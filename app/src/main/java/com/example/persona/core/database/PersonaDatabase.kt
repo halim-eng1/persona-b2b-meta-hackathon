@@ -14,8 +14,10 @@ import com.example.persona.core.database.entity.*
  *  - Added: orders_table ([OrderEntity]) with composite (contactName, status) index.
  *  - Added: EmbeddingJobState column on chat_history for background embedding state machine.
  *
- * The [fallbackToDestructiveMigration] call in [DatabaseModule] handles the upgrade safely
- * for this pre-production codebase (no existing user data to preserve).
+ * Migration policy (post hardening): upgrades require explicit registered
+ * migrations (see [com.example.persona.core.database.migration.DatabaseMigrations]);
+ * only downgrades fall back to destructive handling. The v7 → v8 upgrade used
+ * the pre-hardening destructive fallback and had no existing user data to preserve.
  */
 @Database(
     entities = [

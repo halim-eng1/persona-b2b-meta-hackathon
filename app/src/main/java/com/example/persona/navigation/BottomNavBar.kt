@@ -5,6 +5,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -31,6 +32,7 @@ fun BottomNavBar(
     val items = listOf(
         BottomNavItem(Screen.Home, "Home", Icons.Default.Home),
         BottomNavItem(Screen.KnowledgeManagement, "Knowledge", Icons.Default.Info),
+        BottomNavItem(Screen.Orders, "Orders", Icons.Default.ShoppingBag),
         BottomNavItem(Screen.AuditLog, "Audit Log", Icons.AutoMirrored.Filled.List),
         BottomNavItem(Screen.Settings, "Settings", Icons.Default.Settings)
     )

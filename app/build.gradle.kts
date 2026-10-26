@@ -1,5 +1,30 @@
-import java.io.FileInputStream
 import java.util.Properties
+import org.gradle.api.provider.ValueSource
+import org.gradle.api.provider.ValueSourceParameters
+
+/**
+ * Reads secrets.properties and exposes its entries as configuration inputs.
+ *
+ * Implemented as a [ValueSource] so the Configuration Cache treats the file as a
+ * tracked invalidation input: when any key changes, the cached configuration is
+ * invalidated and the new values land in BuildConfig. A plain
+ * `Properties.load(FileInputStream)` inside the script is untracked — the stale
+ * cached configuration would keep reintroducing the old key values.
+ */
+abstract class SecretsValueSource : ValueSource<Properties, SecretsValueSource.Params> {
+    interface Params : ValueSourceParameters {
+        @get:org.gradle.api.tasks.InputFile
+        @get:org.gradle.api.tasks.PathSensitive(org.gradle.api.tasks.PathSensitivity.NONE)
+        val secretsFile: org.gradle.api.file.RegularFileProperty
+    }
+
+    override fun obtain(): Properties = Properties().apply {
+        val file = parameters.secretsFile.get().asFile
+        if (file.exists()) {
+            file.inputStream().use { load(it) }
+        }
+    }
+}
 
 plugins {
     alias(libs.plugins.android.application)
@@ -10,12 +35,11 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-val secretsProperties = Properties().apply {
-    val secretsFile = rootProject.file("secrets.properties")
-    if (secretsFile.exists()) {
-        FileInputStream(secretsFile).use { load(it) }
+val secretsProperties: Properties = providers.of(SecretsValueSource::class) {
+    parameters {
+        secretsFile.set(rootProject.file("secrets.properties"))
     }
-}
+}.get()
 
 fun resolveSecret(name: String): String? {
     return System.getenv(name)
@@ -121,6 +145,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    // Extended icon set (Orders dashboard nav icon + richer status iconography).
+    implementation(libs.androidx.compose.material.icons.extended)
 
     // Hilt
     implementation(libs.hilt.android)

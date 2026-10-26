@@ -45,23 +45,52 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     companion object {
         private const val TAG = PersonaLogTags.LLM
 
-        /** Elevated network timeout (25 seconds) — prevents timeouts on slower free models under heavy context load. */
+        /**
+         * Elevated network timeout (25 seconds) — prevents timeouts on slower free models under heavy context load.
+         */
         private const val MODEL_TIMEOUT_MS = 25000L
 
-        /** Absolute ceiling for max tokens across failover. */
-        private const val ABSOLUTE_FAILOVER_CEILING = 800
+        /**
+         * Absolute ceiling for max tokens across failover.
+         *
+         * NOTE: this is a clamp, not the request value. The orchestrator passes
+         * 600 (first pass) / 750 (final pass) per call, both of which are below
+         * this ceiling — the constant only becomes relevant if a caller ever
+         * asks for more than 8000.
+         */
+        private const val ABSOLUTE_FAILOVER_CEILING = 8000
 
-        /** Ordered failover chain — only fast, conversational free-tier instruct
-         *  models. With a 25s timeout, the worst-case serial block for the whole
-         *  chain is bounded (~2 min): coding models (qwen3-coder) and safety
-         *  classifier models (content-safety endpoints) are excluded because
-         *  they cannot produce conversational replies. */
+        /**
+         * Ordered failover chain — six fast, conversational free-tier instruct
+         * models with a benchmark-proven record (see `benchmark_results.json`).
+         *
+         * Worst-case bound: 6 entries × 25s per-model timeout = ~150s (~2.5 min)
+         * per pass, at most two passes per customer message (first + final).
+         *
+         * Excluded, and why (all confirmed by the benchmark):
+         *  - cohere/north-mini-code:free — coding model, kept out of the chain
+         *    because it may drift off the conversational JSON contract.
+         *  - nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free — 22s latency and
+         *    a factually-wrong reply in the benchmark.
+         *  - liquid/lfm-2.5-2.6b:free & recursive/flint-v1.0:free — the request
+         *    payload (`reasoning: {effort:"none"}`) yields HTTP 400 from both;
+         *    the benchmark only succeeded with a param-omitted retry we don't
+         *    implement. flint additionally emits no content below max_tokens
+         *    ~2500 (calls send 600/750).
+         *  - xingchen-agi/xing4.0-29b-a4b:free & google/gemma-4-26b-a4b-it:free —
+         *    persistent upstream 429 (rate-limited) across spaced attempts.
+         *  - nvidia/nemotron-3-super-120b-a12b:free — provider 404, deployment
+         *    broken; never answers.
+         *  - thinkingmachines/inkling:free — 403: only available on agentic
+         *    harnesses, not usable via chat completions.
+         */
         private val FAILOVER_MODELS = listOf(
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "google/gemma-4-26b-a4b-it:free",
-            "meta-llama/llama-3.2-3b-instruct:free",
-            "openai/gpt-oss-120b:free",
-            "openrouter/free"
+            "nvidia/nemotron-3.5-lightning:free",    //  1.16s | JSON OK
+            "nvidia/nemotron-3.5-super-vl:free",     //  1.35s | JSON OK | speed champion
+            "openrouter/free",                       //  2.97s | JSON OK
+            "dots-studio/dots-3-note-preview:free",  //  3.30s | JSON OK | valid until Dec 31, 2026
+            "google/gemma-4-31b-it:free",            //  3.93s | JSON OK
+            "nvidia/nemotron-3-ultra-550b-a55b:free" //  5.32s | JSON OK
         )
 
         // ── System Prompts ────────────────────────────────────────────────

@@ -20,6 +20,7 @@ import com.example.persona.features.chat_import.presentation.ChatImportViewModel
 import com.example.persona.features.home.presentation.HomeScreen
 import com.example.persona.features.knowledge.presentation.KnowledgeManagementScreen
 import com.example.persona.features.onboarding.presentation.PermissionOnboardingScreen
+import com.example.persona.features.orders.presentation.OrdersDashboardScreen
 import com.example.persona.features.settings.presentation.SettingsScreen
 
 @Composable
@@ -47,6 +48,10 @@ fun PersonaNavGraph(
 
         composable<Screen.AuditLog> {
             AuditLogScreen()
+        }
+
+        composable<Screen.Orders> {
+            OrdersDashboardScreen()
         }
 
         composable<Screen.Settings> {

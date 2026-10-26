@@ -8,6 +8,7 @@ sealed class Screen {
     @Serializable data object Home : Screen()
     @Serializable data object KnowledgeManagement : Screen()
     @Serializable data object AuditLog : Screen()
+    @Serializable data object Orders : Screen()
     @Serializable data object Settings : Screen()
 
     // Full-screen destinations (no bottom bar)

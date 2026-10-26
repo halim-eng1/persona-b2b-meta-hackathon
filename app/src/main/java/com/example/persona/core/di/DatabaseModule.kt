@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.persona.core.database.PersonaDatabase
 import com.example.persona.core.database.dao.*
+import com.example.persona.core.database.migration.DatabaseMigrations
 import com.example.persona.core.common.Constants
 import dagger.Module
 import dagger.Provides
@@ -16,11 +17,20 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
+    /**
+     * Migration hardening (formerly used [fallbackToDestructiveMigration]):
+     *  - Upgrades require an explicit migration ([DatabaseMigrations.ALL_MIGRATIONS]).
+     *    An unregistered upgrade now fails fast with a schema-validation exception
+     *    instead of silently wiping orders / knowledge chunks / chat history.
+     *  - Downgrades only: destructive fallback is permitted, since a downgrade
+     *    cannot be expressed as a forward migration.
+     */
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): PersonaDatabase =
         Room.databaseBuilder(context, PersonaDatabase::class.java, Constants.DB_NAME)
-            .fallbackToDestructiveMigration()
+            .addMigrations(*DatabaseMigrations.ALL_MIGRATIONS)
+            .fallbackToDestructiveMigrationOnDowngrade()
             .build()
 
     @Provides

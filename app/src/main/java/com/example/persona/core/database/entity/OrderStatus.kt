@@ -38,5 +38,12 @@ enum class OrderStatus {
 
         /** Unfulfilled states used in the deduplication verification window. */
         val UNFULFILLED_STATES: Set<OrderStatus> = setOf(PENDING, IN_PREPARATION)
+
+        /**
+         * Pre-computed names of [UNFULFILLED_STATES], for `status`/`in`-matches
+         * against the persisted TEXT column. Precomputing avoids allocating a
+         * fresh list per order per ui-state emission on the dashboard path.
+         */
+        val UNFULFILLED_STATE_NAMES: Set<String> = UNFULFILLED_STATES.map { it.name }.toSet()
     }
 }
