@@ -1,6 +1,7 @@
 package com.example.persona.features.auto_reply.domain.orchestrator
 
 import android.content.Context
+import com.example.persona.core.database.dao.BusinessKnowledgeDao
 import com.example.persona.core.database.dao.ChatHistoryDao
 import com.example.persona.core.database.dao.FailedQueryDao
 import com.example.persona.core.database.dao.OrderDao
@@ -40,6 +41,7 @@ class AutoReplyOrchestratorRagTest {
     private fun createTestOrchestrator(
         orderDao: OrderDao = mockk(relaxed = true),
         chatHistoryDao: ChatHistoryDao = mockk(relaxed = true),
+        businessKnowledgeDao: BusinessKnowledgeDao = mockk(relaxed = true),
         semanticRetrievalRepository: SemanticRetrievalRepository = mockk(relaxed = true),
         replyGenerationRepository: ReplyGenerationRepository = mockk(relaxed = true),
         directReplyExecutionUseCase: DirectReplyExecutionUseCase = mockk(relaxed = true),
@@ -62,68 +64,61 @@ class AutoReplyOrchestratorRagTest {
         failedQueryDao = failedQueryDao,
         chatHistoryDao = chatHistoryDao,
         orderDao = orderDao,
+        businessKnowledgeDao = businessKnowledgeDao,
         context = mockk(relaxed = true),
         scope = CoroutineScope(Dispatchers.Unconfined)
     )
 
     @Test
     fun `calculateRagBaseThreshold maps preference to realistic MiniLM range with floor`() {
-        // Balanced (0.75f) -> 0.375f
-        assertEquals(0.375f, AutoReplyOrchestrator.calculateRagBaseThreshold(0.75f), 0.001f)
+        // Aggressive (0.65f) -> 0.42f
+        assertEquals(0.42f, AutoReplyOrchestrator.calculateRagBaseThreshold(0.65f), 0.001f)
 
-        // Conservative (0.85f) -> 0.425f
-        assertEquals(0.425f, AutoReplyOrchestrator.calculateRagBaseThreshold(0.85f), 0.001f)
+        // Balanced (0.75f) -> 0.46f
+        assertEquals(0.46f, AutoReplyOrchestrator.calculateRagBaseThreshold(0.75f), 0.001f)
 
-        // Aggressive (0.65f) -> clamped to floor 0.36f (since 0.65 * 0.5 = 0.325 < 0.36)
-        assertEquals(0.36f, AutoReplyOrchestrator.calculateRagBaseThreshold(0.65f), 0.001f)
+        // Conservative (0.85f) -> 0.50f
+        assertEquals(0.50f, AutoReplyOrchestrator.calculateRagBaseThreshold(0.85f), 0.001f)
 
-        // Negative or zero threshold -> clamped to floor 0.36f
-        assertEquals(0.36f, AutoReplyOrchestrator.calculateRagBaseThreshold(-1.0f), 0.001f)
-        assertEquals(0.36f, AutoReplyOrchestrator.calculateRagBaseThreshold(0.0f), 0.001f)
+        // Negative or zero threshold -> clamped to floor 0.42f
+        assertEquals(0.42f, AutoReplyOrchestrator.calculateRagBaseThreshold(-1.0f), 0.001f)
+        assertEquals(0.42f, AutoReplyOrchestrator.calculateRagBaseThreshold(0.0f), 0.001f)
 
-        // Very high threshold -> clamped to 0.45f
-        assertEquals(0.45f, AutoReplyOrchestrator.calculateRagBaseThreshold(1.0f), 0.001f)
+        // Very high threshold -> clamped to 0.50f
+        assertEquals(0.50f, AutoReplyOrchestrator.calculateRagBaseThreshold(1.0f), 0.001f)
     }
 
     @Test
-    fun `mergeCandidates merges pass 1 and pass 2 deduplicating by chunkId and keeping highest score`() {
+    fun `mergeCandidates places Pass 2 chunks ahead of higher-scoring Pass 1 chunks to prevent catalog eviction`() {
         val pass1 = listOf(
+            RetrievalCandidate(
+                chunkId = "noise_pass1",
+                headerContext = "أمثلة",
+                chunkText = "أمثلة: طلب مساء الخميس",
+                similarityScore = 0.95f,
+                baseSimilarityScore = 0.95f
+            ),
             RetrievalCandidate(
                 chunkId = "c1",
                 headerContext = "الشحن",
                 chunkText = "الشحن للقاهرة 50 جنيه",
                 similarityScore = 0.60f,
                 baseSimilarityScore = 0.60f
-            ),
-            RetrievalCandidate(
-                chunkId = "c2",
-                headerContext = "الاسترجاع",
-                chunkText = "فترة الاسترجاع 14 يوم",
-                similarityScore = 0.42f,
-                baseSimilarityScore = 0.42f
             )
         )
 
         val pass2 = listOf(
-            // Overlapping chunk with c2, but with higher score found during refined RE_QUERY
+            // Product chunk retrieved in Pass 2 RE_QUERY with score 0.55
             RetrievalCandidate(
-                chunkId = "c2",
-                headerContext = "الاسترجاع",
-                chunkText = "فترة الاسترجاع 14 يوم",
-                similarityScore = 0.72f,
-                baseSimilarityScore = 0.72f
-            ),
-            // New chunk found in Pass 2
-            RetrievalCandidate(
-                chunkId = "c3",
-                headerContext = "طرق الدفع",
-                chunkText = "الدفع عند الاستلام متاح",
+                chunkId = "product_card",
+                headerContext = "بيانات المنتج",
+                chunkText = "بيانات المنتج: محفظة جيب كارد السعر 150 جنيه",
                 similarityScore = 0.55f,
                 baseSimilarityScore = 0.55f
             ),
-            // Noise chunk below minScore (0.36f)
+            // Noise chunk below minScore (0.38f)
             RetrievalCandidate(
-                chunkId = "noise",
+                chunkId = "noise_low",
                 headerContext = "عام",
                 chunkText = "نص عشوائي غير مفيد",
                 similarityScore = 0.28f,
@@ -131,25 +126,36 @@ class AutoReplyOrchestratorRagTest {
             )
         )
 
-        val merged = AutoReplyOrchestrator.mergeCandidates(pass1, pass2, limit = 5, minScore = 0.36f)
+        val merged = AutoReplyOrchestrator.mergeCandidates(pass1, pass2, limit = 8, minScore = 0.38f)
 
-        // c1 (0.60), c2 (0.72 - highest), c3 (0.55). Noise is filtered out.
+        // Noise_low is filtered (< 0.38). 3 chunks remain.
         assertEquals(3, merged.size)
 
-        // Highest score first: c2 (0.72)
-        assertEquals("c2", merged[0].chunkId)
-        assertEquals(0.72f, merged[0].similarityScore, 0.001f)
+        // Pass 2 chunks MUST come FIRST in rank order!
+        assertEquals("product_card", merged[0].chunkId)
+        assertEquals(0.55f, merged[0].similarityScore, 0.001f)
 
-        // Second: c1 (0.60)
-        assertEquals("c1", merged[1].chunkId)
-        assertEquals(0.60f, merged[1].similarityScore, 0.001f)
+        // Non-duplicate Pass 1 chunks appended afterward
+        assertEquals("noise_pass1", merged[1].chunkId)
+        assertEquals("c1", merged[2].chunkId)
+    }
 
-        // Third: c3 (0.55)
-        assertEquals("c3", merged[2].chunkId)
-        assertEquals(0.55f, merged[2].similarityScore, 0.001f)
+    @Test
+    fun `decodeAgenticResponseSafely repairs unescaped inner quotes in final reply text`() {
+        val rawWithInnerQuotes = """
+            {
+              "action": "REPLY",
+              "refined_search_keyword": null,
+              "order_action": null,
+              "final_reply_text": "أنا مش بس "أنا" يا فندم، أنا مساعدك هنا عشان أسهل عليك!",
+              "extracted_order": null
+            }
+        """.trimIndent()
 
-        // Verify Pass 1 chunks were NOT wiped out
-        assertTrue(merged.any { it.chunkId == "c1" })
+        val parsed = AutoReplyOrchestrator.decodeAgenticResponseSafely(rawWithInnerQuotes)
+
+        assertEquals("REPLY", parsed.action)
+        assertEquals("أنا مش بس \"أنا\" يا فندم، أنا مساعدك هنا عشان أسهل عليك!", parsed.finalReplyText)
     }
 
     @Test

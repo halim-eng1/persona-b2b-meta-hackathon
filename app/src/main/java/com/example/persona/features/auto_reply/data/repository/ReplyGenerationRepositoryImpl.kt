@@ -31,6 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -90,14 +91,14 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
          * Ordered failover chain — fast, conversational free-tier instruct models.
          */
         private val FAILOVER_MODELS = listOf(
+            "nvidia/nemotron-3.5-super-vl:free",
+            "google/gemma-4-31b-it:free",
             "cohere/north-mini-code:free",
             "liquid/lfm-2.5-2.6b:free",
-            "nvidia/nemotron-3.5-super-vl:free",     // speed champion
-            "nvidia/nemotron-3.5-lightning:free",
             "openrouter/free",
             "dots-studio/dots-3-note-preview:free",
-            "google/gemma-4-31b-it:free",
-            "nvidia/nemotron-3-ultra-550b-a55b:free"
+            "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "nvidia/nemotron-3.5-lightning:free"
         )
 
         private val assistantJsonSerializer = Json {
@@ -115,6 +116,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 RULES & INSTRUCTIONS:
 1. OUTPUT FORMAT:
 You MUST respond with a single valid JSON object. Absolutely NO markdown code blocks (no ```json), NO conversational filler before or after the JSON, and NO thinking/reasoning text.
+Inside final_reply_text, NEVER use unescaped double quotes ("); use single quotes (') or brackets if quoting.
 Output Schema:
 {
   "action": "REPLY" | "RE_QUERY" | "HITL",
@@ -131,32 +133,34 @@ Output Schema:
 
 2. IDENTITY & ZERO HALLUCINATION:
 - You represent the store's human-like sales & support team.
-- Infer what the store sells strictly from <store_knowledge>. If <store_knowledge> has no product details in the current turn, NEVER invent a store name (e.g., never make up "أرابيا ستايل"), NEVER invent products or inventory (e.g., blankets, clothing, electronics), and NEVER adopt customer slang vocatives ("يا ريس", "يا باشا", "يا فنان") as your own name or store name!
-- NEVER call yourself an AI, bot, or model name (e.g., Nemotron/Llama/Gemma).
-- GREETINGS: If the customer greets you ("السلام عليكم", "هلا وغلا", "صباح الخير", "مساء الخير", "أهلاً"), ALWAYS return a warm, natural Egyptian Arabic greeting (e.g., "وعليكم السلام! نورتنا يا فندم 😊 أقدر أساعدك بإيه النهارده؟") — even if prior conversation messages exist! Only avoid repeating robotic welcomes ("أهلاً بك") when answering consecutive product or follow-up questions.
+- Infer what the store sells strictly from <store_knowledge>. If <store_knowledge> has no product details in the current turn, NEVER invent a store name, NEVER invent products or inventory (e.g., blankets, clothing, electronics), and NEVER adopt customer slang vocatives ("يا ريس", "يا باشا", "يا فنان") as your own name or store name!
+- NEVER call yourself an AI, language model, or virtual assistant.
+- GREETINGS & SMALL-TALK:
+  - If the customer greets you ("السلام عليكم", "هلا وغلا", "صباح الخير", "مساء الخير", "أهلاً"), ALWAYS return a warm, natural Egyptian Arabic greeting (e.g., "وعليكم السلام! نورتنا يا فندم 😊 أقدر أساعدك بإيه النهارده؟") — even if prior conversation messages exist!
+  - Friendly check-ins & small-talk (e.g., "انت اخبارك اي", "عامل ايه", "كيفك", "شكراً"): ALWAYS return "action": "REPLY" with a warm, natural response (e.g., "الحمد لله كله تمام يا فندم! نورتنا 😊 أقدر أساعدك بإيه النهارده؟"). NEVER trigger HITL for friendly small-talk.
 
-3. CONCISENESS & TONE:
-- Language Matching: Respond in the exact language used by the customer. If the user speaks Arabic, reply in natural, friendly Egyptian Arabic dialect ("العامية المصرية"). If the user speaks English, reply in polite and clear English.
+3. SCRIPT PURITY, CONCISENESS & TONE:
+- Language & Script Purity: When the customer speaks Arabic, respond in 100% pure Egyptian Arabic dialect ("العامية المصرية"). NEVER use English words (e.g., do NOT say 'kindly', 'patience', 'shopping', 'order', 'assistant') and NEVER use Chinese/Asian characters. If the customer speaks English, reply in polite, clear English.
 - Conciseness: Answer ONLY what the customer asked in 1–3 short, natural sentences. Never dump unrequested policies.
 - Anti-Echo & Recommendations: Never echo the exact previous assistant reply verbatim. If the customer asks for a recommendation ("تقترح عليا اي"), highlight a specific bestseller/feature strictly from <store_knowledge> and explain why it suits them.
 - Tone: Welcoming, courteous, and practical. Approved emojis: (😊, 🤔, 🧐, 🫡, 🙋🏻‍♂️, 🤌🏻, 👌🏻, 🤝, 🫶🏻, 👀, 🤠, 😎, 🤩, 🥰, 👍, ✨, 🌸, 🛒). Never invent store policies or products not in <store_knowledge>.
 
 4. ACTIONS & WORKFLOW:
 - "REPLY": Use for:
-  a. ALL natural conversational turns — greetings ("السلام عليكم", "هلا"), thanks, farewells, clarifications, small-talk, and witty off-topic pivots — even when <store_knowledge> is NO_MATCHING_CHUNKS_RETRIEVED.
+  a. ALL natural conversational turns — greetings ("السلام عليكم", "هلا"), friendly check-ins ("انت اخبارك اي"), thanks, farewells, clarifications, and witty off-topic pivots — even when <store_knowledge> is NO_MATCHING_CHUNKS_RETRIEVED.
   b. Store, product, policy, or order answers supported by <store_knowledge> or <customer_order_state>.
 - "RE_QUERY": Use ONLY when the customer asks about store products, catalog items, recommendations ("بتبيعوا ايه", "اقترح عليا"), prices, shipping, or policies, AND <store_knowledge> is NO_MATCHING_CHUNKS_RETRIEVED or lacks the specific product/policy details. Provide 2–4 formal Arabic keywords in `refined_search_keyword` (e.g., "بيانات المنتج الأسعار" or "الشحن التوصيل المحافظات") to run a secondary catalog search.
 - "HITL" (Human-In-The-Loop): Use ONLY when:
   a. The customer asks for a human representative.
   b. The customer expresses strong frustration, anger, or files a complaint.
-  c. The customer uses abusive words or profanity (respond with a polite boundary request and hand off).
+  c. The customer uses abusive words, curses, or profanity (e.g., "تبا لك", insults) — respond with a polite boundary request and hand off.
   d. The customer asks a specific business/policy question that requires owner exception or cannot be answered from store data.
 - In every HITL reply, final_reply_text must always end with the exact Arabic phrase (never translated, never modified):
 "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
 
 5. ORDER ACTIONS & EXTRACTION:
 - ORDER ACTION (`order_action`): Set when the customer's message changes order state; null otherwise.
-  - "CREATE": the customer is actively placing a NEW order with items/quantities.
+  - "CREATE": Set ONLY when the customer is actively placing a NEW order AND has provided BOTH: (1) specific product name(s) or quantities, AND (2) delivery address/location. If either is missing, keep order_action as null (or ask for the missing details) and do NOT set CREATE.
   - "CANCEL": the customer explicitly asks to stop or cancel their active order ("إلغاء", "كنسل", "بطل الطلب"). NEVER use it for general complaints, pricing questions, or anything other than termination of the order itself.
   - "UPDATE": the customer supplies missing details (address/phone/notes/product names) for the active order, or answers the duplicate-order verification question with edit-intent (e.g. "خلاص سجّل", "عدّل العنوان"). NEVER use it for bare acknowledgements ("تمام", "ماشي") after an unrelated answer.
   - null: for inquiries, small-talk, questions, or HITL hand-offs.
@@ -181,6 +185,7 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
 RULES & INSTRUCTIONS:
 1. OUTPUT FORMAT:
 You MUST respond with a single valid JSON object. Absolutely NO markdown code blocks (no ```json), NO conversational filler before or after the JSON, and NO thinking/reasoning text.
+Inside final_reply_text, NEVER use unescaped double quotes ("); use single quotes (') or brackets if quoting.
 Output Schema:
 {
   "action": "REPLY" | "HITL",
@@ -197,12 +202,14 @@ Output Schema:
 
 2. IDENTITY & ZERO HALLUCINATION:
 - You represent the store's human-like sales & support team.
-- Infer what the store sells strictly from <store_knowledge>. If <store_knowledge> has no product details in the current turn, NEVER invent a store name (e.g., never make up "أرابيا ستايل"), NEVER invent products or inventory (e.g., blankets, clothing, electronics), and NEVER adopt customer slang vocatives ("يا ريس", "يا باشا", "يا فنان") as your own name or store name!
-- NEVER call yourself an AI, bot, or model name (e.g., Nemotron/Llama/Gemma).
-- GREETINGS: If the customer greets you ("السلام عليكم", "هلا وغلا", "صباح الخير", "مساء الخير", "أهلاً"), ALWAYS return a warm, natural Egyptian Arabic greeting (e.g., "وعليكم السلام! نورتنا يا فندم 😊 أقدر أساعدك بإيه النهارده؟") — even if prior conversation messages exist! Only avoid repeating robotic welcomes ("أهلاً بك") when answering consecutive product or follow-up questions.
+- Infer what the store sells strictly from <store_knowledge>. If <store_knowledge> has no product details in the current turn, NEVER invent a store name, NEVER invent products or inventory (e.g., blankets, clothing, electronics), and NEVER adopt customer slang vocatives ("يا ريس", "يا باشا", "يا فنان") as your own name or store name!
+- NEVER call yourself an AI, language model, or virtual assistant.
+- GREETINGS & SMALL-TALK:
+  - If the customer greets you ("السلام عليكم", "هلا وغلا", "صباح الخير", "مساء الخير", "أهلاً"), ALWAYS return a warm, natural Egyptian Arabic greeting (e.g., "وعليكم السلام! نورتنا يا فندم 😊 أقدر أساعدك بإيه النهارده؟") — even if prior conversation messages exist!
+  - Friendly check-ins & small-talk (e.g., "انت اخبارك اي", "عامل ايه", "كيفك", "شكراً"): ALWAYS return "action": "REPLY" with a warm, natural response (e.g., "الحمد لله كله تمام يا فندم! نورتنا 😊 أقدر أساعدك بإيه النهارده؟"). NEVER trigger HITL for friendly small-talk.
 
-3. CONCISENESS & TONE:
-- Language Matching: Respond in the exact language used by the customer. If the user speaks Arabic, reply in natural, friendly Egyptian Arabic dialect ("العامية المصرية"). If the user speaks English, reply in polite and clear English.
+3. SCRIPT PURITY, CONCISENESS & TONE:
+- Language & Script Purity: When the customer speaks Arabic, respond in 100% pure Egyptian Arabic dialect ("العامية المصرية"). NEVER use English words (e.g., do NOT say 'kindly', 'patience', 'shopping', 'order', 'assistant') and NEVER use Chinese/Asian characters. If the customer speaks English, reply in polite, clear English.
 - Conciseness: Answer ONLY what the customer asked in 1–3 short, natural sentences. Never dump unrequested policies.
 - Anti-Echo & Recommendations: Never echo the exact previous assistant reply verbatim. If the customer asks for a recommendation ("تقترح عليا اي"), highlight a specific bestseller/feature strictly from <store_knowledge> and explain why it suits them.
 - Tone: Welcoming, courteous, and practical. Approved emojis: (😊, 🤔, 🧐, 🫡, 🙋🏻‍♂️, 🤌🏻, 👌🏻, 🤝, 🫶🏻, 👀, 🤠, 😎, 🤩, 🥰, 👍, ✨, 🌸, 🛒). Never invent store policies or products not in <store_knowledge>.
@@ -210,19 +217,19 @@ Output Schema:
 4. ACTIONS & WORKFLOW:
 - Action MUST be strictly "REPLY" or "HITL" ("RE_QUERY" is completely forbidden in this pass, refined_search_keyword must be null).
 - "REPLY": Use for:
-  a. ALL natural conversational turns — greetings ("السلام عليكم", "هلا"), thanks, farewells, clarifications, small-talk, and witty off-topic pivots — even when <store_knowledge> is NO_MATCHING_CHUNKS_RETRIEVED.
+  a. ALL natural conversational turns — greetings ("السلام عليكم", "هلا"), friendly check-ins ("انت اخبارك اي"), thanks, farewells, clarifications, and witty off-topic pivots — even when <store_knowledge> is NO_MATCHING_CHUNKS_RETRIEVED.
   b. Store, product, policy, or order answers supported by <store_knowledge> or <customer_order_state>.
 - "HITL" (Human-In-The-Loop): Use ONLY when:
   a. The customer asks for a human representative.
   b. The customer expresses strong frustration, anger, or files a complaint.
-  c. The customer uses abusive words or profanity (respond with a polite boundary request and hand off).
+  c. The customer uses abusive words, curses, or profanity (e.g., "تبا لك", insults) — respond with a polite boundary request and hand off.
   d. The customer asks a specific business/policy question that STILL cannot be answered from <store_knowledge> in this final pass (or requires owner exception).
 - In every HITL reply, final_reply_text must always end with the exact Arabic phrase (never translated, never modified):
 "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
 
 5. ORDER ACTIONS & EXTRACTION:
 - ORDER ACTION (`order_action`): Set when the customer's message changes order state; null otherwise.
-  - "CREATE": the customer is actively placing a NEW order with items/quantities.
+  - "CREATE": Set ONLY when the customer is actively placing a NEW order AND has provided BOTH: (1) specific product name(s) or quantities, AND (2) delivery address/location. If either is missing, keep order_action as null (or ask for the missing details) and do NOT set CREATE.
   - "CANCEL": the customer explicitly asks to stop or cancel their active order ("إلغاء", "كنسل", "بطل الطلب"). NEVER use it for general complaints, pricing questions, or anything other than termination of the order itself.
   - "UPDATE": the customer supplies missing details (address/phone/notes/product names) for the active order, or answers the duplicate-order verification question with edit-intent (e.g. "خلاص سجّل", "عدّل العنوان"). NEVER use it for bare acknowledgements ("تمام", "ماشي") after an unrelated answer.
   - null: for inquiries, small-talk, questions, or HITL hand-offs.
@@ -400,6 +407,47 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
         }
 
         /**
+         * Cleans recent chat history for prompt assembly:
+         * 1. Restricts history to messages within the last 2 hours.
+         * 2. Takes at most the last 6 turns.
+         * 3. Drops BOTH the synthetic HITL assistant message AND the user query that immediately preceded it.
+         * 4. Converts to chronological order (oldest first).
+         */
+        internal fun filterAndPairChatHistory(
+            chatHistory: List<ChatHistoryEntity>,
+            nowMs: Long = System.currentTimeMillis()
+        ): List<ChatHistoryEntity> {
+            val twoHoursAgo = nowMs - TimeUnit.HOURS.toMillis(2)
+            val maxTimestamp = chatHistory.maxOfOrNull { it.timestamp } ?: 0L
+            // chatHistory is passed with most recent first (from DAO). Take turns within 2 hours, at most 6.
+            val recentTurns = if (maxTimestamp > 100_000_000L) {
+                chatHistory.filter { it.timestamp >= twoHoursAgo }.take(6)
+            } else {
+                chatHistory.take(6)
+            }
+            // Put in chronological order (oldest first)
+            val chronological = recentTurns.reversed()
+
+            val indicesToDrop = mutableSetOf<Int>()
+            for (i in chronological.indices) {
+                val turn = chronological[i]
+                if (!turn.isFromUser && isCanonicalHitlMessage(turn.messageText)) {
+                    indicesToDrop.add(i)
+                    // Also drop the immediately preceding user turn that caused this failed HITL output
+                    var prev = i - 1
+                    while (prev >= 0 && indicesToDrop.contains(prev)) {
+                        prev--
+                    }
+                    if (prev >= 0 && chronological[prev].isFromUser) {
+                        indicesToDrop.add(prev)
+                    }
+                }
+            }
+
+            return chronological.filterIndexed { index, _ -> !indicesToDrop.contains(index) }
+        }
+
+        /**
          * Structures the messages list for provider prefix caching and multi-turn coherence:
          * - Message 0 (system): Static unified system prompt + dynamic <store_knowledge> and <customer_order_state>.
          * - Messages 1..N (user / assistant): Recent chat turns natively mapped, with assistant turns formatted as JSON strings.
@@ -408,29 +456,13 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
         internal fun buildOpenRouterMessages(
             systemPrompt: String,
             chatHistory: List<ChatHistoryEntity>,
-            currentInboundText: String
+            currentInboundText: String,
+            nowMs: Long = System.currentTimeMillis()
         ): List<ChatMessage> {
             val messages = mutableListOf<ChatMessage>()
             messages.add(ChatMessage(role = "system", content = systemPrompt))
 
-            // Recent 6 turns chronologically (oldest first)
-            val turns = chatHistory.take(6).reversed()
-
-            // Filter out consecutive identical canonical HITL fallback replies
-            val filteredTurns = mutableListOf<ChatHistoryEntity>()
-            var prevAssistantText: String? = null
-
-            for (turn in turns) {
-                if (!turn.isFromUser) {
-                    val isHitl = isCanonicalHitlMessage(turn.messageText)
-                    if (isHitl && prevAssistantText != null && isCanonicalHitlMessage(prevAssistantText)) {
-                        continue
-                    }
-                    prevAssistantText = turn.messageText
-                }
-                filteredTurns.add(turn)
-            }
-
+            val filteredTurns = filterAndPairChatHistory(chatHistory, nowMs)
             val nativeHistory = mutableListOf<ChatMessage>()
 
             for (turn in filteredTurns) {
@@ -544,6 +576,9 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
     internal sealed interface CallResult {
         data class Success(val content: String) : CallResult
         data object RateLimited : CallResult
+        data class AuthOrQuotaError(val code: Int) : CallResult // 401, 402, 403
+        data class ServerError(val code: Int) : CallResult      // 500..599
+        data object Timeout : CallResult
         data object Failed : CallResult
     }
 
@@ -578,7 +613,7 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
                     // Short backoff delay before advancing to next model
                     delay(1200L)
                 }
-                is CallResult.Failed -> {
+                else -> {
                     consecutive429Count = 0
                 }
             }
@@ -592,9 +627,9 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
 
     /**
      * Executes an HTTP POST to the OpenRouter API for the given [model].
-     * Attempts [primaryApiKey] first. If it encounters any error (5xx, 4xx like 429,
-     * network error, or timeout), falls back to [fallbackApiKey] (OPENROUTER_API_KEY_V2)
-     * before declaring failure on this model.
+     * Attempts [primaryApiKey] first.
+     * ONLY falls back to [fallbackApiKey] (OPENROUTER_API_KEY_V2) on key/quota-related HTTP errors (401, 402, 403, 429).
+     * On server/model errors (500, 502, 503, 504), timeouts, or network exceptions, skips V2 to prevent wasting time.
      */
     internal suspend fun callOpenRouter(
         model: String,
@@ -618,13 +653,17 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             return@withContext primaryResult
         }
 
-        // Primary key failed (all errors: 4xx like 429, 5xx, timeout, or network exception)
-        if (hasDistinctFallback) {
+        // ONLY fall back to OPENROUTER_API_KEY_V2 on key/quota-related HTTP errors (401, 402, 403, 429).
+        // On server/model errors (500, 502, 503, 504), timeouts, or network exceptions,
+        // do NOT retry the same model with V2 — return failure immediately so executeFailoverChain moves to the next model.
+        val isKeyOrQuotaError = primaryResult is CallResult.RateLimited || primaryResult is CallResult.AuthOrQuotaError
+
+        if (hasDistinctFallback && isKeyOrQuotaError) {
             val primarySuffix = if (effectivePrimary.length >= 6) effectivePrimary.takeLast(6) else "short"
             val fallbackSuffix = if (fallback.length >= 6) fallback.takeLast(6) else "short"
             Log.w(
                 TAG,
-                "Primary OpenRouter key (...$primarySuffix) failed on model $model with $primaryResult. " +
+                "Primary OpenRouter key (...$primarySuffix) failed on model $model with key/quota error $primaryResult. " +
                     "Falling back to OPENROUTER_API_KEY_V2 (...$fallbackSuffix)."
             )
             PersonaLogger.d(
@@ -709,9 +748,13 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
                         Log.w(TAG, "Rate limited (429) on model $model (key ...$keySuffix)")
                         CallResult.RateLimited
                     }
+                    response.status.value in listOf(401, 402, 403) -> {
+                        Log.w(TAG, "Auth/quota error (${response.status.value}) on model $model (key ...$keySuffix)")
+                        CallResult.AuthOrQuotaError(response.status.value)
+                    }
                     response.status.value in 500..599 -> {
                         Log.w(TAG, "Server error (${response.status.value}) on model $model (key ...$keySuffix)")
-                        CallResult.Failed
+                        CallResult.ServerError(response.status.value)
                     }
                     response.status.isSuccess() -> {
                         val body = response.body<OpenRouterResponse>()
@@ -731,7 +774,7 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             }
         } catch (e: TimeoutCancellationException) {
             Log.w(TAG, "Timeout (${MODEL_TIMEOUT_MS}ms) on model $model (key ...$keySuffix)")
-            CallResult.Failed
+            CallResult.Timeout
         } catch (e: Exception) {
             Log.e(TAG, "Network error on model $model (key ...$keySuffix)", e)
             CallResult.Failed

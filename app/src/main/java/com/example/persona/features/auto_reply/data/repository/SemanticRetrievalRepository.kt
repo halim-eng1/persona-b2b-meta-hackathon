@@ -57,8 +57,8 @@ class SemanticRetrievalRepository @Inject constructor(
         val baseThreshold = if (minimumSimilarityThreshold < 0f) 0.36f else minimumSimilarityThreshold
         val wordCount = queryText.split("\\s+".toRegex()).filter { it.isNotEmpty() }.size
         val adjustedThreshold = when {
-            wordCount <= 2 -> (baseThreshold + 0.15f).coerceAtMost(0.98f)
-            wordCount <= 4 -> (baseThreshold + 0.08f).coerceAtMost(0.95f)
+            wordCount <= 2 -> (baseThreshold + 0.04f).coerceAtMost(0.98f)
+            wordCount <= 4 -> (baseThreshold + 0.02f).coerceAtMost(0.95f)
             else           -> baseThreshold
         }.coerceAtLeast(if (minimumSimilarityThreshold < 0f) 0.36f else 0.0f)
 

@@ -58,4 +58,18 @@ interface BusinessKnowledgeDao {
 
     @Query("SELECT COUNT(*) FROM business_knowledge WHERE source_type = 'CORE_DOCUMENT'")
     fun observeCoreDocumentCount(): Flow<Int>
+
+    /**
+     * Retrieves product catalog chunks directly by keyword matching to prevent catalog eviction.
+     */
+    @Query("""
+        SELECT chunk_id, chunk_text, header_context 
+        FROM business_knowledge 
+        WHERE chunk_text LIKE '%بيانات المنتج%' 
+           OR chunk_text LIKE '%اسم المنتج%' 
+           OR header_context LIKE '%بيانات المنتج%' 
+           OR header_context LIKE '%اسم المنتج%' 
+        LIMIT :limit
+    """)
+    suspend fun getProductCatalogChunks(limit: Int = 5): List<ChunkTextProjection>
 }

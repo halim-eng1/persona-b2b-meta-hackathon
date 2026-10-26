@@ -329,9 +329,9 @@ class ReplyGenerationRepositoryImplTest {
     }
 
     @Test
-    fun `consecutive identical canonical HITL fallback replies are deduplicated in history`() {
+    fun `synthetic canonical HITL fallback replies and their triggering user turns are excluded from history`() {
         val history = listOf(
-            // Descending order (most recent first): 3 identical HITL fallback turns in a row from 429 outages
+            // Descending order (most recent first): HITL fallback turns from outages
             ChatHistoryEntity(id = 3L, contactName = "c", messageText = ReplyGenerationRepositoryImpl.CANONICAL_HITL_MESSAGE, isFromUser = false, timestamp = 300L),
             ChatHistoryEntity(id = 2L, contactName = "c", messageText = ReplyGenerationRepositoryImpl.CANONICAL_HITL_MESSAGE, isFromUser = false, timestamp = 200L),
             ChatHistoryEntity(id = 1L, contactName = "c", messageText = "سلام عليكم", isFromUser = true, timestamp = 100L)
@@ -344,7 +344,7 @@ class ReplyGenerationRepositoryImplTest {
         )
 
         val assistantMessages = messages.filter { it.role == "assistant" }
-        assertEquals("Should only have 1 assistant message instead of 2 consecutive identical HITL duplicates", 1, assistantMessages.size)
+        assertEquals("Synthetic HITL messages should be excluded from prompt context", 0, assistantMessages.size)
     }
 
     @Test
@@ -426,24 +426,16 @@ class ReplyGenerationRepositoryImplTest {
     }
 
     @Test
-    fun `callOpenRouter falls back to V2 key when primary key encounters 500 server error`() = runTest {
+    fun `callOpenRouter skips V2 key on HTTP 502 server error and fails immediately`() = runTest {
         val capturedAuthHeaders = mutableListOf<String>()
         val mockEngine = MockEngine { request ->
             val auth = request.headers[HttpHeaders.Authorization] ?: ""
             capturedAuthHeaders.add(auth)
-            if (auth.contains("primary-key-123")) {
-                respond(
-                    content = """Internal Server Error""",
-                    status = HttpStatusCode.InternalServerError,
-                    headers = headersOf(HttpHeaders.ContentType, "text/plain")
-                )
-            } else {
-                respond(
-                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"نجح بعد العطل\"}"}}]}""",
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
-            }
+            respond(
+                content = """Bad Gateway""",
+                status = HttpStatusCode.BadGateway,
+                headers = headersOf(HttpHeaders.ContentType, "text/plain")
+            )
         }
         val client = HttpClient(mockEngine) {
             install(ContentNegotiation) {
@@ -463,10 +455,9 @@ class ReplyGenerationRepositoryImplTest {
             maxTokens = 100
         )
 
-        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
-        assertEquals(2, capturedAuthHeaders.size)
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.ServerError)
+        assertEquals(1, capturedAuthHeaders.size)
         assertEquals("Bearer primary-key-123", capturedAuthHeaders[0])
-        assertEquals("Bearer fallback-key-456", capturedAuthHeaders[1])
     }
 
     @Test
@@ -583,5 +574,61 @@ class ReplyGenerationRepositoryImplTest {
 
         assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"مرحبا بك\"}", reply)
         assertFalse(reply == ReplyGenerationRepositoryImpl.HITL_FALLBACK_JSON)
+    }
+
+    @Test
+    fun `OpenRouterRequest serialization contains zero reasoning_content keys even with encodeDefaults true`() {
+        val serializer = Json {
+            encodeDefaults = true
+            explicitNulls = false
+            ignoreUnknownKeys = true
+            isLenient = true
+        }
+
+        val request = OpenRouterRequest(
+            model = "nvidia/nemotron-3.5-super-vl:free",
+            messages = listOf(
+                ChatMessage(role = "system", content = "sys"),
+                ChatMessage(role = "user", content = "user_msg"),
+                ChatMessage(role = "assistant", content = "{\"action\":\"REPLY\"}")
+            ),
+            maxTokens = 600
+        )
+
+        val serialized = serializer.encodeToString(OpenRouterRequest.serializer(), request)
+        assertFalse("Serialized request must not contain 'reasoning_content'", serialized.contains("reasoning_content"))
+    }
+
+    @Test
+    fun `buildOpenRouterMessages strips failed user and HITL-bot pairs cleanly without coalescing`() {
+        val now = 10_000_000L
+        val history = listOf(
+            // Most recent first as returned by ChatHistoryDao
+            ChatHistoryEntity(id = 4L, contactName = "c", messageText = "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏", isFromUser = false, timestamp = now - 1000L),
+            ChatHistoryEntity(id = 3L, contactName = "c", messageText = "سؤال فشل الرد عليه", isFromUser = true, timestamp = now - 2000L),
+            ChatHistoryEntity(id = 2L, contactName = "c", messageText = "{\"action\":\"REPLY\",\"final_reply_text\":\"أهلاً بك يا فندم\"}", isFromUser = false, timestamp = now - 10000L),
+            ChatHistoryEntity(id = 1L, contactName = "c", messageText = "السلام عليكم", isFromUser = true, timestamp = now - 11000L)
+        )
+
+        val messages = ReplyGenerationRepositoryImpl.buildOpenRouterMessages(
+            systemPrompt = "System Prompt",
+            chatHistory = history,
+            currentInboundText = "سؤال جديد",
+            nowMs = now
+        )
+
+        // Expected messages:
+        // Message 0: system
+        // Message 1: user: "السلام عليكم"
+        // Message 2: assistant: {"action":"REPLY"...}
+        // Message 3: user: "سؤال جديد" (raw, not coalesced with "سؤال فشل الرد عليه")
+        assertEquals(4, messages.size)
+        assertEquals("system", messages[0].role)
+        assertEquals("user", messages[1].role)
+        assertEquals("السلام عليكم", messages[1].content)
+        assertEquals("assistant", messages[2].role)
+        assertEquals("user", messages[3].role)
+        assertEquals("سؤال جديد", messages[3].content)
+        assertFalse("Failed user query must not be in prompt", messages.any { it.content.contains("سؤال فشل الرد عليه") })
     }
 }

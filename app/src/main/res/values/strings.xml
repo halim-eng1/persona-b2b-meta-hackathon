@@ -10,7 +10,7 @@
 
     <!-- ── Orchestrator: Tier B HITL fallback templates ─────────────────────── -->
     <!-- Holding message sent to the customer when RAG confidence is below threshold -->
-    <string name="hitl_holding_message">عفواً، جاري تحويلك لممثلي خدمة العملاء…</string>
+    <string name="hitl_holding_message">تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏</string>
 
     <!-- Notification title for the HITL alarm shown to the business owner -->
     <string name="hitl_alarm_title">⚠️ تنبيه: عميل يحتاج مساعدة فورية</string>

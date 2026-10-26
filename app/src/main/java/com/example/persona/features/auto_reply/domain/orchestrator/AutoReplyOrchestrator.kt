@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import com.example.persona.R
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.Converters
+import com.example.persona.core.database.dao.BusinessKnowledgeDao
 import com.example.persona.core.database.dao.ChatHistoryDao
 import com.example.persona.core.database.dao.FailedQueryDao
 import com.example.persona.core.database.dao.OrderDao
@@ -65,6 +66,7 @@ class AutoReplyOrchestrator @Inject constructor(
     private val failedQueryDao: FailedQueryDao,
     private val chatHistoryDao: ChatHistoryDao,
     private val orderDao: OrderDao,
+    private val businessKnowledgeDao: BusinessKnowledgeDao,
     @ApplicationContext private val context: Context,
     @ApplicationScope private val scope: CoroutineScope
 ) {
@@ -126,28 +128,100 @@ class AutoReplyOrchestrator @Inject constructor(
         internal fun isPivotStillOpen(latestPivotTimestamp: Long?, consumedPivotTimestamps: Set<Long>): Boolean =
             latestPivotTimestamp != null && !consumedPivotTimestamps.contains(latestPivotTimestamp)
 
+        internal val agenticJson = Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+        }
+
         /**
-         * Pure helper to merge and deduplicate candidates across multiple RAG passes (Pass 1 + Pass 2 RE_QUERY),
-         * keeping the highest similarity score per chunk and filtering out noise below minScore.
+         * State machine that detects unescaped inner double-quotes inside JSON string values
+         * and escapes them to \" so lenient JSON parsers do not fail with syntax errors.
+         * An inner quote is identified when inside a string value and the next non-whitespace
+         * character is not a structural token (',', '}', ']', or ':').
+         */
+        internal fun repairUnescapedJsonQuotes(json: String): String {
+            val sb = StringBuilder()
+            var inString = false
+            var i = 0
+            while (i < json.length) {
+                val c = json[i]
+                if (c == '\\' && inString && i + 1 < json.length) {
+                    sb.append(c)
+                    sb.append(json[i + 1])
+                    i += 2
+                    continue
+                }
+                if (c == '"') {
+                    if (!inString) {
+                        inString = true
+                        sb.append(c)
+                    } else {
+                        var j = i + 1
+                        while (j < json.length && json[j].isWhitespace()) {
+                            j++
+                        }
+                        val nextChar = if (j < json.length) json[j] else null
+                        if (nextChar == ',' || nextChar == '}' || nextChar == ']' || nextChar == ':') {
+                            inString = false
+                            sb.append(c)
+                        } else {
+                            sb.append("\\\"")
+                        }
+                    }
+                } else {
+                    sb.append(c)
+                }
+                i++
+            }
+            return sb.toString()
+        }
+
+        /**
+         * Robust JSON decoder for Agentic LLM responses. Strips Markdown fences,
+         * slices from first '{' to last '}', decodes, and if decoding fails, applies
+         * [repairUnescapedJsonQuotes] state machine before retrying.
+         */
+        internal fun decodeAgenticResponseSafely(raw: String): AgenticLlmResponse {
+            val sanitized = sanitizeLlmJson(raw)
+            return try {
+                agenticJson.decodeFromString<AgenticLlmResponse>(sanitized)
+            } catch (e: Exception) {
+                val repaired = repairUnescapedJsonQuotes(sanitized)
+                agenticJson.decodeFromString<AgenticLlmResponse>(repaired)
+            }
+        }
+
+        /**
+         * Helper to merge candidates across passes: places ALL Pass 2 (RE_QUERY) candidates
+         * (>= minScore) FIRST in rank order, and appends non-duplicate Pass 1 candidates
+         * afterward up to limit (default 8). This prevents noisy Pass 1 chunks from evicting
+         * refined Pass 2 product catalog chunks.
          */
         internal fun mergeCandidates(
             pass1: List<RetrievalCandidate>,
             pass2: List<RetrievalCandidate>,
-            limit: Int = 5,
-            minScore: Float = 0.36f
-        ): List<RetrievalCandidate> = (pass1 + pass2)
-            .groupBy { it.chunkId.ifBlank { it.chunkText } }
-            .map { (_, group) -> group.maxByOrNull { it.similarityScore }!! }
-            .filter { it.similarityScore >= minScore }
-            .sortedByDescending { it.similarityScore }
-            .take(limit)
+            limit: Int = 8,
+            minScore: Float = 0.38f
+        ): List<RetrievalCandidate> {
+            val validPass2 = pass2.filter { it.similarityScore >= minScore }
+                .sortedByDescending { it.similarityScore }
+            val pass2Keys = validPass2.map { it.chunkId.ifBlank { it.chunkText } }.toSet()
+
+            val validPass1 = pass1.filter { it.similarityScore >= minScore }
+                .filterNot { pass2Keys.contains(it.chunkId.ifBlank { it.chunkText }) }
+                .sortedByDescending { it.similarityScore }
+
+            return (validPass2 + validPass1).take(limit)
+        }
 
         /**
-         * Computes the base RAG threshold mapped from user preferences to the
-         * realistic multilingual MiniLM score distribution for Arabic QA pairs.
+         * Computes the base RAG threshold mapped from user preferences [0.65f, 0.85f]
+         * to [0.42f, 0.50f] with clamp: 0.65f -> 0.42f, 0.75f -> 0.46f, 0.85f -> 0.50f.
          */
-        internal fun calculateRagBaseThreshold(userThreshold: Float): Float =
-            (userThreshold * 0.5f).coerceIn(0.36f, 0.45f)
+        internal fun calculateRagBaseThreshold(userThreshold: Float): Float {
+            val clamped = userThreshold.coerceIn(0.65f, 0.85f)
+            return 0.42f + (clamped - 0.65f) * 0.4f
+        }
 
         /**
          * Pure helper to evaluate if a candidate reply is a duplicate of a recent assistant
@@ -376,73 +450,22 @@ class AutoReplyOrchestrator @Inject constructor(
         // (step 10) so the bot engages conversationally with its dynamic AI
         // persona, honoring the customer's language and conversation history.
 
-        // 8. RAG Retrieval Engine
-        val priorMessages = getPriorMessages(rawNotification)
-        val hasContext = priorMessages.isNotEmpty()
-
-        val richContext = if (hasContext) {
-            val prunedPrior = priorMessages.takeLast(2)
-            val normalizedPrior = prunedPrior.map { normalizer.normalize(it) ?: it }
-            normalizedPrior.joinToString("\n") + "\n" + processed.normalizedText
-        } else {
-            processed.normalizedText
-        }
-
+        // 8. RAG Retrieval Engine (Single-Query Pass 1)
         val activeHashes = getActiveReplyHashes()
         val ragBaseThreshold = calculateRagBaseThreshold(stylePrefs.similarityThreshold)
         var candidates: List<RetrievalCandidate> = emptyList()
         var maxScore = 0f
 
-        if (hasContext) {
-            // Late Fusion Parallel Dual Search (Late Fusion)
-            val queryEmbeddingA = embeddingEngine.embedForAutoReply(richContext)
-            val queryEmbeddingB = embeddingEngine.embedForAutoReply(processed.normalizedText)
-
-            if (queryEmbeddingA != null && queryEmbeddingB != null) {
-                val (candidatesA, scoreA) = semanticRetrievalRepository.retrieveCandidates(
-                    queryEmbedding = queryEmbeddingA,
-                    minimumSimilarityThreshold = ragBaseThreshold,
-                    queryText = processed.normalizedText,
-                    recentReplyHashes = activeHashes
-                )
-
-                val (candidatesB, scoreB) = semanticRetrievalRepository.retrieveCandidates(
-                    queryEmbedding = queryEmbeddingB,
-                    minimumSimilarityThreshold = ragBaseThreshold,
-                    queryText = processed.normalizedText,
-                    recentReplyHashes = activeHashes
-                )
-
-                maxScore = maxOf(scoreA, scoreB)
-
-                val combined = candidatesA + candidatesB
-                val uniqueCandidates = combined
-                    .groupBy { it.chunkText }
-                    .map { (_, group) -> group.maxByOrNull { it.similarityScore }!! }
-
-                val topB = candidatesB.firstOrNull()
-                val merged = if (topB != null && topB.baseSimilarityScore > 0.90f) {
-                    val prioritized = uniqueCandidates.first { it.chunkText == topB.chunkText }
-                    val remaining = uniqueCandidates.filter { it.chunkText != topB.chunkText }
-                        .sortedByDescending { it.similarityScore }
-                    listOf(prioritized) + remaining
-                } else {
-                    uniqueCandidates.sortedByDescending { it.similarityScore }
-                }
-                candidates = merged.filter { it.similarityScore >= 0.36f }
-            }
-        } else {
-            val queryEmbedding = embeddingEngine.embedForAutoReply(richContext)
-            if (queryEmbedding != null) {
-                val (retrievedCandidates, bestScore) = semanticRetrievalRepository.retrieveCandidates(
-                    queryEmbedding = queryEmbedding,
-                    minimumSimilarityThreshold = ragBaseThreshold,
-                    queryText = processed.normalizedText,
-                    recentReplyHashes = activeHashes
-                )
-                candidates = retrievedCandidates.filter { it.similarityScore >= 0.36f }
-                maxScore = bestScore
-            }
+        val queryEmbedding = embeddingEngine.embedForAutoReply(processed.normalizedText)
+        if (queryEmbedding != null) {
+            val (retrievedCandidates, bestScore) = semanticRetrievalRepository.retrieveCandidates(
+                queryEmbedding = queryEmbedding,
+                minimumSimilarityThreshold = ragBaseThreshold,
+                queryText = processed.normalizedText,
+                recentReplyHashes = activeHashes
+            )
+            candidates = retrievedCandidates.filter { it.similarityScore >= 0.38f }
+            maxScore = bestScore
         }
 
         // 8.1. Context Assembly (Sources A, B)
@@ -484,18 +507,17 @@ class AutoReplyOrchestrator @Inject constructor(
             return
         }
 
-        // 10b. Parse structured JSON (with markdown code-block stripping)
-        val sanitizedOutput = sanitizeLlmJson(rawLlmOutput)
+        // 10b. Parse structured JSON (with code-block stripping & unescaped quote repair)
         val agenticResponse = try {
-            agenticJson.decodeFromString<AgenticLlmResponse>(sanitizedOutput)
+            decodeAgenticResponseSafely(rawLlmOutput)
         } catch (e: Exception) {
             // Malformed JSON / plain-text raw output must never reach the
             // customer (broken JSON snippets like {"action":"REPLY"... are
             // unacceptable UX). All decode failures degrade safely to HITL.
-            if (isLeakedReasoningText(sanitizedOutput)) {
-                Log.w(TAG, "Raw LLM output contains reasoning leakage — degrading safely to HITL: ${sanitizedOutput.take(200)}", e)
+            if (isLeakedReasoningText(rawLlmOutput)) {
+                Log.w(TAG, "Raw LLM output contains reasoning leakage — degrading safely to HITL: ${rawLlmOutput.take(200)}", e)
             } else {
-                Log.w(TAG, "LLM output is not valid JSON — degrading safely to HITL (no raw-text fallback): ${sanitizedOutput.take(200)}", e)
+                Log.w(TAG, "LLM output is not valid JSON — degrading safely to HITL (no raw-text fallback): ${rawLlmOutput.take(200)}", e)
             }
             buildUnsafeOutputHitlResponse()
         }.let { response ->
@@ -592,12 +614,19 @@ class AutoReplyOrchestrator @Inject constructor(
             }
         }
 
+        val normalizedAction = agenticResponse.action.trim().uppercase()
+        val effectiveAction = if (normalizedAction == "RE_QUERY" && agenticResponse.refinedSearchKeyword.isNullOrBlank() && !agenticResponse.finalReplyText.isNullOrBlank()) {
+            "REPLY"
+        } else {
+            normalizedAction
+        }
+
         val rawReplyText: String? = if (overriddenReplyText != null) {
             overriddenReplyText
         } else {
             when {
                 // Case 0: Handover to human representative (LLM requested HITL)
-                agenticResponse.action == "HITL" -> {
+                effectiveAction == "HITL" -> {
                     Log.i(TAG, "LLM action=HITL. Triggering alarm and hand-off notification.")
                     triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
                     try {
@@ -627,34 +656,106 @@ class AutoReplyOrchestrator @Inject constructor(
                 }
 
                 // Case 1: Valid REPLY action
-                agenticResponse.action == "REPLY" && !agenticResponse.finalReplyText.isNullOrBlank() -> {
+                effectiveAction == "REPLY" && !agenticResponse.finalReplyText.isNullOrBlank() -> {
                     Log.i(TAG, "LLM action=REPLY. Dispatching final reply.")
                     agenticResponse.finalReplyText
                 }
 
-                // Case 2: RE_QUERY — execute one agentic loopback
-                agenticResponse.action == "RE_QUERY" && !agenticResponse.refinedSearchKeyword.isNullOrBlank() -> {
-                    Log.i(TAG, "LLM action=RE_QUERY. Refined keyword: '${agenticResponse.refinedSearchKeyword}'")
+                // Case 2: RE_QUERY — execute secondary retrieval & second LLM pass
+                effectiveAction == "RE_QUERY" -> {
+                    val refinedKeyword = agenticResponse.refinedSearchKeyword?.trim().orEmpty()
+                    Log.i(TAG, "LLM action=RE_QUERY. Refined keyword: '$refinedKeyword'")
                     PersonaLogger.d(PersonaLogTags.LLM, "RE_QUERY loop triggered")
 
-                    // 10c. Embed the refined keyword
-                    val refinedEmbedding = embeddingEngine.embedForAutoReply(agenticResponse.refinedSearchKeyword)
-                    if (refinedEmbedding == null) {
-                        Log.e(TAG, "Failed to embed refined keyword — aborting RE_QUERY")
+                    val isProductCatalogQuery = refinedKeyword.contains("منتج") ||
+                        refinedKeyword.contains("المنتجات") ||
+                        refinedKeyword.contains("أسعار") ||
+                        refinedKeyword.contains("كتالوج") ||
+                        processed.originalText.contains("منتج") ||
+                        processed.originalText.contains("المنتجات") ||
+                        processed.originalText.contains("أسعار") ||
+                        processed.originalText.contains("كتالوج")
+
+                    val catalogCandidates = if (isProductCatalogQuery) {
+                        try {
+                            businessKnowledgeDao.getProductCatalogChunks(limit = 5).map { proj ->
+                                RetrievalCandidate(
+                                    chunkId = proj.chunkId,
+                                    headerContext = proj.headerContext,
+                                    chunkText = proj.chunkText,
+                                    similarityScore = 0.99f,
+                                    baseSimilarityScore = 0.99f
+                                )
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to load product catalog chunks", e)
+                            emptyList()
+                        }
+                    } else {
+                        emptyList()
+                    }
+
+                    val retrievedPass2: List<RetrievalCandidate> = if (refinedKeyword.isNotBlank()) {
+                        val refinedEmbedding = embeddingEngine.embedForAutoReply(refinedKeyword)
+                        if (refinedEmbedding != null) {
+                            val (retrieved, _) = semanticRetrievalRepository.retrieveCandidates(
+                                queryEmbedding = refinedEmbedding,
+                                minimumSimilarityThreshold = ragBaseThreshold,
+                                queryText = refinedKeyword,
+                                recentReplyHashes = activeHashes
+                            )
+                            retrieved
+                        } else {
+                            emptyList()
+                        }
+                    } else {
+                        emptyList()
+                    }
+
+                    val pass2Candidates = catalogCandidates + retrievedPass2
+                    val mergedChunks = mergeCandidates(
+                        pass1 = candidates,
+                        pass2 = pass2Candidates,
+                        limit = 8,
+                        minScore = 0.38f
+                    )
+
+                    Log.i(TAG, "RE_QUERY merged to ${mergedChunks.size} chunks (Pass1: ${candidates.size}, Pass2: ${pass2Candidates.size}). Executing final LLM pass.")
+
+                    // 10e. Second LLM pass — REPLY-only mode (no further RE_QUERY allowed)
+                    // ALWAYS invoke generateFinalReply even if mergedChunks is empty
+                    val finalOutput = replyGenerationRepository.generateFinalReply(
+                        queryText = processed.originalText,
+                        chunks = mergedChunks,
+                        isOngoingConversation = isOngoing,
+                        chatHistory = chatHistory,
+                        activeOrders = activeOrders,
+                        personalChunks = emptyList(),
+                        maxTokens = 750
+                    )
+
+                    if (finalOutput.isNullOrBlank()) {
                         null
                     } else {
-                        // 10d. Second vector sweep with refined keyword
-                        val (newChunks, _) = semanticRetrievalRepository.retrieveCandidates(
-                            queryEmbedding = refinedEmbedding,
-                            minimumSimilarityThreshold = ragBaseThreshold,
-                            queryText = agenticResponse.refinedSearchKeyword,
-                            recentReplyHashes = activeHashes
-                        )
+                        val finalParsed = try {
+                            decodeAgenticResponseSafely(finalOutput)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "LLM final output is not valid JSON — degrading safely to HITL: ${finalOutput.take(200)}", e)
+                            buildUnsafeOutputHitlResponse()
+                        }.let { response ->
+                            if (isLeakedReasoningText(response.finalReplyText)) {
+                                PersonaLogger.w(PersonaLogTags.LLM, "Reasoning leakage in final-pass final_reply_text — routing to HITL guard")
+                                Log.w(TAG, "Reasoning leakage in final-pass final_reply_text — overriding with HITL guard.")
+                                buildUnsafeOutputHitlResponse()
+                            } else {
+                                response
+                            }
+                        }
 
-                        val mergedChunks = mergeCandidates(candidates, newChunks, limit = 5, minScore = 0.36f)
+                        val finalReplyOverride = handleFinalPassOrderActions(finalParsed, processed)
 
-                        if (mergedChunks.isEmpty()) {
-                            Log.d(TAG, "RE_QUERY returned no relevant chunks after merge — HITL fallback")
+                        if (finalParsed.action.trim().uppercase() == "HITL") {
+                            Log.i(TAG, "Second-pass LLM action=HITL. Handing off to human.")
                             try {
                                 val failedQuery = FailedQueryEntity(
                                     contactDisplayName = processed.contactName,
@@ -665,100 +766,36 @@ class AutoReplyOrchestrator @Inject constructor(
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to insert FailedQueryEntity", e)
                             }
-                            null
-                        } else {
-                            Log.i(TAG, "RE_QUERY merged to ${mergedChunks.size} chunks (Pass1: ${candidates.size}, Pass2: ${newChunks.size}). Executing final LLM pass.")
-
-                            // 10e. Second LLM pass — REPLY-only mode (no further RE_QUERY allowed)
-                            val finalOutput = replyGenerationRepository.generateFinalReply(
-                                queryText = processed.originalText,
-                                chunks = mergedChunks,
-                                isOngoingConversation = isOngoing,
-                                chatHistory = chatHistory,
-                                activeOrders = activeOrders,
-                                personalChunks = emptyList(),
-                                maxTokens = 750
-                            )
-
-                            if (finalOutput.isNullOrBlank()) {
-                                null
-                            } else {
-                                // Parse the final output
-                                val sanitizedFinal = sanitizeLlmJson(finalOutput)
-                                val finalParsed = try {
-                                    agenticJson.decodeFromString<AgenticLlmResponse>(sanitizedFinal)
-                                } catch (_: Exception) {
-                                    // Malformed/non-JSON final output must never reach
-                                    // the customer — degrade safely to HITL.
-                                    Log.w(TAG, "LLM final output is not valid JSON — degrading safely to HITL (no raw-text fallback): ${sanitizedFinal.take(200)}")
-                                    buildUnsafeOutputHitlResponse()
-                                }.let { response ->
-                                    // Guard against well-formed JSON whose final_reply_text
-                                    // itself leaks English chain-of-thought.
-                                    if (isLeakedReasoningText(response.finalReplyText)) {
-                                        PersonaLogger.w(PersonaLogTags.LLM, "Reasoning leakage in final-pass final_reply_text — routing to HITL guard")
-                                        Log.w(TAG, "Reasoning leakage in final-pass final_reply_text — overriding with HITL guard.")
-                                        buildUnsafeOutputHitlResponse()
-                                    } else {
-                                        response
-                                    }
-                                }
-
-                                // Agentic order actions are honored in the final
-                                // pass too (first pass took the RE_QUERY branch):
-                                // a CANCEL, UPDATE, or CREATE can legitimately land
-                                // here and must still mutate the persisted state.
-                                val finalReplyOverride = handleFinalPassOrderActions(finalParsed, processed)
-
-                                if (finalParsed.action == "HITL") {
-                                    Log.i(TAG, "Second-pass LLM action=HITL. Handing off to human.")
-                                    try {
-                                        val failedQuery = FailedQueryEntity(
-                                            contactDisplayName = processed.contactName,
-                                            queryText = processed.originalText,
-                                            bestScore = maxScore
-                                        )
-                                        failedQueryDao.insert(failedQuery)
-                                    } catch (e: Exception) {
-                                        Log.e(TAG, "Failed to insert FailedQueryEntity", e)
-                                    }
-                                    triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
-                                    try {
-                                        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                                        val vibrationPattern = longArrayOf(0, 500, 200, 500)
-                                        val notification = NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
-                                            .setSmallIcon(R.drawable.ic_notification)
-                                            .setContentTitle("طلب تحويل لبشري 🚨")
-                                            .setContentText("العميل ${processed.contactName} يطلب التحدث مع موظف بشري الآن!")
-                                            .setStyle(NotificationCompat.BigTextStyle().bigText("العميل ${processed.contactName} يطلب التحدث مع موظف بشري الآن!"))
-                                            .setVibrate(vibrationPattern)
-                                            .setPriority(NotificationCompat.PRIORITY_HIGH)
-                                            .setCategory(NotificationCompat.CATEGORY_ALARM)
-                                            .build()
-                                        notificationManager.notify(1003, notification)
-                                    } catch (e: Exception) {
-                                        Log.e(TAG, "Failed to post hand-off notification to merchant", e)
-                                    }
-                                    val hitlReply = if (!finalParsed.finalReplyText.isNullOrBlank()) {
-                                        finalParsed.finalReplyText
-                                    } else {
-                                        CANONICAL_HITL_MESSAGE
-                                    }
-                                    Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
-                                    sendImmediateReply(processed, ensureHitlSuffix(hitlReply))
-                                    return
-                                }
-
-                                // Use parsed finalReplyText; a parsed-but-blank reply
-                                // degrades to the safe HITL guard instead of leaking
-                                // raw LLM output. A deterministic order-action
-                                // override (e.g. CANCEL without any active order)
-                                // always wins over the model's prose.
-                                finalReplyOverride
-                                    ?: finalParsed.finalReplyText
-                                    ?: buildUnsafeOutputHitlResponse().finalReplyText
+                            triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
+                            try {
+                                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                                val vibrationPattern = longArrayOf(0, 500, 200, 500)
+                                val notification = NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
+                                    .setSmallIcon(R.drawable.ic_notification)
+                                    .setContentTitle("طلب تحويل لبشري 🚨")
+                                    .setContentText("العميل ${processed.contactName} يطلب التحدث مع موظف بشري الآن!")
+                                    .setStyle(NotificationCompat.BigTextStyle().bigText("العميل ${processed.contactName} يطلب التحدث مع موظف بشري الآن!"))
+                                    .setVibrate(vibrationPattern)
+                                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                                    .setCategory(NotificationCompat.CATEGORY_ALARM)
+                                    .build()
+                                notificationManager.notify(1003, notification)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to post hand-off notification to merchant", e)
                             }
+                            val hitlReply = if (!finalParsed.finalReplyText.isNullOrBlank()) {
+                                finalParsed.finalReplyText
+                            } else {
+                                CANONICAL_HITL_MESSAGE
+                            }
+                            Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
+                            sendImmediateReply(processed, ensureHitlSuffix(hitlReply))
+                            return
                         }
+
+                        finalReplyOverride
+                            ?: finalParsed.finalReplyText
+                            ?: buildUnsafeOutputHitlResponse().finalReplyText
                     }
                 }
 
@@ -975,8 +1012,10 @@ class AutoReplyOrchestrator @Inject constructor(
         if (trimmed.isEmpty() || trimmed == CANONICAL_HITL_MESSAGE) {
             return CANONICAL_HITL_MESSAGE
         }
-        return if (trimmed.endsWith(CANONICAL_HITL_MESSAGE)) trimmed
-               else "$trimmed\n$CANONICAL_HITL_MESSAGE"
+        if (trimmed.contains(CANONICAL_HITL_MESSAGE) || trimmed.contains("ثواني وهيكون مع حضرتك")) {
+            return trimmed
+        }
+        return "$trimmed\n$CANONICAL_HITL_MESSAGE"
     }
 
     private suspend fun sendHitlHoldingReply(processed: ProcessedNotification) {
@@ -1020,14 +1059,6 @@ class AutoReplyOrchestrator @Inject constructor(
         return mediaKeywords.any { lower.contains(it) }
     }
 
-    /**
-     * Lenient JSON parser for agentic LLM responses.
-     * Ignores unknown keys to handle extra fields from non-compliant models.
-     */
-    private val agenticJson = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-    }
 
     /**
      * English chain-of-thought markers indicating reasoning-token leakage in

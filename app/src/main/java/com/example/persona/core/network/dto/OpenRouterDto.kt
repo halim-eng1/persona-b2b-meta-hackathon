@@ -5,10 +5,22 @@ import kotlinx.serialization.Serializable
 
 // ── Request DTOs ──────────────────────────────────────────────────────────────
 
+/**
+ * Dedicated request-only message schema containing strictly [role] and [content].
+ * Prevents any accidental serialization of `reasoning_content` on outgoing HTTP requests.
+ */
+@Serializable
+data class OpenRouterChatMessage(
+    val role: String,   // "system" | "user" | "assistant"
+    val content: String
+)
+
+typealias ChatMessage = OpenRouterChatMessage
+
 @Serializable
 data class OpenRouterRequest(
     val model: String,
-    val messages: List<ChatMessage>,
+    val messages: List<OpenRouterChatMessage>,
     val temperature: Float = 0.3f,
     @SerialName("max_tokens")
     val maxTokens: Int = 512,
@@ -37,17 +49,17 @@ data class ReasoningConfig(
     val exclude: Boolean? = true
 )
 
+// ── Response DTOs ─────────────────────────────────────────────────────────────
+
 @Serializable
-data class ChatMessage(
-    val role: String,   // "system" | "user" | "assistant"
-    val content: String,
+data class OpenRouterMessageDto(
+    val role: String? = null,
+    val content: String? = null,
     @SerialName("reasoning_content")
     val reasoningContent: String? = null
 )
 
-typealias OpenRouterMessageDto = ChatMessage
-
-// ── Response DTOs ─────────────────────────────────────────────────────────────
+typealias ChoiceMessage = OpenRouterMessageDto
 
 @Serializable
 data class OpenRouterResponse(
@@ -57,14 +69,7 @@ data class OpenRouterResponse(
 
 @Serializable
 data class Choice(
-    val message: ChoiceMessage? = null
-)
-
-@Serializable
-data class ChoiceMessage(
-    val content: String? = null,
-    @SerialName("reasoning_content")
-    val reasoningContent: String? = null
+    val message: OpenRouterMessageDto? = null
 )
 
 @Serializable
