@@ -1,0 +1,31 @@
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+secrets.properties
+secrets.local.properties
+secrets copy.properties
+.kotlin/
+*.log
+*.onnx
+
+# Agent & local tool caches
+/.antigravitycli/
+/.vscode/
+/.codex/
+/.cursor/
+/.gemini/
+/.claude/
+/.agents/
+/logs/
+/temp_prompt_review/
+/backup_models/
+/benchmark_reasoning/
+/scripts/
+__pycache__/
