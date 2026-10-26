@@ -1,9 +1,22 @@
 package com.example.persona.features.auto_reply.data.repository
 
+import android.content.Context
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.database.entity.OrderStatus
+import com.example.persona.core.network.dto.ChatMessage
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
+import io.ktor.serialization.kotlinx.json.json
+import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -201,5 +214,243 @@ class ReplyGenerationRepositoryImplTest {
         assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS.contains("\"action\": \"REPLY\" | \"RE_QUERY\" | \"HITL\""))
         assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS.contains("\"action\": \"REPLY\" | \"HITL\""))
         assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS.contains("\"RE_QUERY\" is completely forbidden"))
+    }
+
+    @Test
+    fun `callOpenRouter uses primary key when request succeeds`() = runTest {
+        val capturedAuthHeaders = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            capturedAuthHeaders.add(request.headers[HttpHeaders.Authorization] ?: "")
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"تمام\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key-123",
+            fallbackApiKey = "fallback-key-456"
+        )
+
+        val result = repo.callOpenRouter(
+            model = "test-model",
+            messages = listOf(ChatMessage(role = "user", content = "hi")),
+            maxTokens = 100
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals(1, capturedAuthHeaders.size)
+        assertEquals("Bearer primary-key-123", capturedAuthHeaders[0])
+    }
+
+    @Test
+    fun `callOpenRouter falls back to V2 key when primary key encounters 429`() = runTest {
+        val capturedAuthHeaders = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val auth = request.headers[HttpHeaders.Authorization] ?: ""
+            capturedAuthHeaders.add(auth)
+            if (auth.contains("primary-key-123")) {
+                respond(
+                    content = """{"error":{"message":"Rate limit exceeded"}}""",
+                    status = HttpStatusCode.TooManyRequests,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد بديل\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key-123",
+            fallbackApiKey = "fallback-key-456"
+        )
+
+        val result = repo.callOpenRouter(
+            model = "test-model",
+            messages = listOf(ChatMessage(role = "user", content = "hi")),
+            maxTokens = 100
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals(2, capturedAuthHeaders.size)
+        assertEquals("Bearer primary-key-123", capturedAuthHeaders[0])
+        assertEquals("Bearer fallback-key-456", capturedAuthHeaders[1])
+    }
+
+    @Test
+    fun `callOpenRouter falls back to V2 key when primary key encounters 500 server error`() = runTest {
+        val capturedAuthHeaders = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val auth = request.headers[HttpHeaders.Authorization] ?: ""
+            capturedAuthHeaders.add(auth)
+            if (auth.contains("primary-key-123")) {
+                respond(
+                    content = """Internal Server Error""",
+                    status = HttpStatusCode.InternalServerError,
+                    headers = headersOf(HttpHeaders.ContentType, "text/plain")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"نجح بعد العطل\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key-123",
+            fallbackApiKey = "fallback-key-456"
+        )
+
+        val result = repo.callOpenRouter(
+            model = "test-model",
+            messages = listOf(ChatMessage(role = "user", content = "hi")),
+            maxTokens = 100
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals(2, capturedAuthHeaders.size)
+        assertEquals("Bearer primary-key-123", capturedAuthHeaders[0])
+        assertEquals("Bearer fallback-key-456", capturedAuthHeaders[1])
+    }
+
+    @Test
+    fun `callOpenRouter falls back to V2 key when primary key encounters 401 Unauthorized`() = runTest {
+        val capturedAuthHeaders = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val auth = request.headers[HttpHeaders.Authorization] ?: ""
+            capturedAuthHeaders.add(auth)
+            if (auth.contains("primary-key-123")) {
+                respond(
+                    content = """{"error":{"message":"Invalid API key"}}""",
+                    status = HttpStatusCode.Unauthorized,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"نجاح المفتاح البديل\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key-123",
+            fallbackApiKey = "fallback-key-456"
+        )
+
+        val result = repo.callOpenRouter(
+            model = "test-model",
+            messages = listOf(ChatMessage(role = "user", content = "hi")),
+            maxTokens = 100
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals(2, capturedAuthHeaders.size)
+        assertEquals("Bearer primary-key-123", capturedAuthHeaders[0])
+        assertEquals("Bearer fallback-key-456", capturedAuthHeaders[1])
+    }
+
+    @Test
+    fun `callOpenRouter returns RateLimited when both primary and fallback keys return 429`() = runTest {
+        val capturedAuthHeaders = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            capturedAuthHeaders.add(request.headers[HttpHeaders.Authorization] ?: "")
+            respond(
+                content = """{"error":{"message":"Quota exceeded"}}""",
+                status = HttpStatusCode.TooManyRequests,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key-123",
+            fallbackApiKey = "fallback-key-456"
+        )
+
+        val result = repo.callOpenRouter(
+            model = "test-model",
+            messages = listOf(ChatMessage(role = "user", content = "hi")),
+            maxTokens = 100
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.RateLimited)
+        assertEquals(2, capturedAuthHeaders.size)
+    }
+
+    @Test
+    fun `executeFailoverChain returns success when fallback key succeeds on model 1 after primary key 429`() = runTest {
+        val mockEngine = MockEngine { request ->
+            val auth = request.headers[HttpHeaders.Authorization] ?: ""
+            if (auth.contains("primary-key-123")) {
+                respond(
+                    content = """{"error":{"message":"Rate limit exceeded"}}""",
+                    status = HttpStatusCode.TooManyRequests,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"مرحبا بك\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key-123",
+            fallbackApiKey = "fallback-key-456"
+        )
+
+        val reply = repo.executeFailoverChain(
+            messages = listOf(ChatMessage(role = "user", content = "hi")),
+            maxTokens = 100
+        )
+
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"مرحبا بك\"}", reply)
+        assertFalse(reply == ReplyGenerationRepositoryImpl.HITL_FALLBACK_JSON)
     }
 }

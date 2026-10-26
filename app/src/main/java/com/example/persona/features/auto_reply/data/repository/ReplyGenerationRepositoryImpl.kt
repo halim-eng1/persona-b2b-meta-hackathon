@@ -44,6 +44,25 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ReplyGenerationRepository {
 
+    internal constructor(
+        httpClient: HttpClient,
+        context: Context,
+        primaryApiKey: String,
+        fallbackApiKey: String
+    ) : this(httpClient, context) {
+        this.primaryApiKeyOverride = primaryApiKey
+        this.fallbackApiKeyOverride = fallbackApiKey
+    }
+
+    private var primaryApiKeyOverride: String? = null
+    private var fallbackApiKeyOverride: String? = null
+
+    internal val primaryApiKey: String
+        get() = primaryApiKeyOverride ?: BuildConfig.OPENROUTER_API_KEY
+
+    internal val fallbackApiKey: String
+        get() = fallbackApiKeyOverride ?: BuildConfig.OPENROUTER_API_KEY_V2
+
     companion object {
         private const val TAG = PersonaLogTags.LLM
 
@@ -404,9 +423,9 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
         return executeFailoverChain(messages, maxTokens)
     }
 
-    // ── Private Implementation ────────────────────────────────────────────
+    // ── Internal / Private Implementation ───────────────────────────────
 
-    private sealed interface CallResult {
+    internal sealed interface CallResult {
         data class Success(val content: String) : CallResult
         data object RateLimited : CallResult
         data object Failed : CallResult
@@ -417,7 +436,7 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
      * [withTimeout] at [MODEL_TIMEOUT_MS]. On 429 applies 1200ms backoff, and if 3 consecutive
      * models return 429 breaks early to HITL fallback.
      */
-    private suspend fun executeFailoverChain(messages: List<ChatMessage>, maxTokens: Int): String? {
+    internal suspend fun executeFailoverChain(messages: List<ChatMessage>, maxTokens: Int): String? {
         val targetMaxTokens = minOf(maxTokens, ABSOLUTE_FAILOVER_CEILING)
         var consecutive429Count = 0
 
@@ -457,18 +476,91 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
 
     /**
      * Executes an HTTP POST to the OpenRouter API for the given [model].
-     * If HTTP 400 is returned, retries omitting the reasoning object.
+     * Attempts [primaryApiKey] first. If it encounters any error (5xx, 4xx like 429,
+     * network error, or timeout), falls back to [fallbackApiKey] (OPENROUTER_API_KEY_V2)
+     * before declaring failure on this model.
      */
-    private suspend fun callOpenRouter(
+    internal suspend fun callOpenRouter(
         model: String,
         messages: List<ChatMessage>,
         maxTokens: Int
     ): CallResult = withContext(Dispatchers.IO) {
-        try {
+        val primary = primaryApiKey.trim()
+        val fallback = fallbackApiKey.trim()
+
+        val effectivePrimary = primary.ifBlank { fallback }
+        val hasDistinctFallback = fallback.isNotBlank() && fallback != effectivePrimary
+
+        val primaryResult = executeSingleOpenRouterCall(
+            model = model,
+            messages = messages,
+            maxTokens = maxTokens,
+            apiKey = effectivePrimary
+        )
+
+        if (primaryResult is CallResult.Success) {
+            return@withContext primaryResult
+        }
+
+        // Primary key failed (all errors: 4xx like 429, 5xx, timeout, or network exception)
+        if (hasDistinctFallback) {
+            val primarySuffix = if (effectivePrimary.length >= 6) effectivePrimary.takeLast(6) else "short"
+            val fallbackSuffix = if (fallback.length >= 6) fallback.takeLast(6) else "short"
+            Log.w(
+                TAG,
+                "Primary OpenRouter key (...$primarySuffix) failed on model $model with $primaryResult. " +
+                    "Falling back to OPENROUTER_API_KEY_V2 (...$fallbackSuffix)."
+            )
+            PersonaLogger.d(
+                TAG,
+                "Primary key failed on $model ($primaryResult) -> fallback to OPENROUTER_API_KEY_V2"
+            )
+
+            val fallbackResult = executeSingleOpenRouterCall(
+                model = model,
+                messages = messages,
+                maxTokens = maxTokens,
+                apiKey = fallback
+            )
+
+            if (fallbackResult is CallResult.Success) {
+                Log.i(TAG, "Fallback OPENROUTER_API_KEY_V2 succeeded on model $model")
+                PersonaLogger.d(TAG, "Fallback OPENROUTER_API_KEY_V2 succeeded on model: $model")
+                return@withContext fallbackResult
+            }
+
+            Log.w(
+                TAG,
+                "Fallback OPENROUTER_API_KEY_V2 also failed on model $model with $fallbackResult"
+            )
+            return@withContext fallbackResult
+        }
+
+        primaryResult
+    }
+
+    /**
+     * Executes a single HTTP POST attempt to OpenRouter using the designated [apiKey].
+     * If HTTP 400 is returned, retries omitting the reasoning object.
+     */
+    internal suspend fun executeSingleOpenRouterCall(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int,
+        apiKey: String
+    ): CallResult {
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "API key is blank; skipping request for model $model")
+            return CallResult.Failed
+        }
+
+        val keySuffix = if (apiKey.length >= 6) apiKey.takeLast(6) else "short"
+
+        return try {
             withTimeout(MODEL_TIMEOUT_MS) {
                 var response = httpClient.post(BuildConfig.OPENROUTER_BASE_URL) {
                     contentType(ContentType.Application.Json)
-                    bearerAuth(BuildConfig.OPENROUTER_API_KEY)
+                    bearerAuth(apiKey)
                     setBody(
                         OpenRouterRequest(
                             model = model,
@@ -484,7 +576,7 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
                     Log.w(TAG, "HTTP 400 on $model with reasoning object. Retrying without reasoning payload.")
                     response = httpClient.post(BuildConfig.OPENROUTER_BASE_URL) {
                         contentType(ContentType.Application.Json)
-                        bearerAuth(BuildConfig.OPENROUTER_API_KEY)
+                        bearerAuth(apiKey)
                         setBody(
                             OpenRouterRequest(
                                 model = model,
@@ -498,34 +590,34 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
 
                 when {
                     response.status.value == 429 -> {
-                        Log.w(TAG, "Rate limited (429) on model $model")
+                        Log.w(TAG, "Rate limited (429) on model $model (key ...$keySuffix)")
                         CallResult.RateLimited
                     }
                     response.status.value in 500..599 -> {
-                        Log.w(TAG, "Server error (${response.status.value}) on model $model")
+                        Log.w(TAG, "Server error (${response.status.value}) on model $model (key ...$keySuffix)")
                         CallResult.Failed
                     }
                     response.status.isSuccess() -> {
                         val body = response.body<OpenRouterResponse>()
                         val content = body.choices?.firstOrNull()?.message?.content
                         if (content.isNullOrBlank()) {
-                            Log.w(TAG, "Empty content in successful response from $model")
+                            Log.w(TAG, "Empty content in successful response from $model (key ...$keySuffix)")
                             CallResult.Failed
                         } else {
                             CallResult.Success(content)
                         }
                     }
                     else -> {
-                        Log.w(TAG, "Unexpected HTTP ${response.status.value} from $model")
+                        Log.w(TAG, "HTTP ${response.status.value} error from $model (key ...$keySuffix)")
                         CallResult.Failed
                     }
                 }
             }
         } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "Timeout (${MODEL_TIMEOUT_MS}ms) on model $model")
+            Log.w(TAG, "Timeout (${MODEL_TIMEOUT_MS}ms) on model $model (key ...$keySuffix)")
             CallResult.Failed
         } catch (e: Exception) {
-            Log.e(TAG, "Network error on model $model", e)
+            Log.e(TAG, "Network error on model $model (key ...$keySuffix)", e)
             CallResult.Failed
         }
     }

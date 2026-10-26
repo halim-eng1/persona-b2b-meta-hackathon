@@ -76,10 +76,14 @@ android {
         )
         buildConfigField(
             "String",
+            "OPENROUTER_API_KEY_V2",
+            "\"${resolveSecret("OPENROUTER_API_KEY_V2") ?: ""}\""
+        )
+        buildConfigField(
+            "String",
             "OPENROUTER_BASE_URL",
             "\"${resolveSecret("OPENROUTER_BASE_URL") ?: "https://openrouter.ai/api/v1/chat/completions"}\""
         )
-
     }
 
     buildTypes {
@@ -198,6 +202,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.ktor.client.mock)
 
     // Instrumented Testing
     androidTestImplementation(libs.androidx.junit)
