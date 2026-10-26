@@ -1,0 +1,54 @@
+package com.example.persona.features.onboarding.data
+
+import android.Manifest
+import android.content.ComponentName
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
+import androidx.core.content.ContextCompat
+import com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener
+import com.example.persona.features.onboarding.domain.model.PermissionState
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class PermissionChecker @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    fun isNotificationListenerEnabled(): Boolean {
+        val componentName = ComponentName(context, WhatsAppNotificationListener::class.java)
+        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        return flat?.contains(componentName.flattenToString()) == true
+    }
+
+    fun isBatteryOptimizationIgnored(): Boolean {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        return pm.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
+    fun isPostNotificationsGranted(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else true
+    }
+
+    fun getFullState(): PermissionState = PermissionState(
+        isNotificationListenerGranted = isNotificationListenerEnabled(),
+        isBatteryOptimizationIgnored = isBatteryOptimizationIgnored(),
+        isPostNotificationsGranted = isPostNotificationsGranted(),
+        isAutoStartEnabled = detectAutoStartCapability()
+    )
+
+    private fun detectAutoStartCapability(): Boolean? {
+        val manufacturer = Build.MANUFACTURER.lowercase()
+        return when {
+            manufacturer in listOf("xiaomi", "oppo", "vivo", "huawei", "honor", "realme", "oneplus", "samsung", "infinix", "tecno", "itel") -> false
+            else -> null // Not applicable for standard stock Android ROMs
+        }
+    }
+}

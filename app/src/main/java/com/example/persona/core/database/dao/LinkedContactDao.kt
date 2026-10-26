@@ -28,4 +28,7 @@ interface LinkedContactDao {
 
     @Query("UPDATE linked_contacts SET cooldown_count = :count, cooldown_reset_at = :resetAt WHERE id = :contactId")
     suspend fun updateCooldown(contactId: Long, count: Int, resetAt: Instant?)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM linked_contacts WHERE whatsapp_display_name = :name AND is_active = 1)")
+    suspend fun isLinkedContact(name: String): Boolean
 }

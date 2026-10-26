@@ -2,7 +2,7 @@ package com.example.persona.core.common
 
 object Constants {
     // Chat Import
-    const val MIN_MESSAGES_REQUIRED = 200
+    const val MIN_MESSAGES_REQUIRED = 50
     const val EMBEDDING_BATCH_SIZE = 200
     const val EMBEDDING_DIMENSION = 384
 

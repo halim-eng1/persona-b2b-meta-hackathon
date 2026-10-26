@@ -45,4 +45,9 @@ object AppModule {
         PreferenceDataStoreFactory.create {
             context.preferencesDataStoreFile("persona_preferences")
         }
+
+    @Provides
+    @Singleton
+    fun provideWorkManager(@ApplicationContext context: Context): androidx.work.WorkManager =
+        androidx.work.WorkManager.getInstance(context)
 }

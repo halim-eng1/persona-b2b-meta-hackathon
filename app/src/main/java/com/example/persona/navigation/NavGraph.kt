@@ -12,6 +12,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 
+import androidx.compose.runtime.remember
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.persona.features.chat_import.presentation.ChatImportScreen
+import com.example.persona.features.chat_import.presentation.ChatImportProgressScreen
+import com.example.persona.features.chat_import.presentation.ChatImportViewModel
+import com.example.persona.features.home.presentation.HomeScreen
+
+import com.example.persona.features.onboarding.presentation.PermissionOnboardingScreen
+
 @Composable
 fun PersonaNavGraph(
     navController: NavHostController,
@@ -23,7 +32,11 @@ fun PersonaNavGraph(
         modifier = modifier
     ) {
         composable<Screen.Home> {
-            PlaceholderScreen(name = "Home Screen")
+            HomeScreen(
+                onNavigateToImport = {
+                    navController.navigate(Screen.ChatImport)
+                }
+            )
         }
         composable<Screen.Contacts> {
             PlaceholderScreen(name = "Contacts Screen")
@@ -37,15 +50,47 @@ fun PersonaNavGraph(
         composable<Screen.Onboarding> {
             PlaceholderScreen(name = "Onboarding Screen")
         }
-        composable<Screen.ChatImport> {
-            PlaceholderScreen(name = "Chat Import Screen")
+        composable<Screen.ChatImport> { backStackEntry ->
+            val viewModel: ChatImportViewModel = hiltViewModel(backStackEntry)
+            ChatImportScreen(
+                viewModel = viewModel,
+                onImportStarted = {
+                    navController.navigate(Screen.ChatImportProgress(""))
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
         composable<Screen.ChatImportProgress> { backStackEntry ->
-            val args = backStackEntry.toRoute<Screen.ChatImportProgress>()
-            PlaceholderScreen(name = "Chat Import Progress for: ${args.contactName}")
+            val parentEntry = remember(backStackEntry) {
+                try {
+                    navController.getBackStackEntry<Screen.ChatImport>()
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            val viewModel: ChatImportViewModel = if (parentEntry != null) {
+                hiltViewModel(parentEntry)
+            } else {
+                hiltViewModel()
+            }
+            ChatImportProgressScreen(
+                viewModel = viewModel,
+                onComplete = {
+                    navController.navigate(Screen.Home) {
+                        popUpTo(Screen.Home) { inclusive = true }
+                    }
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
         composable<Screen.PermissionSetup> {
-            PlaceholderScreen(name = "Permission Setup Screen")
+            PermissionOnboardingScreen(
+                onComplete = {
+                    navController.navigate(Screen.Home) {
+                        popUpTo(Screen.PermissionSetup) { inclusive = true }
+                    }
+                }
+            )
         }
         composable<Screen.ContactDetail> { backStackEntry ->
             val args = backStackEntry.toRoute<Screen.ContactDetail>()
