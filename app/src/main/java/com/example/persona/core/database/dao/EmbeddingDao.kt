@@ -13,7 +13,7 @@ interface EmbeddingDao {
     suspend fun insertAll(embeddings: List<EmbeddingEntity>)
 
     @Query("""
-        SELECT e.*, m.message_text, m.intent_category
+        SELECT e.*, m.message_text, m.intent_type, m.topic_type, m.sentiment_type, m.context_confidence
         FROM embeddings e
         INNER JOIN chat_messages m ON e.message_id = m.id
         WHERE m.contact_name = :contactName AND m.is_user_message = 1

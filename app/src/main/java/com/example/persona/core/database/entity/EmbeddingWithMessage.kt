@@ -10,7 +10,10 @@ data class EmbeddingWithMessage(
     @ColumnInfo(name = "model_version") val modelVersion: String,
     @ColumnInfo(name = "created_at") val createdAt: Instant,
     @ColumnInfo(name = "message_text") val messageText: String,
-    @ColumnInfo(name = "intent_category") val intentCategory: String
+    @ColumnInfo(name = "intent_type") val intentType: String,
+    @ColumnInfo(name = "topic_type") val topicType: String,
+    @ColumnInfo(name = "sentiment_type") val sentimentType: String,
+    @ColumnInfo(name = "context_confidence") val contextConfidence: Float
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -21,7 +24,10 @@ data class EmbeddingWithMessage(
                 modelVersion == other.modelVersion &&
                 createdAt == other.createdAt &&
                 messageText == other.messageText &&
-                intentCategory == other.intentCategory
+                intentType == other.intentType &&
+                topicType == other.topicType &&
+                sentimentType == other.sentimentType &&
+                contextConfidence == other.contextConfidence
     }
 
     override fun hashCode(): Int {
@@ -31,7 +37,10 @@ data class EmbeddingWithMessage(
         result = 31 * result + modelVersion.hashCode()
         result = 31 * result + createdAt.hashCode()
         result = 31 * result + messageText.hashCode()
-        result = 31 * result + intentCategory.hashCode()
+        result = 31 * result + intentType.hashCode()
+        result = 31 * result + topicType.hashCode()
+        result = 31 * result + sentimentType.hashCode()
+        result = 31 * result + contextConfidence.hashCode()
         return result
     }
 }

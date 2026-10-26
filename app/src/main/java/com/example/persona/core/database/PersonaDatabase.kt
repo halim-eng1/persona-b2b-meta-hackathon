@@ -14,7 +14,7 @@ import com.example.persona.core.database.entity.*
         ReplyLogEntity::class,
         ReplyQueueEntity::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

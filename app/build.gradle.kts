@@ -112,6 +112,9 @@ dependencies {
     // ONNX Runtime
     implementation(libs.onnxruntime.android)
 
+    // DJL Tokenizer
+    implementation(libs.djl.tokenizers)
+
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
 

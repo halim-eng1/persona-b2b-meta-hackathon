@@ -7,7 +7,7 @@ data class ParsedMessage(
     val messageText: String,
     val timestamp: Instant,
     val isUserMessage: Boolean,
-    val intentCategory: IntentCategory,
+    val context: ConversationContext,
     val sourceFormat: ChatFormat,
     val normalizedText: String?,  // null if not Arabic
     val isGrouped: Boolean = false
