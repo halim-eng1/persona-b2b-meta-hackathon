@@ -3,6 +3,7 @@ package com.example.persona.features.home.presentation
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,11 +30,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -56,6 +59,9 @@ import kotlin.math.roundToInt
 @Composable
 fun HomeScreen(
     onNavigateToImport: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onNavigateToAuditLog: () -> Unit,
+    onNavigateToChat: (contactName: String, sourceClass: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
@@ -90,6 +96,21 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
+            // ── Top Bar / Header ──────────────────────────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Dashboard",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
+                )
+                IconButton(onClick = onNavigateToSettings) {
+                    Icon(imageVector = Icons.Default.Settings, contentDescription = "Settings")
+                }
+            }
+
             // ── Section: Master Toggle ────────────────────────────────────────
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -110,7 +131,7 @@ fun HomeScreen(
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            text = if (state.isAutoReplyEnabled) "Active — responding to messages" else "Paused — not responding",
+                            text = if (state.isAutoReplyEnabled) "Active — responding to messages" else "Paused — capturing messages for inbox",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -203,14 +224,29 @@ fun HomeScreen(
 
             // ── Section: Recent Activity ──────────────────────────────────────
             if (state.recentActivity.isNotEmpty()) {
-                Text(
-                    text = "RECENT ACTIVITY",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        letterSpacing = 1.2.sp,
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "RECENT ACTIVITY",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            letterSpacing = 1.2.sp,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(
+                        onClick = onNavigateToAuditLog,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "View All / Audit Log",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -222,7 +258,10 @@ fun HomeScreen(
                 ) {
                     Column(modifier = Modifier.padding(4.dp)) {
                         state.recentActivity.forEachIndexed { index, item ->
-                            RecentActivityRow(item = item)
+                            RecentActivityRow(
+                                item = item,
+                                onClick = { onNavigateToChat(item.contactName, "BUSINESS") }
+                            )
                             if (index < state.recentActivity.lastIndex) {
                                 Box(
                                     modifier = Modifier
@@ -294,7 +333,10 @@ private fun StatCard(
 }
 
 @Composable
-private fun RecentActivityRow(item: AuditLogItem) {
+private fun RecentActivityRow(
+    item: AuditLogItem,
+    onClick: () -> Unit
+) {
     val localDt = item.timestamp.toLocalDateTime(TimeZone.currentSystemDefault())
     val formattedTime = "%02d:%02d".format(localDt.hour, localDt.minute)
     val pct = (item.similarityScore * 100).roundToInt()
@@ -302,6 +344,7 @@ private fun RecentActivityRow(item: AuditLogItem) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

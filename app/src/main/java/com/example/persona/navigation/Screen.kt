@@ -6,15 +6,16 @@ import kotlinx.serialization.Serializable
 sealed class Screen {
     // Bottom nav tabs
     @Serializable data object Home : Screen()
-    @Serializable data object KnowledgeManagement : Screen()
-    @Serializable data object AuditLog : Screen()
+    @Serializable data object Chats : Screen()
     @Serializable data object Orders : Screen()
-    @Serializable data object Settings : Screen()
+    @Serializable data object KnowledgeManagement : Screen()
 
-    // Full-screen destinations (no bottom bar)
+    // Additional full destinations
+    @Serializable data object AuditLog : Screen()
+    @Serializable data object Settings : Screen()
     @Serializable data object Onboarding : Screen()
     @Serializable data object ChatImport : Screen()
     @Serializable data class ChatImportProgress(val contactName: String) : Screen()
     @Serializable data object PermissionSetup : Screen()
-    @Serializable data class ContactDetail(val contactId: Long) : Screen()
+    @Serializable data class ChatDetail(val contactName: String, val sourceClass: String = "BUSINESS") : Screen()
 }

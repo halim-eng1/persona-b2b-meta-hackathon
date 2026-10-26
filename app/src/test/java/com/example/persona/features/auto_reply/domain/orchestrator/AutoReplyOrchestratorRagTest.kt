@@ -3,6 +3,7 @@ package com.example.persona.features.auto_reply.domain.orchestrator
 import android.content.Context
 import com.example.persona.core.database.dao.BusinessKnowledgeDao
 import com.example.persona.core.database.dao.ChatHistoryDao
+import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.dao.FailedQueryDao
 import com.example.persona.core.database.dao.OrderDao
 import com.example.persona.core.database.entity.ChatHistoryEntity
@@ -10,6 +11,7 @@ import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.database.entity.OrderStatus
 import com.example.persona.core.network.dto.AgenticLlmResponse
 import com.example.persona.core.network.dto.ExtractedOrder
+import com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceClass
 import com.example.persona.features.auto_reply.data.repository.NotificationProcessorImpl
 import com.example.persona.features.auto_reply.data.repository.SemanticRetrievalRepository
 import com.example.persona.core.data.repository.UserPreferencesRepository
@@ -42,6 +44,7 @@ class AutoReplyOrchestratorRagTest {
         orderDao: OrderDao = mockk(relaxed = true),
         chatHistoryDao: ChatHistoryDao = mockk(relaxed = true),
         businessKnowledgeDao: BusinessKnowledgeDao = mockk(relaxed = true),
+        conversationMetadataDao: ConversationMetadataDao = mockk(relaxed = true),
         semanticRetrievalRepository: SemanticRetrievalRepository = mockk(relaxed = true),
         replyGenerationRepository: ReplyGenerationRepository = mockk(relaxed = true),
         directReplyExecutionUseCase: DirectReplyExecutionUseCase = mockk(relaxed = true),
@@ -65,6 +68,7 @@ class AutoReplyOrchestratorRagTest {
         chatHistoryDao = chatHistoryDao,
         orderDao = orderDao,
         businessKnowledgeDao = businessKnowledgeDao,
+        conversationMetadataDao = conversationMetadataDao,
         context = mockk(relaxed = true),
         scope = CoroutineScope(Dispatchers.Unconfined)
     )
@@ -415,7 +419,8 @@ class AutoReplyOrchestratorRagTest {
             normalizedText = "السلام عليكم",
             notificationKey = "key_100",
             postTime = System.currentTimeMillis(),
-            context = mockk(relaxed = true)
+            context = mockk(relaxed = true),
+            sourceClass = NotificationSourceClass.BUSINESS
         )
         coEvery { processor.process(any()) } returns processed
         coEvery { chatHistoryDao.insert(any()) } returns 1L
@@ -426,7 +431,7 @@ class AutoReplyOrchestratorRagTest {
         val embeddingEngine = mockk<EmbeddingEngine>()
         coEvery { embeddingEngine.embedForAutoReply(any()) } returns floatArrayOf(0.1f, 0.2f)
         coEvery { semanticRepo.retrieveCandidates(any(), any(), any(), any()) } returns Pair(emptyList(), 0.0f)
-        coEvery { directReplyUseCase.execute(any(), any(), any()) } returns com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResult.Success
+        coEvery { directReplyUseCase.execute(any(), any(), any(), any()) } returns com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResult.Success
 
         // LLM handles greeting naturally
         coEvery {
@@ -480,7 +485,8 @@ class AutoReplyOrchestratorRagTest {
             directReplyUseCase.execute(
                 processed.notificationKey,
                 match { it.contains("وعليكم السلام") },
-                processed.contactName
+                processed.contactName,
+                any()
             )
         }
 
@@ -522,7 +528,8 @@ class AutoReplyOrchestratorRagTest {
             normalizedText = "العنوان مدينة نصر الحي السابع",
             notificationKey = "key_update",
             postTime = System.currentTimeMillis(),
-            context = mockk(relaxed = true)
+            context = mockk(relaxed = true),
+            sourceClass = NotificationSourceClass.BUSINESS
         )
         coEvery { processor.process(any()) } returns processed
         coEvery { chatHistoryDao.insert(any()) } returns 1L
@@ -541,7 +548,7 @@ class AutoReplyOrchestratorRagTest {
         val embeddingEngine = mockk<EmbeddingEngine>()
         coEvery { embeddingEngine.embedForAutoReply(any()) } returns floatArrayOf(0.1f, 0.2f)
         coEvery { semanticRepo.retrieveCandidates(any(), any(), any(), any()) } returns Pair(emptyList(), 0.0f)
-        coEvery { directReplyUseCase.execute(any(), any(), any()) } returns com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResult.Success
+        coEvery { directReplyUseCase.execute(any(), any(), any(), any()) } returns com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResult.Success
 
         coEvery {
             replyRepo.generateReply(
@@ -581,12 +588,13 @@ class AutoReplyOrchestratorRagTest {
             orderDao.updateDeliveryAddress(55L, "مدينة نصر الحي السابع")
         }
 
-        // Verify direct reply was dispatched without falling into HITL
+        // Verify directReplyExecutionUseCase executed the greeting reply
         coVerify(exactly = 1) {
             directReplyUseCase.execute(
                 processed.notificationKey,
                 match { it.contains("تم تسجيل العنوان الجديد") },
-                processed.contactName
+                processed.contactName,
+                any()
             )
         }
     }

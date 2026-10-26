@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.persona.core.database.entity.ChatHistoryEntity
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Data access object for the [chat_history] table.
@@ -34,6 +35,69 @@ interface ChatHistoryDao {
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: ChatHistoryEntity): Long
+
+    /**
+     * Observes all messages for a specific contact and source package in natural
+     * chronological order (oldest first, timestamp ASC) for live chat UI stream.
+     */
+    @Query("""
+        SELECT * FROM chat_history
+        WHERE contact_name = :contactName AND source_class = :sourceClass
+        ORDER BY timestamp ASC
+    """)
+    fun observeMessagesForContact(
+        contactName: String,
+        sourceClass: String
+    ): Flow<List<ChatHistoryEntity>>
+
+    /**
+     * Returns recent messages for a specific contact and source package.
+     */
+    @Query("""
+        SELECT * FROM chat_history
+        WHERE contact_name = :contactName AND source_class = :sourceClass
+        ORDER BY timestamp DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getRecentMessagesForSource(
+        contactName: String,
+        sourceClass: String,
+        limit: Int = 6,
+        offset: Int = 0
+    ): List<ChatHistoryEntity>
+
+    /**
+     * Returns recent messages for a specific contact and source package excluding [excludeId].
+     */
+    @Query("""
+        SELECT * FROM chat_history
+        WHERE contact_name = :contactName AND source_class = :sourceClass AND id != :excludeId
+        ORDER BY timestamp DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getRecentMessagesExceptForSource(
+        contactName: String,
+        sourceClass: String,
+        excludeId: Long,
+        limit: Int = 6,
+        offset: Int = 0
+    ): List<ChatHistoryEntity>
+
+    /**
+     * Updates delivery status for an outgoing message (e.g. SENDING -> SENT, FAILED, QUEUED).
+     */
+    @Query("UPDATE chat_history SET delivery_status = :deliveryStatus WHERE id = :id")
+    suspend fun updateDeliveryStatus(id: Long, deliveryStatus: String)
+
+    /**
+     * Marks all unread messages for a specific contact and source package as read.
+     */
+    @Query("""
+        UPDATE chat_history
+        SET is_read = 1
+        WHERE contact_name = :contactName AND source_class = :sourceClass AND is_read = 0
+    """)
+    suspend fun markMessagesAsRead(contactName: String, sourceClass: String)
 
     /**
      * Returns the [limit] most recent messages for [contactName], ordered chronologically

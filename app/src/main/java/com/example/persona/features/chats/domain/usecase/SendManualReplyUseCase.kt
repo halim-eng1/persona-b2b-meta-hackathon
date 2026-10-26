@@ -1,0 +1,136 @@
+package com.example.persona.features.chats.domain.usecase
+
+import android.util.Log
+import com.example.persona.core.database.Converters
+import com.example.persona.core.database.dao.ChatHistoryDao
+import com.example.persona.core.database.dao.ConversationMetadataDao
+import com.example.persona.core.database.entity.ChatHistoryEntity
+import com.example.persona.core.di.ApplicationScope
+import com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener
+import com.example.persona.features.auto_reply.domain.usecase.DirectReplyExecutionUseCase
+import com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResult
+import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+import javax.inject.Singleton
+
+sealed interface ManualReplyResult {
+    data class Success(val messageId: Long) : ManualReplyResult
+    data class Queued(val messageId: Long, val message: String) : ManualReplyResult
+    data class Failed(val messageId: Long, val reason: String, val targetPackage: String) : ManualReplyResult
+}
+
+@Singleton
+class SendManualReplyUseCase @Inject constructor(
+    private val chatHistoryDao: ChatHistoryDao,
+    private val conversationMetadataDao: ConversationMetadataDao,
+    private val directReplyExecutionUseCase: DirectReplyExecutionUseCase,
+    private val embeddingEngine: EmbeddingEngine,
+    @ApplicationScope private val scope: CoroutineScope
+) {
+    companion object {
+        private const val TAG = "SendManualReplyUseCase"
+    }
+
+    suspend operator fun invoke(
+        contactName: String,
+        sourceClass: String,
+        replyText: String
+    ): ManualReplyResult {
+        val trimmedText = replyText.trim()
+        val now = System.currentTimeMillis()
+
+        // 1. Suppress self-reply echo in notification listener
+        WhatsAppNotificationListener.registerMerchantReply(contactName, trimmedText)
+
+        // 2. Optimistic insert into chat_history with status SENDING
+        val optimisticEntity = ChatHistoryEntity(
+            contactName = contactName,
+            messageText = trimmedText,
+            isFromUser = false,
+            timestamp = now,
+            embedding = null,
+            embeddingState = "PENDING",
+            sourceClass = sourceClass,
+            senderType = "MERCHANT_MANUAL",
+            deliveryStatus = "SENDING",
+            isRead = true
+        )
+        val messageId = chatHistoryDao.insert(optimisticEntity)
+
+        // 3. Human-AI race guard: automatically pause AI for this contact
+        conversationMetadataDao.setAiPaused(contactName, sourceClass, true)
+
+        // 4. Update conversation metadata snippet and timestamp
+        conversationMetadataDao.recordMessageTurn(
+            contactName = contactName,
+            sourceClass = sourceClass,
+            messageText = trimmedText,
+            senderType = "MERCHANT_MANUAL",
+            timestamp = now,
+            notificationKey = null,
+            incrementUnread = false
+        )
+
+        // 5. Dispatch via DirectReplyExecutionUseCase
+        val executionResult = directReplyExecutionUseCase.execute(
+            notificationKey = null,
+            replyText = trimmedText,
+            contactName = contactName,
+            sourceClass = sourceClass
+        )
+
+        val targetPackage = getTargetPackage(sourceClass)
+
+        return when (executionResult) {
+            is ReplyExecutionResult.Success -> {
+                chatHistoryDao.updateDeliveryStatus(messageId, "SENT")
+                conversationMetadataDao.setNeedsHumanAttention(contactName, sourceClass, false)
+
+                // Background embedding computation for multi-turn LLM context
+                scope.launch(Dispatchers.Default) {
+                    val claimSuccess = chatHistoryDao.claimForProcessing(messageId)
+                    if (claimSuccess > 0) {
+                        try {
+                            val embedding = embeddingEngine.embedForAutoReply(trimmedText)
+                            if (embedding != null) {
+                                val blob = Converters().fromFloatArray(embedding)
+                                if (blob != null) {
+                                    chatHistoryDao.updateEmbeddingRaw(messageId, blob)
+                                } else {
+                                    chatHistoryDao.updateEmbeddingState(messageId, "FAILED")
+                                }
+                            } else {
+                                chatHistoryDao.updateEmbeddingState(messageId, "FAILED")
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Embedding failed for manual reply $messageId", e)
+                            chatHistoryDao.updateEmbeddingState(messageId, "FAILED")
+                        }
+                    }
+                }
+
+                ManualReplyResult.Success(messageId)
+            }
+
+            is ReplyExecutionResult.Aborted -> {
+                // Map Aborted -> QUEUED (will auto-retry when notification arrives)
+                chatHistoryDao.updateDeliveryStatus(messageId, "QUEUED")
+                ManualReplyResult.Queued(messageId, "Awaiting active notification from WhatsApp")
+            }
+
+            is ReplyExecutionResult.Failed -> {
+                chatHistoryDao.updateDeliveryStatus(messageId, "FAILED")
+                ManualReplyResult.Failed(messageId, executionResult.reason, targetPackage)
+            }
+        }
+    }
+
+    private fun getTargetPackage(sourceClass: String): String = when (sourceClass.uppercase()) {
+        "MAIN_APP" -> "com.whatsapp"
+        "BUSINESS" -> "com.whatsapp.w4b"
+        else -> "com.whatsapp"
+    }
+}

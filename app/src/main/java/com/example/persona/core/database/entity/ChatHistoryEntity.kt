@@ -29,7 +29,9 @@ import androidx.room.PrimaryKey
     tableName = "chat_history",
     indices = [
         Index(value = ["contact_name", "timestamp"]),
-        Index(value = ["contact_name"])
+        Index(value = ["contact_name"]),
+        Index(value = ["contact_name", "source_class", "timestamp"]),
+        Index(value = ["contact_name", "source_class"])
     ]
 )
 data class ChatHistoryEntity(
@@ -47,7 +49,7 @@ data class ChatHistoryEntity(
 
     /**
      * True if this message was sent by the customer (inbound).
-     * False if it was generated and sent by the bot (outbound).
+     * False if it was generated and sent by the bot or merchant (outbound).
      */
     @ColumnInfo(name = "is_from_user")
     val isFromUser: Boolean,
@@ -72,7 +74,23 @@ data class ChatHistoryEntity(
      * Default: [EmbeddingJobState.PENDING.name] — immediately eligible for background pickup.
      */
     @ColumnInfo(name = "embedding_state")
-    val embeddingState: String = EmbeddingJobState.PENDING.name
+    val embeddingState: String = EmbeddingJobState.PENDING.name,
+
+    /** WhatsApp source package classification: MAIN_APP, BUSINESS, CLONE. */
+    @ColumnInfo(name = "source_class", defaultValue = "BUSINESS")
+    val sourceClass: String = "BUSINESS",
+
+    /** Sender origin: CUSTOMER, AI_AGENT, MERCHANT_MANUAL. */
+    @ColumnInfo(name = "sender_type", defaultValue = "CUSTOMER")
+    val senderType: String = "CUSTOMER",
+
+    /** Message delivery state: SENDING, SENT, FAILED, QUEUED. */
+    @ColumnInfo(name = "delivery_status", defaultValue = "SENT")
+    val deliveryStatus: String = "SENT",
+
+    /** Read receipt flag for merchant CRM view. 1 = read, 0 = unread. */
+    @ColumnInfo(name = "is_read", defaultValue = "0")
+    val isRead: Boolean = false
 ) {
     // FloatArray breaks structural equality — override explicitly.
     override fun equals(other: Any?): Boolean {
@@ -84,7 +102,11 @@ data class ChatHistoryEntity(
             isFromUser == other.isFromUser &&
             timestamp == other.timestamp &&
             (embedding?.contentEquals(other.embedding ?: return false) ?: (other.embedding == null)) &&
-            embeddingState == other.embeddingState
+            embeddingState == other.embeddingState &&
+            sourceClass == other.sourceClass &&
+            senderType == other.senderType &&
+            deliveryStatus == other.deliveryStatus &&
+            isRead == other.isRead
     }
 
     override fun hashCode(): Int {
@@ -95,6 +117,10 @@ data class ChatHistoryEntity(
         result = 31 * result + timestamp.hashCode()
         result = 31 * result + (embedding?.contentHashCode() ?: 0)
         result = 31 * result + embeddingState.hashCode()
+        result = 31 * result + sourceClass.hashCode()
+        result = 31 * result + senderType.hashCode()
+        result = 31 * result + deliveryStatus.hashCode()
+        result = 31 * result + isRead.hashCode()
         return result
     }
 }

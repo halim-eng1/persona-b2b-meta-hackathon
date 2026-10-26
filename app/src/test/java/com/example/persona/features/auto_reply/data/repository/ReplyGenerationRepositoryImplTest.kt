@@ -637,4 +637,44 @@ class ReplyGenerationRepositoryImplTest {
         assertEquals("سؤال جديد", messages[3].content)
         assertFalse("Failed user query must not be in prompt", messages.any { it.content.contains("سؤال فشل الرد عليه") })
     }
+
+    @Test
+    fun `buildOpenRouterMessages formats MERCHANT_MANUAL history turns as assistant messages`() {
+        val history = listOf(
+            // Most recent first: merchant manually replied to customer
+            ChatHistoryEntity(
+                id = 2L,
+                contactName = "عميل",
+                messageText = "تمام هبعت لحضرتك خصم 10%",
+                isFromUser = false,
+                senderType = "MERCHANT_MANUAL",
+                timestamp = 200L
+            ),
+            ChatHistoryEntity(
+                id = 1L,
+                contactName = "عميل",
+                messageText = "ممكن خصم؟",
+                isFromUser = true,
+                senderType = "CUSTOMER",
+                timestamp = 100L
+            )
+        )
+
+        val messages = ReplyGenerationRepositoryImpl.buildOpenRouterMessages(
+            systemPrompt = "System Prompt",
+            chatHistory = history,
+            currentInboundText = "شكرا جدا"
+        )
+
+        assertEquals(4, messages.size)
+        assertEquals("system", messages[0].role)
+        assertEquals("user", messages[1].role)
+        assertEquals("ممكن خصم؟", messages[1].content)
+        assertEquals("assistant", messages[2].role)
+        val json = Json { ignoreUnknownKeys = true }
+        val decoded = json.decodeFromString<AgenticLlmResponse>(messages[2].content)
+        assertEquals("تمام هبعت لحضرتك خصم 10%", decoded.finalReplyText)
+        assertEquals("user", messages[3].role)
+        assertEquals("شكرا جدا", messages[3].content)
+    }
 }

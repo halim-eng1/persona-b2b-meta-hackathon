@@ -11,9 +11,11 @@ class ToggleAutoReplyUseCase @Inject constructor(
     suspend operator fun invoke(enable: Boolean) {
         prefsRepository.setAutoReplyEnabled(enable)
         if (enable) {
+            // Ensure the service component is enabled in PackageManager
             serviceController.enableAutoReply()
-        } else {
-            serviceController.disableAutoReply()
         }
+        // When disabling auto-reply, we DO NOT call disableAutoReply() on the service component.
+        // The NotificationListenerService remains running to capture incoming customer messages
+        // for the Live Inbox and cache RemoteInput actions for manual merchant replies.
     }
 }

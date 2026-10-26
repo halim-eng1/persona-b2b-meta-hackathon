@@ -80,6 +80,21 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         const val CHANNEL_ID = "persona_auto_reply_channel"
         const val NOTIFICATION_ID = 1001
         private const val DEDUP_TTL_MS = 30_000L  // 30 seconds
+
+        private val recentlyDispatchedMerchantReplies = ConcurrentHashMap<String, Long>(64)
+        private const val MERCHANT_ECHO_TTL_MS = 60_000L
+
+        fun registerMerchantReply(contactName: String, replyText: String) {
+            val key = "${contactName.trim().lowercase()}_${replyText.trim().hashCode()}"
+            recentlyDispatchedMerchantReplies[key] = System.currentTimeMillis()
+        }
+
+        fun isMerchantReplyEcho(contactName: String, text: String): Boolean {
+            val now = System.currentTimeMillis()
+            recentlyDispatchedMerchantReplies.entries.removeAll { now - it.value > MERCHANT_ECHO_TTL_MS }
+            val key = "${contactName.trim().lowercase()}_${text.trim().hashCode()}"
+            return recentlyDispatchedMerchantReplies.containsKey(key)
+        }
     }
 
     private val recentKeys = ConcurrentHashMap<String, Long>(64)
@@ -135,6 +150,14 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return
         }
 
+        if (isMerchantReplyEcho(title, text)) {
+            PersonaLogger.d(
+                PersonaLogTags.NOTIFICATION,
+                "Skipped merchant reply echo notification: title=$title key=${sbn.key}"
+            )
+            return
+        }
+
         // ── 4b. RemoteInput reply action filter ───────────────────────────────
         //     Non-replyable system/sync/backup notifications (e.g., "Checking for new messages")
         //     must be dropped immediately at the source so they never enter
@@ -162,7 +185,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         if (recentKeys.putIfAbsent(dedupeKey, now) != null) return
 
         // ── 6. Cache reply action ─────────────────────────────────────────────
-        NotificationActionCache.put(sbn.key, replyAction)
+        NotificationActionCache.put(sbn.key, replyAction, sourceClass.name, title)
 
         // ── 7. Extract extra messages ─────────────────────────────────────────
         val extraMessagesList = mutableListOf<ExtraMessage>()
@@ -195,6 +218,14 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             Log.w("NLS", "Failed to extract EXTRA_MESSAGES for ${sbn.key}", e)
         }
 
+        if (extraMessagesList.isNotEmpty() && extraMessagesList.last().isUser && text.equals(extraMessagesList.last().text, ignoreCase = true)) {
+            PersonaLogger.d(
+                PersonaLogTags.NOTIFICATION,
+                "Skipped extra messages self-echo: title=$title key=${sbn.key}"
+            )
+            return
+        }
+
         // ── 8. Build domain model with sourceClass and dispatch ───────────────
         val whatsappNotification = WhatsAppNotification(
             title = title,
@@ -209,9 +240,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        if (sbn.packageName in WHATSAPP_PACKAGES) {
-            NotificationActionCache.remove(sbn.key)
-        }
+        // Retain cached actions in NotificationActionCache for 24h TTL to support manual reply recovery.
     }
 
     override fun onListenerConnected() {

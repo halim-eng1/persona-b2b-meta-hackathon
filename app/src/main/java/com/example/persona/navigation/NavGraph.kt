@@ -12,11 +12,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.toRoute
 import com.example.persona.features.auto_reply.presentation.audit.AuditLogScreen
-import com.example.persona.features.chat_import.presentation.ChatImportScreen
 import com.example.persona.features.chat_import.presentation.ChatImportProgressScreen
+import com.example.persona.features.chat_import.presentation.ChatImportScreen
 import com.example.persona.features.chat_import.presentation.ChatImportViewModel
+import com.example.persona.features.chats.presentation.detail.ChatDetailScreen
+import com.example.persona.features.chats.presentation.list.ChatsListScreen
 import com.example.persona.features.home.presentation.HomeScreen
 import com.example.persona.features.knowledge.presentation.KnowledgeManagementScreen
 import com.example.persona.features.onboarding.presentation.PermissionOnboardingScreen
@@ -38,8 +39,29 @@ fun PersonaNavGraph(
             HomeScreen(
                 onNavigateToImport = {
                     navController.navigate(Screen.ChatImport)
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Screen.Settings)
+                },
+                onNavigateToAuditLog = {
+                    navController.navigate(Screen.AuditLog)
+                },
+                onNavigateToChat = { contactName, sourceClass ->
+                    navController.navigate(Screen.ChatDetail(contactName, sourceClass))
                 }
             )
+        }
+
+        composable<Screen.Chats> {
+            ChatsListScreen(
+                onNavigateToChat = { contactName, sourceClass ->
+                    navController.navigate(Screen.ChatDetail(contactName, sourceClass))
+                }
+            )
+        }
+
+        composable<Screen.Orders> {
+            OrdersDashboardScreen()
         }
 
         composable<Screen.KnowledgeManagement> {
@@ -50,15 +72,17 @@ fun PersonaNavGraph(
             AuditLogScreen()
         }
 
-        composable<Screen.Orders> {
-            OrdersDashboardScreen()
-        }
-
         composable<Screen.Settings> {
             SettingsScreen()
         }
 
         // ── Full-screen destinations (no bottom bar) ──────────────────────────
+        composable<Screen.ChatDetail> {
+            ChatDetailScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         composable<Screen.Onboarding> {
             PlaceholderScreen(name = "Onboarding")
         }
@@ -109,11 +133,6 @@ fun PersonaNavGraph(
                     }
                 }
             )
-        }
-
-        composable<Screen.ContactDetail> { backStackEntry ->
-            val args = backStackEntry.toRoute<Screen.ContactDetail>()
-            PlaceholderScreen(name = "Contact Detail ID: ${args.contactId}")
         }
     }
 }

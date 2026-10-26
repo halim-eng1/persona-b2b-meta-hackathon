@@ -1,5 +1,6 @@
 package com.example.persona
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -7,7 +8,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -20,21 +24,33 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    private var pendingDeepLinkContact by mutableStateOf<Pair<String, String>?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleIntent(intent)
+
         setContent {
             PersonaTheme {
                 val navController = rememberNavController()
                 val currentBackStackEntry by navController.currentBackStackEntryAsState()
-                
+
                 val currentDestination = currentBackStackEntry?.destination
                 val showBottomBar = currentDestination?.let { dest ->
                     dest.hasRoute(Screen.Home::class) ||
-                    dest.hasRoute(Screen.KnowledgeManagement::class) ||
-                    dest.hasRoute(Screen.AuditLog::class) ||
-                    dest.hasRoute(Screen.Settings::class)
+                    dest.hasRoute(Screen.Chats::class) ||
+                    dest.hasRoute(Screen.Orders::class) ||
+                    dest.hasRoute(Screen.KnowledgeManagement::class)
                 } ?: false
+
+                LaunchedEffect(pendingDeepLinkContact) {
+                    pendingDeepLinkContact?.let { (contact, source) ->
+                        navController.navigate(Screen.ChatDetail(contact, source))
+                        pendingDeepLinkContact = null
+                    }
+                }
 
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
@@ -50,6 +66,20 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val contactName = intent?.getStringExtra("open_chat_contact_name")
+        val sourceClass = intent?.getStringExtra("open_chat_source_class") ?: "BUSINESS"
+        if (!contactName.isNullOrBlank()) {
+            pendingDeepLinkContact = contactName to sourceClass
         }
     }
 }

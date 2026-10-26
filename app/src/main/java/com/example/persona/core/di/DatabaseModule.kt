@@ -63,4 +63,9 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideOrderDao(db: PersonaDatabase): OrderDao = db.orderDao()
+
+    @Provides
+    @Singleton
+    fun provideConversationMetadataDao(db: PersonaDatabase): ConversationMetadataDao =
+        db.conversationMetadataDao()
 }

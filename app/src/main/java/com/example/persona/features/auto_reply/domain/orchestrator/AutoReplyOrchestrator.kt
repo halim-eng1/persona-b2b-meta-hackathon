@@ -3,7 +3,9 @@ package com.example.persona.features.auto_reply.domain.orchestrator
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -12,6 +14,7 @@ import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.Converters
 import com.example.persona.core.database.dao.BusinessKnowledgeDao
 import com.example.persona.core.database.dao.ChatHistoryDao
+import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.dao.FailedQueryDao
 import com.example.persona.core.database.dao.OrderDao
 import com.example.persona.core.database.entity.ChatHistoryEntity
@@ -67,6 +70,7 @@ class AutoReplyOrchestrator @Inject constructor(
     private val chatHistoryDao: ChatHistoryDao,
     private val orderDao: OrderDao,
     private val businessKnowledgeDao: BusinessKnowledgeDao,
+    private val conversationMetadataDao: ConversationMetadataDao,
     @ApplicationContext private val context: Context,
     @ApplicationScope private val scope: CoroutineScope
 ) {
@@ -379,35 +383,40 @@ class AutoReplyOrchestrator @Inject constructor(
     }
 
     internal suspend fun processNotificationSequentially(rawNotification: WhatsAppNotification) {
-        // 1. Global switch
-        if (!prefsRepository.isAutoReplyEnabledSync()) {
-            PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Notification rejected")
-            Log.d(TAG, "Auto-reply globally disabled. Skipping ${rawNotification.title}")
-            return
-        }
-
-        // 2. Load style preferences
-        val stylePrefs = prefsRepository.getStylePreferencesSync()
-        val cooldownMs = stylePrefs.cooldownMins * 60_000L
-
-        // 3. Pre-process notification
+        // 1. Pre-process notification FIRST
         val processed = processor.process(rawNotification)
+        val sourceClassStr = processed.sourceClass.name
 
-        Log.i(PersonaLogTags.LLM, "📩 Incoming message from [${processed.contactName}]: \"${processed.originalText}\"")
+        Log.i(PersonaLogTags.LLM, "📩 Incoming message from [${processed.contactName}] ($sourceClassStr): \"${processed.originalText}\"")
 
-        // 3.1. Persist inbound message immediately to chat_history
+        // 2. Persist inbound message immediately to chat_history
         val chatHistoryEntity = ChatHistoryEntity(
             contactName = processed.contactName,
             messageText = processed.originalText,
             isFromUser = true,
             timestamp = processed.postTime,
             embedding = null,
-            embeddingState = "PENDING"
+            embeddingState = "PENDING",
+            sourceClass = sourceClassStr,
+            senderType = "CUSTOMER",
+            deliveryStatus = "SENT",
+            isRead = false
         )
         val insertedId = chatHistoryDao.insert(chatHistoryEntity)
         Log.d(TAG, "Chat history row inserted for contact=${processed.contactName}, id=$insertedId")
 
-        // 3.2. Launch background embedding generation coroutine on scope (detached from notification thread)
+        // 3. Upsert conversation_metadata for the live inbox
+        conversationMetadataDao.recordMessageTurn(
+            contactName = processed.contactName,
+            sourceClass = sourceClassStr,
+            messageText = processed.originalText,
+            senderType = "CUSTOMER",
+            timestamp = processed.postTime,
+            notificationKey = processed.notificationKey,
+            incrementUnread = true
+        )
+
+        // 4. Launch background embedding generation coroutine on scope (detached from notification thread)
         scope.launch(Dispatchers.Default) {
             val claimSuccess = chatHistoryDao.claimForProcessing(insertedId)
             if (claimSuccess > 0) {
@@ -436,7 +445,26 @@ class AutoReplyOrchestrator @Inject constructor(
         }
         Log.d(TAG, "⚡ Background embedding job launched for chatHistory id=$insertedId, state=PROCESSING")
 
-        // 4. Cooldown policy
+        // 5. Global switch gate: if master Auto-Reply is OFF, terminate after persistence
+        if (!prefsRepository.isAutoReplyEnabledSync()) {
+            PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Notification captured, auto-reply OFF")
+            Log.d(TAG, "Auto-reply globally disabled. Stored inbound message, skipping reply for ${rawNotification.title}")
+            return
+        }
+
+        // 6. Per-contact AI pause gate: if merchant manually paused AI for this contact, terminate after persistence
+        val convMeta = conversationMetadataDao.getConversation(processed.contactName, sourceClassStr)
+        if (convMeta?.isAiPaused == true) {
+            PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Notification captured, AI paused for contact")
+            Log.d(TAG, "AI auto-reply paused for contact ${processed.contactName} ($sourceClassStr). Stored inbound message, skipping reply.")
+            return
+        }
+
+        // 7. Load style preferences
+        val stylePrefs = prefsRepository.getStylePreferencesSync()
+        val cooldownMs = stylePrefs.cooldownMins * 60_000L
+
+        // 8. Cooldown policy
         val now = System.currentTimeMillis()
         val lastReplyTime = cooldownMap[processed.contactName] ?: 0L
         if (stylePrefs.cooldownMins != 0 && now - lastReplyTime < cooldownMs) {
@@ -446,7 +474,7 @@ class AutoReplyOrchestrator @Inject constructor(
             return
         }
 
-        // 5. Human safety filter
+        // 9. Human safety filter
         val hasUrgentKeyword = SAFETY_KEYWORDS.any { keyword ->
             processed.originalText.contains(keyword, ignoreCase = true) ||
             processed.normalizedText.contains(keyword, ignoreCase = true)
@@ -458,8 +486,8 @@ class AutoReplyOrchestrator @Inject constructor(
             val alertMessage = "[Safety Alert] urgent keyword detected. Message: ${processed.originalText}"
             auditLogRepository.queuePendingReply(processed, alertMessage)
 
-            // Trigger alarm vibration & sound notification
-            triggerHitlAlarm(processed.contactName, processed.originalText, 1.0f)
+            // Trigger alarm vibration & sound notification + flag CRM attention
+            handleHitlEscalation(processed, 1.0f)
             
             Log.i("PersonaMetrics", "metric=notification_drop_rate value=1 contact=${processed.contactName.hashCode()}")
             Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
@@ -535,7 +563,7 @@ class AutoReplyOrchestrator @Inject constructor(
         )
         if (rawLlmOutput.isNullOrBlank()) {
             Log.d(TAG, "LLM returned null/blank — all models failed. HITL fallback.")
-            triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
+            handleHitlEscalation(processed, maxScore)
             Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
             sendHitlHoldingReply(processed)
             return
@@ -661,10 +689,21 @@ class AutoReplyOrchestrator @Inject constructor(
                 // Case 0: Handover to human representative (LLM requested HITL)
                 effectiveAction == "HITL" -> {
                     Log.i(TAG, "LLM action=HITL. Triggering alarm and hand-off notification.")
-                    triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
+                    handleHitlEscalation(processed, maxScore)
                     try {
                         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                         val vibrationPattern = longArrayOf(0, 500, 200, 500)
+                        val intent = Intent(context, com.example.persona.MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            putExtra("open_chat_contact_name", processed.contactName)
+                            putExtra("open_chat_source_class", processed.sourceClass.name)
+                        }
+                        val pendingIntent = PendingIntent.getActivity(
+                            context,
+                            (processed.contactName + processed.sourceClass.name + "1003").hashCode(),
+                            intent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                        )
                         val notification = NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
                             .setSmallIcon(R.drawable.ic_notification)
                             .setContentTitle("طلب تحويل لبشري 🚨")
@@ -673,6 +712,8 @@ class AutoReplyOrchestrator @Inject constructor(
                             .setVibrate(vibrationPattern)
                             .setPriority(NotificationCompat.PRIORITY_HIGH)
                             .setCategory(NotificationCompat.CATEGORY_ALARM)
+                            .setContentIntent(pendingIntent)
+                            .setAutoCancel(true)
                             .build()
                         notificationManager.notify(1003, notification)
                     } catch (e: Exception) {
@@ -799,10 +840,21 @@ class AutoReplyOrchestrator @Inject constructor(
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to insert FailedQueryEntity", e)
                             }
-                            triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
+                            handleHitlEscalation(processed, maxScore)
                             try {
                                 val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                                 val vibrationPattern = longArrayOf(0, 500, 200, 500)
+                                val intent = Intent(context, com.example.persona.MainActivity::class.java).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                    putExtra("open_chat_contact_name", processed.contactName)
+                                    putExtra("open_chat_source_class", processed.sourceClass.name)
+                                }
+                                val pendingIntent = PendingIntent.getActivity(
+                                    context,
+                                    (processed.contactName + processed.sourceClass.name + "1003_2").hashCode(),
+                                    intent,
+                                    PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                                )
                                 val notification = NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
                                     .setSmallIcon(R.drawable.ic_notification)
                                     .setContentTitle("طلب تحويل لبشري 🚨")
@@ -811,6 +863,8 @@ class AutoReplyOrchestrator @Inject constructor(
                                     .setVibrate(vibrationPattern)
                                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                                     .setCategory(NotificationCompat.CATEGORY_ALARM)
+                                    .setContentIntent(pendingIntent)
+                                    .setAutoCancel(true)
                                     .build()
                                 notificationManager.notify(1003, notification)
                             } catch (e: Exception) {
@@ -843,7 +897,7 @@ class AutoReplyOrchestrator @Inject constructor(
 
         if (rawReplyText.isNullOrBlank()) {
             Log.d(TAG, "Agentic loop produced no reply — HITL fallback.")
-            triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
+            handleHitlEscalation(processed, maxScore)
             Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
             sendHitlHoldingReply(processed)
             return
@@ -861,7 +915,7 @@ class AutoReplyOrchestrator @Inject constructor(
         // within the current session window (last 2 hours), do NOT send a verbatim duplicate — hand off cleanly to HITL.
         if (isEchoRepetition(styledReplyText, processed.originalText, chatHistory)) {
             Log.w(TAG, "Anti-echo guard triggered: LLM produced verbatim duplicate of recent assistant reply for ${processed.contactName}. Degrading to HITL.")
-            triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
+            handleHitlEscalation(processed, maxScore)
             sendHitlHoldingReply(processed)
             return
         }
@@ -871,7 +925,8 @@ class AutoReplyOrchestrator @Inject constructor(
         val executionResult = directReplyExecutionUseCase.execute(
             processed.notificationKey,
             styledReplyText,
-            processed.contactName
+            processed.contactName,
+            processed.sourceClass.name
         )
 
         // 13. Audit logging
@@ -888,10 +943,24 @@ class AutoReplyOrchestrator @Inject constructor(
                     isFromUser = false,
                     timestamp = System.currentTimeMillis(),
                     embedding = null,
-                    embeddingState = "PENDING"
+                    embeddingState = "PENDING",
+                    sourceClass = processed.sourceClass.name,
+                    senderType = "AI_AGENT",
+                    deliveryStatus = "SENT",
+                    isRead = true
                 )
                 val botInsertedId = chatHistoryDao.insert(botChatHistory)
                 Log.d(TAG, "Bot reply persisted to chat history, id=$botInsertedId")
+
+                conversationMetadataDao.recordMessageTurn(
+                    contactName = processed.contactName,
+                    sourceClass = processed.sourceClass.name,
+                    messageText = styledReplyText,
+                    senderType = "AI_AGENT",
+                    timestamp = System.currentTimeMillis(),
+                    notificationKey = processed.notificationKey,
+                    incrementUnread = false
+                )
 
                 // Launch background embedding coroutine
                 scope.launch(Dispatchers.Default) {
@@ -949,7 +1018,8 @@ class AutoReplyOrchestrator @Inject constructor(
         val executionResult = directReplyExecutionUseCase.execute(
             processed.notificationKey,
             text,
-            processed.contactName
+            processed.contactName,
+            processed.sourceClass.name
         )
         when (executionResult) {
             is ReplyExecutionResult.Success -> {
@@ -964,10 +1034,24 @@ class AutoReplyOrchestrator @Inject constructor(
                     isFromUser = false,
                     timestamp = System.currentTimeMillis(),
                     embedding = null,
-                    embeddingState = "PENDING"
+                    embeddingState = "PENDING",
+                    sourceClass = processed.sourceClass.name,
+                    senderType = "AI_AGENT",
+                    deliveryStatus = "SENT",
+                    isRead = true
                 )
                 val botInsertedId = chatHistoryDao.insert(botChatHistory)
                 Log.d(TAG, "Immediate bot reply persisted to chat history, id=$botInsertedId")
+
+                conversationMetadataDao.recordMessageTurn(
+                    contactName = processed.contactName,
+                    sourceClass = processed.sourceClass.name,
+                    messageText = text,
+                    senderType = "AI_AGENT",
+                    timestamp = System.currentTimeMillis(),
+                    notificationKey = processed.notificationKey,
+                    incrementUnread = false
+                )
 
                 // Launch background embedding
                 scope.launch(Dispatchers.Default) {
@@ -1015,13 +1099,40 @@ class AutoReplyOrchestrator @Inject constructor(
         }
     }
 
-    private fun triggerHitlAlarm(contactName: String, queryText: String, score: Float) {
+    private suspend fun handleHitlEscalation(
+        processed: ProcessedNotification,
+        score: Float
+    ) {
+        val sourceClassStr = processed.sourceClass.name
+        conversationMetadataDao.setNeedsHumanAttention(processed.contactName, sourceClassStr, true)
+        conversationMetadataDao.setAiPaused(processed.contactName, sourceClassStr, true)
+        triggerHitlAlarm(processed.contactName, processed.originalText, score, sourceClassStr)
+    }
+
+    private fun triggerHitlAlarm(
+        contactName: String,
+        queryText: String,
+        score: Float,
+        sourceClass: String = "BUSINESS"
+    ) {
         try {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val vibrationPattern = longArrayOf(0, 500, 200, 500)
 
             val title = context.getString(R.string.hitl_alarm_title)
             val body = context.getString(R.string.hitl_alarm_body)
+
+            val intent = Intent(context, com.example.persona.MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("open_chat_contact_name", contactName)
+                putExtra("open_chat_source_class", sourceClass)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                (contactName + sourceClass).hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+            )
 
             val notification = NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
@@ -1031,6 +1142,8 @@ class AutoReplyOrchestrator @Inject constructor(
                 .setVibrate(vibrationPattern)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
                 .build()
 
             notificationManager.notify(1002, notification)

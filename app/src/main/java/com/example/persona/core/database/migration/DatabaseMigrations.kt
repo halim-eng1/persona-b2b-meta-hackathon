@@ -28,13 +28,6 @@ object DatabaseMigrations {
 
     /**
      * v7 → v8: introduces `chat_history` and `orders_table`.
-     *
-     * Required so devices still running a pre-v8 build upgrade instead of
-     * crash-looping: `fallbackToDestructiveMigration()` was removed and only
-     * downgrades may wipe, so any pre-8 install needs this explicit path.
-     * Both tables were brand-new in v8 (v7 had no such tables), so creating
-     * them fresh is the full migration — the DDL mirrors the exported schema
-     * JSON (`app/schemas/.../8.json`) exactly.
      */
     val MIGRATION_7_8 = object : Migration(7, 8) {
         override fun migrate(db: SupportSQLiteDatabase) {
@@ -80,23 +73,85 @@ object DatabaseMigrations {
     }
 
     /**
-     * Placeholder for the next schema upgrade (v8 → v9).
-     *
-     * **Must be filled in together with the version bump** in
-     * [com.example.persona.core.database.PersonaDatabase] — with the database at
-     * version 8 this migration is never invoked, so this is dead wiring until a
-     * real post-v8 entity change ships. At that point replace the empty body
-     * with the actual DDL, e.g.:
-     * ```
-     * db.execSQL("ALTER TABLE chat_history ADD COLUMN lastSummarizedAt INTEGER DEFAULT 0 NOT NULL")
-     * ```
-     *
-     * An empty migration body between matching start/end versions is valid only
-     * when the exported schema actually does not change.
+     * v8 → v9: WhatsApp Live Inbox & CRM Schema Migration:
+     *  - Adds columns to `chat_history`: `source_class`, `sender_type`, `delivery_status`, `is_read`.
+     *  - Adds composite indices on `chat_history`: `(contact_name, source_class, timestamp)` and `(contact_name, source_class)`.
+     *  - Creates `conversation_metadata` table with composite PK `(contact_name, source_class)`.
+     *  - Creates indices and partial indices on `conversation_metadata`.
+     *  - Smart backfill: populates `conversation_metadata` from existing `chat_history` records.
      */
     val MIGRATION_8_9 = object : Migration(8, 9) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            // Future schema alterations for v9 go here.
+            // 1. Extend chat_history table
+            db.execSQL("ALTER TABLE `chat_history` ADD COLUMN `source_class` TEXT NOT NULL DEFAULT 'BUSINESS'")
+            db.execSQL("ALTER TABLE `chat_history` ADD COLUMN `sender_type` TEXT NOT NULL DEFAULT 'CUSTOMER'")
+            db.execSQL("ALTER TABLE `chat_history` ADD COLUMN `delivery_status` TEXT NOT NULL DEFAULT 'SENT'")
+            db.execSQL("ALTER TABLE `chat_history` ADD COLUMN `is_read` INTEGER NOT NULL DEFAULT 0")
+
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_chat_history_contact_name_source_class_timestamp` " +
+                    "ON `chat_history` (`contact_name`, `source_class`, `timestamp`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_chat_history_contact_name_source_class` " +
+                    "ON `chat_history` (`contact_name`, `source_class`)"
+            )
+
+            // 2. Create conversation_metadata table
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `conversation_metadata` (" +
+                    "`contact_name` TEXT NOT NULL, " +
+                    "`source_class` TEXT NOT NULL DEFAULT 'BUSINESS', " +
+                    "`is_ai_paused` INTEGER NOT NULL DEFAULT 0, " +
+                    "`needs_human_attention` INTEGER NOT NULL DEFAULT 0, " +
+                    "`last_notification_key` TEXT, " +
+                    "`last_message_text` TEXT, " +
+                    "`last_message_sender_type` TEXT NOT NULL DEFAULT 'CUSTOMER', " +
+                    "`last_message_timestamp` INTEGER NOT NULL DEFAULT 0, " +
+                    "`unread_count` INTEGER NOT NULL DEFAULT 0, " +
+                    "PRIMARY KEY(`contact_name`, `source_class`))"
+            )
+
+            // 3. Create indices on conversation_metadata
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_conversation_metadata_last_message_timestamp` " +
+                    "ON `conversation_metadata` (`last_message_timestamp`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_conversation_metadata_unread_count` " +
+                    "ON `conversation_metadata` (`unread_count`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_conversation_metadata_needs_human_attention` " +
+                    "ON `conversation_metadata` (`needs_human_attention`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_conversation_metadata_unread_partial` " +
+                    "ON `conversation_metadata` (`unread_count`) WHERE `unread_count` > 0"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_conversation_metadata_attention_partial` " +
+                    "ON `conversation_metadata` (`needs_human_attention`) WHERE `needs_human_attention` = 1"
+            )
+
+            // 4. Smart backfill from existing chat_history rows
+            db.execSQL(
+                "INSERT OR IGNORE INTO `conversation_metadata` (" +
+                    "`contact_name`, `source_class`, `is_ai_paused`, `needs_human_attention`, " +
+                    "`last_notification_key`, `last_message_text`, `last_message_sender_type`, `last_message_timestamp`, `unread_count`" +
+                ") SELECT " +
+                    "`contact_name`, " +
+                    "'BUSINESS' AS `source_class`, " +
+                    "0 AS `is_ai_paused`, " +
+                    "0 AS `needs_human_attention`, " +
+                    "NULL AS `last_notification_key`, " +
+                    "`message_text` AS `last_message_text`, " +
+                    "'CUSTOMER' AS `last_message_sender_type`, " +
+                    "MAX(`timestamp`) AS `last_message_timestamp`, " +
+                    "0 AS `unread_count` " +
+                "FROM `chat_history` " +
+                "GROUP BY `contact_name`"
+            )
         }
     }
 

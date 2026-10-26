@@ -480,7 +480,7 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             val nativeHistory = mutableListOf<ChatMessage>()
 
             for (turn in filteredTurns) {
-                val role = if (turn.isFromUser) "user" else "assistant"
+                val role = if (turn.isFromUser && !turn.senderType.equals("MERCHANT_MANUAL", ignoreCase = true)) "user" else "assistant"
                 val text = turn.messageText.trim()
                 if (text.isEmpty()) continue
 

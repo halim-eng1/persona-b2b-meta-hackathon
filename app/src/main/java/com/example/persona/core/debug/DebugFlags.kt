@@ -10,6 +10,11 @@ package com.example.persona.core.debug
 object DebugFlags {
 
     /**
+     * Staged rollout flag for the new Chats live inbox tab and CRM features.
+     */
+    const val ENABLE_CHATS_TAB = true
+
+    /**
      * Enables the NotificationSourceDiagnostics subsystem.
      * When true, NLS_DIAG log lines are emitted for every WhatsApp notification.
      * When false, the entire diagnostics pipeline is skipped with zero overhead.

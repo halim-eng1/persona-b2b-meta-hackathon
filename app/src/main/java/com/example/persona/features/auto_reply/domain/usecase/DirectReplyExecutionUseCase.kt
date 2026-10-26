@@ -1,12 +1,16 @@
 package com.example.persona.features.auto_reply.domain.usecase
 
+import android.app.Notification
+import android.app.PendingIntent
 import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.service.notification.StatusBarNotification
 import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.features.auto_reply.data.service.NotificationActionCache
+import com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
@@ -20,58 +24,65 @@ class DirectReplyExecutionUseCase @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     /**
-     * Executes the direct reply action for a cached notification.
-     * Returns a strongly-typed ReplyExecutionResult indicating success or reason for failure.
+     * Executes the direct reply action for a cached or active notification.
+     *
+     * Tries:
+     * 1. Exact match on live notificationKey in active notifications.
+     * 2. Live contactName + sourceClass matching in active notifications.
+     * 3. Fallback to cached Notification.Action (from dual-indexed NotificationActionCache).
+     *
+     * Catches [PendingIntent.CanceledException] gracefully if the notification has been invalidated by the OS.
      */
     suspend fun execute(
-        notificationKey: String,
+        notificationKey: String?,
         replyText: String,
-        contactName: String
+        contactName: String,
+        sourceClass: String = "BUSINESS"
     ): ReplyExecutionResult {
         PersonaLogger.d(
             PersonaLogTags.REPLY,
-            "Reply generated: length=${replyText.length}, hash=${replyText.hashCode().toString(16)}"
+            "Reply execution started for $contactName ($sourceClass), length=${replyText.length}"
         )
 
-        // 1. Check live notifications in status bar and extract fresh reply action
-        val listenerService = com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener.instance?.get()
-        val action = if (listenerService != null) {
+        val listenerService = WhatsAppNotificationListener.instance?.get()
+        var action: Notification.Action? = null
+
+        if (listenerService != null) {
             val activeNotifications = listenerService.activeNotifications ?: emptyArray()
 
-            // Always prioritize exact notificationKey matching
-            var liveSbn = activeNotifications.firstOrNull { it.key == notificationKey }
+            // 1. Try exact notificationKey matching in live status bar
+            var liveSbn = if (!notificationKey.isNullOrBlank()) {
+                activeNotifications.firstOrNull { it.key == notificationKey }
+            } else {
+                null
+            }
 
-            // Fallback to contact name matching if key match not found
+            // 2. Fallback to contact name and source package matching in live status bar
             if (liveSbn == null) {
-                // Find all child notifications that match the contactName directly
                 val directChildMatches = activeNotifications.filter { sbn ->
-                    (sbn.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY) == 0 &&
-                    matchesContact(sbn, contactName)
+                    (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY) == 0 &&
+                    matchesContact(sbn, contactName) &&
+                    matchesSourceClass(sbn, sourceClass)
                 }
 
-                // Find group summaries
                 val groupSummaries = activeNotifications.filter { sbn ->
-                    sbn.isGroup && (sbn.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY) != 0
+                    sbn.isGroup && (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0
                 }
 
-                // Find child notifications of those group summaries that match the contactName
-                val summaryChildMatches = mutableListOf<android.service.notification.StatusBarNotification>()
+                val summaryChildMatches = mutableListOf<StatusBarNotification>()
                 for (summary in groupSummaries) {
                     val children = activeNotifications.filter { sbn ->
-                        sbn.groupKey == summary.groupKey && 
-                        (sbn.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY) == 0
+                        sbn.groupKey == summary.groupKey &&
+                        (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY) == 0 &&
+                        matchesContact(sbn, contactName) &&
+                        matchesSourceClass(sbn, sourceClass)
                     }
-                    val matchedChildren = children.filter { child ->
-                        matchesContact(child, contactName)
-                    }
-                    summaryChildMatches.addAll(matchedChildren)
+                    summaryChildMatches.addAll(children)
                 }
 
-                // Combine and deduplicate matches by key
                 val allMatches = (directChildMatches + summaryChildMatches).distinctBy { it.key }
-
                 if (allMatches.size > 1) {
-                    val reason = "Aborted: Multiple active notifications (${allMatches.size}) match the contact name '$contactName'. Aborting to prevent cross-fire misrouting."
+                    val reason = "Aborted: Multiple active notifications (${allMatches.size}) match '$contactName' ($sourceClass)."
                     PersonaLogger.d(PersonaLogTags.REPLY, "Execution failure: reason=$reason")
                     return ReplyExecutionResult.Aborted
                 }
@@ -79,32 +90,36 @@ class DirectReplyExecutionUseCase @Inject constructor(
                 liveSbn = allMatches.firstOrNull()
             }
 
-            if (liveSbn == null) {
-                val reason = "Aborted: notification no longer active in status bar for $contactName"
-                PersonaLogger.d(PersonaLogTags.REPLY, "Execution failure: reason=$reason")
-                return ReplyExecutionResult.Aborted
+            if (liveSbn != null) {
+                val freshAction = liveSbn.notification?.actions?.firstOrNull { act ->
+                    act.remoteInputs?.any { it.resultKey != null } == true
+                }
+                if (freshAction != null) {
+                    NotificationActionCache.put(liveSbn.key, freshAction, sourceClass, contactName)
+                    action = freshAction
+                }
             }
+        }
 
-            val freshAction = liveSbn.notification?.actions?.firstOrNull { act ->
-                act.remoteInputs?.any { it.resultKey != null } == true
-            }
-            if (freshAction != null) {
-                NotificationActionCache.put(liveSbn.key, freshAction)
-                freshAction
-            } else {
+        // 3. Status bar recovery: fallback to cached Notification.Action if live notification is gone
+        if (action == null) {
+            action = if (!notificationKey.isNullOrBlank()) {
                 NotificationActionCache.get(notificationKey)
+            } else {
+                null
             }
-        } else {
-            NotificationActionCache.get(notificationKey)
+        }
+        if (action == null) {
+            action = NotificationActionCache.get(sourceClass, contactName)
         }
 
         if (action == null) {
-            val reason = "Notification action not found in cache (likely expired or dismissed)"
-            PersonaLogger.d(PersonaLogTags.REPLY, "Execution failure: reason=$reason")
-            return ReplyExecutionResult.Failed(reason)
+            val reason = "Notification action not found in active status bar or cache for $contactName ($sourceClass)"
+            PersonaLogger.d(PersonaLogTags.REPLY, "Execution aborted: reason=$reason")
+            return ReplyExecutionResult.Aborted
         }
 
-        // 2. Extract the RemoteInput actions
+        // 4. Extract RemoteInput
         val remoteInputs = action.remoteInputs
         if (remoteInputs.isNullOrEmpty()) {
             val reason = "No RemoteInputs found on notification action"
@@ -120,7 +135,6 @@ class DirectReplyExecutionUseCase @Inject constructor(
         }
 
         try {
-            // 3. Create Intent and insert replyText using resultKey
             val resultsBundle = Bundle().apply {
                 putCharSequence(remoteInput.resultKey, replyText)
             }
@@ -128,10 +142,13 @@ class DirectReplyExecutionUseCase @Inject constructor(
             val fillInIntent = Intent()
             RemoteInput.addResultsToIntent(remoteInputs, fillInIntent, resultsBundle)
 
-            // 4. Fire the direct reply intent
             action.actionIntent.send(context, 0, fillInIntent)
             PersonaLogger.d(PersonaLogTags.REPLY, "Execution success")
             return ReplyExecutionResult.Success
+        } catch (e: PendingIntent.CanceledException) {
+            val reason = "PendingIntent canceled (notification expired or invalidated): ${e.message}"
+            PersonaLogger.d(PersonaLogTags.REPLY, "Execution failure: reason=$reason")
+            return ReplyExecutionResult.Failed(reason)
         } catch (e: Exception) {
             val reason = "PendingIntent sending failed: ${e.message}"
             PersonaLogger.d(PersonaLogTags.REPLY, "Execution failure: reason=$reason")
@@ -139,11 +156,21 @@ class DirectReplyExecutionUseCase @Inject constructor(
         }
     }
 
-    private fun matchesContact(sbn: android.service.notification.StatusBarNotification?, contactName: String): Boolean {
+    private fun matchesContact(sbn: StatusBarNotification?, contactName: String): Boolean {
         val extras = sbn?.notification?.extras ?: return false
-        val title = extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString()
+        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
         val convTitle = extras.getCharSequence("android.conversationTitle")?.toString()
         val hiddenConvTitle = extras.getCharSequence("android.hiddenConversationTitle")?.toString()
-        return title == contactName || convTitle == contactName || hiddenConvTitle == contactName
+        return title.equals(contactName, ignoreCase = true) ||
+            convTitle.equals(contactName, ignoreCase = true) ||
+            hiddenConvTitle.equals(contactName, ignoreCase = true)
+    }
+
+    private fun matchesSourceClass(sbn: StatusBarNotification, sourceClass: String): Boolean {
+        return when (sourceClass.uppercase()) {
+            "MAIN_APP" -> sbn.packageName == "com.whatsapp"
+            "BUSINESS" -> sbn.packageName == "com.whatsapp.w4b"
+            else -> true
+        }
     }
 }

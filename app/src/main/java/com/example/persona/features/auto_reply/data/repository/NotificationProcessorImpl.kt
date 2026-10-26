@@ -20,14 +20,15 @@ class NotificationProcessorImpl @Inject constructor(
         val originalText = notification.text
         val normalizedText = normalizer.normalize(originalText) ?: originalText
         val context = contextDetector.detect(normalizedText)
-        
+
         return ProcessedNotification(
             notificationKey = notification.notificationKey,
             contactName = notification.title,
             originalText = originalText,
             normalizedText = normalizedText,
             context = context,
-            postTime = notification.postTime
+            postTime = notification.postTime,
+            sourceClass = notification.sourceClass
         )
     }
 }
