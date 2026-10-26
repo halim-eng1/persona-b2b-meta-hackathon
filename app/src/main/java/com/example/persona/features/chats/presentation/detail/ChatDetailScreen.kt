@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -40,9 +41,11 @@ fun ChatDetailScreen(
     val context = LocalContext.current
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val imeBottom = WindowInsets.ime.getBottom(density)
 
-    // Auto-scroll to bottom when messages list size changes
-    LaunchedEffect(state.messages.size) {
+    // Auto-scroll to bottom when messages list size changes or keyboard appears
+    LaunchedEffect(state.messages.size, imeBottom) {
         if (state.messages.isNotEmpty()) {
             listState.animateScrollToItem(state.messages.lastIndex)
         }
@@ -51,10 +54,11 @@ fun ChatDetailScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .imePadding()
             .background(Color(0xFF0F172A))
+            .statusBarsPadding()
+            .windowInsetsPadding(
+                WindowInsets.navigationBars.union(WindowInsets.ime).only(WindowInsetsSides.Bottom)
+            )
     ) {
         // Compact TopBar (fixed height 56.dp)
         CompactChatTopBar(
