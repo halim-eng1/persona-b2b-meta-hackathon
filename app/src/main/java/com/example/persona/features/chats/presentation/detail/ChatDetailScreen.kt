@@ -23,17 +23,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatDetailScreen(
     onNavigateBack: () -> Unit,
@@ -52,187 +52,62 @@ fun ChatDetailScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                title = {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = state.contactName,
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                maxLines = 1
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = when (state.sourceClass.uppercase()) {
-                                    "BUSINESS" -> Color(0xFF25D366)
-                                    "MAIN_APP" -> MaterialTheme.colorScheme.secondary
-                                    else -> MaterialTheme.colorScheme.tertiary
-                                }
-                            ) {
-                                Text(
-                                    text = state.sourceClass.take(4),
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .imePadding()
+            .background(Color(0xFF0F172A))
+    ) {
+        // Compact TopBar (fixed height 56.dp)
+        CompactChatTopBar(
+            contactName = state.contactName,
+            sourceClass = state.sourceClass,
+            replyCapability = state.replyCapability,
+            isAiPaused = state.isAiPaused,
+            onNavigateBack = onNavigateBack,
+            onToggleAi = { viewModel.toggleAiPaused() }
+        )
 
-                        // Readiness status
-                        Text(
-                            text = if (state.replyCapability == ReplyCapability.READY_VIA_NOTIFICATION) {
-                                "● Ready to reply via notification"
-                            } else {
-                                "○ Awaiting active notification"
-                            },
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                            color = if (state.replyCapability == ReplyCapability.READY_VIA_NOTIFICATION) {
-                                Color(0xFF2E7D32)
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
-                    }
-                },
-                actions = {
-                    // Per-Contact AI Toggle
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Text(
-                            text = if (state.isAiPaused) "AI Off" else "AI On",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Switch(
-                            checked = !state.isAiPaused,
-                            onCheckedChange = { viewModel.toggleAiPaused() },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.primary,
-                                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
-                            )
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        },
-        bottomBar = {
-            Column(
+        // In-chat banner when AI is paused
+        AnimatedVisibility(visible = state.isAiPaused) {
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .navigationBarsPadding()
-                    .imePadding()
+                    .clickable { viewModel.toggleAiPaused() },
+                color = Color(0xFF334155)
             ) {
-                // In-chat banner when AI is paused
-                AnimatedVisibility(visible = state.isAiPaused) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.toggleAiPaused() },
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PauseCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "AI Auto-Reply paused for this chat — Tap to Resume",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                // Composer input bar
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    OutlinedTextField(
-                        value = state.inputText,
-                        onValueChange = { viewModel.onInputTextChanged(it) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 8.dp),
-                        placeholder = { Text("Type a manual reply...") },
-                        maxLines = 4,
-                        shape = RoundedCornerShape(24.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                            focusedContainerColor = MaterialTheme.colorScheme.surface
+                    Icon(
+                        imageVector = Icons.Default.PauseCircle,
+                        contentDescription = null,
+                        tint = Color(0xFFF59E0B),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "AI Auto-Reply paused for this chat — Tap to Resume",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
                         )
                     )
-
-                    IconButton(
-                        onClick = {
-                            viewModel.sendMessage()
-                            coroutineScope.launch {
-                                if (state.messages.isNotEmpty()) {
-                                    listState.animateScrollToItem(state.messages.lastIndex)
-                                }
-                            }
-                        },
-                        enabled = state.inputText.isNotBlank() && !state.isSending,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(
-                                color = if (state.inputText.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                shape = CircleShape
-                            )
-                    ) {
-                        if (state.isSending) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "Send",
-                                tint = if (state.inputText.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
                 }
             }
-        },
-        modifier = modifier
-    ) { innerPadding ->
+        }
+
+        // Messages Stream
         LazyColumn(
             state = listState,
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 12.dp),
+                .weight(1f)
+                .fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             itemsIndexed(
@@ -248,16 +123,228 @@ fun ChatDetailScreen(
 
                 MessageBubble(
                     message = msg,
-                    onRetry = { viewModel.retryMessage(msg.text) },
+                    onRetry = { viewModel.retryMessage(msg.id, msg.text) },
                     onOpenWhatsApp = {
-                        val pkg = state.fallbackTargetPackage ?: "com.whatsapp"
+                        val pkg = state.fallbackTargetPackage
+                            ?: if (state.sourceClass.uppercase() == "BUSINESS") "com.whatsapp.w4b" else "com.whatsapp"
                         openWhatsAppFallback(context, pkg, msg.text)
                     }
                 )
             }
+        }
 
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
+        // Composer Bar (NO extra imePadding here!)
+        ChatComposerBar(
+            inputText = state.inputText,
+            isSending = state.isSending,
+            onInputTextChanged = { viewModel.onInputTextChanged(it) },
+            onSendMessage = {
+                viewModel.sendMessage()
+                coroutineScope.launch {
+                    if (state.messages.isNotEmpty()) {
+                        listState.animateScrollToItem(state.messages.lastIndex)
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun CompactChatTopBar(
+    contactName: String,
+    sourceClass: String,
+    replyCapability: ReplyCapability,
+    isAiPaused: Boolean,
+    onNavigateBack: () -> Unit,
+    onToggleAi: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp),
+        color = Color(0xFF1E293B),
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onNavigateBack,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White
+                )
+            }
+
+            // Circular avatar (32.dp)
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF334155)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = contactName.take(1).uppercase(),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Contact info column
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = contactName,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color.White
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = when (sourceClass.uppercase()) {
+                            "BUSINESS" -> Color(0xFF25D366)
+                            "MAIN_APP" -> Color(0xFF3B82F6)
+                            else -> Color(0xFF8B5CF6)
+                        }
+                    ) {
+                        Text(
+                            text = sourceClass.take(4),
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+
+                // Subtitle
+                Text(
+                    text = if (replyCapability == ReplyCapability.READY_VIA_NOTIFICATION) {
+                        "● متاح للرد"
+                    } else {
+                        "○ بانتظار إشعار"
+                    },
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = if (replyCapability == ReplyCapability.READY_VIA_NOTIFICATION) {
+                        Color(0xFF4ADE80)
+                    } else {
+                        Color(0xFF94A3B8)
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Right row: Compact AI Auto-Reply Switch (0.75f scale) with clean label ("AI")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = 4.dp)
+            ) {
+                Text(
+                    text = "AI",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                )
+                Switch(
+                    checked = !isAiPaused,
+                    onCheckedChange = { onToggleAi() },
+                    modifier = Modifier.scale(0.75f),
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color(0xFF22C55E),
+                        uncheckedThumbColor = Color(0xFF94A3B8),
+                        uncheckedTrackColor = Color(0xFF334155)
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatComposerBar(
+    inputText: String,
+    isSending: Boolean,
+    onInputTextChanged: (String) -> Unit,
+    onSendMessage: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Color(0xFF1E293B)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = inputText,
+                onValueChange = onInputTextChanged,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp),
+                placeholder = { Text("Type a manual reply...", color = Color(0xFF94A3B8)) },
+                maxLines = 4,
+                shape = RoundedCornerShape(24.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedContainerColor = Color(0xFF0F172A),
+                    unfocusedContainerColor = Color(0xFF0F172A),
+                    focusedBorderColor = Color(0xFF3B82F6),
+                    unfocusedBorderColor = Color(0xFF334155)
+                )
+            )
+
+            IconButton(
+                onClick = onSendMessage,
+                enabled = inputText.isNotBlank() && !isSending,
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        color = if (inputText.isNotBlank()) Color(0xFF25D366) else Color(0xFF334155),
+                        shape = CircleShape
+                    )
+            ) {
+                if (isSending) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "Send",
+                        tint = if (inputText.isNotBlank()) Color.White else Color(0xFF94A3B8)
+                    )
+                }
             }
         }
     }
@@ -273,12 +360,12 @@ private fun DateHeaderChip(dateText: String) {
     ) {
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+            color = Color(0xFF1E293B)
         ) {
             Text(
                 text = dateText,
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Color(0xFF94A3B8),
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
         }
@@ -295,12 +382,12 @@ private fun MessageBubble(
     val alignment = if (isOutbound) Alignment.CenterEnd else Alignment.CenterStart
     val bubbleColor = if (isOutbound) {
         if (message.senderType == "MERCHANT_MANUAL") {
-            MaterialTheme.colorScheme.primaryContainer
+            Color(0xFF025144)
         } else {
-            MaterialTheme.colorScheme.secondaryContainer
+            Color(0xFF005C4B)
         }
     } else {
-        MaterialTheme.colorScheme.surfaceVariant
+        Color(0xFF202C33)
     }
 
     Box(
@@ -331,7 +418,7 @@ private fun MessageBubble(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
                                 ),
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                color = Color(0xFF8696A0)
                             )
                         }
                         Spacer(modifier = Modifier.height(2.dp))
@@ -341,7 +428,7 @@ private fun MessageBubble(
                     if (message.hasMediaIndicator) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                            color = Color(0xFF111B21),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 4.dp)
@@ -353,14 +440,14 @@ private fun MessageBubble(
                                 Icon(
                                     imageVector = Icons.Default.Attachment,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = Color(0xFF25D366),
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Media attached — view in WhatsApp app",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Color(0xFF8696A0)
                                 )
                             }
                         }
@@ -370,7 +457,7 @@ private fun MessageBubble(
                     Text(
                         text = message.text,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = Color.White
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -383,7 +470,7 @@ private fun MessageBubble(
                         Text(
                             text = message.formattedTime,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            color = Color(0xFF8696A0)
                         )
 
                         if (isOutbound) {
@@ -393,7 +480,7 @@ private fun MessageBubble(
                                     Icon(
                                         imageVector = Icons.Default.Schedule,
                                         contentDescription = "Sending",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        tint = Color(0xFF8696A0),
                                         modifier = Modifier.size(12.dp)
                                     )
                                 }
@@ -401,7 +488,7 @@ private fun MessageBubble(
                                     Icon(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = "Sent",
-                                        tint = Color(0xFF2E7D32),
+                                        tint = Color(0xFF53BDEB),
                                         modifier = Modifier.size(14.dp)
                                     )
                                 }
@@ -409,7 +496,7 @@ private fun MessageBubble(
                                     Icon(
                                         imageVector = Icons.Default.HourglassBottom,
                                         contentDescription = "Queued",
-                                        tint = MaterialTheme.colorScheme.tertiary,
+                                        tint = Color(0xFFF59E0B),
                                         modifier = Modifier.size(12.dp)
                                     )
                                 }
@@ -417,7 +504,7 @@ private fun MessageBubble(
                                     Icon(
                                         imageVector = Icons.Default.Error,
                                         contentDescription = "Failed",
-                                        tint = MaterialTheme.colorScheme.error,
+                                        tint = Color(0xFFEF4444),
                                         modifier = Modifier.size(14.dp)
                                     )
                                 }
@@ -441,10 +528,11 @@ private fun MessageBubble(
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = null,
+                            tint = Color(0xFFEF4444),
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Retry", style = MaterialTheme.typography.labelSmall)
+                        Text(text = "Retry", color = Color(0xFFEF4444), style = MaterialTheme.typography.labelSmall)
                     }
 
                     TextButton(
@@ -454,10 +542,11 @@ private fun MessageBubble(
                         Icon(
                             imageVector = Icons.Default.OpenInNew,
                             contentDescription = null,
+                            tint = Color(0xFF25D366),
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Open in WhatsApp", style = MaterialTheme.typography.labelSmall)
+                        Text(text = "Open in WhatsApp", color = Color(0xFF25D366), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

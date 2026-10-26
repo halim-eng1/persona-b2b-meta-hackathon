@@ -125,14 +125,6 @@ object DatabaseMigrations {
                 "CREATE INDEX IF NOT EXISTS `index_conversation_metadata_needs_human_attention` " +
                     "ON `conversation_metadata` (`needs_human_attention`)"
             )
-            db.execSQL(
-                "CREATE INDEX IF NOT EXISTS `index_conversation_metadata_unread_partial` " +
-                    "ON `conversation_metadata` (`unread_count`) WHERE `unread_count` > 0"
-            )
-            db.execSQL(
-                "CREATE INDEX IF NOT EXISTS `index_conversation_metadata_attention_partial` " +
-                    "ON `conversation_metadata` (`needs_human_attention`) WHERE `needs_human_attention` = 1"
-            )
 
             // 4. Smart backfill from existing chat_history rows
             db.execSQL(

@@ -92,7 +92,8 @@ class SendManualReplyUseCaseTest {
                 senderType = "MERCHANT_MANUAL",
                 timestamp = any(),
                 notificationKey = null,
-                incrementUnread = false
+                incrementUnread = false,
+                isAiPaused = true
             )
         }
 
@@ -102,7 +103,7 @@ class SendManualReplyUseCaseTest {
     }
 
     @Test
-    fun `aborted reply maps to QUEUED delivery status`() = runTest(testDispatcher) {
+    fun `aborted reply maps to FAILED delivery status for immediate user feedback`() = runTest(testDispatcher) {
         coEvery { chatHistoryDao.insert(any()) } returns 99L
         coEvery {
             directReplyExecutionUseCase.execute(any(), any(), any(), any())
@@ -114,11 +115,33 @@ class SendManualReplyUseCaseTest {
             replyText = "أهلاً بك"
         )
 
-        assertTrue(result is ManualReplyResult.Queued)
-        assertEquals(99L, (result as ManualReplyResult.Queued).messageId)
+        assertTrue(result is ManualReplyResult.Failed)
+        assertEquals(99L, (result as ManualReplyResult.Failed).messageId)
 
-        // Aborted turns must be updated to QUEUED in Room
-        coVerify(exactly = 1) { chatHistoryDao.updateDeliveryStatus(99L, "QUEUED") }
+        // Aborted turns must be updated to FAILED in Room so merchant can retry or open WhatsApp
+        coVerify(exactly = 1) { chatHistoryDao.updateDeliveryStatus(99L, "FAILED") }
+    }
+
+    @Test
+    fun `retrying failed reply updates existing row instead of inserting duplicate`() = runTest(testDispatcher) {
+        coEvery {
+            directReplyExecutionUseCase.execute(any(), any(), any(), any())
+        } returns ReplyExecutionResult.Success
+
+        val result = useCase.invoke(
+            contactName = "محمد",
+            sourceClass = "MAIN_APP",
+            replyText = "أهلاً بك مجدداً",
+            retryMessageId = 88L
+        )
+
+        assertTrue(result is ManualReplyResult.Success)
+        assertEquals(88L, (result as ManualReplyResult.Success).messageId)
+
+        // Verify existing message set to SENDING then SENT, and NO new row inserted
+        coVerify(exactly = 1) { chatHistoryDao.updateDeliveryStatus(88L, "SENDING") }
+        coVerify(exactly = 1) { chatHistoryDao.updateDeliveryStatus(88L, "SENT") }
+        coVerify(exactly = 0) { chatHistoryDao.insert(any()) }
     }
 
     @Test

@@ -534,8 +534,9 @@ class AutoReplyOrchestrator @Inject constructor(
         val contextStart = System.currentTimeMillis()
         
         // Source A: Chronological turns
-        val chatHistory = chatHistoryDao.getRecentMessagesExcept(
+        val chatHistory = chatHistoryDao.getRecentMessagesExceptForSource(
             contactName = processed.contactName,
+            sourceClass = sourceClassStr,
             excludeId = insertedId,
             limit = 6
         )
@@ -642,7 +643,10 @@ class AutoReplyOrchestrator @Inject constructor(
                 else -> {
                     val result = handleOrderCreation(
                         extractedOrder = agenticResponse.extractedOrder,
-                        contactName = processed.contactName
+                        contactName = processed.contactName,
+                        customerText = processed.originalText,
+                        orderAction = orderAction ?: "",
+                        sourceClass = sourceClassStr
                     )
                     if (result is OrderIngestionResult.DuplicatePivot) {
                         overriddenReplyText = result.pivotReplyText
@@ -1279,7 +1283,10 @@ class AutoReplyOrchestrator @Inject constructor(
      */
     internal suspend fun handleOrderCreation(
         extractedOrder: ExtractedOrderDto?,
-        contactName: String
+        contactName: String,
+        customerText: String = "",
+        orderAction: String? = "",
+        sourceClass: String = "BUSINESS"
     ): OrderIngestionResult {
         if (extractedOrder == null) return OrderIngestionResult.Ignored
 
@@ -1290,7 +1297,7 @@ class AutoReplyOrchestrator @Inject constructor(
 
         val existingOrder = orderDao.getActiveMatchingOrder(contactName)
         return if (existingOrder != null) {
-            val recentChatTurns = chatHistoryDao.getRecentMessages(contactName, limit = 6)
+            val recentChatTurns = chatHistoryDao.getRecentMessagesForSource(contactName, sourceClass, limit = 6)
             val latestPivotMsg = recentChatTurns.firstOrNull { !it.isFromUser && it.messageText.contains(PIVOT_MARKER) }
 
             val pivotSeen = isPivotStillOpen(
@@ -1299,11 +1306,37 @@ class AutoReplyOrchestrator @Inject constructor(
             )
 
             if (pivotSeen && latestPivotMsg != null) {
-                applyOrderUpdates(existingOrder, extractedOrder)
-                consumedPivotTimestamps
-                    .computeIfAbsent(contactName) { ConcurrentHashMap.newKeySet() }
-                    .add(latestPivotMsg.timestamp)
-                OrderIngestionResult.Merged(existingOrder.id)
+                val lowerCustomerText = customerText.lowercase()
+                val isNewOrder = lowerCustomerText.contains("جديد") ||
+                        lowerCustomerText.contains("منفصل") ||
+                        lowerCustomerText.contains("اوردر جديد") ||
+                        lowerCustomerText.contains("أوردر جديد") ||
+                        lowerCustomerText.contains("طلب تاني") ||
+                        lowerCustomerText.contains("new") ||
+                        orderAction?.equals("CREATE", ignoreCase = true) == true
+
+                if (isNewOrder) {
+                    val newOrder = OrderEntity(
+                        contactName = contactName,
+                        customerNameFromLlm = normalizedCustomerName,
+                        deliveryAddress = normalizedDeliveryAddress,
+                        orderDetails = normalizedOrderDetails,
+                        customNotes = normalizedCustomNotes,
+                        status = OrderStatus.PENDING.name
+                    )
+                    val insertedOrderId = orderDao.insert(newOrder)
+                    PersonaLogger.i(PersonaLogTags.ORCHESTRATOR, "Customer chose NEW separate order following pivot. Inserted new order id=$insertedOrderId")
+                    consumedPivotTimestamps
+                        .computeIfAbsent(contactName) { ConcurrentHashMap.newKeySet() }
+                        .add(latestPivotMsg.timestamp)
+                    OrderIngestionResult.Created(insertedOrderId)
+                } else {
+                    applyOrderUpdates(existingOrder, extractedOrder)
+                    consumedPivotTimestamps
+                        .computeIfAbsent(contactName) { ConcurrentHashMap.newKeySet() }
+                        .add(latestPivotMsg.timestamp)
+                    OrderIngestionResult.Merged(existingOrder.id)
+                }
             } else {
                 Log.i(TAG, "🔄 Duplicate order detected for $contactName. Sending verification pivot.")
                 val pivotText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية 😊 تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟"
@@ -1398,7 +1431,10 @@ class AutoReplyOrchestrator @Inject constructor(
                 else -> {
                     val result = handleOrderCreation(
                         extractedOrder = finalParsed.extractedOrder,
-                        contactName = processed.contactName
+                        contactName = processed.contactName,
+                        customerText = processed.originalText,
+                        orderAction = finalOrderAction ?: "",
+                        sourceClass = processed.sourceClass.name
                     )
                     if (result is OrderIngestionResult.DuplicatePivot) {
                         finalReplyOverride = result.pivotReplyText
@@ -1424,7 +1460,10 @@ class AutoReplyOrchestrator @Inject constructor(
                 "CREATE" -> {
                     val result = handleOrderCreation(
                         extractedOrder = null,
-                        contactName = processed.contactName
+                        contactName = processed.contactName,
+                        customerText = processed.originalText,
+                        orderAction = finalOrderAction,
+                        sourceClass = processed.sourceClass.name
                     )
                     if (result is OrderIngestionResult.DuplicatePivot) {
                         finalReplyOverride = result.pivotReplyText

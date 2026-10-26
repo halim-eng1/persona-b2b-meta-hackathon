@@ -30,7 +30,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        handleIntent(intent)
+        if (savedInstanceState == null) {
+            handleIntent(intent)
+        }
 
         setContent {
             PersonaTheme {
@@ -78,6 +80,7 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: Intent?) {
         val contactName = intent?.getStringExtra("open_chat_contact_name")
         val sourceClass = intent?.getStringExtra("open_chat_source_class") ?: "BUSINESS"
+        intent?.removeExtra("open_chat_contact_name")
         if (!contactName.isNullOrBlank()) {
             pendingDeepLinkContact = contactName to sourceClass
         }

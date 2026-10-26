@@ -260,7 +260,7 @@ fun HomeScreen(
                         state.recentActivity.forEachIndexed { index, item ->
                             RecentActivityRow(
                                 item = item,
-                                onClick = { onNavigateToChat(item.contactName, "BUSINESS") }
+                                onClick = { onNavigateToChat(item.contactName, item.sourceClass) }
                             )
                             if (index < state.recentActivity.lastIndex) {
                                 Box(

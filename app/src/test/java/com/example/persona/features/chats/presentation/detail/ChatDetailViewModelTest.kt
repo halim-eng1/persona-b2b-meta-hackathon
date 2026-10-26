@@ -170,4 +170,36 @@ class ChatDetailViewModelTest {
             sendManualReplyUseCase("أحمد مصطفى", "BUSINESS", "سعر المنتج 150 جنيه")
         }
     }
+
+    @Test
+    fun `retryMessage delegates to SendManualReplyUseCase with retryMessageId`() = runTest(testDispatcher) {
+        coEvery {
+            sendManualReplyUseCase(
+                contactName = "أحمد مصطفى",
+                sourceClass = "BUSINESS",
+                replyText = "رسالة تجريبية",
+                retryMessageId = 42L
+            )
+        } returns ManualReplyResult.Success(42L)
+
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle
+        )
+        advanceUntilIdle()
+
+        viewModel.retryMessage(42L, "رسالة تجريبية")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            sendManualReplyUseCase(
+                contactName = "أحمد مصطفى",
+                sourceClass = "BUSINESS",
+                replyText = "رسالة تجريبية",
+                retryMessageId = 42L
+            )
+        }
+    }
 }

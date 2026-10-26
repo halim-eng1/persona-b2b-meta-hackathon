@@ -67,28 +67,28 @@ class ChatDetailViewModel @Inject constructor(
     private val _fallbackTargetPackage = MutableStateFlow<String?>(null)
     val fallbackTargetPackage: StateFlow<String?> = _fallbackTargetPackage
 
+    private val _replyCapability = MutableStateFlow(ReplyCapability.AWAITING_ACTIVE_NOTIFICATION)
+    val replyCapability: StateFlow<ReplyCapability> = _replyCapability
+
+    private data class InputState(
+        val text: String,
+        val isSending: Boolean,
+        val fallbackPkg: String?
+    )
+
+    private val _inputState = combine(_inputText, _isSending, _fallbackTargetPackage) { text, sending, pkg ->
+        InputState(text, sending, pkg)
+    }
+
     val uiState: StateFlow<ChatDetailUiState> = combine(
         chatHistoryDao.observeMessagesForContact(contactName, sourceClass),
         conversationMetadataDao.observeAllConversations(),
-        _inputText,
-        _isSending,
-        _fallbackTargetPackage
-    ) { rawMessages, allConversations, input, sending, fallbackPkg ->
+        _replyCapability,
+        _inputState
+    ) { rawMessages, allConversations, capability, inputState ->
         val convMeta = allConversations.firstOrNull {
             it.contactName.equals(contactName, ignoreCase = true) &&
                 it.sourceClass.equals(sourceClass, ignoreCase = true)
-        }
-
-        val hasAction = NotificationActionCache.get(sourceClass, contactName) != null ||
-            WhatsAppNotificationListener.instance?.get()?.activeNotifications?.any { sbn ->
-                sbn.notification.extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString()
-                    .equals(contactName, ignoreCase = true)
-            } == true
-
-        val capability = if (hasAction) {
-            ReplyCapability.READY_VIA_NOTIFICATION
-        } else {
-            ReplyCapability.AWAITING_ACTIVE_NOTIFICATION
         }
 
         val uiMessages = rawMessages.map { it.toUiModel() }
@@ -100,9 +100,9 @@ class ChatDetailViewModel @Inject constructor(
             isAiPaused = convMeta?.isAiPaused ?: false,
             needsHumanAttention = convMeta?.needsHumanAttention ?: false,
             replyCapability = capability,
-            inputText = input,
-            isSending = sending,
-            fallbackTargetPackage = fallbackPkg
+            inputText = inputState.text,
+            isSending = inputState.isSending,
+            fallbackTargetPackage = inputState.fallbackPkg
         )
     }.stateIn(
         scope = viewModelScope,
@@ -113,6 +113,45 @@ class ChatDetailViewModel @Inject constructor(
     init {
         // Mark conversation and messages as read when thread is opened
         markAsRead()
+        checkNotificationReadiness()
+
+        // Re-check notification readiness on background thread when incoming message turns arrive
+        viewModelScope.launch {
+            chatHistoryDao.observeMessagesForContact(contactName, sourceClass).collect {
+                checkNotificationReadiness()
+            }
+        }
+    }
+
+    fun checkNotificationReadiness() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val hasCached = NotificationActionCache.get(sourceClass, contactName) != null
+            if (hasCached) {
+                _replyCapability.value = ReplyCapability.READY_VIA_NOTIFICATION
+                return@launch
+            }
+
+            val targetPkg = when (sourceClass.uppercase()) {
+                "MAIN_APP" -> "com.whatsapp"
+                "BUSINESS" -> "com.whatsapp.w4b"
+                else -> null
+            }
+
+            val active = WhatsAppNotificationListener.instance?.get()?.activeNotifications ?: emptyArray()
+            val hasLive = active.any { sbn ->
+                (targetPkg == null || sbn.packageName == targetPkg) &&
+                (sbn.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY == 0) &&
+                sbn.notification.extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString()
+                    .equals(contactName, ignoreCase = true) &&
+                sbn.notification.actions?.any { act -> act.remoteInputs?.any { it.resultKey != null } == true } == true
+            }
+
+            _replyCapability.value = if (hasLive) {
+                ReplyCapability.READY_VIA_NOTIFICATION
+            } else {
+                ReplyCapability.AWAITING_ACTIVE_NOTIFICATION
+            }
+        }
     }
 
     fun markAsRead() {
@@ -164,9 +203,14 @@ class ChatDetailViewModel @Inject constructor(
         }
     }
 
-    fun retryMessage(messageText: String) {
+    fun retryMessage(messageId: Long, messageText: String) {
         viewModelScope.launch {
-            sendManualReplyUseCase(contactName, sourceClass, messageText)
+            sendManualReplyUseCase(
+                contactName = contactName,
+                sourceClass = sourceClass,
+                replyText = messageText,
+                retryMessageId = messageId
+            )
         }
     }
 
@@ -212,12 +256,11 @@ class ChatDetailViewModel @Inject constructor(
             val dt = Instant.fromEpochMilliseconds(timestampMs).toLocalDateTime(TimeZone.currentSystemDefault())
             val nowDt = Instant.fromEpochMilliseconds(System.currentTimeMillis()).toLocalDateTime(TimeZone.currentSystemDefault())
 
-            if (dt.year == nowDt.year && dt.monthNumber == nowDt.monthNumber && dt.dayOfMonth == nowDt.dayOfMonth) {
-                "Today"
-            } else if (dt.year == nowDt.year && dt.monthNumber == nowDt.monthNumber && dt.dayOfMonth == nowDt.dayOfMonth - 1) {
-                "Yesterday"
-            } else {
-                "%02d/%02d/%04d".format(dt.dayOfMonth, dt.monthNumber, dt.year)
+            val epochDiff = nowDt.date.toEpochDays() - dt.date.toEpochDays()
+            when (epochDiff) {
+                0 -> "Today"
+                1 -> "Yesterday"
+                else -> "%02d/%02d/%04d".format(dt.dayOfMonth, dt.monthNumber, dt.year)
             }
         } catch (e: Exception) {
             ""

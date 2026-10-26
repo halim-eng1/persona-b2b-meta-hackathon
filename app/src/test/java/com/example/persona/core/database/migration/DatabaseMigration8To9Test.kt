@@ -36,12 +36,15 @@ class DatabaseMigration8To9Test {
             })
         }
 
-        // 4. Verify indices and partial indices
+        // 4. Verify standard indices on conversation_metadata
         verify {
-            db.execSQL(match { it.contains("index_conversation_metadata_unread_partial") && it.contains("WHERE `unread_count` > 0") })
+            db.execSQL(match { it.contains("index_conversation_metadata_last_message_timestamp") })
         }
         verify {
-            db.execSQL(match { it.contains("index_conversation_metadata_attention_partial") && it.contains("WHERE `needs_human_attention` = 1") })
+            db.execSQL(match { it.contains("index_conversation_metadata_unread_count") })
+        }
+        verify {
+            db.execSQL(match { it.contains("index_conversation_metadata_needs_human_attention") })
         }
 
         // 5. Verify smart backfill from existing chat_history

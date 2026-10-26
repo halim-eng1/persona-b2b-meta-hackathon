@@ -37,7 +37,8 @@ class SendManualReplyUseCase @Inject constructor(
     suspend operator fun invoke(
         contactName: String,
         sourceClass: String,
-        replyText: String
+        replyText: String,
+        retryMessageId: Long? = null
     ): ManualReplyResult {
         val trimmedText = replyText.trim()
         val now = System.currentTimeMillis()
@@ -45,25 +46,30 @@ class SendManualReplyUseCase @Inject constructor(
         // 1. Suppress self-reply echo in notification listener
         WhatsAppNotificationListener.registerMerchantReply(contactName, trimmedText)
 
-        // 2. Optimistic insert into chat_history with status SENDING
-        val optimisticEntity = ChatHistoryEntity(
-            contactName = contactName,
-            messageText = trimmedText,
-            isFromUser = false,
-            timestamp = now,
-            embedding = null,
-            embeddingState = "PENDING",
-            sourceClass = sourceClass,
-            senderType = "MERCHANT_MANUAL",
-            deliveryStatus = "SENDING",
-            isRead = true
-        )
-        val messageId = chatHistoryDao.insert(optimisticEntity)
+        // 2. Either reuse existing failed message row or insert an optimistic turn
+        val messageId = if (retryMessageId != null) {
+            chatHistoryDao.updateDeliveryStatus(retryMessageId, "SENDING")
+            retryMessageId
+        } else {
+            val optimisticEntity = ChatHistoryEntity(
+                contactName = contactName,
+                messageText = trimmedText,
+                isFromUser = false,
+                timestamp = now,
+                embedding = null,
+                embeddingState = "PENDING",
+                sourceClass = sourceClass,
+                senderType = "MERCHANT_MANUAL",
+                deliveryStatus = "SENDING",
+                isRead = true
+            )
+            chatHistoryDao.insert(optimisticEntity)
+        }
 
         // 3. Human-AI race guard: automatically pause AI for this contact
         conversationMetadataDao.setAiPaused(contactName, sourceClass, true)
 
-        // 4. Update conversation metadata snippet and timestamp
+        // 4. Update conversation metadata snippet and timestamp, preserving isAiPaused = true
         conversationMetadataDao.recordMessageTurn(
             contactName = contactName,
             sourceClass = sourceClass,
@@ -71,7 +77,8 @@ class SendManualReplyUseCase @Inject constructor(
             senderType = "MERCHANT_MANUAL",
             timestamp = now,
             notificationKey = null,
-            incrementUnread = false
+            incrementUnread = false,
+            isAiPaused = true
         )
 
         // 5. Dispatch via DirectReplyExecutionUseCase
@@ -116,9 +123,9 @@ class SendManualReplyUseCase @Inject constructor(
             }
 
             is ReplyExecutionResult.Aborted -> {
-                // Map Aborted -> QUEUED (will auto-retry when notification arrives)
-                chatHistoryDao.updateDeliveryStatus(messageId, "QUEUED")
-                ManualReplyResult.Queued(messageId, "Awaiting active notification from WhatsApp")
+                // Map Aborted -> FAILED (immediate user feedback, retry & open in WhatsApp available)
+                chatHistoryDao.updateDeliveryStatus(messageId, "FAILED")
+                ManualReplyResult.Failed(messageId, "Awaiting active notification from WhatsApp", targetPackage)
             }
 
             is ReplyExecutionResult.Failed -> {

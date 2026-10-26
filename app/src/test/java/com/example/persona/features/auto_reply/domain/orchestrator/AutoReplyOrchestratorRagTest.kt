@@ -26,6 +26,7 @@ import com.example.persona.features.auto_reply.domain.repository.ReplyGeneration
 import com.example.persona.features.auto_reply.domain.usecase.DirectReplyExecutionUseCase
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormalizer
+import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator.OrderIngestionResult
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -250,6 +251,7 @@ class AutoReplyOrchestratorRagTest {
         )
         coEvery { orderDao.getActiveMatchingOrder("عميل تجريبي") } returns existingOrder
         coEvery { chatHistoryDao.getRecentMessages("عميل تجريبي", limit = 6) } returns emptyList()
+        coEvery { chatHistoryDao.getRecentMessagesForSource("عميل تجريبي", any(), limit = 6) } returns emptyList()
 
         val orchestrator = createTestOrchestrator(orderDao = orderDao, chatHistoryDao = chatHistoryDao)
 
@@ -276,6 +278,122 @@ class AutoReplyOrchestratorRagTest {
 
         assertTrue(override?.contains("أنا شايف إنك لسه عامل أوردر مشابه") == true)
         coVerify(exactly = 0) { orderDao.insert(any()) }
+    }
+
+    @Test
+    fun `Customer choosing NEW order following pivot inserts separate order and does not update existing`() = runBlocking {
+        val orderDao = mockk<OrderDao>(relaxed = true)
+        val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
+        val existingOrder = OrderEntity(
+            id = 2L,
+            contactName = "محمد علي",
+            orderDetails = "قميص أبيض",
+            deliveryAddress = "المعادي",
+            status = OrderStatus.PENDING.name
+        )
+        coEvery { orderDao.getActiveMatchingOrder("محمد علي") } returns existingOrder
+        coEvery { orderDao.insert(any()) } returns 3L
+
+        val pivotTimestamp = System.currentTimeMillis() - 10_000L
+        val pivotMsg = ChatHistoryEntity(
+            id = 10L,
+            contactName = "محمد علي",
+            messageText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية 😊 تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟",
+            isFromUser = false,
+            timestamp = pivotTimestamp,
+            sourceClass = "BUSINESS"
+        )
+        coEvery { chatHistoryDao.getRecentMessagesForSource("محمد علي", "BUSINESS", limit = 6) } returns listOf(pivotMsg)
+
+        val orchestrator = createTestOrchestrator(orderDao = orderDao, chatHistoryDao = chatHistoryDao)
+
+        val extracted = ExtractedOrder(
+            customerName = "محمد علي",
+            deliveryAddress = "التجمع الخامس",
+            orderDetails = "بنطلون جينز",
+            customNotes = "مقاس 34"
+        )
+
+        val result = orchestrator.handleOrderCreation(
+            extractedOrder = extracted,
+            contactName = "محمد علي",
+            customerText = "لا اعملي اوردر جديد منفصل ب العنوان الجديد",
+            orderAction = "CREATE",
+            sourceClass = "BUSINESS"
+        )
+
+        assertTrue(result is OrderIngestionResult.Created)
+        assertEquals(3L, (result as OrderIngestionResult.Created).orderId)
+
+        // Verify orderDao.insert was called for new order with new address
+        coVerify(exactly = 1) {
+            orderDao.insert(match {
+                it.contactName == "محمد علي" &&
+                it.deliveryAddress == "التجمع الخامس" &&
+                it.orderDetails == "بنطلون جينز" &&
+                it.status == OrderStatus.PENDING.name
+            })
+        }
+
+        // Verify existing order was NOT updated
+        coVerify(exactly = 0) {
+            orderDao.updateDeliveryAddress(eq(2L), any())
+        }
+    }
+
+    @Test
+    fun `Customer choosing UPDATE order following pivot merges into existing order without inserting new order`() = runBlocking {
+        val orderDao = mockk<OrderDao>(relaxed = true)
+        val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
+        val existingOrder = OrderEntity(
+            id = 2L,
+            contactName = "محمد علي",
+            orderDetails = "قميص أبيض",
+            deliveryAddress = "المعادي",
+            status = OrderStatus.PENDING.name
+        )
+        coEvery { orderDao.getActiveMatchingOrder("محمد علي") } returns existingOrder
+
+        val pivotTimestamp = System.currentTimeMillis() - 10_000L
+        val pivotMsg = ChatHistoryEntity(
+            id = 10L,
+            contactName = "محمد علي",
+            messageText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية 😊 تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟",
+            isFromUser = false,
+            timestamp = pivotTimestamp,
+            sourceClass = "BUSINESS"
+        )
+        coEvery { chatHistoryDao.getRecentMessagesForSource("محمد علي", "BUSINESS", limit = 6) } returns listOf(pivotMsg)
+
+        val orchestrator = createTestOrchestrator(orderDao = orderDao, chatHistoryDao = chatHistoryDao)
+
+        val extracted = ExtractedOrder(
+            customerName = "محمد علي",
+            deliveryAddress = "المعادي، شارع النصر",
+            orderDetails = "قميص أبيض مقاس L",
+            customNotes = null
+        )
+
+        val result = orchestrator.handleOrderCreation(
+            extractedOrder = extracted,
+            contactName = "محمد علي",
+            customerText = "عدل على القديم وخليه شارع النصر",
+            orderAction = "UPDATE",
+            sourceClass = "BUSINESS"
+        )
+
+        assertTrue(result is OrderIngestionResult.Merged)
+        assertEquals(2L, (result as OrderIngestionResult.Merged).orderId)
+
+        // Verify orderDao.insert was NOT called
+        coVerify(exactly = 0) {
+            orderDao.insert(any())
+        }
+
+        // Verify existing order was updated
+        coVerify(exactly = 1) {
+            orderDao.updateDeliveryAddress(2L, "المعادي، شارع النصر")
+        }
     }
 
     @Test
@@ -426,6 +544,7 @@ class AutoReplyOrchestratorRagTest {
         coEvery { chatHistoryDao.insert(any()) } returns 1L
         coEvery { chatHistoryDao.claimForProcessing(any()) } returns 0 // Skip async background embedding in test
         coEvery { chatHistoryDao.getRecentMessagesExcept(any(), any(), any()) } returns emptyList()
+        coEvery { chatHistoryDao.getRecentMessagesExceptForSource(any(), any(), any(), any()) } returns emptyList()
         coEvery { orderDao.getActiveOrdersByContact(any()) } returns emptyList()
 
         val embeddingEngine = mockk<EmbeddingEngine>()
@@ -535,6 +654,7 @@ class AutoReplyOrchestratorRagTest {
         coEvery { chatHistoryDao.insert(any()) } returns 1L
         coEvery { chatHistoryDao.claimForProcessing(any()) } returns 0
         coEvery { chatHistoryDao.getRecentMessagesExcept(any(), any(), any()) } returns emptyList()
+        coEvery { chatHistoryDao.getRecentMessagesExceptForSource(any(), any(), any(), any()) } returns emptyList()
 
         val existingOrder = OrderEntity(
             id = 55L,

@@ -135,12 +135,11 @@ class ChatsListViewModel @Inject constructor(
             val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
             val nowDt = Instant.fromEpochMilliseconds(System.currentTimeMillis()).toLocalDateTime(TimeZone.currentSystemDefault())
 
-            return if (dt.year == nowDt.year && dt.monthNumber == nowDt.monthNumber && dt.dayOfMonth == nowDt.dayOfMonth) {
-                "%02d:%02d".format(dt.hour, dt.minute)
-            } else if (dt.year == nowDt.year && dt.monthNumber == nowDt.monthNumber && dt.dayOfMonth == nowDt.dayOfMonth - 1) {
-                "Yesterday"
-            } else {
-                "%02d/%02d/%04d".format(dt.dayOfMonth, dt.monthNumber, dt.year)
+            val epochDiff = nowDt.date.toEpochDays() - dt.date.toEpochDays()
+            return when (epochDiff) {
+                0 -> "%02d:%02d".format(dt.hour, dt.minute)
+                1 -> "Yesterday"
+                else -> "%02d/%02d/%04d".format(dt.dayOfMonth, dt.monthNumber, dt.year)
             }
         } catch (e: Exception) {
             return ""

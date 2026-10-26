@@ -13,5 +13,6 @@ data class AuditLogItem(
     val generatedReply: String,
     val similarityScore: Float,
     val wasAutoSent: Boolean,
-    val timestamp: Instant
+    val timestamp: Instant,
+    val sourceClass: String = "BUSINESS"
 )

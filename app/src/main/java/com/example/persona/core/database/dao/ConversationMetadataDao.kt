@@ -80,6 +80,14 @@ interface ConversationMetadataDao {
     @Query("SELECT COUNT(*) FROM conversation_metadata WHERE needs_human_attention = 1")
     fun observeTotalAttentionCount(): Flow<Int>
 
+    @Query("""
+        SELECT * FROM conversation_metadata
+        WHERE contact_name = :contactName
+        ORDER BY last_message_timestamp DESC
+        LIMIT 1
+    """)
+    suspend fun getLatestConversationForContact(contactName: String): ConversationMetadataEntity?
+
     @Transaction
     suspend fun recordMessageTurn(
         contactName: String,
@@ -88,7 +96,8 @@ interface ConversationMetadataDao {
         senderType: String,
         timestamp: Long,
         notificationKey: String? = null,
-        incrementUnread: Boolean = false
+        incrementUnread: Boolean = false,
+        isAiPaused: Boolean? = null
     ) {
         val existing = getConversation(contactName, sourceClass)
         if (existing == null) {
@@ -96,7 +105,7 @@ interface ConversationMetadataDao {
                 ConversationMetadataEntity(
                     contactName = contactName,
                     sourceClass = sourceClass,
-                    isAiPaused = false,
+                    isAiPaused = isAiPaused ?: false,
                     needsHumanAttention = false,
                     lastNotificationKey = notificationKey,
                     lastMessageText = messageText,
@@ -112,7 +121,8 @@ interface ConversationMetadataDao {
                     lastMessageSenderType = senderType,
                     lastMessageTimestamp = timestamp,
                     lastNotificationKey = notificationKey ?: existing.lastNotificationKey,
-                    unreadCount = if (incrementUnread) existing.unreadCount + 1 else existing.unreadCount
+                    unreadCount = if (incrementUnread) existing.unreadCount + 1 else existing.unreadCount,
+                    isAiPaused = isAiPaused ?: existing.isAiPaused
                 )
             )
         }
