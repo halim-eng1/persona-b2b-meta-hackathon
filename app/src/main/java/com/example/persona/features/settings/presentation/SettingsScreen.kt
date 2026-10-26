@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,14 +20,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -43,6 +39,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
+import com.example.persona.features.settings.presentation.components.CooldownOption
+import com.example.persona.features.settings.presentation.components.ProfileOption
+import com.example.persona.features.settings.presentation.components.ThresholdOption
 
 @Composable
 fun SettingsScreen(
@@ -256,8 +255,6 @@ fun SettingsScreen(
     }
 }
 
-// ── Section Wrapper ─────────────────────────────────────────────────────────
-
 @Composable
 private fun SettingsSection(
     title: String,
@@ -292,144 +289,5 @@ private fun SettingsSection(
                 content()
             }
         }
-    }
-}
-
-// ── Style Profile Option ────────────────────────────────────────────────────
-
-private val profileDescriptions = mapOf(
-    StyleProfile.PROFESSIONAL to "Formal tone, no emojis, complete sentences.",
-    StyleProfile.CASUAL       to "Natural tone matching your emoji usage rate.",
-    StyleProfile.STRICT_MATCH to "Exact historical reply, no modifications.",
-    StyleProfile.SHORT_DIRECT to "Concise replies with pleasantries stripped.",
-    StyleProfile.EMOJI_HEAVY  to "Expressive replies with contextual emojis."
-)
-
-@Composable
-private fun ProfileOption(
-    profile: StyleProfile,
-    isSelected: Boolean,
-    onSelect: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSelect)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        RadioButton(
-            selected = isSelected,
-            onClick = onSelect,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = MaterialTheme.colorScheme.primary
-            )
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = profile.displayName,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                )
-            )
-            Text(
-                text = profileDescriptions[profile] ?: "",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (isSelected) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Text(
-                    text = "Active",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
-        }
-    }
-}
-
-// ── Threshold Option ────────────────────────────────────────────────────────
-
-private val thresholdDescriptions = mapOf(
-    ThresholdLevel.CONSERVATIVE to "Only reply when highly confident (≥ 85%).",
-    ThresholdLevel.BALANCED     to "Balanced confidence required (≥ 75%).",
-    ThresholdLevel.AGGRESSIVE   to "Reply even with lower confidence (≥ 65%)."
-)
-
-@Composable
-private fun ThresholdOption(
-    level: ThresholdLevel,
-    isSelected: Boolean,
-    onSelect: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSelect)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        RadioButton(
-            selected = isSelected,
-            onClick = onSelect,
-            colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = level.displayName,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                )
-            )
-            Text(
-                text = thresholdDescriptions[level] ?: "",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-// ── Cooldown Option ─────────────────────────────────────────────────────────
-
-@Composable
-private fun CooldownOption(
-    mins: Int,
-    isSelected: Boolean,
-    onSelect: () -> Unit
-) {
-    val label = when (mins) {
-        0 -> "None (Instant / Testing Mode)"
-        1 -> "1 minute"
-        else -> "$mins minutes"
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSelect)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        RadioButton(
-            selected = isSelected,
-            onClick = onSelect,
-            colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-            )
-        )
     }
 }

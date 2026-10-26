@@ -26,7 +26,7 @@ import com.example.persona.features.auto_reply.domain.repository.ReplyGeneration
 import com.example.persona.features.auto_reply.domain.usecase.DirectReplyExecutionUseCase
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormalizer
-import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator.OrderIngestionResult
+import com.example.persona.features.auto_reply.domain.orchestrator.OrderIngestionResult
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
