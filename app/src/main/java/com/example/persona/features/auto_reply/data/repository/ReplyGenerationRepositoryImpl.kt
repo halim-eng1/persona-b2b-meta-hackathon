@@ -142,7 +142,7 @@ Output Schema:
 - ORDER ACTION (`order_action`): Set when the customer's message changes order state; null otherwise.
   - "CREATE": the customer is actively placing a NEW order with items/quantities.
   - "CANCEL": the customer explicitly asks to stop or cancel their active order ("إلغاء", "كنسل", "بطل الطلب"). NEVER use it for general complaints, pricing questions, or anything other than termination of the order itself.
-  - "UPDATE": the customer supplies missing details (address/phone/notes/product names) for, or confirms, the already-active order — e.g. answering the duplicate-order verification question, or short confirmations like "خلاص", "تمام", "ماشي".
+  - "UPDATE": the customer supplies missing details (address/phone/notes/product names) for the already-active order, or answers the duplicate-order verification question with edit-intent (e.g. "خلاص سجّل", "عدّل العنوان"). NEVER use it for bare acknowledgements that follow an unrelated answer — a lone "تمام" or "ماشي" after prices, small-talk, or a question MUST NOT move any order.
   - null: for inquiries, small-talk, questions, or HITL hand-offs.
 - STATE-CLAIM RULE: never state in final_reply_text that an order was registered, updated, or cancelled unless the matching order_action is set in THIS response. Without an order_action, describe orders exactly and only as they appear in PERSONAL USER STATE.
 - UPDATE CLOSING RULE: when order_action is "UPDATE", final_reply_text must CLOSE the loop with a short confirmation (e.g. "تم يا فندم، سجلت التفاصيل عندنا ✅") and NEVER ask the customer to confirm the same thing again.
@@ -175,7 +175,7 @@ Output Schema:
 {
   "action": "REPLY" | "HITL",
   "refined_search_keyword": null,
-  "order_action": "CREATE" | "CANCEL" | "UPDATE" | null,
+  "order_action": "CANCEL" | "UPDATE" | null,
   "final_reply_text": "The message to send to the customer",
   "extracted_order": null
 }

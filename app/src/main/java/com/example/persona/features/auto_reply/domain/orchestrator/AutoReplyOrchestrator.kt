@@ -67,9 +67,38 @@ class AutoReplyOrchestrator @Inject constructor(
     companion object {
         private const val TAG = "AutoReplyOrchestrator"
         private const val ALARM_CHANNEL_ID = "hitl_alarm_channel"
+
+        /**
+         * Stable prefix of the dedup verification pivot message. Used for the
+         * (widened) 6-turn suppression scan — must stay a substring-compatible
+         * prefix of the user-facing pivot text so emoji variants still match.
+         */
+        const val PIVOT_MARKER = "أنا شايف إنك لسه عامل أوردر مشابه"
+
+        /**
+         * Deterministic replacement reply when the model emits a CANCEL for a
+         * contact that has no active order: the bot must never let prose claim
+         * an irreversible state change that did not happen (f3.log lesson).
+         */
+        const val NO_ACTIVE_ORDER_REPLY =
+            "يا فندم، ما لقيناش أوردر نشط باسم حضرتك في النظام حالياً 😊 لو في أوردر حضرتك شايفه ينتظر إلغاء، ابعتلنا تفاصيله وهنراجع حالاً."
+
         private val SAFETY_KEYWORDS = listOf(
             "ضروري", "مشكلة", "مستشفى", "الحقني", "مصيبة", "urgent", "help"
         )
+
+        /**
+         * Pure merge-once decision for the dedup verification pivot: a pivot is
+         * still open when a pivot message exists in the recent window AND that
+         * exact pivot instance has not already consumed an extraction merge.
+         * Consumption is tracked per pivot timestamp (a set, since a contact can
+         * cycle through several pivots), which keeps interleaved Q&A merging
+         * (fix.log) while a lingering pivot can no longer absorb every later
+         * extraction into the old order.
+         */
+        internal fun isPivotStillOpen(latestPivotTimestamp: Long?, consumedPivotTimestamps: Set<Long>): Boolean =
+            latestPivotTimestamp != null && !consumedPivotTimestamps.contains(latestPivotTimestamp)
+
         const val CONTEXT_WINDOW_MINUTES = 1L
         const val MAX_CONTEXT_QUEUE_SIZE = 50
     }
@@ -85,6 +114,13 @@ class AutoReplyOrchestrator @Inject constructor(
 
     // Session tracker for greeting suppression (last auto-reply timestamp per sender)
     private val lastReplyTimestamps = ConcurrentHashMap<String, Long>()
+
+    // Merge-once guard for the dedup verification pivot: contact -> set of pivot
+    // message timestamps that have already been answered by an extraction merge.
+    // Without this, a pivot text lingering in the 6-turn window would absorb
+    // every later extraction as an "edit" of the old order even when the
+    // customer explicitly asked for a NEW order (mis-attribution guard).
+    private val consumedPivotTimestamps = ConcurrentHashMap<String, MutableSet<Long>>()
 
     // LRU Cache for last 3 globally transmitted replies (hash to timestamp)
     private val recentReplyCache = ConcurrentHashMap<Int, Long>()
@@ -443,15 +479,19 @@ class AutoReplyOrchestrator @Inject constructor(
             }
         }
 
-        Log.i("PersonaMetrics", "metric=order_extraction_rate value=${if (agenticResponse.extractedOrder != null) 1 else 0} contact=${processed.contactName.hashCode()}")
-        Log.i("PersonaMetrics", "metric=order_action_usage value=${if (agenticResponse.orderAction != null) 1 else 0} contact=${processed.contactName.hashCode()}")
-
         // 5.1–5.3 Agentic Order Actions & Ingestion Routing.
         // `order_action` turns spoken intent into explicit DB state transitions
         // (CANCEL / UPDATE merge) so replies never claim changes the DB disagrees
         // with; extraction without an action keeps the legacy dedup/pivot path.
         var overriddenReplyText: String? = null
+
+        // Known actions only: any other string the model emits must stay inert
+        // instead of silently meaning something.
         val orderAction = agenticResponse.orderAction?.trim()?.uppercase()
+            ?.takeIf { it == "CREATE" || it == "CANCEL" || it == "UPDATE" }
+
+        Log.i("PersonaMetrics", "metric=order_extraction_rate value=${if (agenticResponse.extractedOrder != null) 1 else 0} contact=${processed.contactName.hashCode()}")
+        Log.i("PersonaMetrics", "metric=order_action_usage value=${orderAction ?: if (agenticResponse.orderAction != null) "UNKNOWN" else "NONE"} contact=${processed.contactName.hashCode()}")
 
         if (agenticResponse.extractedOrder != null) {
             val extracted = agenticResponse.extractedOrder
@@ -474,7 +514,11 @@ class AutoReplyOrchestrator @Inject constructor(
                 // Agentic CANCEL — the customer is stopping the order: transition
                 // the persisted state and never resurrect the extraction as a new row.
                 orderAction == "CANCEL" -> {
-                    executeCancelOrderAction(processed)
+                    if (!executeCancelOrderAction(processed)) {
+                        // No active order existed: the model may still have claimed
+                        // a cancellation — override the prose with the real state.
+                        overriddenReplyText = NO_ACTIVE_ORDER_REPLY
+                    }
                 }
 
                 // Agentic UPDATE — merge the customer's new details into the
@@ -502,13 +546,26 @@ class AutoReplyOrchestrator @Inject constructor(
                         // between the pivot and the next extraction used to reset
                         // the suppression and re-send the same verification
                         // question to the customer.
-                        val pivotSeen = recentChatTurns.any { !it.isFromUser && it.messageText.contains("أنا شايف إنك لسه عامل أوردر مشابه") }
+                        val latestPivotMsg = recentChatTurns.firstOrNull { !it.isFromUser && it.messageText.contains(PIVOT_MARKER) }
 
-                        if (pivotSeen) {
+                        // Merge-once per pivot: once this pivot instance has
+                        // already been answered by a merge, it is consumed — a
+                        // later extraction (e.g. the customer declaring a
+                        // genuinely NEW order) must not keep being appended
+                        // into the old order's notes.
+                        val pivotSeen = isPivotStillOpen(
+                            latestPivotTimestamp = latestPivotMsg?.timestamp,
+                            consumedPivotTimestamps = consumedPivotTimestamps[processed.contactName] ?: emptySet()
+                        )
+
+                        if (pivotSeen && latestPivotMsg != null) {
                             if (newNotes.isNotEmpty()) {
                                 orderDao.appendCustomNotes(existingOrder.id, newNotes)
                                 Log.i(TAG, "Merged order details into existing order id=${existingOrder.id} for ${processed.contactName}")
                             }
+                            consumedPivotTimestamps
+                                .computeIfAbsent(processed.contactName) { ConcurrentHashMap.newKeySet() }
+                                .add(latestPivotMsg.timestamp)
                         } else {
                             Log.i(TAG, "🔄 Duplicate order detected for ${processed.contactName}. Sending verification pivot.")
                             overriddenReplyText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية 😊 تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟"
@@ -531,7 +588,11 @@ class AutoReplyOrchestrator @Inject constructor(
             // Agentic actions can arrive without an extraction payload (the
             // customer only confirms or cancels, with no new details).
             when (orderAction) {
-                "CANCEL" -> executeCancelOrderAction(processed)
+                "CANCEL" -> {
+                    if (!executeCancelOrderAction(processed)) {
+                        overriddenReplyText = NO_ACTIVE_ORDER_REPLY
+                    }
+                }
                 "UPDATE" -> {
                     val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
                     if (existingOrder == null) {
@@ -649,8 +710,15 @@ class AutoReplyOrchestrator @Inject constructor(
                                 // pass too (first pass took the RE_QUERY branch):
                                 // a CANCEL or confirmation can legitimately land
                                 // here and must still mutate the persisted state.
+                                var finalReplyOverride: String? = null
                                 when (finalParsed.orderAction?.trim()?.uppercase()) {
-                                    "CANCEL" -> executeCancelOrderAction(processed)
+                                    "CANCEL" -> {
+                                        if (!executeCancelOrderAction(processed)) {
+                                            // Never ship a cancellation claim the
+                                            // DB did not perform.
+                                            finalReplyOverride = NO_ACTIVE_ORDER_REPLY
+                                        }
+                                    }
                                     "UPDATE" -> {
                                         val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
                                         if (existingOrder == null) {
@@ -694,8 +762,12 @@ class AutoReplyOrchestrator @Inject constructor(
 
                                 // Use parsed finalReplyText; a parsed-but-blank reply
                                 // degrades to the safe HITL guard instead of leaking
-                                // raw LLM output.
-                                finalParsed.finalReplyText ?: buildUnsafeOutputHitlResponse().finalReplyText
+                                // raw LLM output. A deterministic order-action
+                                // override (e.g. CANCEL without any active order)
+                                // always wins over the model's prose.
+                                finalReplyOverride
+                                    ?: finalParsed.finalReplyText
+                                    ?: buildUnsafeOutputHitlResponse().finalReplyText
                             }
                         }
                     }
@@ -998,21 +1070,35 @@ class AutoReplyOrchestrator @Inject constructor(
 
     /**
      * Executes the agentic CANCEL order action: deterministically transitions
-     * every active order for the contact to CANCELLED so the bot's spoken
-     * claim ("تم الإلغاء") always matches the persisted state. When no active
-     * order exists, nothing is mutated and the reply must reflect the real
-     * state (guarding against the fake-cancellation loop seen in f3.log).
+     * the contact's **newest unfulfilled order** ([OrderStatus.PENDING] or
+     * [OrderStatus.IN_PREPARATION], via [OrderDao.getActiveMatchingOrder]) to
+     * CANCELLED so the bot's spoken claim ("تم الإلغاء") always matches the
+     * persisted state.
+     *
+     * Scope is deliberately one order, not the whole active set: the prompt only
+     * ever shows the model a single active order, while a contact may also have
+     * an [OrderStatus.SHIPPING_IN_PROGRESS] delivery in flight — cancelling that
+     * too would silently revert a state the customer never mentioned and no
+     * merchant ever confirmed.
+     *
+     * Timing note: like the pre-existing insert/merge ingestion, the mutation
+     * happens before reply dispatch; status moves are dashboard-reversible.
+     *
+     * @return true when a DB write occurred; false when no active order existed,
+     * in which case the caller must override the LLM prose with the real state
+     * (see [NO_ACTIVE_ORDER_REPLY]) — a verbal-only fake cancellation is exactly
+     * the f3.log regression class this guard closes at the code level.
      */
-    private suspend fun executeCancelOrderAction(processed: ProcessedNotification) {
-        val activeOrders = orderDao.getActiveOrdersByContact(processed.contactName)
-        if (activeOrders.isEmpty()) {
-            Log.i(TAG, "order_action=CANCEL but no active orders for ${processed.contactName} — no state mutation")
-        } else {
-            activeOrders.forEach { order ->
-                orderDao.updateStatus(order.id, OrderStatus.CANCELLED.name)
-                Log.i(TAG, "🚫 Agentic CANCEL: order id=${order.id} (${order.status} → ${OrderStatus.CANCELLED.name}) for ${processed.contactName}")
-            }
+    private suspend fun executeCancelOrderAction(processed: ProcessedNotification): Boolean {
+        val activeOrder = orderDao.getActiveMatchingOrder(processed.contactName)
+        if (activeOrder == null) {
+            Log.i(TAG, "order_action=CANCEL but no active order for ${processed.contactName} — no state mutation")
+            return false
         }
+
+        orderDao.updateStatus(activeOrder.id, OrderStatus.CANCELLED.name)
+        Log.i(TAG, "🚫 Agentic CANCEL: order id=${activeOrder.id} (${activeOrder.status} → ${OrderStatus.CANCELLED.name}) for ${processed.contactName}")
+        return true
     }
 
     private fun getPriorMessages(current: WhatsAppNotification): List<String> {
