@@ -293,6 +293,7 @@ class AutoReplyOrchestratorRagTest {
 
         val isEcho = AutoReplyOrchestrator.isEchoRepetition(
             candidateReply = candidateReply,
+            currentUserText = "فين عنوانكم؟",
             chatHistory = chatHistory,
             nowMs = now
         )
@@ -320,12 +321,78 @@ class AutoReplyOrchestratorRagTest {
 
         val isEcho = AutoReplyOrchestrator.isEchoRepetition(
             candidateReply = candidateReply,
+            currentUserText = "فين عنوانكم؟",
             chatHistory = chatHistory,
             nowMs = now
         )
 
         // Must trigger because it is within 2 hours
         assertTrue(isEcho)
+    }
+
+    @Test
+    fun `anti-echo guard does not trigger when user repeats the exact same query`() {
+        val now = 10_000_000L
+        val tenMinutesAgo = now - TimeUnit.MINUTES.toMillis(10)
+
+        val chatHistory = listOf(
+            ChatHistoryEntity(
+                id = 2L,
+                contactName = "عميل تجريبي",
+                messageText = "الشحن 50 جنيه للقاهرة.",
+                isFromUser = false,
+                timestamp = tenMinutesAgo + 1000L
+            ),
+            ChatHistoryEntity(
+                id = 1L,
+                contactName = "عميل تجريبي",
+                messageText = "بكام الشحن للقاهرة؟",
+                isFromUser = true,
+                timestamp = tenMinutesAgo
+            )
+        )
+
+        val candidateReply = "الشحن 50 جنيه للقاهرة."
+
+        val isEcho = AutoReplyOrchestrator.isEchoRepetition(
+            candidateReply = candidateReply,
+            currentUserText = "بكام الشحن للقاهرة؟",
+            chatHistory = chatHistory,
+            nowMs = now
+        )
+
+        // Must NOT trigger because user intentionally repeated their question
+        assertFalse(isEcho)
+    }
+
+    @Test
+    fun `filterDuplicateNoteLines removes existing lines and retains new ones`() {
+        val existingNotes = "العنوان: التجمع الخامس\nالاسم: أحمد مصطفى"
+        val newNotes = "العنوان: التجمع الخامس\nالتفاصيل: محفظة جيب كارد\nملاحظات: الاتصال مسبقاً"
+
+        val filtered = AutoReplyOrchestrator.filterDuplicateNoteLines(
+            existingNotes = existingNotes,
+            newNotes = newNotes,
+            existingDeliveryAddress = "التجمع الخامس",
+            existingCustomerName = "أحمد مصطفى"
+        )
+
+        val expected = "التفاصيل: محفظة جيب كارد\nملاحظات: الاتصال مسبقاً"
+        assertEquals(expected, filtered)
+    }
+
+    @Test
+    fun `filterDuplicateNoteLines drops address already stored in discrete column`() {
+        val existingNotes: String? = null
+        val newNotes = "العنوان: مدينة نصر"
+
+        val filtered = AutoReplyOrchestrator.filterDuplicateNoteLines(
+            existingNotes = existingNotes,
+            newNotes = newNotes,
+            existingDeliveryAddress = "مدينة نصر"
+        )
+
+        assertEquals("", filtered)
     }
 
     @Test
@@ -433,5 +500,126 @@ class AutoReplyOrchestratorRagTest {
 
         val plainJson = "{\"action\": \"REPLY\", \"final_reply_text\": \"تمام\"}"
         assertEquals(plainJson, AutoReplyOrchestrator.sanitizeLlmJson(plainJson))
+    }
+
+    @Test
+    fun `Pass 1 LLM with action UPDATE and valid reply text dispatches as normal reply without HITL fallback`() = runBlocking {
+        val semanticRepo = mockk<SemanticRetrievalRepository>()
+        val replyRepo = mockk<ReplyGenerationRepository>()
+        val directReplyUseCase = mockk<DirectReplyExecutionUseCase>(relaxed = true)
+        val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
+        val orderDao = mockk<OrderDao>(relaxed = true)
+        val failedQueryDao = mockk<FailedQueryDao>(relaxed = true)
+        val prefsRepo = mockk<UserPreferencesRepository>()
+        val processor = mockk<NotificationProcessorImpl>()
+
+        coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
+        coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0)
+
+        val processed = ProcessedNotification(
+            contactName = "عميل تحديث",
+            originalText = "العنوان مدينة نصر الحي السابع",
+            normalizedText = "العنوان مدينة نصر الحي السابع",
+            notificationKey = "key_update",
+            postTime = System.currentTimeMillis(),
+            context = mockk(relaxed = true)
+        )
+        coEvery { processor.process(any()) } returns processed
+        coEvery { chatHistoryDao.insert(any()) } returns 1L
+        coEvery { chatHistoryDao.claimForProcessing(any()) } returns 0
+        coEvery { chatHistoryDao.getRecentMessagesExcept(any(), any(), any()) } returns emptyList()
+
+        val existingOrder = OrderEntity(
+            id = 55L,
+            contactName = "عميل تحديث",
+            deliveryAddress = null,
+            status = OrderStatus.PENDING.name
+        )
+        coEvery { orderDao.getActiveOrdersByContact("عميل تحديث") } returns listOf(existingOrder)
+        coEvery { orderDao.getActiveMatchingOrder("عميل تحديث") } returns existingOrder
+
+        val embeddingEngine = mockk<EmbeddingEngine>()
+        coEvery { embeddingEngine.embedForAutoReply(any()) } returns floatArrayOf(0.1f, 0.2f)
+        coEvery { semanticRepo.retrieveCandidates(any(), any(), any(), any()) } returns Pair(emptyList(), 0.0f)
+        coEvery { directReplyUseCase.execute(any(), any(), any()) } returns com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResult.Success
+
+        coEvery {
+            replyRepo.generateReply(
+                notification = processed,
+                candidates = emptyList(),
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = any()
+            )
+        } returns """{"action":"UPDATE","refined_search_keyword":null,"order_action":"UPDATE","final_reply_text":"تمام يا فندم، تم تسجيل العنوان الجديد ✅","extracted_order":{"customer_name":null,"delivery_address":"مدينة نصر الحي السابع","order_details":null,"custom_notes":null}}"""
+
+        val orchestrator = createTestOrchestrator(
+            orderDao = orderDao,
+            chatHistoryDao = chatHistoryDao,
+            semanticRetrievalRepository = semanticRepo,
+            replyGenerationRepository = replyRepo,
+            directReplyExecutionUseCase = directReplyUseCase,
+            failedQueryDao = failedQueryDao,
+            prefsRepository = prefsRepo,
+            processor = processor,
+            embeddingEngine = embeddingEngine
+        )
+
+        val rawNotification = WhatsAppNotification(
+            title = "عميل تحديث",
+            text = "العنوان مدينة نصر الحي السابع",
+            postTime = System.currentTimeMillis(),
+            notificationKey = "key_update"
+        )
+
+        orchestrator.processNotificationSequentially(rawNotification)
+
+        // Verify discrete address column updated
+        coVerify(exactly = 1) {
+            orderDao.updateDeliveryAddress(55L, "مدينة نصر الحي السابع")
+        }
+
+        // Verify direct reply was dispatched without falling into HITL
+        coVerify(exactly = 1) {
+            directReplyUseCase.execute(
+                processed.notificationKey,
+                match { it.contains("تم تسجيل العنوان الجديد") },
+                processed.contactName
+            )
+        }
+    }
+
+    @Test
+    fun `applyOrderUpdates updates discrete columns and avoids duplicating existing note lines`() = runBlocking {
+        val orderDao = mockk<OrderDao>(relaxed = true)
+        val orchestrator = createTestOrchestrator(orderDao = orderDao)
+
+        val existingOrder = OrderEntity(
+            id = 77L,
+            contactName = "عميل تجريبي",
+            customerNameFromLlm = "أحمد القديم",
+            deliveryAddress = "المعادي",
+            customNotes = "العنوان: المعادي\nملاحظات: قديمة",
+            status = OrderStatus.PENDING.name
+        )
+
+        val extracted = ExtractedOrder(
+            customerName = "أحمد الجديد",
+            deliveryAddress = "الزمالك",
+            orderDetails = "ساعة يد",
+            customNotes = "ملاحظات: قديمة"
+        )
+
+        orchestrator.applyOrderUpdates(existingOrder, extracted)
+
+        coVerify(exactly = 1) { orderDao.updateCustomerName(77L, "أحمد الجديد") }
+        coVerify(exactly = 1) { orderDao.updateDeliveryAddress(77L, "الزمالك") }
+        coVerify(exactly = 1) {
+            orderDao.appendCustomNotes(77L, match {
+                it.contains("التفاصيل: ساعة يد") && !it.contains("ملاحظات: قديمة") && !it.contains("العنوان: الزمالك")
+            })
+        }
     }
 }

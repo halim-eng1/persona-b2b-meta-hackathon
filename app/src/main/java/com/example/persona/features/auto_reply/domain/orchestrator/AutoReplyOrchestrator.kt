@@ -229,12 +229,46 @@ class AutoReplyOrchestrator @Inject constructor(
          */
         internal fun isEchoRepetition(
             candidateReply: String,
+            currentUserText: String,
             chatHistory: List<ChatHistoryEntity>,
             nowMs: Long = System.currentTimeMillis()
         ): Boolean {
+            val lastUserTurn = chatHistory.firstOrNull { it.isFromUser }
+            if (lastUserTurn != null && currentUserText.trim().equals(lastUserTurn.messageText.trim(), ignoreCase = true)) {
+                return false
+            }
+
             val twoHoursAgo = nowMs - TimeUnit.HOURS.toMillis(2)
             val lastAssistantTurn = chatHistory.firstOrNull { !it.isFromUser && it.timestamp >= twoHoursAgo }
             return lastAssistantTurn != null && candidateReply.trim().lowercase() == lastAssistantTurn.messageText.trim().lowercase()
+        }
+
+        internal fun filterDuplicateNoteLines(
+            existingNotes: String?,
+            newNotes: String,
+            existingDeliveryAddress: String? = null,
+            existingCustomerName: String? = null
+        ): String {
+            if (newNotes.isBlank()) return ""
+            val existingLines = existingNotes
+                ?.lines()
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.toMutableSet()
+                ?: mutableSetOf()
+
+            existingDeliveryAddress?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                existingLines.add("العنوان: $it")
+            }
+            existingCustomerName?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                existingLines.add("الاسم: $it")
+            }
+
+            return newNotes.lines()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !existingLines.contains(it) }
+                .joinToString("\n")
+                .trim()
         }
 
         const val CONTEXT_WINDOW_MINUTES = 1L
@@ -548,7 +582,6 @@ class AutoReplyOrchestrator @Inject constructor(
 
         if (agenticResponse.extractedOrder != null) {
             val extracted = agenticResponse.extractedOrder
-            val newNotes = buildNotesFromExtractedOrder(extracted)
 
             // Deduplication / order-state lookup
             val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
@@ -567,10 +600,7 @@ class AutoReplyOrchestrator @Inject constructor(
                 // Agentic UPDATE — merge the customer's new details into the
                 // active pending order and advance it for the merchant dashboard.
                 orderAction == "UPDATE" && existingOrder != null -> {
-                    if (newNotes.isNotEmpty()) {
-                        orderDao.appendCustomNotes(existingOrder.id, newNotes)
-                        Log.i(TAG, "🔁 Agentic UPDATE merged into order id=${existingOrder.id} for ${processed.contactName}")
-                    }
+                    applyOrderUpdates(existingOrder, extracted)
                     if (existingOrder.status == OrderStatus.PENDING.name) {
                         orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
                         Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirm/update")
@@ -584,8 +614,7 @@ class AutoReplyOrchestrator @Inject constructor(
                 else -> {
                     val result = handleOrderCreation(
                         extractedOrder = agenticResponse.extractedOrder,
-                        contactName = processed.contactName,
-                        processed = processed
+                        contactName = processed.contactName
                     )
                     if (result is OrderIngestionResult.DuplicatePivot) {
                         overriddenReplyText = result.pivotReplyText
@@ -614,7 +643,11 @@ class AutoReplyOrchestrator @Inject constructor(
             }
         }
 
-        val normalizedAction = agenticResponse.action.trim().uppercase()
+        val rawAction = agenticResponse.action.trim().uppercase()
+        val normalizedAction = when (rawAction) {
+            "UPDATE", "CREATE" -> "REPLY" // Treat order updates/creations with valid reply text as normal replies
+            else -> rawAction
+        }
         val effectiveAction = if (normalizedAction == "RE_QUERY" && agenticResponse.refinedSearchKeyword.isNullOrBlank() && !agenticResponse.finalReplyText.isNullOrBlank()) {
             "REPLY"
         } else {
@@ -826,7 +859,7 @@ class AutoReplyOrchestrator @Inject constructor(
 
         // Anti-echo guard: if reply text is identical to a recent preceding assistant message for the same contact
         // within the current session window (last 2 hours), do NOT send a verbatim duplicate — hand off cleanly to HITL.
-        if (isEchoRepetition(styledReplyText, chatHistory)) {
+        if (isEchoRepetition(styledReplyText, processed.originalText, chatHistory)) {
             Log.w(TAG, "Anti-echo guard triggered: LLM produced verbatim duplicate of recent assistant reply for ${processed.contactName}. Degrading to HITL.")
             triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
             sendHitlHoldingReply(processed)
@@ -1133,8 +1166,7 @@ class AutoReplyOrchestrator @Inject constructor(
      */
     internal suspend fun handleOrderCreation(
         extractedOrder: ExtractedOrderDto?,
-        contactName: String,
-        processed: ProcessedNotification
+        contactName: String
     ): OrderIngestionResult {
         if (extractedOrder == null) return OrderIngestionResult.Ignored
 
@@ -1142,8 +1174,6 @@ class AutoReplyOrchestrator @Inject constructor(
         val normalizedDeliveryAddress = normalizeField(extractedOrder.deliveryAddress)
         val normalizedOrderDetails = normalizeField(extractedOrder.orderDetails)
         val normalizedCustomNotes = normalizeField(extractedOrder.customNotes)
-
-        val newNotes = buildNotesFromExtractedOrder(extractedOrder)
 
         val existingOrder = orderDao.getActiveMatchingOrder(contactName)
         return if (existingOrder != null) {
@@ -1156,10 +1186,7 @@ class AutoReplyOrchestrator @Inject constructor(
             )
 
             if (pivotSeen && latestPivotMsg != null) {
-                if (newNotes.isNotEmpty()) {
-                    orderDao.appendCustomNotes(existingOrder.id, newNotes)
-                    Log.i(TAG, "Merged order details into existing order id=${existingOrder.id} for $contactName")
-                }
+                applyOrderUpdates(existingOrder, extractedOrder)
                 consumedPivotTimestamps
                     .computeIfAbsent(contactName) { ConcurrentHashMap.newKeySet() }
                     .add(latestPivotMsg.timestamp)
@@ -1186,17 +1213,46 @@ class AutoReplyOrchestrator @Inject constructor(
 
     private fun buildNotesFromExtractedOrder(extracted: ExtractedOrder?): String {
         if (extracted == null) return ""
-        val normalizedCustomerName = normalizeField(extracted.customerName)
-        val normalizedDeliveryAddress = normalizeField(extracted.deliveryAddress)
-        val normalizedOrderDetails = normalizeField(extracted.orderDetails)
-        val normalizedCustomNotes = normalizeField(extracted.customNotes)
+        val normalizedCustomerName = normalizeField(extracted.customerName)?.removePrefix("الاسم:")?.trim()
+        val normalizedDeliveryAddress = normalizeField(extracted.deliveryAddress)?.removePrefix("العنوان:")?.trim()
+        val normalizedOrderDetails = normalizeField(extracted.orderDetails)?.removePrefix("التفاصيل:")?.trim()
+        val normalizedCustomNotes = normalizeField(extracted.customNotes)?.removePrefix("ملاحظات:")?.trim()
 
         return buildString {
-            normalizedCustomerName?.let { append("الاسم: $it\n") }
-            normalizedDeliveryAddress?.let { append("العنوان: $it\n") }
-            normalizedOrderDetails?.let { append("التفاصيل: $it\n") }
-            normalizedCustomNotes?.let { append("ملاحظات: $it\n") }
+            normalizedCustomerName?.takeIf { it.isNotEmpty() }?.let { append("الاسم: $it\n") }
+            normalizedDeliveryAddress?.takeIf { it.isNotEmpty() }?.let { append("العنوان: $it\n") }
+            normalizedOrderDetails?.takeIf { it.isNotEmpty() }?.let { append("التفاصيل: $it\n") }
+            normalizedCustomNotes?.takeIf { it.isNotEmpty() }?.let { append("ملاحظات: $it\n") }
         }.trim()
+    }
+
+    internal suspend fun applyOrderUpdates(existingOrder: OrderEntity, extracted: ExtractedOrder?) {
+        if (extracted == null) return
+
+        val normalizedCustomerName = normalizeField(extracted.customerName)?.removePrefix("الاسم:")?.trim()
+        if (!normalizedCustomerName.isNullOrBlank() && normalizedCustomerName != existingOrder.customerNameFromLlm) {
+            orderDao.updateCustomerName(existingOrder.id, normalizedCustomerName)
+            Log.i(TAG, "Updated customer name for order ${existingOrder.id}: $normalizedCustomerName")
+        }
+
+        val normalizedDeliveryAddress = normalizeField(extracted.deliveryAddress)?.removePrefix("العنوان:")?.trim()
+        if (!normalizedDeliveryAddress.isNullOrBlank() && normalizedDeliveryAddress != existingOrder.deliveryAddress) {
+            orderDao.updateDeliveryAddress(existingOrder.id, normalizedDeliveryAddress)
+            Log.i(TAG, "Updated delivery address for order ${existingOrder.id}: $normalizedDeliveryAddress")
+        }
+
+        val rawNewNotes = buildNotesFromExtractedOrder(extracted)
+        val deduplicatedNotes = filterDuplicateNoteLines(
+            existingNotes = existingOrder.customNotes,
+            newNotes = rawNewNotes,
+            existingDeliveryAddress = normalizedDeliveryAddress ?: existingOrder.deliveryAddress,
+            existingCustomerName = normalizedCustomerName ?: existingOrder.customerNameFromLlm
+        )
+
+        if (deduplicatedNotes.isNotEmpty()) {
+            orderDao.appendCustomNotes(existingOrder.id, deduplicatedNotes)
+            Log.i(TAG, "🔁 Deduplicated notes appended to order id=${existingOrder.id}: '$deduplicatedNotes'")
+        }
     }
 
     internal suspend fun handleFinalPassOrderActions(
@@ -1211,7 +1267,6 @@ class AutoReplyOrchestrator @Inject constructor(
 
         if (finalParsed.extractedOrder != null) {
             val extracted = finalParsed.extractedOrder
-            val newNotes = buildNotesFromExtractedOrder(extracted)
             val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
 
             when {
@@ -1221,10 +1276,7 @@ class AutoReplyOrchestrator @Inject constructor(
                     }
                 }
                 finalOrderAction == "UPDATE" && existingOrder != null -> {
-                    if (newNotes.isNotEmpty()) {
-                        orderDao.appendCustomNotes(existingOrder.id, newNotes)
-                        Log.i(TAG, "🔁 Agentic UPDATE (final pass) merged into order id=${existingOrder.id} for ${processed.contactName}")
-                    }
+                    applyOrderUpdates(existingOrder, extracted)
                     if (existingOrder.status == OrderStatus.PENDING.name) {
                         orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
                         Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION (final-pass UPDATE)")
@@ -1233,8 +1285,7 @@ class AutoReplyOrchestrator @Inject constructor(
                 else -> {
                     val result = handleOrderCreation(
                         extractedOrder = finalParsed.extractedOrder,
-                        contactName = processed.contactName,
-                        processed = processed
+                        contactName = processed.contactName
                     )
                     if (result is OrderIngestionResult.DuplicatePivot) {
                         finalReplyOverride = result.pivotReplyText
@@ -1260,8 +1311,7 @@ class AutoReplyOrchestrator @Inject constructor(
                 "CREATE" -> {
                     val result = handleOrderCreation(
                         extractedOrder = null,
-                        contactName = processed.contactName,
-                        processed = processed
+                        contactName = processed.contactName
                     )
                     if (result is OrderIngestionResult.DuplicatePivot) {
                         finalReplyOverride = result.pivotReplyText

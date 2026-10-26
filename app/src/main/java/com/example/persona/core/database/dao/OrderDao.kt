@@ -134,6 +134,18 @@ interface OrderDao {
     """)
     suspend fun appendCustomNotes(id: Long, additionalNotes: String)
 
+    /**
+     * Updates the [deliveryAddress] field for a specific order row.
+     */
+    @Query("UPDATE orders_table SET delivery_address = :address WHERE id = :id")
+    suspend fun updateDeliveryAddress(id: Long, address: String)
+
+    /**
+     * Updates the [customerNameFromLlm] field for a specific order row.
+     */
+    @Query("UPDATE orders_table SET customer_name_from_llm = :name WHERE id = :id")
+    suspend fun updateCustomerName(id: Long, name: String)
+
     /** Total order count — useful for diagnostics. */
     @Query("SELECT COUNT(*) FROM orders_table")
     suspend fun getTotalCount(): Int
