@@ -85,8 +85,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
          *    harnesses, not usable via chat completions.
          */
         private val FAILOVER_MODELS = listOf(
-            "nvidia/nemotron-3.5-lightning:free",    //  1.16s | JSON OK
             "nvidia/nemotron-3.5-super-vl:free",     //  1.35s | JSON OK | speed champion
+            "nvidia/nemotron-3.5-lightning:free",    //  1.16s | JSON OK
             "openrouter/free",                       //  2.97s | JSON OK
             "dots-studio/dots-3-note-preview:free",  //  3.30s | JSON OK | valid until Dec 31, 2026
             "google/gemma-4-31b-it:free",            //  3.93s | JSON OK
@@ -114,6 +114,7 @@ Output Schema:
 {
   "action": "REPLY" | "RE_QUERY" | "HITL",
   "refined_search_keyword": "keywords in Modern Standard Arabic for catalog search, or null",
+  "order_action": "CREATE" | "CANCEL" | "UPDATE" | null,
   "final_reply_text": "The message to send to the customer",
   "extracted_order": {
     "customer_name": "string or null",
@@ -137,6 +138,14 @@ Output Schema:
   d. The inquiry requires owner intervention or information not available in the store data.
 - In every HITL reply, final_reply_text must always end with the exact Arabic phrase (never translated, never modified):
 "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
+
+- ORDER ACTION (`order_action`): Set when the customer's message changes order state; null otherwise.
+  - "CREATE": the customer is actively placing a NEW order with items/quantities.
+  - "CANCEL": the customer explicitly asks to stop or cancel their active order ("إلغاء", "كنسل", "بطل الطلب"). NEVER use it for general complaints, pricing questions, or anything other than termination of the order itself.
+  - "UPDATE": the customer supplies missing details (address/phone/notes/product names) for, or confirms, the already-active order — e.g. answering the duplicate-order verification question, or short confirmations like "خلاص", "تمام", "ماشي".
+  - null: for inquiries, small-talk, questions, or HITL hand-offs.
+- STATE-CLAIM RULE: never state in final_reply_text that an order was registered, updated, or cancelled unless the matching order_action is set in THIS response. Without an order_action, describe orders exactly and only as they appear in PERSONAL USER STATE.
+- UPDATE CLOSING RULE: when order_action is "UPDATE", final_reply_text must CLOSE the loop with a short confirmation (e.g. "تم يا فندم، سجلت التفاصيل عندنا ✅") and NEVER ask the customer to confirm the same thing again.
 
 4. ORDER STATUS & EXTRACTION:
 - If customer asks about their order status and an order exists in PERSONAL USER STATE, reply strictly using this Egyptian Arabic structure (adapt to English if customer is speaking English):
@@ -166,6 +175,7 @@ Output Schema:
 {
   "action": "REPLY" | "HITL",
   "refined_search_keyword": null,
+  "order_action": "CREATE" | "CANCEL" | "UPDATE" | null,
   "final_reply_text": "The message to send to the customer",
   "extracted_order": null
 }
@@ -173,6 +183,9 @@ Output Schema:
 2. LANGUAGE & BEHAVIOR:
 - Match customer's language (Egyptian Arabic for Arabic inquiries, English for English).
 - Action MUST be strictly "REPLY" or "HITL" ("RE_QUERY" is completely forbidden in this pass).
+- ORDER STATE (`order_action`): "CANCEL" when the customer explicitly asks to stop/cancel their active order; "UPDATE" when they complete or confirm the active order's details; null otherwise.
+- Never state in final_reply_text that an order was registered, updated, or cancelled unless a matching order_action is set this turn — report the real PERSONAL USER STATE status instead.
+- When order_action is "UPDATE", close the loop with a short confirmation and never ask the customer to confirm again.
 - If the knowledge context is still insufficient, set action to "HITL" with an apologetic hand-off message in `final_reply_text`.
 - In every HITL reply, final_reply_text must always end with the exact Arabic phrase (never translated, never modified):
 "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏\""""

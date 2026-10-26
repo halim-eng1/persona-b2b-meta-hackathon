@@ -76,6 +76,8 @@ data class OpenRouterError(
  * - `action = "RE_QUERY"` → [refinedSearchKeyword] contains optimized Arabic
  *   search terms for a second vector sweep.
  * - `action = "HITL"` → Handover to human representative (agentic loop halts).
+ * - `orderAction` is the optional state-transition tool call (CREATE/CANCEL/UPDATE)
+ *   executed by the orchestrator against the orders table.
  *
  * [extractedOrder] is populated when the LLM detects an active order being placed
  * in the conversation. It is null for all non-order interactions.
@@ -87,6 +89,18 @@ data class AgenticLlmResponse(
     val action: String,
     @SerialName("refined_search_keyword")
     val refinedSearchKeyword: String? = null,
+    /**
+     * Explicit agentic state-transition instruction emitted by the LLM:
+     * "CREATE" (new order), "CANCEL" (stop the active order), "UPDATE"
+     * (merge details into / confirm the active pending order), or null for
+     * non-mutating turns (inquiries, small-talk, questions, HITL).
+     *
+     * Executed as a deterministic DB write in [com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator]
+     * so the bot's spoken claims (e.g. "تم الإلغاء") always match the persisted
+     * state instead of relying on LLM prose.
+     */
+    @SerialName("order_action")
+    val orderAction: String? = null,
     @SerialName("final_reply_text")
     val finalReplyText: String? = null,
     @SerialName("extracted_order")

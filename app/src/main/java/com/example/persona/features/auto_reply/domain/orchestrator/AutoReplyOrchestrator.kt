@@ -444,9 +444,15 @@ class AutoReplyOrchestrator @Inject constructor(
         }
 
         Log.i("PersonaMetrics", "metric=order_extraction_rate value=${if (agenticResponse.extractedOrder != null) 1 else 0} contact=${processed.contactName.hashCode()}")
+        Log.i("PersonaMetrics", "metric=order_action_usage value=${if (agenticResponse.orderAction != null) 1 else 0} contact=${processed.contactName.hashCode()}")
 
-        // 5.1 & 5.2 Order Ingestion & Deduplication Ingestion Routing
+        // 5.1–5.3 Agentic Order Actions & Ingestion Routing.
+        // `order_action` turns spoken intent into explicit DB state transitions
+        // (CANCEL / UPDATE merge) so replies never claim changes the DB disagrees
+        // with; extraction without an action keeps the legacy dedup/pivot path.
         var overriddenReplyText: String? = null
+        val orderAction = agenticResponse.orderAction?.trim()?.uppercase()
+
         if (agenticResponse.extractedOrder != null) {
             val extracted = agenticResponse.extractedOrder
             val normalizedCustomerName = normalizeField(extracted.customerName)
@@ -454,40 +460,88 @@ class AutoReplyOrchestrator @Inject constructor(
             val normalizedOrderDetails = normalizeField(extracted.orderDetails)
             val normalizedCustomNotes = normalizeField(extracted.customNotes)
 
-            // Deduplication Check
-            val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
-            if (existingOrder != null) {
-                // Check if last bot message was pivot
-                val recentChatTurns = chatHistoryDao.getRecentMessages(processed.contactName, limit = 6)
-                val lastBotMsg = recentChatTurns.firstOrNull { !it.isFromUser }
-                val lastWasPivot = lastBotMsg?.messageText?.contains("أنا شايف إنك لسه عامل أوردر مشابه من شوية") == true
+            val newNotes = buildString {
+                normalizedCustomerName?.let { append("الاسم: $it\n") }
+                normalizedDeliveryAddress?.let { append("العنوان: $it\n") }
+                normalizedOrderDetails?.let { append("التفاصيل: $it\n") }
+                normalizedCustomNotes?.let { append("ملاحظات: $it\n") }
+            }.trim()
 
-                if (lastWasPivot) {
-                    val newNotes = buildString {
-                        normalizedCustomerName?.let { append("الاسم: $it\n") }
-                        normalizedDeliveryAddress?.let { append("العنوان: $it\n") }
-                        normalizedOrderDetails?.let { append("التفاصيل: $it\n") }
-                        normalizedCustomNotes?.let { append("ملاحظات: $it\n") }
-                    }.trim()
+            // Deduplication / order-state lookup
+            val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
+
+            when {
+                // Agentic CANCEL — the customer is stopping the order: transition
+                // the persisted state and never resurrect the extraction as a new row.
+                orderAction == "CANCEL" -> {
+                    executeCancelOrderAction(processed)
+                }
+
+                // Agentic UPDATE — merge the customer's new details into the
+                // active pending order and advance it for the merchant dashboard.
+                orderAction == "UPDATE" && existingOrder != null -> {
                     if (newNotes.isNotEmpty()) {
                         orderDao.appendCustomNotes(existingOrder.id, newNotes)
-                        Log.i(TAG, "Merged order details into existing order id=${existingOrder.id} for ${processed.contactName}")
+                        Log.i(TAG, "🔁 Agentic UPDATE merged into order id=${existingOrder.id} for ${processed.contactName}")
                     }
-                } else {
-                    Log.i(TAG, "🔄 Duplicate order detected for ${processed.contactName}. Sending verification pivot.")
-                    overriddenReplyText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية 😊 تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟"
+                    if (existingOrder.status == OrderStatus.PENDING.name) {
+                        orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
+                        Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirm/update")
+                    }
                 }
-            } else {
-                val newOrder = OrderEntity(
-                    contactName = processed.contactName,
-                    customerNameFromLlm = normalizedCustomerName,
-                    deliveryAddress = normalizedDeliveryAddress,
-                    orderDetails = normalizedOrderDetails,
-                    customNotes = normalizedCustomNotes,
-                    status = OrderStatus.PENDING.name
-                )
-                val insertedOrderId = orderDao.insert(newOrder)
-                Log.i(TAG, "📦 New order ingested for ${processed.contactName}: orderId=$insertedOrderId")
+
+                // CREATE (explicit or implied) — and the UPDATE fallback when no
+                // active order exists to merge into (degrade to insert so details
+                // are never dropped). This is also the legacy dedup/pivot path
+                // that keeps pre-order_action LLM outputs working.
+                else -> {
+                    if (existingOrder != null) {
+                        val recentChatTurns = chatHistoryDao.getRecentMessages(processed.contactName, limit = 6)
+                        // Scan the whole recent window for the pivot marker, not
+                        // just the single last bot message: interleaved Q&A turns
+                        // between the pivot and the next extraction used to reset
+                        // the suppression and re-send the same verification
+                        // question to the customer.
+                        val pivotSeen = recentChatTurns.any { !it.isFromUser && it.messageText.contains("أنا شايف إنك لسه عامل أوردر مشابه") }
+
+                        if (pivotSeen) {
+                            if (newNotes.isNotEmpty()) {
+                                orderDao.appendCustomNotes(existingOrder.id, newNotes)
+                                Log.i(TAG, "Merged order details into existing order id=${existingOrder.id} for ${processed.contactName}")
+                            }
+                        } else {
+                            Log.i(TAG, "🔄 Duplicate order detected for ${processed.contactName}. Sending verification pivot.")
+                            overriddenReplyText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية 😊 تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟"
+                        }
+                    } else {
+                        val newOrder = OrderEntity(
+                            contactName = processed.contactName,
+                            customerNameFromLlm = normalizedCustomerName,
+                            deliveryAddress = normalizedDeliveryAddress,
+                            orderDetails = normalizedOrderDetails,
+                            customNotes = normalizedCustomNotes,
+                            status = OrderStatus.PENDING.name
+                        )
+                        val insertedOrderId = orderDao.insert(newOrder)
+                        Log.i(TAG, "📦 New order ingested for ${processed.contactName}: orderId=$insertedOrderId")
+                    }
+                }
+            }
+        } else {
+            // Agentic actions can arrive without an extraction payload (the
+            // customer only confirms or cancels, with no new details).
+            when (orderAction) {
+                "CANCEL" -> executeCancelOrderAction(processed)
+                "UPDATE" -> {
+                    val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
+                    if (existingOrder == null) {
+                        Log.i(TAG, "order_action=UPDATE but no active order for ${processed.contactName} — nothing to update")
+                    } else if (existingOrder.status == OrderStatus.PENDING.name) {
+                        orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
+                        Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirmation")
+                    }
+                }
+                else -> Unit
             }
         }
 
@@ -589,6 +643,24 @@ class AutoReplyOrchestrator @Inject constructor(
                                     } else {
                                         response
                                     }
+                                }
+
+                                // Agentic order actions are honored in the final
+                                // pass too (first pass took the RE_QUERY branch):
+                                // a CANCEL or confirmation can legitimately land
+                                // here and must still mutate the persisted state.
+                                when (finalParsed.orderAction?.trim()?.uppercase()) {
+                                    "CANCEL" -> executeCancelOrderAction(processed)
+                                    "UPDATE" -> {
+                                        val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
+                                        if (existingOrder == null) {
+                                            Log.i(TAG, "order_action=UPDATE (final pass) but no active order for ${processed.contactName} — nothing to update")
+                                        } else if (existingOrder.status == OrderStatus.PENDING.name) {
+                                            orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
+                                            Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION (final-pass UPDATE)")
+                                        }
+                                    }
+                                    else -> Unit
                                 }
 
                                 if (finalParsed.action == "HITL") {
@@ -923,6 +995,25 @@ class AutoReplyOrchestrator @Inject constructor(
         action = "HITL",
         finalReplyText = "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
     )
+
+    /**
+     * Executes the agentic CANCEL order action: deterministically transitions
+     * every active order for the contact to CANCELLED so the bot's spoken
+     * claim ("تم الإلغاء") always matches the persisted state. When no active
+     * order exists, nothing is mutated and the reply must reflect the real
+     * state (guarding against the fake-cancellation loop seen in f3.log).
+     */
+    private suspend fun executeCancelOrderAction(processed: ProcessedNotification) {
+        val activeOrders = orderDao.getActiveOrdersByContact(processed.contactName)
+        if (activeOrders.isEmpty()) {
+            Log.i(TAG, "order_action=CANCEL but no active orders for ${processed.contactName} — no state mutation")
+        } else {
+            activeOrders.forEach { order ->
+                orderDao.updateStatus(order.id, OrderStatus.CANCELLED.name)
+                Log.i(TAG, "🚫 Agentic CANCEL: order id=${order.id} (${order.status} → ${OrderStatus.CANCELLED.name}) for ${processed.contactName}")
+            }
+        }
+    }
 
     private fun getPriorMessages(current: WhatsAppNotification): List<String> {
         val timeLimitMs = CONTEXT_WINDOW_MINUTES * 60 * 1000L
