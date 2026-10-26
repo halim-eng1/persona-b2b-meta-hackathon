@@ -34,6 +34,7 @@ import com.example.persona.features.auto_reply.domain.model.ProcessedNotificatio
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormalizer
 import com.example.persona.core.network.dto.AgenticLlmResponse
+import com.example.persona.core.network.dto.ExtractedOrder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,8 +44,11 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+
+typealias ExtractedOrderDto = ExtractedOrder
 
 @Singleton
 class AutoReplyOrchestrator @Inject constructor(
@@ -99,8 +103,52 @@ class AutoReplyOrchestrator @Inject constructor(
         internal fun isPivotStillOpen(latestPivotTimestamp: Long?, consumedPivotTimestamps: Set<Long>): Boolean =
             latestPivotTimestamp != null && !consumedPivotTimestamps.contains(latestPivotTimestamp)
 
+        /**
+         * Pure helper to merge and deduplicate candidates across multiple RAG passes (Pass 1 + Pass 2 RE_QUERY),
+         * keeping the highest similarity score per chunk and filtering out noise below minScore.
+         */
+        internal fun mergeCandidates(
+            pass1: List<RetrievalCandidate>,
+            pass2: List<RetrievalCandidate>,
+            limit: Int = 5,
+            minScore: Float = 0.36f
+        ): List<RetrievalCandidate> = (pass1 + pass2)
+            .groupBy { it.chunkId.ifBlank { it.chunkText } }
+            .map { (_, group) -> group.maxByOrNull { it.similarityScore }!! }
+            .filter { it.similarityScore >= minScore }
+            .sortedByDescending { it.similarityScore }
+            .take(limit)
+
+        /**
+         * Computes the base RAG threshold mapped from user preferences to the
+         * realistic multilingual MiniLM score distribution for Arabic QA pairs.
+         */
+        internal fun calculateRagBaseThreshold(userThreshold: Float): Float =
+            (userThreshold * 0.5f).coerceIn(0.36f, 0.45f)
+
+        /**
+         * Pure helper to evaluate if a candidate reply is a duplicate of a recent assistant
+         * response sent within the current session window (last 2 hours).
+         */
+        internal fun isEchoRepetition(
+            candidateReply: String,
+            chatHistory: List<ChatHistoryEntity>,
+            nowMs: Long = System.currentTimeMillis()
+        ): Boolean {
+            val twoHoursAgo = nowMs - TimeUnit.HOURS.toMillis(2)
+            val lastAssistantTurn = chatHistory.firstOrNull { !it.isFromUser && it.timestamp >= twoHoursAgo }
+            return lastAssistantTurn != null && candidateReply.trim().lowercase() == lastAssistantTurn.messageText.trim().lowercase()
+        }
+
         const val CONTEXT_WINDOW_MINUTES = 1L
         const val MAX_CONTEXT_QUEUE_SIZE = 50
+    }
+
+    sealed interface OrderIngestionResult {
+        data class Created(val orderId: Long) : OrderIngestionResult
+        data class Merged(val orderId: Long) : OrderIngestionResult
+        data class DuplicatePivot(val pivotReplyText: String) : OrderIngestionResult
+        data object Ignored : OrderIngestionResult
     }
 
     // Channel for sequential processing — prevents concurrent ONNX executions (OOM prevention)
@@ -318,6 +366,7 @@ class AutoReplyOrchestrator @Inject constructor(
         }
 
         val activeHashes = getActiveReplyHashes()
+        val ragBaseThreshold = calculateRagBaseThreshold(stylePrefs.similarityThreshold)
         var candidates: List<RetrievalCandidate> = emptyList()
         var maxScore = 0f
         val queryEmbeddingForPersonalSweep: FloatArray?
@@ -331,14 +380,14 @@ class AutoReplyOrchestrator @Inject constructor(
             if (queryEmbeddingA != null && queryEmbeddingB != null) {
                 val (candidatesA, scoreA) = semanticRetrievalRepository.retrieveCandidates(
                     queryEmbedding = queryEmbeddingA,
-                    minimumSimilarityThreshold = -1.0f,
+                    minimumSimilarityThreshold = ragBaseThreshold,
                     queryText = processed.normalizedText,
                     recentReplyHashes = activeHashes
                 )
 
                 val (candidatesB, scoreB) = semanticRetrievalRepository.retrieveCandidates(
                     queryEmbedding = queryEmbeddingB,
-                    minimumSimilarityThreshold = -1.0f,
+                    minimumSimilarityThreshold = ragBaseThreshold,
                     queryText = processed.normalizedText,
                     recentReplyHashes = activeHashes
                 )
@@ -351,7 +400,7 @@ class AutoReplyOrchestrator @Inject constructor(
                     .map { (_, group) -> group.maxByOrNull { it.similarityScore }!! }
 
                 val topB = candidatesB.firstOrNull()
-                candidates = if (topB != null && topB.baseSimilarityScore > 0.90f) {
+                val merged = if (topB != null && topB.baseSimilarityScore > 0.90f) {
                     val prioritized = uniqueCandidates.first { it.chunkText == topB.chunkText }
                     val remaining = uniqueCandidates.filter { it.chunkText != topB.chunkText }
                         .sortedByDescending { it.similarityScore }
@@ -359,6 +408,7 @@ class AutoReplyOrchestrator @Inject constructor(
                 } else {
                     uniqueCandidates.sortedByDescending { it.similarityScore }
                 }
+                candidates = merged.filter { it.similarityScore >= 0.36f }
             }
         } else {
             val queryEmbedding = embeddingEngine.embedForAutoReply(richContext)
@@ -366,11 +416,11 @@ class AutoReplyOrchestrator @Inject constructor(
             if (queryEmbedding != null) {
                 val (retrievedCandidates, bestScore) = semanticRetrievalRepository.retrieveCandidates(
                     queryEmbedding = queryEmbedding,
-                    minimumSimilarityThreshold = -1.0f,
+                    minimumSimilarityThreshold = ragBaseThreshold,
                     queryText = processed.normalizedText,
                     recentReplyHashes = activeHashes
                 )
-                candidates = retrievedCandidates
+                candidates = retrievedCandidates.filter { it.similarityScore >= 0.36f }
                 maxScore = bestScore
             }
         }
@@ -387,20 +437,27 @@ class AutoReplyOrchestrator @Inject constructor(
         
         // Source B: Global candidates (candidates)
         
-        // Source C: Personal client state
+        // Source C: Personal client state (excluding current inbound and recent chat turns)
         val activeOrders = orderDao.getActiveOrdersByContact(processed.contactName)
         val embeddedMessages = chatHistoryDao.getEmbeddedMessages(processed.contactName, limit = 20)
+        val excludedPersonalIds = buildSet {
+            add(insertedId)
+            chatHistory.forEach { add(it.id) }
+        }
         val personalChunks = if (queryEmbeddingForPersonalSweep != null) {
-            embeddedMessages.mapNotNull { msg ->
-                val msgEmbedding = msg.embedding
-                if (msgEmbedding != null) {
-                    msg to dotProduct(queryEmbeddingForPersonalSweep, msgEmbedding)
-                } else {
-                    null
-                }
-            }.sortedByDescending { it.second }
-             .take(2)
-             .map { it.first }
+            embeddedMessages
+                .filterNot { it.id in excludedPersonalIds }
+                .mapNotNull { msg ->
+                    val msgEmbedding = msg.embedding
+                    if (msgEmbedding != null) {
+                        val score = dotProduct(queryEmbeddingForPersonalSweep, msgEmbedding)
+                        if (score >= 0.45f) msg to score else null
+                    } else {
+                        null
+                    }
+                }.sortedByDescending { it.second }
+                 .take(2)
+                 .map { it.first }
         } else {
             emptyList()
         }
@@ -495,17 +552,7 @@ class AutoReplyOrchestrator @Inject constructor(
 
         if (agenticResponse.extractedOrder != null) {
             val extracted = agenticResponse.extractedOrder
-            val normalizedCustomerName = normalizeField(extracted.customerName)
-            val normalizedDeliveryAddress = normalizeField(extracted.deliveryAddress)
-            val normalizedOrderDetails = normalizeField(extracted.orderDetails)
-            val normalizedCustomNotes = normalizeField(extracted.customNotes)
-
-            val newNotes = buildString {
-                normalizedCustomerName?.let { append("الاسم: $it\n") }
-                normalizedDeliveryAddress?.let { append("العنوان: $it\n") }
-                normalizedOrderDetails?.let { append("التفاصيل: $it\n") }
-                normalizedCustomNotes?.let { append("ملاحظات: $it\n") }
-            }.trim()
+            val newNotes = buildNotesFromExtractedOrder(extracted)
 
             // Deduplication / order-state lookup
             val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
@@ -539,48 +586,13 @@ class AutoReplyOrchestrator @Inject constructor(
                 // are never dropped). This is also the legacy dedup/pivot path
                 // that keeps pre-order_action LLM outputs working.
                 else -> {
-                    if (existingOrder != null) {
-                        val recentChatTurns = chatHistoryDao.getRecentMessages(processed.contactName, limit = 6)
-                        // Scan the whole recent window for the pivot marker, not
-                        // just the single last bot message: interleaved Q&A turns
-                        // between the pivot and the next extraction used to reset
-                        // the suppression and re-send the same verification
-                        // question to the customer.
-                        val latestPivotMsg = recentChatTurns.firstOrNull { !it.isFromUser && it.messageText.contains(PIVOT_MARKER) }
-
-                        // Merge-once per pivot: once this pivot instance has
-                        // already been answered by a merge, it is consumed — a
-                        // later extraction (e.g. the customer declaring a
-                        // genuinely NEW order) must not keep being appended
-                        // into the old order's notes.
-                        val pivotSeen = isPivotStillOpen(
-                            latestPivotTimestamp = latestPivotMsg?.timestamp,
-                            consumedPivotTimestamps = consumedPivotTimestamps[processed.contactName] ?: emptySet()
-                        )
-
-                        if (pivotSeen && latestPivotMsg != null) {
-                            if (newNotes.isNotEmpty()) {
-                                orderDao.appendCustomNotes(existingOrder.id, newNotes)
-                                Log.i(TAG, "Merged order details into existing order id=${existingOrder.id} for ${processed.contactName}")
-                            }
-                            consumedPivotTimestamps
-                                .computeIfAbsent(processed.contactName) { ConcurrentHashMap.newKeySet() }
-                                .add(latestPivotMsg.timestamp)
-                        } else {
-                            Log.i(TAG, "🔄 Duplicate order detected for ${processed.contactName}. Sending verification pivot.")
-                            overriddenReplyText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية 😊 تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟"
-                        }
-                    } else {
-                        val newOrder = OrderEntity(
-                            contactName = processed.contactName,
-                            customerNameFromLlm = normalizedCustomerName,
-                            deliveryAddress = normalizedDeliveryAddress,
-                            orderDetails = normalizedOrderDetails,
-                            customNotes = normalizedCustomNotes,
-                            status = OrderStatus.PENDING.name
-                        )
-                        val insertedOrderId = orderDao.insert(newOrder)
-                        Log.i(TAG, "📦 New order ingested for ${processed.contactName}: orderId=$insertedOrderId")
+                    val result = handleOrderCreation(
+                        extractedOrder = agenticResponse.extractedOrder,
+                        contactName = processed.contactName,
+                        processed = processed
+                    )
+                    if (result is OrderIngestionResult.DuplicatePivot) {
+                        overriddenReplyText = result.pivotReplyText
                     }
                 }
             }
@@ -660,21 +672,23 @@ class AutoReplyOrchestrator @Inject constructor(
                         // 10d. Second vector sweep with refined keyword
                         val (newChunks, _) = semanticRetrievalRepository.retrieveCandidates(
                             queryEmbedding = refinedEmbedding,
-                            minimumSimilarityThreshold = -1.0f,
+                            minimumSimilarityThreshold = ragBaseThreshold,
                             queryText = agenticResponse.refinedSearchKeyword,
                             recentReplyHashes = activeHashes
                         )
 
-                        if (newChunks.isEmpty()) {
-                            Log.d(TAG, "RE_QUERY returned no new chunks — HITL fallback")
+                        val mergedChunks = mergeCandidates(candidates, newChunks, limit = 5, minScore = 0.36f)
+
+                        if (mergedChunks.isEmpty()) {
+                            Log.d(TAG, "RE_QUERY returned no relevant chunks after merge — HITL fallback")
                             null
                         } else {
-                            Log.i(TAG, "RE_QUERY returned ${newChunks.size} new chunks. Executing final LLM pass.")
+                            Log.i(TAG, "RE_QUERY merged to ${mergedChunks.size} chunks (Pass1: ${candidates.size}, Pass2: ${newChunks.size}). Executing final LLM pass.")
 
                             // 10e. Second LLM pass — REPLY-only mode (no further RE_QUERY allowed)
                             val finalOutput = replyGenerationRepository.generateFinalReply(
                                 queryText = processed.originalText,
-                                chunks = newChunks,
+                                chunks = mergedChunks,
                                 isOngoingConversation = isOngoing,
                                 chatHistory = chatHistory,
                                 activeOrders = activeOrders,
@@ -708,28 +722,9 @@ class AutoReplyOrchestrator @Inject constructor(
 
                                 // Agentic order actions are honored in the final
                                 // pass too (first pass took the RE_QUERY branch):
-                                // a CANCEL or confirmation can legitimately land
+                                // a CANCEL, UPDATE, or CREATE can legitimately land
                                 // here and must still mutate the persisted state.
-                                var finalReplyOverride: String? = null
-                                when (finalParsed.orderAction?.trim()?.uppercase()) {
-                                    "CANCEL" -> {
-                                        if (!executeCancelOrderAction(processed)) {
-                                            // Never ship a cancellation claim the
-                                            // DB did not perform.
-                                            finalReplyOverride = NO_ACTIVE_ORDER_REPLY
-                                        }
-                                    }
-                                    "UPDATE" -> {
-                                        val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
-                                        if (existingOrder == null) {
-                                            Log.i(TAG, "order_action=UPDATE (final pass) but no active order for ${processed.contactName} — nothing to update")
-                                        } else if (existingOrder.status == OrderStatus.PENDING.name) {
-                                            orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
-                                            Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION (final-pass UPDATE)")
-                                        }
-                                    }
-                                    else -> Unit
-                                }
+                                val finalReplyOverride = handleFinalPassOrderActions(finalParsed, processed)
 
                                 if (finalParsed.action == "HITL") {
                                     Log.i(TAG, "Second-pass LLM action=HITL. Handing off to human.")
@@ -797,6 +792,15 @@ class AutoReplyOrchestrator @Inject constructor(
             context = processed.context,
             userEmojiRate = 0f
         )
+
+        // Anti-echo guard: if reply text is identical to a recent preceding assistant message for the same contact
+        // within the current session window (last 2 hours), do NOT send a verbatim duplicate — hand off cleanly to HITL.
+        if (isEchoRepetition(styledReplyText, chatHistory)) {
+            Log.w(TAG, "Anti-echo guard triggered: LLM produced verbatim duplicate of recent assistant reply for ${processed.contactName}. Degrading to HITL.")
+            triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
+            sendImmediateReply(processed, ensureHitlSuffix(context.getString(R.string.hitl_holding_message)))
+            return
+        }
 
         // 12. Execute direct reply via RemoteInput
         delay(stylePrefs.replyDelaySeconds * 1000L)
@@ -1099,6 +1103,151 @@ class AutoReplyOrchestrator @Inject constructor(
         orderDao.updateStatus(activeOrder.id, OrderStatus.CANCELLED.name)
         Log.i(TAG, "🚫 Agentic CANCEL: order id=${activeOrder.id} (${activeOrder.status} → ${OrderStatus.CANCELLED.name}) for ${processed.contactName}")
         return true
+    }
+
+    /**
+     * Ingests a new order or triggers the duplicate-order verification pivot.
+     */
+    internal suspend fun handleOrderCreation(
+        extractedOrder: ExtractedOrderDto?,
+        contactName: String,
+        processed: ProcessedNotification
+    ): OrderIngestionResult {
+        if (extractedOrder == null) return OrderIngestionResult.Ignored
+
+        val normalizedCustomerName = normalizeField(extractedOrder.customerName)
+        val normalizedDeliveryAddress = normalizeField(extractedOrder.deliveryAddress)
+        val normalizedOrderDetails = normalizeField(extractedOrder.orderDetails)
+        val normalizedCustomNotes = normalizeField(extractedOrder.customNotes)
+
+        val newNotes = buildNotesFromExtractedOrder(extractedOrder)
+
+        val existingOrder = orderDao.getActiveMatchingOrder(contactName)
+        return if (existingOrder != null) {
+            val recentChatTurns = chatHistoryDao.getRecentMessages(contactName, limit = 6)
+            val latestPivotMsg = recentChatTurns.firstOrNull { !it.isFromUser && it.messageText.contains(PIVOT_MARKER) }
+
+            val pivotSeen = isPivotStillOpen(
+                latestPivotTimestamp = latestPivotMsg?.timestamp,
+                consumedPivotTimestamps = consumedPivotTimestamps[contactName] ?: emptySet()
+            )
+
+            if (pivotSeen && latestPivotMsg != null) {
+                if (newNotes.isNotEmpty()) {
+                    orderDao.appendCustomNotes(existingOrder.id, newNotes)
+                    Log.i(TAG, "Merged order details into existing order id=${existingOrder.id} for $contactName")
+                }
+                consumedPivotTimestamps
+                    .computeIfAbsent(contactName) { ConcurrentHashMap.newKeySet() }
+                    .add(latestPivotMsg.timestamp)
+                OrderIngestionResult.Merged(existingOrder.id)
+            } else {
+                Log.i(TAG, "🔄 Duplicate order detected for $contactName. Sending verification pivot.")
+                val pivotText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية 😊 تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟"
+                OrderIngestionResult.DuplicatePivot(pivotText)
+            }
+        } else {
+            val newOrder = OrderEntity(
+                contactName = contactName,
+                customerNameFromLlm = normalizedCustomerName,
+                deliveryAddress = normalizedDeliveryAddress,
+                orderDetails = normalizedOrderDetails,
+                customNotes = normalizedCustomNotes,
+                status = OrderStatus.PENDING.name
+            )
+            val insertedOrderId = orderDao.insert(newOrder)
+            Log.i(TAG, "📦 New order ingested for $contactName: orderId=$insertedOrderId")
+            OrderIngestionResult.Created(insertedOrderId)
+        }
+    }
+
+    private fun buildNotesFromExtractedOrder(extracted: ExtractedOrder?): String {
+        if (extracted == null) return ""
+        val normalizedCustomerName = normalizeField(extracted.customerName)
+        val normalizedDeliveryAddress = normalizeField(extracted.deliveryAddress)
+        val normalizedOrderDetails = normalizeField(extracted.orderDetails)
+        val normalizedCustomNotes = normalizeField(extracted.customNotes)
+
+        return buildString {
+            normalizedCustomerName?.let { append("الاسم: $it\n") }
+            normalizedDeliveryAddress?.let { append("العنوان: $it\n") }
+            normalizedOrderDetails?.let { append("التفاصيل: $it\n") }
+            normalizedCustomNotes?.let { append("ملاحظات: $it\n") }
+        }.trim()
+    }
+
+    internal suspend fun handleFinalPassOrderActions(
+        finalParsed: AgenticLlmResponse,
+        processed: ProcessedNotification
+    ): String? {
+        var finalReplyOverride: String? = null
+        val finalOrderAction = finalParsed.orderAction?.trim()?.uppercase()
+            ?.takeIf { it == "CREATE" || it == "CANCEL" || it == "UPDATE" }
+
+        Log.i("PersonaMetrics", "metric=final_pass_order_action value=${finalOrderAction ?: "NONE"} contact=${processed.contactName.hashCode()}")
+
+        if (finalParsed.extractedOrder != null) {
+            val extracted = finalParsed.extractedOrder
+            val newNotes = buildNotesFromExtractedOrder(extracted)
+            val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
+
+            when {
+                finalOrderAction == "CANCEL" -> {
+                    if (!executeCancelOrderAction(processed)) {
+                        finalReplyOverride = NO_ACTIVE_ORDER_REPLY
+                    }
+                }
+                finalOrderAction == "UPDATE" && existingOrder != null -> {
+                    if (newNotes.isNotEmpty()) {
+                        orderDao.appendCustomNotes(existingOrder.id, newNotes)
+                        Log.i(TAG, "🔁 Agentic UPDATE (final pass) merged into order id=${existingOrder.id} for ${processed.contactName}")
+                    }
+                    if (existingOrder.status == OrderStatus.PENDING.name) {
+                        orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
+                        Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION (final-pass UPDATE)")
+                    }
+                }
+                else -> {
+                    val result = handleOrderCreation(
+                        extractedOrder = finalParsed.extractedOrder,
+                        contactName = processed.contactName,
+                        processed = processed
+                    )
+                    if (result is OrderIngestionResult.DuplicatePivot) {
+                        finalReplyOverride = result.pivotReplyText
+                    }
+                }
+            }
+        } else {
+            when (finalOrderAction) {
+                "CANCEL" -> {
+                    if (!executeCancelOrderAction(processed)) {
+                        finalReplyOverride = NO_ACTIVE_ORDER_REPLY
+                    }
+                }
+                "UPDATE" -> {
+                    val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
+                    if (existingOrder == null) {
+                        Log.i(TAG, "order_action=UPDATE (final pass) but no active order for ${processed.contactName} — nothing to update")
+                    } else if (existingOrder.status == OrderStatus.PENDING.name) {
+                        orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
+                        Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION (final-pass UPDATE)")
+                    }
+                }
+                "CREATE" -> {
+                    val result = handleOrderCreation(
+                        extractedOrder = null,
+                        contactName = processed.contactName,
+                        processed = processed
+                    )
+                    if (result is OrderIngestionResult.DuplicatePivot) {
+                        finalReplyOverride = result.pivotReplyText
+                    }
+                }
+                else -> Unit
+            }
+        }
+        return finalReplyOverride
     }
 
     private fun getPriorMessages(current: WhatsAppNotification): List<String> {

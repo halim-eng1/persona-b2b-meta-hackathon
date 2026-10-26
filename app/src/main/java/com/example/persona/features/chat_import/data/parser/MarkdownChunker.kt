@@ -26,7 +26,10 @@ class MarkdownChunker @Inject constructor() {
 
     companion object {
         /** Regex to detect Markdown header lines at any depth (# through ######). */
-        private val HEADER_REGEX = Regex("^#{1,6}\\s+(.+)$", RegexOption.MULTILINE)
+        private val HEADER_REGEX = Regex("^(#{1,6})\\s+(.+)$")
+
+        /** Regex to detect Markdown horizontal rule lines (---, ***, ___). */
+        private val HORIZONTAL_RULE_REGEX = Regex("^\\s*[-*_]{3,}\\s*$")
 
         /**
          * Detects media-only messages (images, videos, audio, documents) sent through WhatsApp.
@@ -78,35 +81,48 @@ class MarkdownChunker @Inject constructor() {
     // Header splitting
     // ──────────────────────────────────────────────────────────────────────────
 
+    private data class HeadingBreadcrumb(val level: Int, val title: String)
+
     /**
-     * Splits [text] into (headerLine?, body) pairs.
-     * The first pair has a null header if the document starts without a header.
+     * Splits [text] into (headerBreadcrumb?, body) pairs.
+     * Maintains a breadcrumb stack (e.g., "H1 - H2 - H3") and strips stray
+     * horizontal rules (---) from chunk bodies.
      */
     private fun splitByHeaders(text: String): List<Pair<String?, String>> {
         val lines = text.lines()
         val sections = mutableListOf<Pair<String?, String>>()
-
-        var currentHeader: String? = null
+        val headerStack = mutableListOf<HeadingBreadcrumb>()
         val currentBody = StringBuilder()
 
         for (line in lines) {
-            if (HEADER_REGEX.matches(line)) {
-                // Flush current section
+            val headerMatch = HEADER_REGEX.find(line.trim())
+            if (headerMatch != null) {
+                // Flush current section only if body is non-blank
                 val body = currentBody.toString().trim()
-                if (body.isNotEmpty() || currentHeader != null) {
-                    sections += Pair(currentHeader, body)
+                if (body.isNotEmpty()) {
+                    val breadcrumb = if (headerStack.isEmpty()) null else headerStack.joinToString(" - ") { it.title }
+                    sections += Pair(breadcrumb, body)
                 }
-                currentHeader = HEADER_REGEX.find(line)?.groupValues?.get(1)?.trim()
                 currentBody.clear()
-            } else {
+
+                val level = headerMatch.groupValues[1].length
+                val title = headerMatch.groupValues[2].trim()
+
+                // Pop headings at or below the current depth
+                while (headerStack.isNotEmpty() && headerStack.last().level >= level) {
+                    headerStack.removeAt(headerStack.lastIndex)
+                }
+                headerStack.add(HeadingBreadcrumb(level, title))
+            } else if (!HORIZONTAL_RULE_REGEX.matches(line)) {
                 currentBody.appendLine(line)
             }
         }
 
-        // Flush the last section
+        // Flush the last section only if body is non-blank
         val remaining = currentBody.toString().trim()
-        if (remaining.isNotEmpty() || currentHeader != null) {
-            sections += Pair(currentHeader, remaining)
+        if (remaining.isNotEmpty()) {
+            val breadcrumb = if (headerStack.isEmpty()) null else headerStack.joinToString(" - ") { it.title }
+            sections += Pair(breadcrumb, remaining)
         }
 
         return sections

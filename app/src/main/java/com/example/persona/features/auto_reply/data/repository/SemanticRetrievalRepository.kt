@@ -40,7 +40,7 @@ class SemanticRetrievalRepository @Inject constructor(
     suspend fun retrieveCandidates(
         queryEmbedding: FloatArray,
         limit: Int = 5,
-        minimumSimilarityThreshold: Float = 0.75f,
+        minimumSimilarityThreshold: Float = 0.38f,
         queryText: String = "",
         recentReplyHashes: List<Int> = emptyList()
     ): Pair<List<RetrievalCandidate>, Float> {
@@ -54,12 +54,13 @@ class SemanticRetrievalRepository @Inject constructor(
         }
 
         // ── Step 2: Dynamic Thresholding by word count ─────────────────────────
+        val baseThreshold = if (minimumSimilarityThreshold < 0f) 0.36f else minimumSimilarityThreshold
         val wordCount = queryText.split("\\s+".toRegex()).filter { it.isNotEmpty() }.size
         val adjustedThreshold = when {
-            wordCount <= 2 -> (minimumSimilarityThreshold + 0.15f).coerceAtMost(0.98f)
-            wordCount <= 4 -> (minimumSimilarityThreshold + 0.08f).coerceAtMost(0.95f)
-            else           -> minimumSimilarityThreshold
-        }
+            wordCount <= 2 -> (baseThreshold + 0.15f).coerceAtMost(0.98f)
+            wordCount <= 4 -> (baseThreshold + 0.08f).coerceAtMost(0.95f)
+            else           -> baseThreshold
+        }.coerceAtLeast(if (minimumSimilarityThreshold < 0f) 0.36f else 0.0f)
 
         // ── Step 3: In-memory dot-product sweep (top 50) ───────────────────────
         val topProjections = allVectorProjections.asSequence()

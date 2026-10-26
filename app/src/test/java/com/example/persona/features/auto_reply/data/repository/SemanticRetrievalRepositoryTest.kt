@@ -86,7 +86,7 @@ class SemanticRetrievalRepositoryTest {
         val textHash = "Knowledge A".hashCode()
 
         // Act
-        val (candidates, bestScore) = repository.retrieveCandidates(
+        val (candidates, _) = repository.retrieveCandidates(
             queryEmbedding = floatArrayOf(1.0f, 0.0f),
             minimumSimilarityThreshold = 0.60f,
             queryText = "this is a long query",
@@ -97,5 +97,27 @@ class SemanticRetrievalRepositoryTest {
         assertEquals(1, candidates.size)
         assertEquals(0.70f, candidates[0].similarityScore, 0.001f)
         assertEquals(0.90f, candidates[0].baseSimilarityScore, 0.001f)
+    }
+
+    @Test
+    fun retrieveCandidates_negativeThresholdNeverAllowsGarbageChunks(): Unit = runBlocking {
+        // Arrange: Vector with 0.25 similarity (garbage/noise)
+        val projections = listOf(
+            ChunkVectorProjection("garbage_chunk", floatArrayOf(0.25f, 0.0f))
+        )
+        coEvery { embeddingIndexDao.getAllVectors() } returns projections
+        coEvery { businessKnowledgeDao.getChunkTextsByIds(any()) } returns listOf(
+            ChunkTextProjection("garbage_chunk", "Garbage text", "Header")
+        )
+
+        // Act: Pass negative threshold (-1.0f)
+        val (candidates, _) = repository.retrieveCandidates(
+            queryEmbedding = floatArrayOf(1.0f, 0.0f),
+            minimumSimilarityThreshold = -1.0f,
+            queryText = "short"
+        )
+
+        // Assert: Garbage chunk at 0.25f must NOT pass because floor is enforced (>= 0.36f + dynamic bump)
+        assertTrue(candidates.isEmpty())
     }
 }
