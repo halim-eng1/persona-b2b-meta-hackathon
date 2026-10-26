@@ -58,6 +58,20 @@ class ChatImportViewModelTest {
     }
 
     @Test
+    fun onUnsupportedFilePicked_setsErrorAndClearsSelection() {
+        viewModel.onFilePicked(mockUri)
+
+        viewModel.onUnsupportedFilePicked()
+
+        assertNull(viewModel.uiState.value.selectedFileUri)
+        assertEquals(
+            "نوع الملف غير مدعوم. اختر ملف بنسق .txt أو .md (Unsupported file type. Please pick a .txt or .md file.)",
+            viewModel.uiState.value.error
+        )
+        assertFalse(viewModel.uiState.value.isOwnerNameMissing)
+    }
+
+    @Test
     fun cancelImport_triggersRepositoryCancelAndUpdatesState() {
         viewModel.cancelImport()
 

@@ -1,7 +1,9 @@
 package com.example.persona.features.chat_import.presentation
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -40,11 +42,34 @@ fun ChatImportScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
+
+    /**
+     * Accepted MIME types for knowledge import: plain text plus Markdown.
+     * "application/octet-stream" is included because some file providers
+     * expose .md/.txt files with a generic MIME type.
+     */
+    val acceptedMimeTypes = arrayOf(
+        "text/plain",
+        "text/markdown",
+        "text/x-markdown",
+        "application/octet-stream"
+    )
 
     val fileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
-        uri?.let { viewModel.onFilePicked(it) }
+        uri?.let { picked ->
+            val displayName = picked.queryDisplayName(context)
+            val isSupported = displayName?.endsWith(".txt", ignoreCase = true) == true ||
+                displayName?.endsWith(".md", ignoreCase = true) == true
+            if (isSupported || displayName == null) {
+                // displayName == null → provider did not expose a name; let the worker try.
+                viewModel.onFilePicked(picked)
+            } else {
+                viewModel.onUnsupportedFilePicked()
+            }
+        }
     }
 
     LaunchedEffect(uiState.isImporting) {
@@ -101,7 +126,7 @@ fun ChatImportScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Upload a exported WhatsApp chat file. The AI model runs on-device to index your messaging style.",
+                        text = "Upload a exported WhatsApp chat file (.txt) or Markdown knowledge file (.md). The AI model runs on-device to index your messaging style.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.9f)
                     )
@@ -136,7 +161,7 @@ fun ChatImportScreen(
                     val steps = listOf(
                         "1. Open WhatsApp & go to a contact's chat.",
                         "2. Tap the three dots menu (More) -> Export chat.",
-                        "3. Select 'Without Media' to generate a .txt file.",
+                        "3. Select 'Without Media' to generate a .txt / .md file.",
                         "4. Save it and select it using the picker below."
                     )
 
@@ -161,7 +186,7 @@ fun ChatImportScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Button(
-                        onClick = { fileLauncher.launch(arrayOf("text/plain")) },
+                        onClick = { fileLauncher.launch(acceptedMimeTypes) },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -170,7 +195,7 @@ fun ChatImportScreen(
                             contentDescription = "Pick File",
                             modifier = Modifier.padding(end = 8.dp)
                         )
-                        Text("Choose Chat Export (.txt)")
+                        Text("Choose Chat Export (.txt / .md)")
                     }
 
                     uiState.selectedFileUri?.let { uri ->
@@ -247,7 +272,6 @@ fun ChatImportScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    val context = LocalContext.current
                     OutlinedButton(
                         onClick = {
                             try {
@@ -297,4 +321,24 @@ fun ChatImportScreen(
             }
         }
     }
+}
+
+/**
+ * Queries [contentResolver] for the human-readable display name of this [Uri]
+ * (SAF content URIs do not carry the file name in [Uri.lastPathSegment]).
+ * Returns null when the name cannot be resolved.
+ */
+private fun Uri.queryDisplayName(context: Context): String? = try {
+    context.contentResolver.query(
+        this,
+        arrayOf(OpenableColumns.DISPLAY_NAME),
+        null,
+        null,
+        null
+    )?.use { cursor ->
+        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+    }
+} catch (e: Exception) {
+    null
 }
