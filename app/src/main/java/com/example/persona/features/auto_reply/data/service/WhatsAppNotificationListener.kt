@@ -12,7 +12,10 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.persona.R
+import com.example.persona.core.logging.PersonaLogger
+import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.features.auto_reply.domain.model.WhatsAppNotification
+import com.example.persona.features.auto_reply.domain.model.ExtraMessage
 import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
 import com.example.persona.features.chat_import.data.embedding.HuggingFaceTokenizer
 import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
@@ -59,6 +62,12 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         // 3. Skip group summary notifications
         if (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
 
+        // Log notification receipt
+        PersonaLogger.d(
+            PersonaLogTags.NOTIFICATION,
+            "Notification received: Title=$title, NotificationKey=${sbn.key}"
+        )
+
         // 4. ConcurrentHashMap-based dedup with TTL
         val dedupeKey = "${sbn.key}_${text.hashCode()}"
         val now = System.currentTimeMillis()
@@ -75,12 +84,51 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             NotificationActionCache.put(sbn.key, replyAction)
         }
 
+        // Extract extra messages for context compilation
+        val extraMessagesList = mutableListOf<ExtraMessage>()
+        try {
+            val parcelableMessages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+            if (parcelableMessages != null) {
+                for (parcelable in parcelableMessages) {
+                    if (parcelable is android.os.Bundle) {
+                        val msgText = parcelable.getCharSequence("text")?.toString()
+                        val msgTimestamp = parcelable.getLong("time")
+                        var senderName: String? = null
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                            val senderPerson = parcelable.getParcelable<android.app.Person>("sender_person")
+                            senderName = senderPerson?.name?.toString()
+                        }
+                        if (senderName == null) {
+                            senderName = parcelable.getCharSequence("sender")?.toString()
+                        }
+
+                        if (msgText != null) {
+                            val isUser = senderName != null && (
+                                senderName.equals("You", ignoreCase = true) || 
+                                senderName.equals("أنت", ignoreCase = true)
+                            )
+                            extraMessagesList.add(
+                                ExtraMessage(
+                                    text = msgText,
+                                    timestamp = msgTimestamp,
+                                    isUser = isUser
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("NLS", "Failed to extract EXTRA_MESSAGES for ${sbn.key}", e)
+        }
+
         // 6. Build domain model and dispatch
         val whatsappNotification = WhatsAppNotification(
             title = title,
             text = text,
             postTime = sbn.postTime,
-            notificationKey = sbn.key
+            notificationKey = sbn.key,
+            extraMessages = extraMessagesList
         )
 
         messageDispatcher.dispatch(whatsappNotification)

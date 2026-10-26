@@ -10,6 +10,7 @@ import kotlinx.datetime.Instant
 
 @Dao
 interface ReplyLogDao {
+
     @Insert
     suspend fun insert(log: ReplyLogEntity): Long
 
@@ -24,4 +25,27 @@ interface ReplyLogDao {
 
     @Query("DELETE FROM reply_log WHERE timestamp < :before")
     suspend fun deleteOlderThan(before: Instant)
+
+    /**
+     * Joins reply_log with linked_contacts to resolve contact display names.
+     * Returns a raw projection used by [AuditLogRepositoryImpl] to build domain models.
+     */
+    @Query("""
+        SELECT 
+            rl.id            AS id,
+            lc.whatsapp_display_name AS contactName,
+            rl.incoming_message       AS incomingMessage,
+            rl.generated_reply        AS generatedReply,
+            rl.similarity_score       AS similarityScore,
+            rl.was_auto_sent          AS wasAutoSent,
+            rl.timestamp              AS timestamp
+        FROM reply_log rl
+        INNER JOIN linked_contacts lc ON lc.id = rl.contact_id
+        ORDER BY rl.timestamp DESC
+        LIMIT :limit
+    """)
+    fun observeLogsWithContact(limit: Int = 100): Flow<List<AuditLogProjection>>
+
+    @Query("SELECT COUNT(*) FROM reply_log WHERE was_auto_sent = 1")
+    fun observeAutoSentCount(): Flow<Int>
 }

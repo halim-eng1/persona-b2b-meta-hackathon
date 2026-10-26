@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
+import com.example.persona.core.common.AppException
 import com.example.persona.core.common.Resource
 import com.example.persona.features.chat_import.data.repository.ChatImportRepository
 import com.example.persona.features.chat_import.data.worker.ChatImportWorker
@@ -26,16 +27,16 @@ class ChatImportViewModel @Inject constructor(
     val uiState: StateFlow<ChatImportUiState> = _uiState.asStateFlow()
 
     fun onFilePicked(uri: Uri) {
-        _uiState.update { it.copy(selectedFileUri = uri, error = null) }
+        _uiState.update { it.copy(selectedFileUri = uri, error = null, isOwnerNameMissing = false) }
     }
 
-    fun startImport(userName: String? = null) {
+    fun startImport() {
         val uri = _uiState.value.selectedFileUri ?: return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isImporting = true, error = null, isComplete = false, isCancelled = false) }
+            _uiState.update { it.copy(isImporting = true, error = null, isComplete = false, isCancelled = false, isOwnerNameMissing = false) }
 
-            when (val result = startImportUseCase(uri, userName)) {
+            when (val result = startImportUseCase(uri)) {
                 is Resource.Success -> {
                     result.data.collect { workInfo ->
                         workInfo?.let { updateFromWorkInfo(it) }
@@ -43,7 +44,11 @@ class ChatImportViewModel @Inject constructor(
                 }
                 is Resource.Error -> {
                     _uiState.update {
-                        it.copy(isImporting = false, error = result.exception.message)
+                        it.copy(
+                            isImporting = false,
+                            error = result.exception.message,
+                            isOwnerNameMissing = result.exception is AppException.OwnerNameNotConfigured
+                        )
                     }
                 }
                 is Resource.Loading -> { /* no-op */ }
@@ -106,6 +111,7 @@ data class ChatImportUiState(
     val isComplete: Boolean = false,
     val isCancelled: Boolean = false,
     val error: String? = null,
+    val isOwnerNameMissing: Boolean = false,
     // Progress
     val currentPhase: String = "",
     val currentBatch: Int = 0,

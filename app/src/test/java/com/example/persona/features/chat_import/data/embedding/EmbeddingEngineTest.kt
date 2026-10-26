@@ -1,5 +1,6 @@
 package com.example.persona.features.chat_import.data.embedding
 
+import android.content.Context
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -23,7 +24,7 @@ class EmbeddingEngineTest {
 
     @Before
     fun setUp() {
-        embeddingEngine = EmbeddingEngine(modelManager, tokenizer, testDispatcher)
+        embeddingEngine = EmbeddingEngine(modelManager, tokenizer, mockk(relaxed = true), testDispatcher)
     }
 
     @Test

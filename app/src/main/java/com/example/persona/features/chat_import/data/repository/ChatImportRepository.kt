@@ -24,12 +24,10 @@ class ChatImportRepository @Inject constructor(
      * Returns a Flow of WorkInfo for progress observation.
      */
     fun startImport(
-        fileUri: Uri,
-        userName: String? = null
+        fileUri: Uri
     ): Flow<WorkInfo?> {
         val inputData = workDataOf(
-            ChatImportWorker.KEY_FILE_URI to fileUri.toString(),
-            ChatImportWorker.KEY_USER_NAME to userName
+            ChatImportWorker.KEY_FILE_URI to fileUri.toString()
         )
 
         val constraints = Constraints.Builder()

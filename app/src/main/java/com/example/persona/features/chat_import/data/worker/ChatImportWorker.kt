@@ -15,7 +15,10 @@ import com.example.persona.core.database.dao.LinkedContactDao
 import com.example.persona.core.database.entity.ChatMessageEntity
 import com.example.persona.core.database.entity.EmbeddingEntity
 import com.example.persona.core.database.entity.LinkedContactEntity
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.di.IoDispatcher
+import com.example.persona.core.logging.PersonaLogger
+import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
 import com.example.persona.features.chat_import.data.parser.ChatFileParser
@@ -42,13 +45,13 @@ class ChatImportWorker @AssistedInject constructor(
     private val embeddingDao: EmbeddingDao,
     private val linkedContactDao: LinkedContactDao,
     private val database: PersonaDatabase,
+    private val prefsRepository: UserPreferencesRepository,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : CoroutineWorker(context, params) {
 
     companion object {
         // Input data keys
         const val KEY_FILE_URI = "file_uri"
-        const val KEY_USER_NAME = "user_name"
 
         // Progress data keys
         const val KEY_PHASE = "phase"
@@ -68,9 +71,13 @@ class ChatImportWorker @AssistedInject constructor(
     }
 
     override suspend fun doWork(): Result = withContext(ioDispatcher) {
+        PersonaLogger.d(PersonaLogTags.IMPORT, "Import started")
         val fileUriString = inputData.getString(KEY_FILE_URI)
             ?: return@withContext failWithError("No file URI provided")
-        val knownUserName = inputData.getString(KEY_USER_NAME)
+        val ownerName = prefsRepository.getOwnerNameSync()
+        if (ownerName.isBlank()) {
+            return@withContext failWithError("Owner name not configured. Please set your WhatsApp name in Settings.")
+        }
 
         try {
             // ── Phase 1: Read file ──────────────────────────────
@@ -86,7 +93,7 @@ class ChatImportWorker @AssistedInject constructor(
             // ── Phase 2: Parse ──────────────────────────────────
             reportProgress(ImportProgress.ImportPhase.DETECTING_FORMAT, 0, 0, 0, 0)
 
-            val parseResult = chatFileParser.parse(lineSequence, knownUserName)
+            val parseResult = chatFileParser.parse(lineSequence, ownerName)
 
             when (parseResult) {
                 is ParseFileResult.FormatError ->
@@ -96,6 +103,7 @@ class ChatImportWorker @AssistedInject constructor(
 
             val parsed = (parseResult as ParseFileResult.Success)
             val messages = parsed.messages
+            PersonaLogger.d(PersonaLogTags.IMPORT, "Messages parsed")
 
             // ── Data Quality Gate ───────────────────────────────
             if (messages.size < Constants.MIN_MESSAGES_REQUIRED) {
@@ -108,6 +116,7 @@ class ChatImportWorker @AssistedInject constructor(
             reportProgress(ImportProgress.ImportPhase.PARSING_MESSAGES, 0, 0, 0, messages.size)
 
             val processed = messageProcessor.process(messages)
+            PersonaLogger.d(PersonaLogTags.IMPORT, "Messages grouped")
 
             // ── Phase 4: Load model ─────────────────────────────
             if (!modelManager.isLoaded()) {
@@ -117,12 +126,9 @@ class ChatImportWorker @AssistedInject constructor(
                 }
             }
 
-            // Identify the contact name (the most frequent sender who is not the user)
+            // Identify the contact name (the unique non-owner sender name)
             val contactName = parsed.messages
-                .filter { !it.isUserMessage }
-                .groupingBy { it.senderName }
-                .eachCount()
-                .maxByOrNull { it.value }?.key ?: "Unknown"
+                .firstOrNull { !it.isUserMessage }?.senderName ?: "Unknown"
 
             // ── Phase 5: Clear old data ─────────────────────────
             embeddingDao.deleteEmbeddingsForContact(contactName)
@@ -131,12 +137,12 @@ class ChatImportWorker @AssistedInject constructor(
             // ── Phase 6: Persist all messages to DB ─────────────
             reportProgress(ImportProgress.ImportPhase.PERSISTING, 0, 0, 0, processed.size)
 
-            val messageEntities = processed.map { it.toEntity() }
+            val messageEntities = processed.map { it.toEntity(contactName) }
             chatMessageDao.insertAll(messageEntities)
 
-            // Re-query user messages to get database auto-generated IDs
-            val storedUserMessages = chatMessageDao.getUserMessagesForContact(contactName)
-            val totalBatches = (storedUserMessages.size + Constants.EMBEDDING_BATCH_SIZE - 1) /
+            // Re-query user messages to get database auto-generated IDs and their corresponding triggers
+            val storedUserMessagesWithTriggers = chatMessageDao.getUserMessagesWithTriggersForContact(contactName)
+            val totalBatches = (storedUserMessagesWithTriggers.size + Constants.EMBEDDING_BATCH_SIZE - 1) /
                 Constants.EMBEDDING_BATCH_SIZE
 
             // ── Phase 7: Batched embedding generation ───────────
@@ -145,24 +151,24 @@ class ChatImportWorker @AssistedInject constructor(
                 if (isStopped) return@withContext Result.failure()
 
                 val start = batchIndex * Constants.EMBEDDING_BATCH_SIZE
-                val end = minOf(start + Constants.EMBEDDING_BATCH_SIZE, storedUserMessages.size)
-                val batch = storedUserMessages.subList(start, end)
+                val end = minOf(start + Constants.EMBEDDING_BATCH_SIZE, storedUserMessagesWithTriggers.size)
+                val batch = storedUserMessagesWithTriggers.subList(start, end)
 
                 reportProgress(
                     ImportProgress.ImportPhase.EMBEDDING,
                     batchIndex + 1, totalBatches,
-                    processedCount, storedUserMessages.size
+                    processedCount, storedUserMessagesWithTriggers.size
                 )
 
-                // Generate embeddings
-                val textsToEmbed = batch.map { it.normalizedText ?: it.messageText }
+                // Generate embeddings (Embed the TRIGGER text, fallback to message text if no trigger)
+                val textsToEmbed = batch.map { it.triggerText ?: (it.message.normalizedText ?: it.message.messageText) }
                 val embeddings = embeddingEngine.embedBatch(textsToEmbed)
 
                 // Save embeddings
-                val embeddingEntities = batch.zip(embeddings).mapNotNull { (msg, vec) ->
+                val embeddingEntities = batch.zip(embeddings).mapNotNull { (item, vec) ->
                     vec?.let {
                         EmbeddingEntity(
-                            messageId = msg.id,
+                            messageId = item.message.id,
                             vector = it,
                             modelVersion = EmbeddingEntity.CURRENT_MODEL_VERSION,
                             createdAt = Clock.System.now()
@@ -176,6 +182,7 @@ class ChatImportWorker @AssistedInject constructor(
                 // Free memory
                 System.gc()
             }
+            PersonaLogger.d(PersonaLogTags.IMPORT, "Embeddings generated")
 
             // ── Phase 8: Register linked contact ────────────────
             linkedContactDao.insert(
@@ -192,22 +199,28 @@ class ChatImportWorker @AssistedInject constructor(
 
             // ── Phase 9: SQLite WAL Checkpoint (Exactly Once) ──
             try {
-                database.openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
-                Log.i("ChatImportWorker", "WAL checkpoint executed successfully")
+                database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        Log.i("ChatImportWorker", "WAL checkpoint executed successfully: busy=${cursor.getInt(0)}, log=${cursor.getInt(1)}, checkpointed=${cursor.getInt(2)}")
+                    } else {
+                        Log.i("ChatImportWorker", "WAL checkpoint executed successfully")
+                    }
+                }
             } catch (e: Exception) {
-                Log.e("ChatImportWorker", "Failed to run WAL checkpoint", e)
+                Log.e("PersonaImport", "WAL Checkpoint Failed -> Exception: ${e.javaClass.simpleName} | Message: ${e.message}")
             }
 
             reportProgress(
                 ImportProgress.ImportPhase.COMPLETE,
                 totalBatches, totalBatches,
-                storedUserMessages.size, storedUserMessages.size
+                storedUserMessagesWithTriggers.size, storedUserMessagesWithTriggers.size
             )
+            PersonaLogger.d(PersonaLogTags.IMPORT, "Import completed")
 
             val outputData = workDataOf(
                 KEY_RESULT_CONTACT to contactName,
                 KEY_RESULT_TOTAL to processed.size,
-                KEY_RESULT_USER_MSGS to storedUserMessages.size,
+                KEY_RESULT_USER_MSGS to storedUserMessagesWithTriggers.size,
                 KEY_RESULT_FORMAT to parsed.format.name
             )
 
@@ -216,7 +229,7 @@ class ChatImportWorker @AssistedInject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e("ChatImportWorker", "Import failed", e)
+            Log.e("PersonaImport", "Global Import Core Failure -> Exception: ${e.javaClass.simpleName} | Message: ${e.message}")
             failWithError(e.message ?: "Unknown error")
         }
     }
@@ -241,8 +254,8 @@ class ChatImportWorker @AssistedInject constructor(
         ))
     }
 
-    private fun ParsedMessage.toEntity() = ChatMessageEntity(
-        contactName = senderName,
+    private fun ParsedMessage.toEntity(contact: String) = ChatMessageEntity(
+        contactName = contact,
         messageText = messageText,
         isUserMessage = isUserMessage,
         timestamp = timestamp,

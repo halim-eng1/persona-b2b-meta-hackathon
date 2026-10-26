@@ -34,6 +34,8 @@ sealed class AppException(
         AppException("Insufficient messages: found $found, need $required")
     data class ParseError(val line: Int, val detail: String) :
         AppException("Parse error at line $line: $detail")
+    data object OwnerNameNotConfigured :
+        AppException("Owner name not configured. Please set your WhatsApp display name in Settings.")
 
     // ── Business Logic ───────────────────────────────────────
     data class ContactLimitReached(val limit: Int) :

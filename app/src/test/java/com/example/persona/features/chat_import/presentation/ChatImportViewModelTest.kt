@@ -54,6 +54,7 @@ class ChatImportViewModelTest {
 
         assertEquals(mockUri, viewModel.uiState.value.selectedFileUri)
         assertNull(viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isOwnerNameMissing)
     }
 
     @Test
@@ -68,12 +69,25 @@ class ChatImportViewModelTest {
     @Test
     fun startImport_whenUseCaseReturnsError_updatesStateWithError() = runTest {
         viewModel.onFilePicked(mockUri)
-        coEvery { startImportUseCase(mockUri, "User") } returns Resource.Error(AppException.ContactLimitReached(1))
+        coEvery { startImportUseCase(mockUri) } returns Resource.Error(AppException.ContactLimitReached(1))
 
-        viewModel.startImport("User")
+        viewModel.startImport()
 
         assertFalse(viewModel.uiState.value.isImporting)
         assertEquals("Contact limit reached: 1", viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isOwnerNameMissing)
+    }
+
+    @Test
+    fun startImport_whenUseCaseReturnsOwnerNameNotConfigured_updatesStateWithErrorAndFlag() = runTest {
+        viewModel.onFilePicked(mockUri)
+        coEvery { startImportUseCase(mockUri) } returns Resource.Error(AppException.OwnerNameNotConfigured)
+
+        viewModel.startImport()
+
+        assertFalse(viewModel.uiState.value.isImporting)
+        assertEquals("Owner name not configured. Please set your WhatsApp display name in Settings.", viewModel.uiState.value.error)
+        assertTrue(viewModel.uiState.value.isOwnerNameMissing)
     }
 
     @Test
@@ -90,9 +104,9 @@ class ChatImportViewModelTest {
             .putInt(ChatImportWorker.KEY_TOTAL_MESSAGES, 1000)
             .build()
 
-        coEvery { startImportUseCase(mockUri, "User") } returns Resource.Success(flowOf(workInfo))
+        coEvery { startImportUseCase(mockUri) } returns Resource.Success(flowOf(workInfo))
 
-        viewModel.startImport("User")
+        viewModel.startImport()
 
         val state = viewModel.uiState.value
         assertTrue(state.isImporting)
@@ -102,5 +116,6 @@ class ChatImportViewModelTest {
         assertEquals(400, state.messagesProcessed)
         assertEquals(1000, state.totalMessages)
         assertEquals(0.4f, state.progressFraction, 0.001f)
+        assertFalse(state.isOwnerNameMissing)
     }
 }

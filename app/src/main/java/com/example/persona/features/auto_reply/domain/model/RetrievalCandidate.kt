@@ -7,5 +7,10 @@ data class RetrievalCandidate(
     val context: ConversationContext,
     val similarityScore: Float,
     val messageTimestamp: Long,
-    val contactId: Long
-)
+    val contactId: Long,
+    val triggerText: String = "",
+    val replyText: String = ""
+) {
+    val score: Float get() = similarityScore
+}
+

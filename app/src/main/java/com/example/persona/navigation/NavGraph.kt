@@ -5,21 +5,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
-
-import androidx.compose.runtime.remember
-import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.persona.features.auto_reply.presentation.audit.AuditLogScreen
 import com.example.persona.features.chat_import.presentation.ChatImportScreen
 import com.example.persona.features.chat_import.presentation.ChatImportProgressScreen
 import com.example.persona.features.chat_import.presentation.ChatImportViewModel
 import com.example.persona.features.home.presentation.HomeScreen
-
 import com.example.persona.features.onboarding.presentation.PermissionOnboardingScreen
+import com.example.persona.features.settings.presentation.SettingsScreen
 
 @Composable
 fun PersonaNavGraph(
@@ -31,6 +31,7 @@ fun PersonaNavGraph(
         startDestination = Screen.Home,
         modifier = modifier
     ) {
+        // ── Bottom nav destinations ───────────────────────────────────────────
         composable<Screen.Home> {
             HomeScreen(
                 onNavigateToImport = {
@@ -38,18 +39,24 @@ fun PersonaNavGraph(
                 }
             )
         }
+
         composable<Screen.Contacts> {
-            PlaceholderScreen(name = "Contacts Screen")
+            PlaceholderScreen(name = "Contacts — Phase 4")
         }
+
         composable<Screen.AuditLog> {
-            PlaceholderScreen(name = "Audit Log Screen")
+            AuditLogScreen()
         }
+
         composable<Screen.Settings> {
-            PlaceholderScreen(name = "Settings Screen")
+            SettingsScreen()
         }
+
+        // ── Full-screen destinations (no bottom bar) ──────────────────────────
         composable<Screen.Onboarding> {
-            PlaceholderScreen(name = "Onboarding Screen")
+            PlaceholderScreen(name = "Onboarding")
         }
+
         composable<Screen.ChatImport> { backStackEntry ->
             val viewModel: ChatImportViewModel = hiltViewModel(backStackEntry)
             ChatImportScreen(
@@ -57,9 +64,13 @@ fun PersonaNavGraph(
                 onImportStarted = {
                     navController.navigate(Screen.ChatImportProgress(""))
                 },
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToSettings = {
+                    navController.navigate(Screen.Settings)
+                }
             )
         }
+
         composable<Screen.ChatImportProgress> { backStackEntry ->
             val parentEntry = remember(backStackEntry) {
                 try {
@@ -83,6 +94,7 @@ fun PersonaNavGraph(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
+
         composable<Screen.PermissionSetup> {
             PermissionOnboardingScreen(
                 onComplete = {
@@ -92,6 +104,7 @@ fun PersonaNavGraph(
                 }
             )
         }
+
         composable<Screen.ContactDetail> { backStackEntry ->
             val args = backStackEntry.toRoute<Screen.ContactDetail>()
             PlaceholderScreen(name = "Contact Detail ID: ${args.contactId}")

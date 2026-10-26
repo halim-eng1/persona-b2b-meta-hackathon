@@ -118,8 +118,9 @@ fun PermissionOnboardingScreen(
                     isGranted = state.isNotificationListenerGranted,
                     onGrantClick = {
                         try {
-                            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
                             context.startActivity(intent)
                         } catch (e: Exception) {
                             // Fallback to general settings
@@ -322,7 +323,7 @@ private fun PermissionCard(
                         modifier = Modifier.size(24.dp)
                     )
                 } else {
-                    Icon(
+                    Icon(   
                         imageVector = Icons.Default.Warning,
                         contentDescription = "Missing",
                         tint = MaterialTheme.colorScheme.error,

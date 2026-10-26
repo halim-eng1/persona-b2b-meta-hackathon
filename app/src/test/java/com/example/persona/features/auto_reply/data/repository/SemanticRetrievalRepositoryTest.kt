@@ -2,6 +2,8 @@ package com.example.persona.features.auto_reply.data.repository
 
 import com.example.persona.core.database.dao.EmbeddingDao
 import com.example.persona.core.database.dao.LinkedContactDao
+import com.example.persona.core.database.dao.ChatMessageDao
+import com.example.persona.core.database.dao.ShortMessageReplyCandidate
 import com.example.persona.core.database.entity.EmbeddingWithMessage
 import com.example.persona.core.database.entity.LinkedContactEntity
 import com.example.persona.features.chat_import.domain.model.ConversationContext
@@ -20,7 +22,8 @@ class SemanticRetrievalRepositoryTest {
 
     private val embeddingDao = mockk<EmbeddingDao>()
     private val linkedContactDao = mockk<LinkedContactDao>()
-    private val repository = SemanticRetrievalRepository(embeddingDao, linkedContactDao)
+    private val chatMessageDao = mockk<ChatMessageDao>()
+    private val repository = SemanticRetrievalRepository(embeddingDao, linkedContactDao, chatMessageDao)
 
     @Test
     fun retrieveCandidates_contactNotLinked_returnsEmptyList(): Unit = runBlocking {
@@ -172,5 +175,61 @@ class SemanticRetrievalRepositoryTest {
 
         // Assert
         assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun retrieveShortMessageReply_safetyGuardAbortsIfUnderThreeMatches(): Unit = runBlocking {
+        val contact = LinkedContactEntity(
+            id = 42L,
+            whatsappDisplayName = "Alice",
+            isActive = true,
+            autoReplyEnabled = true,
+            cooldownCount = 0,
+            cooldownResetAt = null,
+            linkedAt = Instant.fromEpochMilliseconds(0)
+        )
+        coEvery { linkedContactDao.getByDisplayName("Alice") } returns contact
+        // Return only 2 exact match candidates
+        coEvery { chatMessageDao.getExactShortMessageReplies("Alice", "الو") } returns listOf(
+            ShortMessageReplyCandidate("نايم", Instant.fromEpochMilliseconds(1000L)),
+            ShortMessageReplyCandidate("مين معايا", Instant.fromEpochMilliseconds(2000L))
+        )
+        // Return 0 fuzzy matches
+        coEvery { chatMessageDao.getFuzzyShortMessageReplies("Alice", "الو") } returns emptyList()
+
+        val result = repository.retrieveShortMessageReply("Alice", "الو")
+
+        assertTrue(result == null)
+    }
+
+    @Test
+    fun retrieveShortMessageReply_exactMatchSanitizedAndWeightedSelection(): Unit = runBlocking {
+        val contact = LinkedContactEntity(
+            id = 42L,
+            whatsappDisplayName = "Alice",
+            isActive = true,
+            autoReplyEnabled = true,
+            cooldownCount = 0,
+            cooldownResetAt = null,
+            linkedAt = Instant.fromEpochMilliseconds(0)
+        )
+        coEvery { linkedContactDao.getByDisplayName("Alice") } returns contact
+
+        coEvery { chatMessageDao.getExactShortMessageReplies("Alice", "الو") } returns listOf(
+            ShortMessageReplyCandidate("نايم", Instant.fromEpochMilliseconds(1000L)),
+            ShortMessageReplyCandidate("مين معايا", Instant.fromEpochMilliseconds(2000L))
+        )
+        coEvery { chatMessageDao.getFuzzyShortMessageReplies("Alice", "الو") } returns listOf(
+            ShortMessageReplyCandidate("نايم", Instant.fromEpochMilliseconds(1000L)),
+            ShortMessageReplyCandidate("نايم", Instant.fromEpochMilliseconds(1500L)),
+            ShortMessageReplyCandidate("مين معايا", Instant.fromEpochMilliseconds(2000L))
+        )
+
+        val result = repository.retrieveShortMessageReply("Alice", "الو")
+
+        assertTrue(result != null)
+        assertTrue(result?.replyText == "نايم" || result?.replyText == "مين معايا")
+        assertEquals(42L, result?.contactId)
+        assertEquals("الو", result?.triggerText)
     }
 }

@@ -22,6 +22,12 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        ndk {
+            stl = "c++_shared"
+            abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a"))
+        }
+
     }
 
     buildTypes {
@@ -63,6 +69,12 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
         }
     }
 }
@@ -114,6 +126,8 @@ dependencies {
 
     // DJL Tokenizer
     implementation(libs.djl.tokenizers)
+    implementation(libs.djl.android.tokenizer.native)
+
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)

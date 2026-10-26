@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import android.content.Intent
 import com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener
 import com.example.persona.features.onboarding.domain.model.PermissionState
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -18,6 +19,17 @@ import javax.inject.Singleton
 class PermissionChecker @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    fun startNotificationListenerSettings(context: Context) {
+        try {
+            val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            context.startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
+    }
+
     fun isNotificationListenerEnabled(): Boolean {
         val componentName = ComponentName(context, WhatsAppNotificationListener::class.java)
         val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")

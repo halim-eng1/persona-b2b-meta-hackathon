@@ -1,5 +1,6 @@
 package com.example.persona.features.chat_import.data.parser
 
+import android.util.Log
 import com.example.persona.features.chat_import.domain.model.ChatFormat
 import com.example.persona.features.chat_import.domain.model.ConversationContext
 import com.example.persona.features.chat_import.domain.model.IntentType
@@ -23,8 +24,15 @@ class ChatFileParser @Inject constructor(
      */
     fun parse(
         lineSequence: Sequence<String>,
-        knownUserName: String? = null
+        ownerName: String
     ): ParseFileResult {
+        val cleanOwnerName = ownerName.replace(Regex("[\u200E\u200F\uFEFF]"), "")
+            .trim()
+            .removeSuffix(":")
+            .trim()
+        if (cleanOwnerName.isBlank()) {
+            throw IllegalStateException("Owner name not configured")
+        }
         val lineIterator = lineSequence.iterator()
         val sniffBuffer = mutableListOf<String>()
 
@@ -51,10 +59,11 @@ class ChatFileParser @Inject constructor(
                 } else {
                     raw.messageText
                 }
-                distinctSenders.add(raw.senderName)
+                val cleanSender = raw.senderName.replace(Regex("[\u200E\u200F\uFEFF]"), "").trim()
+                distinctSenders.add(cleanSender)
                 messages.add(
                     ParsedMessage(
-                        senderName = raw.senderName,
+                        senderName = cleanSender,
                         messageText = fullText.trim(),
                         timestamp = raw.timestamp,
                         isUserMessage = false, // resolved later
@@ -129,23 +138,35 @@ class ChatFileParser @Inject constructor(
             )
         }
 
-        // Resolve user identity: the most frequent sender is the user
-        val userName = knownUserName ?: resolveMostFrequentSender(messages)
-        val resolved = messages.map { it.copy(isUserMessage = it.senderName == userName) }
+        // Resolve user identity: match against ownerName
+        var matchCount = 0
+        val resolved = messages.map { msg ->
+            val senderNameCleaned = msg.senderName.replace(Regex("[\u200E\u200F\uFEFF]"), "")
+                .trim()
+                .removeSuffix(":")
+                .trim()
+
+            if (matchCount < 5) {
+                Log.d(
+                    "PersonaIdentity",
+                    "MATCH TEST -> Sender: '$senderNameCleaned' (Chars: ${senderNameCleaned.map { it.code }}), Owner: '$cleanOwnerName' (Chars: ${cleanOwnerName.map { it.code }})"
+                )
+                matchCount++
+            }
+
+            val isUserMsg = senderNameCleaned == cleanOwnerName
+            msg.copy(
+                senderName = senderNameCleaned,
+                isUserMessage = isUserMsg
+            )
+        }
 
         return ParseFileResult.Success(
             messages = resolved,
             format = format,
-            userName = userName,
+            userName = cleanOwnerName,
             skippedSystemMessages = skippedSystemCount
         )
-    }
-
-    private fun resolveMostFrequentSender(messages: List<ParsedMessage>): String {
-        return messages.groupingBy { it.senderName }
-            .eachCount()
-            .maxByOrNull { it.value }
-            .let { it?.key ?: "" }
     }
 }
 

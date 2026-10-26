@@ -24,24 +24,32 @@ class HuggingFaceTokenizer @Inject constructor(
      * Must be called once before any tokenize() call.
      */
     fun initialize() {
-        if (isInitialized) return
-        try {
-            val tempFile = java.io.File(context.cacheDir, "tokenizer.json")
-            context.assets.open(TOKENIZER_JSON_PATH).use { input ->
-                java.io.FileOutputStream(tempFile).use { output ->
-                    input.copyTo(output)
+        synchronized(this) {
+            if (isInitialized) return
+            try {
+                val tempFile = java.io.File(context.cacheDir, "tokenizer.json")
+                context.assets.open(TOKENIZER_JSON_PATH).use { input ->
+                    java.io.FileOutputStream(tempFile).use { output ->
+                        input.copyTo(output)
+                    }
                 }
+
+                // Force Application ClassLoader on the current thread to resolve JNI libs in Binder context
+                val appClassLoader = context.applicationContext.classLoader
+                Thread.currentThread().contextClassLoader = appClassLoader
+
+                tokenizer = ai.djl.huggingface.tokenizers.HuggingFaceTokenizer.builder()
+                    .optTokenizerPath(tempFile.toPath())
+                    .optMaxLength(MAX_SEQ_LENGTH)
+                    .optPadToMaxLength()
+                    .optTruncation(true)
+                    .build()
+                isInitialized = true
+                Log.i(TAG, "HuggingFace tokenizer loaded from tokenizer.json")
+            } catch (e: Throwable) {
+                Log.e(TAG, "Failed to initialize HuggingFaceTokenizer -> Exception: ${e.javaClass.simpleName} | Message: ${e.message}")
             }
-            tokenizer = ai.djl.huggingface.tokenizers.HuggingFaceTokenizer.builder()
-                .optTokenizerPath(tempFile.toPath())
-                .optMaxLength(MAX_SEQ_LENGTH)
-                .optPadToMaxLength()
-                .optTruncation(true)
-                .build()
-            isInitialized = true
-            Log.i(TAG, "HuggingFace tokenizer loaded from tokenizer.json")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize HuggingFaceTokenizer", e)
+
         }
     }
 
@@ -51,19 +59,26 @@ class HuggingFaceTokenizer @Inject constructor(
      * DJL handles [CLS]/[SEP] insertion, padding, and truncation internally.
      */
     fun tokenize(text: String): TokenizedInput {
-        check(isInitialized) { "Tokenizer not initialized. Call initialize() first." }
-        val encoding = tokenizer!!.encode(text)
-        return TokenizedInput(
-            inputIds = encoding.ids,
-            attentionMask = encoding.attentionMask,
-            tokenTypeIds = encoding.typeIds
-        )
+        if (!isInitialized) {
+            initialize()
+        }
+        synchronized(this) {
+            check(isInitialized) { "Tokenizer not initialized. Call initialize() first." }
+            val encoding = tokenizer!!.encode(text)
+            return TokenizedInput(
+                inputIds = encoding.ids,
+                attentionMask = encoding.attentionMask,
+                tokenTypeIds = encoding.typeIds
+            )
+        }
     }
 
     fun release() {
-        tokenizer?.close()
-        tokenizer = null
-        isInitialized = false
+        synchronized(this) {
+            tokenizer?.close()
+            tokenizer = null
+            isInitialized = false
+        }
     }
 }
 

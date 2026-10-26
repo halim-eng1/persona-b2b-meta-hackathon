@@ -4,7 +4,11 @@ import android.util.Log
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import android.content.Context
 import com.example.persona.core.di.AiInferenceDispatcher
+import com.example.persona.core.logging.PersonaLogger
+import com.example.persona.core.logging.PersonaLogTags
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -14,6 +18,7 @@ import javax.inject.Singleton
 class EmbeddingEngine @Inject constructor(
     private val modelManager: OnnxModelManager,
     private val tokenizer: HuggingFaceTokenizer,
+    @ApplicationContext private val context: Context,
     @AiInferenceDispatcher private val aiDispatcher: CoroutineDispatcher
 ) {
     companion object {
@@ -27,9 +32,18 @@ class EmbeddingEngine @Inject constructor(
      * Returns null if model is not loaded or inference fails.
      */
     suspend fun embed(text: String): FloatArray? = withContext(aiDispatcher) {
-        modelManager.withInferenceLock { session ->
+        PersonaLogger.d(PersonaLogTags.EMBEDDING, "Embedding request: batchSize=1")
+        val startTime = System.currentTimeMillis()
+        val result = modelManager.withInferenceLock { session ->
             runInference(session, text)
         }
+        val duration = System.currentTimeMillis() - startTime
+        val count = if (result != null) 1 else 0
+        PersonaLogger.d(
+            PersonaLogTags.EMBEDDING,
+            "Embedding completed: batchSize=1, embeddingCount=$count, durationMs=$duration"
+        )
+        result
     }
 
     /**
@@ -38,11 +52,25 @@ class EmbeddingEngine @Inject constructor(
      * Returns null on timeout — orchestrator falls back to suggestion.
      */
     suspend fun embedForAutoReply(text: String): FloatArray? = withContext(aiDispatcher) {
-        modelManager.withInferenceLock(
+        PersonaLogger.d(PersonaLogTags.EMBEDDING, "Embedding request: batchSize=1")
+        val startTime = System.currentTimeMillis()
+
+        // Force Application ClassLoader on the current thread to resolve JNI libs in Binder context
+        val appClassLoader = context.applicationContext.classLoader
+        Thread.currentThread().contextClassLoader = appClassLoader
+
+        val result = modelManager.withInferenceLock(
             timeoutMs = OnnxModelManager.REALTIME_INFERENCE_TIMEOUT_MS
         ) { session ->
             runInference(session, text)
         }
+        val duration = System.currentTimeMillis() - startTime
+        val count = if (result != null) 1 else 0
+        PersonaLogger.d(
+            PersonaLogTags.EMBEDDING,
+            "Embedding completed: batchSize=1, embeddingCount=$count, durationMs=$duration"
+        )
+        result
     }
 
     /**
@@ -51,13 +79,22 @@ class EmbeddingEngine @Inject constructor(
      * Acquires and releases the Mutex PER ITEM to yield to auto-reply.
      */
     suspend fun embedBatch(texts: List<String>): List<FloatArray?> = withContext(aiDispatcher) {
-        texts.map { text ->
+        PersonaLogger.d(PersonaLogTags.EMBEDDING, "Embedding request: batchSize=${texts.size}")
+        val startTime = System.currentTimeMillis()
+        val results = texts.map { text ->
             // Hidden #6: Release mutex between items so auto-reply
             // can acquire it within the 5s timeout window
             modelManager.withInferenceLock { session ->
                 runInference(session, text)
             }
         }
+        val duration = System.currentTimeMillis() - startTime
+        val count = results.count { it != null }
+        PersonaLogger.d(
+            PersonaLogTags.EMBEDDING,
+            "Embedding completed: batchSize=${texts.size}, embeddingCount=$count, durationMs=$duration"
+        )
+        results
     }
 
     /**
@@ -97,10 +134,11 @@ class EmbeddingEngine @Inject constructor(
 
             // Refactor #8: L2-normalize at storage time
             l2Normalize(pooled)
-        } catch (e: Exception) {
-            Log.e(TAG, "Inference failed", e)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Inference failed -> Exception: ${e.javaClass.simpleName} | Message: ${e.message}")
             null
         }
+
     }
 
     /**

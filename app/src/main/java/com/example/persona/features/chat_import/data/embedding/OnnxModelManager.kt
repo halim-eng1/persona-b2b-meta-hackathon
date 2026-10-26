@@ -15,6 +15,8 @@ import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
 import javax.inject.Singleton
 
+class ModelLoadException(val filePath: String, message: String, cause: Throwable? = null) : Exception(message, cause)
+
 @Singleton
 class OnnxModelManager @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -44,6 +46,31 @@ class OnnxModelManager @Inject constructor(
         loadLock.withLock {
             if (session != null) return@withContext true
 
+            val modelFile = java.io.File(context.filesDir, MODEL_PATH)
+
+            // Try to copy from assets to local filesDir if it does not exist
+            if (!modelFile.exists()) {
+                try {
+                    modelFile.parentFile?.mkdirs()
+                    context.assets.open(MODEL_PATH).use { input ->
+                        modelFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Log.i(TAG, "Successfully copied model from assets to ${modelFile.absolutePath}")
+                } catch (e: Exception) {
+                    Log.e("AiModel", "CRITICAL: Model file missing at expected path: ${modelFile.absolutePath}", e)
+                }
+            }
+
+            // Explicit Existence Check: Before calling OrtSession.create, explicitly check file.exists()
+            if (!modelFile.exists()) {
+                val absolutePath = modelFile.absolutePath
+                val errorMessage = "CRITICAL: Model file missing at expected path: $absolutePath"
+                Log.e("AiModel", errorMessage)
+                throw ModelLoadException(absolutePath, errorMessage)
+            }
+
             try {
                 environment = OrtEnvironment.getEnvironment()
                 val sessionOptions = OrtSession.SessionOptions().apply {
@@ -52,14 +79,13 @@ class OnnxModelManager @Inject constructor(
                     addConfigEntry("session.intra_op.allow_spinning", "0")
                 }
 
-                val modelBytes = context.assets.open(MODEL_PATH).use { it.readBytes() }
-                session = environment!!.createSession(modelBytes, sessionOptions)
+                session = environment!!.createSession(modelFile.absolutePath, sessionOptions)
 
-                Log.i(TAG, "ONNX model loaded successfully. Input: ${session!!.inputNames}")
+                Log.i(TAG, "ONNX model loaded successfully from file. Input: ${session!!.inputNames}")
                 true
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to load ONNX model", e)
-                false
+                Log.e("AiModel", "CRITICAL: Model file exists but failed to load. Details: ${e.message}", e)
+                throw e
             }
         }
     }

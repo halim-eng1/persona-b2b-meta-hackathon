@@ -31,7 +31,7 @@ class ChatFileParserTest {
             "3/25/24, 4:58 PM - Bob: Talk to you later"
         )
 
-        val result = fileParser.parse(lines.asSequence())
+        val result = fileParser.parse(lines.asSequence(), ownerName = "Bob")
         assertTrue(result is ParseFileResult.Success)
         val success = result as ParseFileResult.Success
         assertEquals(ChatFormat.WHATSAPP_ENGLISH_US, success.format)
@@ -51,7 +51,7 @@ class ChatFileParserTest {
             "3/25/24, 4:55 PM - Bob: Hello"
         )
 
-        val result = fileParser.parse(lines.asSequence())
+        val result = fileParser.parse(lines.asSequence(), ownerName = "Bob")
         assertTrue(result is ParseFileResult.Success)
         val success = result as ParseFileResult.Success
         assertEquals(2, success.messages.size)
@@ -68,7 +68,7 @@ class ChatFileParserTest {
             "3/25/24, 4:58 PM - Bob: تم حذف هذه الرسالة"
         )
 
-        val result = fileParser.parse(lines.asSequence())
+        val result = fileParser.parse(lines.asSequence(), ownerName = "Bob")
         assertTrue(result is ParseFileResult.Success)
         val success = result as ParseFileResult.Success
         assertEquals(1, success.messages.size)
@@ -76,17 +76,54 @@ class ChatFileParserTest {
     }
 
     @Test
-    fun parse_knownUserNameOverride_setsCorrectly() {
+    fun parse_withOwnerName_correctlyClassifiesUserMessages() {
         val lines = listOf(
             "3/25/24, 4:54 PM - Alice: Hello",
             "3/25/24, 4:55 PM - Bob: Hi"
         )
 
-        val result = fileParser.parse(lines.asSequence(), knownUserName = "Alice")
+        val result = fileParser.parse(lines.asSequence(), ownerName = "Alice")
         assertTrue(result is ParseFileResult.Success)
         val success = result as ParseFileResult.Success
         assertEquals("Alice", success.userName)
         assertTrue(success.messages[0].isUserMessage)
+        assertTrue(!success.messages[1].isUserMessage)
+    }
+
+    @Test
+    fun parse_withBlankOwnerName_throwsIllegalStateException() {
+        val lines = listOf(
+            "3/25/24, 4:54 PM - Alice: Hello",
+            "3/25/24, 4:55 PM - Bob: Hi"
+        )
+
+        try {
+            fileParser.parse(lines.asSequence(), ownerName = "")
+            fail("Should have thrown IllegalStateException")
+        } catch (e: IllegalStateException) {
+            assertEquals("Owner name not configured", e.message)
+        }
+    }
+
+    @Test
+    fun parse_whenOwnerSendsFewerMessages_stillResolvesCorrectly() {
+        val lines = listOf(
+            "3/25/24, 4:54 PM - Alice: Hello Bob",
+            "3/25/24, 4:55 PM - Bob: Hi Alice",
+            "3/25/24, 4:56 PM - Alice: Did you finish the task?",
+            "3/25/24, 4:57 PM - Alice: Bob?",
+            "3/25/24, 4:58 PM - Alice: Are you there?"
+        )
+
+        // Bob only sends 1 message, Alice sends 4. But Bob is the explicit owner.
+        val result = fileParser.parse(lines.asSequence(), ownerName = "Bob")
+        assertTrue(result is ParseFileResult.Success)
+        val success = result as ParseFileResult.Success
+        assertEquals("Bob", success.userName)
+        // Alice's message should not be flagged as user message
+        assertTrue(!success.messages[0].isUserMessage)
+        // Bob's message should be flagged as user message
+        assertTrue(success.messages[1].isUserMessage)
     }
 
     @Test
@@ -98,7 +135,7 @@ class ChatFileParserTest {
         )
 
         try {
-            fileParser.parse(lines.asSequence())
+            fileParser.parse(lines.asSequence(), ownerName = "Bob")
             fail("Should have thrown GroupChatNotSupportedException")
         } catch (e: GroupChatNotSupportedException) {
             assertTrue(e.message!!.contains("not supported"))
@@ -107,7 +144,7 @@ class ChatFileParserTest {
 
     @Test
     fun parse_emptyFile_returnsFormatError() {
-        val result = fileParser.parse(emptySequence())
+        val result = fileParser.parse(emptySequence(), ownerName = "Bob")
         assertTrue(result is ParseFileResult.FormatError)
     }
 
@@ -121,7 +158,7 @@ class ChatFileParserTest {
             .take(10000)
 
         val start = System.currentTimeMillis()
-        val result = fileParser.parse(largeSequence)
+        val result = fileParser.parse(largeSequence, ownerName = "Bob")
         val end = System.currentTimeMillis()
 
         assertTrue(result is ParseFileResult.Success)
