@@ -105,9 +105,8 @@ class StylePostProcessor @Inject constructor() {
         // Condense multiple spaces introduced by emoji removal
         result = result.replace(Regex("  +"), " ")
         // Ensure terminal punctuation
-        if (result.isNotEmpty() && !result.last().isLetterOrDigit().not()) {
-            // already has punctuation
-        } else if (result.isNotEmpty() && result.last().isLetterOrDigit()) {
+        val lastChar = result.lastOrNull()
+        if (lastChar != null && lastChar.isLetterOrDigit()) {
             result += "."
         }
         return result.trim()

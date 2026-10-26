@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.persona.R
 import com.example.persona.core.data.repository.UserPreferencesRepository
+import com.example.persona.core.database.Converters
 import com.example.persona.core.database.dao.ChatHistoryDao
 import com.example.persona.core.database.dao.FailedQueryDao
 import com.example.persona.core.database.dao.OrderDao
@@ -32,7 +33,6 @@ import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormalizer
-import com.example.persona.features.chat_import.domain.model.IntentType
 import com.example.persona.core.network.dto.AgenticLlmResponse
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -202,9 +202,13 @@ class AutoReplyOrchestrator @Inject constructor(
                     val latency = System.currentTimeMillis() - startTime
                     Log.i("PersonaMetrics", "metric=embedding_latency_ms value=$latency contact=${processed.contactName.hashCode()}")
                     if (embedding != null) {
-                        chatHistoryDao.updateEmbedding(insertedId, embedding)
-                        chatHistoryDao.updateEmbeddingState(insertedId, "DONE")
-                        Log.d(TAG, "Background embedding completed and saved for chatHistory id=$insertedId")
+                        val embeddingBlob = Converters().fromFloatArray(embedding)
+                        if (embeddingBlob != null) {
+                            chatHistoryDao.updateEmbeddingRaw(insertedId, embeddingBlob)
+                            Log.d(TAG, "Background embedding completed and saved for chatHistory id=$insertedId")
+                        } else {
+                            chatHistoryDao.updateEmbeddingState(insertedId, "FAILED")
+                        }
                     } else {
                         chatHistoryDao.updateEmbeddingState(insertedId, "FAILED")
                         Log.w(TAG, "Embedding returned null for chatHistory id=$insertedId")
@@ -258,21 +262,12 @@ class AutoReplyOrchestrator @Inject constructor(
             return
         }
 
-        // 7. Tier A Interception (Greetings/Farewells short-circuit)
-        val intent = processed.context.intent
-        if (intent == IntentType.GREETING) {
-            Log.i(TAG, "Greeting intent detected. Sending Tier A greeting template.")
-            val defaultGreeting = context.getString(R.string.greeting_template_default)
-            val template = prefsRepository.getGreetingTemplateSync(defaultGreeting)
-            sendImmediateReply(processed, template)
-            return
-        } else if (intent == IntentType.CLOSING) {
-            Log.i(TAG, "Closing intent detected. Sending Tier A farewell template.")
-            val defaultFarewell = context.getString(R.string.farewell_template_default)
-            val template = prefsRepository.getFarewellTemplateSync(defaultFarewell)
-            sendImmediateReply(processed, template)
-            return
-        }
+        // 7. Tier A Interception — intentional no-op:
+        // Greetings and farewells (IntentType.GREETING / IntentType.CLOSING) are
+        // NOT short-circuited to deterministic templates anymore. They flow
+        // through the RAG retrieval engine (step 8) and the LLM generation pass
+        // (step 10) so the bot engages conversationally with its dynamic AI
+        // persona, honoring the customer's language and conversation history.
 
         // 8. RAG Retrieval Engine
         val priorMessages = getPriorMessages(rawNotification)
@@ -412,7 +407,7 @@ class AutoReplyOrchestrator @Inject constructor(
             chatHistory = chatHistory,
             activeOrders = activeOrders,
             personalChunks = personalChunks,
-            maxTokens = 180
+            maxTokens = 600
         )
         if (rawLlmOutput.isNullOrBlank()) {
             Log.d(TAG, "LLM returned null/blank — all models failed. HITL fallback.")
@@ -427,15 +422,32 @@ class AutoReplyOrchestrator @Inject constructor(
         val agenticResponse = try {
             agenticJson.decodeFromString<AgenticLlmResponse>(sanitizedOutput)
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse agentic JSON, using raw text as reply: $sanitizedOutput", e)
-            null  // Graceful degradation — treat as raw reply text
+            // Malformed JSON / plain-text raw output must never reach the
+            // customer (broken JSON snippets like {"action":"REPLY"... are
+            // unacceptable UX). All decode failures degrade safely to HITL.
+            if (isLeakedReasoningText(sanitizedOutput)) {
+                Log.w(TAG, "Raw LLM output contains reasoning leakage — degrading safely to HITL: ${sanitizedOutput.take(200)}", e)
+            } else {
+                Log.w(TAG, "LLM output is not valid JSON — degrading safely to HITL (no raw-text fallback): ${sanitizedOutput.take(200)}", e)
+            }
+            buildUnsafeOutputHitlResponse()
+        }.let { response ->
+            // Guard against well-formed JSON whose final_reply_text itself
+            // leaks English chain-of-thought (e.g. free-tier reasoning models).
+            if (isLeakedReasoningText(response.finalReplyText)) {
+                PersonaLogger.w(PersonaLogTags.LLM, "Reasoning leakage in parsed final_reply_text — routing to HITL guard")
+                Log.w(TAG, "Reasoning leakage in parsed final_reply_text — overriding with HITL guard.")
+                buildUnsafeOutputHitlResponse()
+            } else {
+                response
+            }
         }
 
-        Log.i("PersonaMetrics", "metric=order_extraction_rate value=${if (agenticResponse?.extractedOrder != null) 1 else 0} contact=${processed.contactName.hashCode()}")
+        Log.i("PersonaMetrics", "metric=order_extraction_rate value=${if (agenticResponse.extractedOrder != null) 1 else 0} contact=${processed.contactName.hashCode()}")
 
         // 5.1 & 5.2 Order Ingestion & Deduplication Ingestion Routing
         var overriddenReplyText: String? = null
-        if (agenticResponse?.extractedOrder != null) {
+        if (agenticResponse.extractedOrder != null) {
             val extracted = agenticResponse.extractedOrder
             val normalizedCustomerName = normalizeField(extracted.customerName)
             val normalizedDeliveryAddress = normalizeField(extracted.deliveryAddress)
@@ -484,7 +496,7 @@ class AutoReplyOrchestrator @Inject constructor(
         } else {
             when {
                 // Case 0: Handover to human representative (LLM requested HITL)
-                agenticResponse?.action == "HITL" -> {
+                agenticResponse.action == "HITL" -> {
                     Log.i(TAG, "LLM action=HITL. Triggering alarm and hand-off notification.")
                     triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
                     try {
@@ -514,13 +526,13 @@ class AutoReplyOrchestrator @Inject constructor(
                 }
 
                 // Case 1: Valid REPLY action
-                agenticResponse?.action == "REPLY" && !agenticResponse.finalReplyText.isNullOrBlank() -> {
+                agenticResponse.action == "REPLY" && !agenticResponse.finalReplyText.isNullOrBlank() -> {
                     Log.i(TAG, "LLM action=REPLY. Dispatching final reply.")
                     agenticResponse.finalReplyText
                 }
 
                 // Case 2: RE_QUERY — execute one agentic loopback
-                agenticResponse?.action == "RE_QUERY" && !agenticResponse.refinedSearchKeyword.isNullOrBlank() -> {
+                agenticResponse.action == "RE_QUERY" && !agenticResponse.refinedSearchKeyword.isNullOrBlank() -> {
                     Log.i(TAG, "LLM action=RE_QUERY. Refined keyword: '${agenticResponse.refinedSearchKeyword}'")
                     PersonaLogger.d(PersonaLogTags.LLM, "RE_QUERY loop triggered")
 
@@ -552,7 +564,7 @@ class AutoReplyOrchestrator @Inject constructor(
                                 chatHistory = chatHistory,
                                 activeOrders = activeOrders,
                                 personalChunks = personalChunks,
-                                maxTokens = 350
+                                maxTokens = 750
                             )
 
                             if (finalOutput.isNullOrBlank()) {
@@ -563,10 +575,23 @@ class AutoReplyOrchestrator @Inject constructor(
                                 val finalParsed = try {
                                     agenticJson.decodeFromString<AgenticLlmResponse>(sanitizedFinal)
                                 } catch (_: Exception) {
-                                    null
+                                    // Malformed/non-JSON final output must never reach
+                                    // the customer — degrade safely to HITL.
+                                    Log.w(TAG, "LLM final output is not valid JSON — degrading safely to HITL (no raw-text fallback): ${sanitizedFinal.take(200)}")
+                                    buildUnsafeOutputHitlResponse()
+                                }.let { response ->
+                                    // Guard against well-formed JSON whose final_reply_text
+                                    // itself leaks English chain-of-thought.
+                                    if (isLeakedReasoningText(response.finalReplyText)) {
+                                        PersonaLogger.w(PersonaLogTags.LLM, "Reasoning leakage in final-pass final_reply_text — routing to HITL guard")
+                                        Log.w(TAG, "Reasoning leakage in final-pass final_reply_text — overriding with HITL guard.")
+                                        buildUnsafeOutputHitlResponse()
+                                    } else {
+                                        response
+                                    }
                                 }
 
-                                if (finalParsed?.action == "HITL") {
+                                if (finalParsed.action == "HITL") {
                                     Log.i(TAG, "Second-pass LLM action=HITL. Handing off to human.")
                                     triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
                                     try {
@@ -595,18 +620,19 @@ class AutoReplyOrchestrator @Inject constructor(
                                     return
                                 }
 
-                                // Use parsed finalReplyText, or fall back to raw output
-                                finalParsed?.finalReplyText ?: finalOutput
+                                // Use parsed finalReplyText; a parsed-but-blank reply
+                                // degrades to the safe HITL guard instead of leaking
+                                // raw LLM output.
+                                finalParsed.finalReplyText ?: buildUnsafeOutputHitlResponse().finalReplyText
                             }
                         }
                     }
                 }
 
-                // Case 3: Graceful degradation — unparseable JSON, use raw LLM text
-                agenticResponse == null -> {
-                    Log.i(TAG, "Using raw LLM output as reply (JSON parse failed)")
-                    sanitizedOutput
-                }
+                // Case 3: removed — with the decode-failure HITL guard above,
+                // raw LLM text is never dispatched as a reply. Any parsed but
+                // unroutable response falls through to `null`, which triggers
+                // the standard HITL fallback below.
 
                 else -> null
             }
@@ -665,8 +691,12 @@ class AutoReplyOrchestrator @Inject constructor(
                             val latency = System.currentTimeMillis() - startTime
                             Log.i("PersonaMetrics", "metric=embedding_latency_ms value=$latency contact=${processed.contactName.hashCode()}")
                             if (embedding != null) {
-                                chatHistoryDao.updateEmbedding(botInsertedId, embedding)
-                                chatHistoryDao.updateEmbeddingState(botInsertedId, "DONE")
+                                val embeddingBlob = Converters().fromFloatArray(embedding)
+                                if (embeddingBlob != null) {
+                                    chatHistoryDao.updateEmbeddingRaw(botInsertedId, embeddingBlob)
+                                } else {
+                                    chatHistoryDao.updateEmbeddingState(botInsertedId, "FAILED")
+                                }
                             } else {
                                 chatHistoryDao.updateEmbeddingState(botInsertedId, "FAILED")
                             }
@@ -730,8 +760,12 @@ class AutoReplyOrchestrator @Inject constructor(
                             val latency = System.currentTimeMillis() - startTime
                             Log.i("PersonaMetrics", "metric=embedding_latency_ms value=$latency contact=${processed.contactName.hashCode()}")
                             if (embedding != null) {
-                                chatHistoryDao.updateEmbedding(botInsertedId, embedding)
-                                chatHistoryDao.updateEmbeddingState(botInsertedId, "DONE")
+                                val embeddingBlob = Converters().fromFloatArray(embedding)
+                                if (embeddingBlob != null) {
+                                    chatHistoryDao.updateEmbeddingRaw(botInsertedId, embeddingBlob)
+                                } else {
+                                    chatHistoryDao.updateEmbeddingState(botInsertedId, "FAILED")
+                                }
                             } else {
                                 chatHistoryDao.updateEmbeddingState(botInsertedId, "FAILED")
                             }
@@ -854,6 +888,41 @@ class AutoReplyOrchestrator @Inject constructor(
         }
         return cleaned.trim()
     }
+
+    /**
+     * English chain-of-thought markers indicating reasoning-token leakage in
+     * LLM output. Checked both on raw output (when JSON decoding fails) and
+     * on parsed `final_reply_text` from well-formed JSON, as a last line of
+     * defense before anything would reach the customer on WhatsApp.
+     */
+    private val REASONING_LEAK_MARKERS = listOf(
+        "the user is asking",
+        "looking at the knowledge",
+        "as an ai",
+        "context provided",
+        "thinking process",
+        "i need to"
+    )
+
+    /**
+     * Detects English chain-of-thought / reasoning leakage in any LLM text
+     * (raw output or a parsed `final_reply_text`). Case-insensitive.
+     */
+    private fun isLeakedReasoningText(text: String?): Boolean {
+        if (text.isNullOrBlank()) return false
+        val lowered = text.lowercase()
+        return REASONING_LEAK_MARKERS.any { lowered.contains(it) }
+    }
+
+    /**
+     * Deterministic safe degradation for unparseable / reasoning-leaking LLM
+     * output: an apologetic HITL hand-off. Uses the exact canonical suffix
+     * checked by [ensureHitlSuffix] so the phrase is never appended twice.
+     */
+    private fun buildUnsafeOutputHitlResponse(): AgenticLlmResponse = AgenticLlmResponse(
+        action = "HITL",
+        finalReplyText = "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
+    )
 
     private fun getPriorMessages(current: WhatsAppNotification): List<String> {
         val timeLimitMs = CONTEXT_WINDOW_MINUTES * 60 * 1000L

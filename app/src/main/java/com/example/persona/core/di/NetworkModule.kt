@@ -25,6 +25,9 @@ object NetworkModule {
                 ignoreUnknownKeys = true
                 isLenient = true
                 prettyPrint = false
+                // Required so reasoning-suppression fields (include_reasoning,
+                // reasoning) with default values are actually sent to OpenRouter.
+                encodeDefaults = true
             })
         }
         install(Logging) {

@@ -78,8 +78,8 @@ interface ChatHistoryDao {
      * Backfills the [embedding] BLOB for a specific row after the background ONNX job completes.
      * Called only after a successful [claimForProcessing] and successful inference result.
      */
-    @Query("UPDATE chat_history SET embedding = :embedding WHERE id = :id")
-    suspend fun updateEmbedding(id: Long, embedding: FloatArray)
+    @Query("UPDATE chat_history SET embedding = :embeddingBlob, embedding_state = 'DONE' WHERE id = :id")
+    suspend fun updateEmbeddingRaw(id: Long, embeddingBlob: ByteArray)
 
     /**
      * Transitions the [embeddingState] column for a specific row.
