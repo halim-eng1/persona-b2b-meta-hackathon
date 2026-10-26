@@ -20,6 +20,7 @@ import com.example.persona.core.database.dao.BusinessKnowledgeDao
 import com.example.persona.core.database.dao.EmbeddingIndexDao
 import com.example.persona.core.database.entity.BusinessKnowledgeEntity
 import com.example.persona.core.database.entity.EmbeddingIndexEntity
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.di.IoDispatcher
 import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.logging.PersonaLogTags
@@ -27,6 +28,7 @@ import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
 import com.example.persona.features.chat_import.data.parser.KnowledgeChunk
 import com.example.persona.features.chat_import.data.parser.MarkdownChunker
+import com.example.persona.features.chat_import.data.parser.StoreTopicsExtractor
 import com.example.persona.features.chat_import.domain.model.ImportProgress
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -60,6 +62,7 @@ class ChatImportWorker @AssistedInject constructor(
     private val businessKnowledgeDao: BusinessKnowledgeDao,
     private val embeddingIndexDao: EmbeddingIndexDao,
     private val database: PersonaDatabase,
+    private val userPreferencesRepository: UserPreferencesRepository,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : CoroutineWorker(context, params) {
 
@@ -171,6 +174,19 @@ class ChatImportWorker @AssistedInject constructor(
             }
 
             PersonaLogger.d(PersonaLogTags.IMPORT, "Chunks persisted: ${chunks.size}")
+
+            // ── Phase 3b: Store Topics Index (hierarchical indexing) ──────────
+            // Extract the Level-1 (#) headings of the imported document and persist
+            // them as the <store_topics> index consumed by PromptContextBuilder.
+            val extractedTopics = StoreTopicsExtractor.extract(rawText)
+            try {
+                userPreferencesRepository.setStoreKnowledgeTopics(extractedTopics)
+                PersonaLogger.i(PersonaLogTags.IMPORT, "Extracted and saved ${extractedTopics.size} store knowledge topics.")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                // Topics are a prompt-enhancement only; never fail the import for them.
+                PersonaLogger.w(PersonaLogTags.IMPORT, "Failed to persist store knowledge topics: ${e.message}")
+            }
 
             // ── Phase 4: Load model + Embed ───────────────────────────────────
             if (!modelManager.isLoaded()) {

@@ -27,6 +27,7 @@ import io.ktor.http.isSuccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
@@ -105,8 +106,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         internal fun buildSystemPromptWithContext(
             staticSystemPrompt: String,
             candidates: List<RetrievalCandidate>,
-            activeOrders: List<OrderEntity>
-        ): String = PromptContextBuilder.buildSystemPromptWithContext(staticSystemPrompt, candidates, activeOrders)
+            activeOrders: List<OrderEntity>,
+            storeTopics: List<String> = emptyList()
+        ): String = PromptContextBuilder.buildSystemPromptWithContext(staticSystemPrompt, candidates, activeOrders, storeTopics)
 
         internal fun formatHistoricalAssistantTurn(rawText: String): String =
             PromptContextBuilder.formatHistoricalAssistantTurn(rawText)
@@ -148,6 +150,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         personalChunks: List<ChatHistoryEntity>,
         maxTokens: Int
     ): String? {
+        val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
         val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
             botName = userPreferencesRepository.getBotNameSync(),
             storeName = userPreferencesRepository.getStoreNameSync()
@@ -155,7 +158,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val systemPromptWithContext = PromptContextBuilder.buildSystemPromptWithContext(
             staticSystemPrompt = baseSystemPrompt,
             candidates = candidates,
-            activeOrders = activeOrders
+            activeOrders = activeOrders,
+            storeTopics = storeTopics
         )
         val messages = PromptContextBuilder.buildOpenRouterMessages(
             systemPrompt = systemPromptWithContext,
@@ -174,6 +178,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         personalChunks: List<ChatHistoryEntity>,
         maxTokens: Int
     ): String? {
+        val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
         val baseSystemPrompt = PromptContextBuilder.buildFinalPassSystemPrompt(
             botName = userPreferencesRepository.getBotNameSync(),
             storeName = userPreferencesRepository.getStoreNameSync()
@@ -181,7 +186,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val systemPromptWithContext = PromptContextBuilder.buildSystemPromptWithContext(
             staticSystemPrompt = baseSystemPrompt,
             candidates = chunks,
-            activeOrders = activeOrders
+            activeOrders = activeOrders,
+            storeTopics = storeTopics
         )
         val messages = PromptContextBuilder.buildOpenRouterMessages(
             systemPrompt = systemPromptWithContext,

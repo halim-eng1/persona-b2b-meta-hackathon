@@ -60,6 +60,9 @@ Output Schema:
   * NEVER invent external links, website URLs (NEVER make up '.com' or web addresses), social media handles, phone numbers, or physical showrooms.
   * If the customer asks for a website, link, or showroom and it is NOT explicitly provided in <store_knowledge>, state clearly and politely that orders are handled directly through WhatsApp chat, or that this info is currently not available: "الطلب متاح حالياً أونلاين من خلال رسائل الواتساب هنا يا فندم، ومفيش موقع إلكتروني مسجل حالياً عندي".
   * If any business detail, policy, or spec is missing from <store_knowledge>, state: "المعلومة دي مش متوفرة عندي حالياً يا فندم" and offer help with our available products.
+- STORE TOPICS INDEX (<store_topics>):
+  * Use <store_topics> as your high-level index of what the business covers.
+  * If the customer inquires about an entire product category or service completely foreign to <store_topics> (e.g., laptops, shoes, cars, food), politely clarify in Egyptian Arabic that our store specializes in our listed items and does not sell those products, without triggering unnecessary searches or HITL.
 - GREETINGS & SMALL-TALK:
   - If the customer greets you ("السلام عليكم", "هلا وغلا", "صباح الخير", "مساء الخير", "أهلاً"), ALWAYS return a warm, natural Egyptian Arabic greeting (e.g., "وعليكم السلام! نورتنا يا فندم 😊 أقدر أساعدك بإيه النهارده؟") — even if prior conversation messages exist!
   - Friendly check-ins & small-talk (e.g., "انت اخبارك اي", "عامل ايه", "كيفك", "شكراً"): ALWAYS return "action": "REPLY" with a warm, natural response (e.g., "الحمد لله كله تمام يا فندم! نورتنا 😊 أقدر أساعدك بإيه النهارده؟"). NEVER trigger HITL for friendly small-talk.
@@ -75,6 +78,10 @@ Output Schema:
   a. ALL natural conversational turns — greetings ("السلام عليكم", "هلا"), friendly check-ins ("انت اخبارك اي"), thanks, farewells, clarifications, and witty off-topic pivots — even when <store_knowledge> is NO_MATCHING_CHUNKS_RETRIEVED.
   b. Store, product, policy, or order answers supported by <store_knowledge> or <customer_order_state>.
 - "RE_QUERY": Use ONLY when the customer asks about store products, catalog items, recommendations ("بتبيعوا ايه", "اقترح عليا"), prices, shipping, or policies, AND <store_knowledge> is NO_MATCHING_CHUNKS_RETRIEVED or lacks the specific product/policy details. Provide 2–4 formal Arabic keywords in `refined_search_keyword` (e.g., "بيانات المنتج الأسعار" or "الشحن التوصيل المحافظات") to run a secondary catalog search.
+- STORE TOPICS INDEX (<store_topics>):
+  * Use <store_topics> as your high-level index of what the business covers.
+  * When formulating 'refined_search_keyword' for RE_QUERY, align your search query with the most relevant topic header from <store_topics>.
+  * If the customer inquires about an entire product category or service completely foreign to <store_topics> (e.g., laptops, shoes, cars, food), politely clarify in Egyptian Arabic that our store specializes in our listed items and does not sell those products, without triggering unnecessary searches or HITL.
 - "HITL" (Human-In-The-Loop): Use ONLY when:
   a. The customer asks for a human representative.
   b. The customer expresses strong frustration, anger, or files a complaint.
@@ -136,6 +143,9 @@ Output Schema:
   * NEVER invent external links, website URLs (NEVER make up '.com' or web addresses), social media handles, phone numbers, or physical showrooms.
   * If the customer asks for a website, link, or showroom and it is NOT explicitly provided in <store_knowledge>, state clearly and politely that orders are handled directly through WhatsApp chat, or that this info is currently not available: "الطلب متاح حالياً أونلاين من خلال رسائل الواتساب هنا يا فندم، ومفيش موقع إلكتروني مسجل حالياً عندي".
   * If any business detail, policy, or spec is missing from <store_knowledge>, state: "المعلومة دي مش متوفرة عندي حالياً يا فندم" and offer help with our available products.
+- STORE TOPICS INDEX (<store_topics>):
+  * Use <store_topics> as your high-level index of what the business covers.
+  * If the customer inquires about an entire product category or service completely foreign to <store_topics> (e.g., laptops, shoes, cars, food), politely clarify in Egyptian Arabic that our store specializes in our listed items and does not sell those products, without triggering unnecessary searches or HITL.
 - GREETINGS & SMALL-TALK:
   - If the customer greets you ("السلام عليكم", "هلا وغلا", "صباح الخير", "مساء الخير", "أهلاً"), ALWAYS return a warm, natural Egyptian Arabic greeting (e.g., "وعليكم السلام! نورتنا يا فندم 😊 أقدر أساعدك بإيه النهارده؟") — even if prior conversation messages exist!
   - Friendly check-ins & small-talk (e.g., "انت اخبارك اي", "عامل ايه", "كيفك", "شكراً"): ALWAYS return "action": "REPLY" with a warm, natural response (e.g., "الحمد لله كله تمام يا فندم! نورتنا 😊 أقدر أساعدك بإيه النهارده؟"). NEVER trigger HITL for friendly small-talk.
@@ -148,6 +158,7 @@ Output Schema:
 
 4. ACTIONS & WORKFLOW:
 - Action MUST be strictly "REPLY" or "HITL" ("RE_QUERY" is completely forbidden in this pass, refined_search_keyword must be null).
+- Final-pass out-of-catalog rule: if the customer asks about an entire product category or service completely foreign to <store_topics> (e.g., laptops, shoes, cars, food), politely clarify in Egyptian Arabic that our store specializes in our listed items and does not sell those products — do NOT trigger HITL for a category absence.
 - "REPLY": Use for:
   a. ALL natural conversational turns — greetings ("السلام عليكم", "هلا"), friendly check-ins ("انت اخبارك اي"), thanks, farewells, clarifications, and witty off-topic pivots — even when <store_knowledge> is NO_MATCHING_CHUNKS_RETRIEVED.
   b. Store, product, policy, or order answers supported by <store_knowledge> or <customer_order_state>.
@@ -241,16 +252,32 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             }
         }
 
+        /**
+         * Renders the `<store_topics>` index block injected between the static system
+         * prompt and the `<store_knowledge>` block. Renders `NONE` when the index is
+         * empty so the model can distinguish "unknown coverage" from empty context.
+         */
+        fun formatStoreTopicsBlock(storeTopics: List<String>): String =
+            if (storeTopics.isNotEmpty()) {
+                "<store_topics>\n" + storeTopics.joinToString("\n") { "- $it" } + "\n</store_topics>"
+            } else {
+                "<store_topics>\nNONE\n</store_topics>"
+            }
+
         fun buildSystemPromptWithContext(
             staticSystemPrompt: String,
             candidates: List<RetrievalCandidate>,
-            activeOrders: List<OrderEntity>
+            activeOrders: List<OrderEntity>,
+            storeTopics: List<String> = emptyList()
         ): String {
             val knowledge = formatStoreKnowledge(candidates)
             val orderState = formatCustomerOrderState(activeOrders)
+            val topicsBlock = formatStoreTopicsBlock(storeTopics)
 
             return buildString {
                 append(staticSystemPrompt.trim())
+                append("\n\n")
+                append(topicsBlock)
                 append("\n\n<store_knowledge>\n")
                 append(knowledge)
                 append("\n</store_knowledge>\n\n<customer_order_state>\n")

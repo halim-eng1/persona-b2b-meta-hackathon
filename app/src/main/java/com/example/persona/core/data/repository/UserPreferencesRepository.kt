@@ -55,6 +55,10 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_BOT_NAME = stringPreferencesKey("bot_name")
         val KEY_STORE_NAME = stringPreferencesKey("store_name")
 
+        // ── Store Topics Index (hierarchical knowledge indexing) ──────────────
+        /** Newline-joined list of Level-1 (`#`) headings extracted from the imported knowledge document. */
+        private val STORE_KNOWLEDGE_TOPICS_KEY = stringPreferencesKey("store_knowledge_topics")
+
         const val DEFAULT_BOT_NAME = "مساعد المبيعات"
         const val DEFAULT_STORE_NAME = "متجرنا"
     }
@@ -102,6 +106,16 @@ class UserPreferencesRepository @Inject constructor(
         prefs[KEY_STORE_NAME]?.takeIf { it.isNotBlank() } ?: DEFAULT_STORE_NAME
     }
 
+    /**
+     * Store Topics Index: the Level-1 (`#`) section headings of the last imported
+     * knowledge document, exposed as a reactive list. Consumed by [PromptContextBuilder]
+     * to inject the `<store_topics>` block into the system prompt.
+     */
+    val storeKnowledgeTopicsFlow: Flow<List<String>> = dataStore.data.map { preferences ->
+        val raw = preferences[STORE_KNOWLEDGE_TOPICS_KEY] ?: ""
+        if (raw.isBlank()) emptyList() else raw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
     // ── Suspend setters ───────────────────────────────────────────────────────
 
     suspend fun setAutoReplyEnabled(enabled: Boolean) {
@@ -143,6 +157,23 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun setStoreName(name: String) {
         dataStore.edit { prefs -> prefs[KEY_STORE_NAME] = name.trim() }
+    }
+
+    /**
+     * Atomically persists the Store Topics Index (one topic per line).
+     * Overwrites any previous list — re-importing a knowledge document supersedes it.
+     */
+    suspend fun setStoreKnowledgeTopics(topics: List<String>) {
+        dataStore.edit { preferences ->
+            preferences[STORE_KNOWLEDGE_TOPICS_KEY] = topics.joinToString("\n")
+        }
+    }
+
+    /** Removes the Store Topics Index (called when the merchant clears/resets the Knowledge Base). */
+    suspend fun clearStoreKnowledgeTopics() {
+        dataStore.edit { preferences ->
+            preferences.remove(STORE_KNOWLEDGE_TOPICS_KEY)
+        }
     }
 
     // ── Sync readers (for worker/service contexts) ────────────────────────────

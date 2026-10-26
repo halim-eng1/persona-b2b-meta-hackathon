@@ -703,4 +703,86 @@ class ReplyGenerationRepositoryImplTest {
         assertTrue(first.contains("GENERALIZED OUT-OF-BOUNDS MARKETING RECOVERY"))
         assertTrue(final.contains("GENERALIZED OUT-OF-BOUNDS MARKETING RECOVERY"))
     }
+
+    @Test
+    fun `system prompts reference the store topics index rules in both passes`() {
+        val first = ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS
+        val final = ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS
+
+        listOf(first, final).forEach { prompt ->
+            assertTrue("STORE TOPICS INDEX rule must be present", prompt.contains("STORE TOPICS INDEX (<store_topics>):"))
+            assertTrue(
+                "Foreign-category clarification rule must be present",
+                prompt.contains("completely foreign to <store_topics>")
+            )
+        }
+
+        // RE_QUERY alignment rule only makes sense in the first pass (RE_QUERY allowed there)
+        assertTrue(
+            ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS.contains(
+                "align your search query with the most relevant topic header from <store_topics>"
+            )
+        )
+    }
+
+    @Test
+    fun `buildSystemPromptWithContext renders the store_topics block with real topics before store_knowledge`() {
+        val topics = listOf("تعريف النشاط التجاري", "كتالوج المنتجات والأسعار الرسمية", "سياسات الشحن والتوصيل")
+        val candidates = listOf(
+            RetrievalCandidate(
+                chunkId = "c1",
+                headerContext = "سياسات الشحن والتوصيل > نطاق القاهرة الكبرى",
+                chunkText = "شحن القاهرة 50 جنيه",
+                similarityScore = 0.7f,
+                baseSimilarityScore = 0.7f
+            )
+        )
+
+        val systemPromptWithContext = ReplyGenerationRepositoryImpl.buildSystemPromptWithContext(
+            staticSystemPrompt = ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS,
+            candidates = candidates,
+            activeOrders = emptyList(),
+            storeTopics = topics
+        )
+
+        val expectedBlock =
+            "<store_topics>\n" +
+                "- تعريف النشاط التجاري\n" +
+                "- كتالوج المنتجات والأسعار الرسمية\n" +
+                "- سياسات الشحن والتوصيل\n" +
+                "</store_topics>"
+        assertTrue(systemPromptWithContext.contains(expectedBlock))
+        assertFalse("Real topics must not render the NONE placeholder", systemPromptWithContext.contains("\nNONE\n"))
+
+        // The topics block must sit between the static rules and <store_knowledge>.
+        // lastIndexOf() targets the dynamically injected blocks, not mentions of these
+        // tags inside the static rule text.
+        val topicsIndex = systemPromptWithContext.lastIndexOf("<store_topics>")
+        val knowledgeIndex = systemPromptWithContext.lastIndexOf("<store_knowledge>")
+        assertTrue(topicsIndex != -1)
+        assertTrue("store_topics must precede store_knowledge", topicsIndex < knowledgeIndex)
+
+        // store_knowledge content remains intact
+        assertTrue(systemPromptWithContext.contains("شحن القاهرة 50 جنيه"))
+        assertTrue(systemPromptWithContext.contains("<customer_order_state>"))
+    }
+
+    @Test
+    fun `buildSystemPromptWithContext renders NONE placeholder when store topics are absent`() {
+        val systemPromptWithContext = ReplyGenerationRepositoryImpl.buildSystemPromptWithContext(
+            staticSystemPrompt = ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS,
+            candidates = emptyList(),
+            activeOrders = emptyList(),
+            storeTopics = emptyList()
+        )
+
+        assertTrue(systemPromptWithContext.contains("<store_topics>\nNONE\n</store_topics>"))
+        assertTrue(systemPromptWithContext.contains("NO_MATCHING_CHUNKS_RETRIEVED"))
+
+        // lastIndexOf() targets the dynamically injected block, not mentions of these
+        // tags inside the static rule text.
+        val topicsIndex = systemPromptWithContext.lastIndexOf("<store_topics>")
+        val knowledgeIndex = systemPromptWithContext.lastIndexOf("<store_knowledge>")
+        assertTrue("store_topics must precede store_knowledge", topicsIndex in 0 until knowledgeIndex)
+    }
 }
