@@ -1,14 +1,27 @@
 package com.example.persona.core.database
 
 import androidx.room.Database
-import androidx.room.Entity
-import androidx.room.PrimaryKey
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
+import com.example.persona.core.database.dao.*
+import com.example.persona.core.database.entity.*
 
-@Entity(tableName = "dummy_table")
-data class DummyEntity(
-    @PrimaryKey val id: Int = 1
+@Database(
+    entities = [
+        ChatMessageEntity::class,
+        EmbeddingEntity::class,
+        LinkedContactEntity::class,
+        ReplyLogEntity::class,
+        ReplyQueueEntity::class
+    ],
+    version = 1,
+    exportSchema = true
 )
-
-@Database(entities = [DummyEntity::class], version = 1, exportSchema = false)
-abstract class PersonaDatabase : RoomDatabase()
+@TypeConverters(Converters::class)
+abstract class PersonaDatabase : RoomDatabase() {
+    abstract fun chatMessageDao(): ChatMessageDao
+    abstract fun embeddingDao(): EmbeddingDao
+    abstract fun linkedContactDao(): LinkedContactDao
+    abstract fun replyLogDao(): ReplyLogDao
+    abstract fun replyQueueDao(): ReplyQueueDao
+}
