@@ -29,17 +29,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.ui.theme.chatColors
 
 @Composable
 fun AiThinkingIndicatorBubble(
     botName: String,
     modifier: Modifier = Modifier
 ) {
+    val chatColors = MaterialTheme.chatColors
     val infiniteTransition = rememberInfiniteTransition(label = "ai_thinking_dots")
 
     val dot1Alpha by infiniteTransition.animateFloat(
@@ -80,7 +81,7 @@ fun AiThinkingIndicatorBubble(
                 bottomStart = 16.dp,
                 bottomEnd = 4.dp
             ),
-            color = Color(0xFF1E293B),
+            color = chatColors.surface,
             tonalElevation = 2.dp
         ) {
             Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
@@ -88,7 +89,7 @@ fun AiThinkingIndicatorBubble(
                     Icon(
                         imageVector = Icons.Default.SmartToy,
                         contentDescription = null,
-                        tint = Color(0xFF2DD4BF),
+                        tint = chatColors.statusGenerating,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -101,7 +102,7 @@ fun AiThinkingIndicatorBubble(
                             fontWeight = FontWeight.SemiBold,
                             textDirection = TextDirection.Content
                         ),
-                        color = Color(0xFF2DD4BF)
+                        color = chatColors.statusGenerating
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
@@ -110,7 +111,7 @@ fun AiThinkingIndicatorBubble(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
                         ),
-                        color = Color(0xFF2DD4BF)
+                        color = chatColors.statusGenerating
                     )
                 }
 
@@ -124,19 +125,19 @@ fun AiThinkingIndicatorBubble(
                         modifier = Modifier
                             .size(7.dp)
                             .alpha(dot1Alpha)
-                            .background(Color(0xFF2DD4BF), CircleShape)
+                            .background(chatColors.statusGenerating, CircleShape)
                     )
                     Box(
                         modifier = Modifier
                             .size(7.dp)
                             .alpha(dot2Alpha)
-                            .background(Color(0xFF2DD4BF), CircleShape)
+                            .background(chatColors.statusGenerating, CircleShape)
                     )
                     Box(
                         modifier = Modifier
                             .size(7.dp)
                             .alpha(dot3Alpha)
-                            .background(Color(0xFF2DD4BF), CircleShape)
+                            .background(chatColors.statusGenerating, CircleShape)
                     )
                 }
             }

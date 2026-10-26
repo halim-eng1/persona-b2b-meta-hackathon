@@ -8,6 +8,8 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
@@ -38,6 +40,12 @@ private val LightColorScheme = lightColorScheme(
     onError = OnErrorLight
 )
 
+private val LocalChatColors = staticCompositionLocalOf { darkChatColors() }
+
+/** Chat-feature color roles; resolve with the current appearance (dark/light). */
+val MaterialTheme.chatColors: ChatColors
+    @Composable get() = LocalChatColors.current
+
 @Composable
 fun PersonaTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -53,10 +61,14 @@ fun PersonaTheme(
         else -> LightColorScheme
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = PersonaTypography,
-        shapes = PersonaShapes,
-        content = content
-    )
+    CompositionLocalProvider(
+        LocalChatColors provides if (darkTheme) darkChatColors() else lightChatColors()
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = PersonaTypography,
+            shapes = PersonaShapes,
+            content = content
+        )
+    }
 }

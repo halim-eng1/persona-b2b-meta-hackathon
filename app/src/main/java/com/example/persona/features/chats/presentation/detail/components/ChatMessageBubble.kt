@@ -9,16 +9,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.chats.presentation.detail.ChatMessageUiModel
+import com.example.persona.ui.theme.chatColors
 
 @Composable
 fun DateHeaderChip(dateText: String) {
+    val chatColors = MaterialTheme.chatColors
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -27,12 +28,12 @@ fun DateHeaderChip(dateText: String) {
     ) {
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = Color(0xFF1E293B)
+            color = chatColors.surface
         ) {
             Text(
                 text = dateText,
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = Color(0xFF94A3B8),
+                color = chatColors.statusIdle,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
         }
@@ -49,14 +50,15 @@ fun MessageBubble(
 ) {
     val isOutbound = !message.isFromUser
     val alignment = if (isOutbound) Alignment.CenterEnd else Alignment.CenterStart
+    val chatColors = MaterialTheme.chatColors
     val bubbleColor = if (isOutbound) {
         if (message.senderType == "MERCHANT_MANUAL") {
-            Color(0xFF025144)
+            chatColors.bubbleOutboundManual
         } else {
-            Color(0xFF005C4B)
+            chatColors.bubbleOutboundBot
         }
     } else {
-        Color(0xFF202C33)
+        chatColors.bubbleInbound
     }
 
     Box(
@@ -88,7 +90,7 @@ fun MessageBubble(
                                     Icons.Default.SmartToy
                                 },
                                 contentDescription = null,
-                                tint = Color(0xFF8696A0),
+                                tint = chatColors.onBubbleSubtle,
                                 modifier = Modifier.size(14.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
@@ -98,7 +100,7 @@ fun MessageBubble(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
                                 ),
-                                color = Color(0xFF8696A0)
+                                color = chatColors.onBubbleSubtle
                             )
                         }
                         Spacer(modifier = Modifier.height(2.dp))
@@ -108,7 +110,7 @@ fun MessageBubble(
                     if (message.hasMediaIndicator) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFF111B21),
+                            color = chatColors.mediaChip,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 4.dp)
@@ -120,14 +122,14 @@ fun MessageBubble(
                                 Icon(
                                     imageVector = Icons.Default.Attachment,
                                     contentDescription = null,
-                                    tint = Color(0xFF25D366),
+                                    tint = chatColors.accentText,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Media attached — view in WhatsApp app",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color(0xFF8696A0)
+                                    color = chatColors.neutral
                                 )
                             }
                         }
@@ -142,7 +144,7 @@ fun MessageBubble(
                         style = MaterialTheme.typography.bodyMedium.copy(
                             textDirection = TextDirection.ContentOrRtl
                         ),
-                        color = Color.White
+                        color = chatColors.onBubble
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -155,7 +157,7 @@ fun MessageBubble(
                         Text(
                             text = message.formattedTime,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            color = Color(0xFF8696A0)
+                            color = chatColors.onBubbleSubtle
                         )
 
                         if (isOutbound) {
@@ -165,7 +167,7 @@ fun MessageBubble(
                                     Icon(
                                         imageVector = Icons.Default.Schedule,
                                         contentDescription = "Sending",
-                                        tint = Color(0xFF8696A0),
+                                        tint = chatColors.onBubbleSubtle,
                                         modifier = Modifier.size(12.dp)
                                     )
                                 }
@@ -173,7 +175,7 @@ fun MessageBubble(
                                     Icon(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = "Sent",
-                                        tint = Color(0xFF53BDEB),
+                                        tint = chatColors.delivered,
                                         modifier = Modifier.size(14.dp)
                                     )
                                 }
@@ -181,7 +183,7 @@ fun MessageBubble(
                                     Icon(
                                         imageVector = Icons.Default.HourglassBottom,
                                         contentDescription = "Queued",
-                                        tint = Color(0xFFF59E0B),
+                                        tint = chatColors.statusPaused,
                                         modifier = Modifier.size(12.dp)
                                     )
                                 }
@@ -189,7 +191,7 @@ fun MessageBubble(
                                     Icon(
                                         imageVector = Icons.Default.Error,
                                         contentDescription = "Failed",
-                                        tint = Color(0xFFEF4444),
+                                        tint = chatColors.failed,
                                         modifier = Modifier.size(14.dp)
                                     )
                                 }
@@ -213,11 +215,11 @@ fun MessageBubble(
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = null,
-                            tint = Color(0xFFEF4444),
+                            tint = chatColors.failed,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Retry", color = Color(0xFFEF4444), style = MaterialTheme.typography.labelSmall)
+                        Text(text = "Retry", color = chatColors.failed, style = MaterialTheme.typography.labelSmall)
                     }
 
                     TextButton(
@@ -227,11 +229,11 @@ fun MessageBubble(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                             contentDescription = null,
-                            tint = Color(0xFF25D366),
+                            tint = chatColors.accentText,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Open in WhatsApp", color = Color(0xFF25D366), style = MaterialTheme.typography.labelSmall)
+                        Text(text = "Open in WhatsApp", color = chatColors.accentText, style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

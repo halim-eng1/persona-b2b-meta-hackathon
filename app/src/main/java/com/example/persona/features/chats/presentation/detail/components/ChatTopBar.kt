@@ -11,8 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.chats.presentation.detail.ReplyCapability
+import com.example.persona.ui.theme.chatColors
 
 @Composable
 fun CompactChatTopBar(
@@ -33,16 +35,19 @@ fun CompactChatTopBar(
     onToggleAi: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val chatColors = MaterialTheme.chatColors
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp),
-        color = Color(0xFF1E293B),
+            // Grows with the user's font scale: the two-line name/status column exceeds
+            // 56dp at large system font sizes, so 56dp is a floor, not a fixed height.
+            .heightIn(min = 56.dp),
+        color = chatColors.surface,
         shadowElevation = 2.dp
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -53,7 +58,7 @@ fun CompactChatTopBar(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = Color.White
+                    tint = chatColors.onSurface
                 )
             }
 
@@ -62,12 +67,12 @@ fun CompactChatTopBar(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF334155)),
+                    .background(chatColors.surfaceAlt),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = contactName.take(1).uppercase(),
-                    color = Color.White,
+                    color = chatColors.onSurface,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                 )
             }
@@ -85,7 +90,7 @@ fun CompactChatTopBar(
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
-                            color = Color.White
+                            color = chatColors.onSurface
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -95,14 +100,14 @@ fun CompactChatTopBar(
                     Surface(
                         shape = RoundedCornerShape(4.dp),
                         color = when (sourceClass.uppercase()) {
-                            "BUSINESS" -> Color(0xFF25D366)
-                            "MAIN_APP" -> Color(0xFF3B82F6)
-                            else -> Color(0xFF8B5CF6)
+                            "BUSINESS" -> chatColors.badgeBusiness
+                            "MAIN_APP" -> chatColors.badgeMainApp
+                            else -> chatColors.badgeOther
                         }
                     ) {
                         Text(
                             text = sourceClass.take(4),
-                            color = Color.White,
+                            color = chatColors.onBadge,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
@@ -116,10 +121,10 @@ fun CompactChatTopBar(
                 // Arabic/English name cannot invert the surrounding punctuation under
                 // the LTR root layout (BiDi first-strong rule).
                 val subtitleColor = when {
-                    isAiGenerating -> Color(0xFF2DD4BF)
-                    isAiPaused -> Color(0xFFF59E0B)
-                    replyCapability == ReplyCapability.READY_VIA_NOTIFICATION -> Color(0xFF4ADE80)
-                    else -> Color(0xFF94A3B8)
+                    isAiGenerating -> chatColors.statusGenerating
+                    isAiPaused -> chatColors.statusPaused
+                    replyCapability == ReplyCapability.READY_VIA_NOTIFICATION -> chatColors.statusReady
+                    else -> chatColors.statusIdle
                 }
 
                 Row(
@@ -128,20 +133,14 @@ fun CompactChatTopBar(
                 ) {
                     when {
                         isAiGenerating -> {
+                            // The thinking bubble in the stream says "…is generating reply…";
+                            // the top bar only carries who, so the sentence isn't said twice.
                             Text(
                                 text = botName,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 11.sp,
                                     textDirection = TextDirection.Content
                                 ),
-                                color = subtitleColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "is generating reply...",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                 color = subtitleColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -184,7 +183,8 @@ fun CompactChatTopBar(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Right row: Compact AI Auto-Reply Switch (0.75f scale) with clean label ("AI")
+            // Right row: AI Auto-Reply switch with clean label ("AI"). The switch is
+            // full-size (48dp enforced touch target) and self-describing for TalkBack.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(end = 4.dp)
@@ -193,18 +193,24 @@ fun CompactChatTopBar(
                     text = "AI",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = chatColors.onSurface
                     )
                 )
+                // Breathing room between label and switch: the label used to get its
+                // gap from the 0.75f switch scale, which no longer applies.
+                Spacer(modifier = Modifier.width(6.dp))
                 Switch(
                     checked = !isAiPaused,
                     onCheckedChange = { onToggleAi() },
-                    modifier = Modifier.scale(0.75f),
+                    modifier = Modifier.semantics {
+                        contentDescription = "AI auto-reply"
+                        stateDescription = if (isAiPaused) "Paused" else "Active"
+                    },
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = Color(0xFF22C55E),
-                        uncheckedThumbColor = Color(0xFF94A3B8),
-                        uncheckedTrackColor = Color(0xFF334155)
+                        checkedThumbColor = chatColors.onSurface,
+                        checkedTrackColor = chatColors.switchTrackChecked,
+                        uncheckedThumbColor = chatColors.statusIdle,
+                        uncheckedTrackColor = chatColors.surfaceAlt
                     )
                 )
             }

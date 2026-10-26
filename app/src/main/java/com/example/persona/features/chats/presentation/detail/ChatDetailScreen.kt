@@ -1,10 +1,10 @@
 package com.example.persona.features.chats.presentation.detail
 
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,9 +18,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -30,6 +32,8 @@ import com.example.persona.features.chats.presentation.detail.components.ChatCom
 import com.example.persona.features.chats.presentation.detail.components.CompactChatTopBar
 import com.example.persona.features.chats.presentation.detail.components.DateHeaderChip
 import com.example.persona.features.chats.presentation.detail.components.MessageBubble
+import com.example.persona.ui.theme.chatColors
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
@@ -44,11 +48,16 @@ fun ChatDetailScreen(
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
+    val chatColors = MaterialTheme.chatColors
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // Auto-scroll to bottom when messages list size changes, AI starts generating, or keyboard appears
+    // Auto-scroll to bottom when the message list grows, AI starts/stops generating, or the
+    // keyboard appears — but only when the user is already at (or near) the bottom, so
+    // reading history is never yanked away. First load: the fresh list can't scroll
+    // forward yet, so the initial position lands on the latest message.
     LaunchedEffect(state.messages.size, state.isAiGenerating, imeBottom) {
         val totalItems = state.messages.size + if (state.isAiGenerating) 1 else 0
-        if (totalItems > 0) {
+        if (totalItems > 0 && !listState.canScrollForward) {
             listState.animateScrollToItem(totalItems - 1)
         }
     }
@@ -56,13 +65,13 @@ fun ChatDetailScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0F172A))
+            .background(chatColors.background)
             .statusBarsPadding()
             .windowInsetsPadding(
                 WindowInsets.navigationBars.union(WindowInsets.ime).only(WindowInsetsSides.Bottom)
             )
     ) {
-        // Compact TopBar (fixed height 56.dp)
+        // Compact TopBar (56.dp floor; grows with font scale)
         CompactChatTopBar(
             contactName = state.contactName,
             sourceClass = state.sourceClass,
@@ -74,13 +83,20 @@ fun ChatDetailScreen(
             onToggleAi = { viewModel.toggleAiPaused() }
         )
 
-        // In-chat banner when AI is paused
+        // In-chat banner when AI is paused. Interactive: carries a button role, a tap
+        // label, and a state description so TalkBack announces affordance + state, and
+        // a 48dp minimum touch target (the content row is shorter than that).
         AnimatedVisibility(visible = state.isAiPaused) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { viewModel.toggleAiPaused() },
-                color = Color(0xFF334155)
+                    .heightIn(min = 48.dp)
+                    .semantics { stateDescription = "AI auto-reply is paused" }
+                    .clickable(
+                        role = Role.Button,
+                        onClickLabel = "Resume AI auto-reply"
+                    ) { viewModel.toggleAiPaused() },
+                color = chatColors.surfaceAlt
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
@@ -90,7 +106,7 @@ fun ChatDetailScreen(
                     Icon(
                         imageVector = Icons.Default.PauseCircle,
                         contentDescription = null,
-                        tint = Color(0xFFF59E0B),
+                        tint = chatColors.statusPaused,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -98,59 +114,69 @@ fun ChatDetailScreen(
                         text = "AI Auto-Reply paused for this chat — Tap to Resume",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Medium,
-                            color = Color.White
+                            color = chatColors.onSurface
                         )
                     )
                 }
             }
         }
 
-        // Messages Stream
-        LazyColumn(
-            state = listState,
+        // Messages Stream. The snackbar overlays the bottom of the list instead of taking
+        // layout space in the Column, so feedback never compresses the stream or shifts it.
+        Box(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxWidth()
         ) {
-            itemsIndexed(
-                items = state.messages,
-                key = { _, msg -> msg.id }
-            ) { index, msg ->
-                val prevMsg = state.messages.getOrNull(index - 1)
-                val showDateHeader = prevMsg == null || prevMsg.dateHeader != msg.dateHeader
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(
+                    items = state.messages,
+                    key = { _, msg -> msg.id }
+                ) { index, msg ->
+                    val prevMsg = state.messages.getOrNull(index - 1)
+                    val showDateHeader = prevMsg == null || prevMsg.dateHeader != msg.dateHeader
 
-                if (showDateHeader) {
-                    DateHeaderChip(dateText = msg.dateHeader)
+                    if (showDateHeader) {
+                        DateHeaderChip(dateText = msg.dateHeader)
+                    }
+
+                    MessageBubble(
+                        message = msg,
+                        botName = state.botName,
+                        onRetry = { viewModel.retryMessage(msg.id, msg.text) },
+                        onOpenWhatsApp = {
+                            val pkg = state.fallbackTargetPackage
+                                ?: if (state.sourceClass.uppercase() == "BUSINESS") "com.whatsapp.w4b" else "com.whatsapp"
+                            openWhatsAppFallback(context, snackbarHostState, coroutineScope, pkg, msg.text)
+                        }
+                    )
                 }
 
-                MessageBubble(
-                    message = msg,
-                    botName = state.botName,
-                    onRetry = { viewModel.retryMessage(msg.id, msg.text) },
-                    onOpenWhatsApp = {
-                        val pkg = state.fallbackTargetPackage
-                            ?: if (state.sourceClass.uppercase() == "BUSINESS") "com.whatsapp.w4b" else "com.whatsapp"
-                        openWhatsAppFallback(context, pkg, msg.text)
-                    }
-                )
-            }
-
-            if (state.isAiGenerating) {
-                item(key = "ai_thinking_indicator") {
-                    // Align to the outgoing (AI) side, matching the green bubble stream
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.CenterEnd
-                    ) {
-                        AiThinkingIndicatorBubble(
-                            botName = state.botName,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
+                if (state.isAiGenerating) {
+                    item(key = "ai_thinking_indicator") {
+                        // Align to the outgoing (AI) side, matching the green bubble stream
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            AiThinkingIndicatorBubble(
+                                botName = state.botName,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             }
+
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
 
         // Composer Bar (Root layout already handles imePadding)
@@ -158,34 +184,52 @@ fun ChatDetailScreen(
             inputText = state.inputText,
             isSending = state.isSending,
             onInputTextChanged = { viewModel.onInputTextChanged(it) },
-            onSendMessage = {
-                viewModel.sendMessage()
-                coroutineScope.launch {
-                    if (state.messages.isNotEmpty()) {
-                        listState.animateScrollToItem(state.messages.lastIndex)
-                    }
-                }
-            }
+            onSendMessage = { viewModel.sendMessage() }
         )
     }
 }
 
-private fun openWhatsAppFallback(context: Context, packageName: String, text: String) {
-    try {
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = ClipData.newPlainText("WhatsApp Reply", text)
-        clipboard.setPrimaryClip(clip)
-        Toast.makeText(context, "Message copied to clipboard", Toast.LENGTH_SHORT).show()
+private fun openWhatsAppFallback(
+    context: Context,
+    snackbarHostState: SnackbarHostState,
+    coroutineScope: CoroutineScope,
+    packageName: String,
+    text: String
+) {
+    // Feedback is fire-and-forget: showSnackbar suspends until the snackbar is dismissed
+    // (~4s at Short duration), so awaiting it before startActivity would delay the
+    // WhatsApp launch by that long. Child coroutines keep the snackbar visible without
+    // blocking the launch. There are no suspension points before startActivity, so the
+    // screen scope being cancelled (e.g. the user navigating back) can no longer
+    // interrupt the launch sequence either.
+    fun report(message: String) {
+        coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+    }
 
-        val intent = context.packageManager.getLaunchIntentForPackage(packageName)
-            ?: context.packageManager.getLaunchIntentForPackage("com.whatsapp")
-        if (intent != null) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        } else {
-            Toast.makeText(context, "WhatsApp app not found on device", Toast.LENGTH_LONG).show()
+    coroutineScope.launch {
+        try {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("WhatsApp Reply", text))
+            report("Message copied to clipboard")
+        } catch (_: Exception) {
+            // Some OEMs restrict background clipboard access — report the actual failure
+            // instead of blaming WhatsApp. Opening the chat is still useful.
+            report("Could not copy the reply to the clipboard")
         }
-    } catch (e: Exception) {
-        Toast.makeText(context, "Could not open WhatsApp: ${e.message}", Toast.LENGTH_SHORT).show()
+
+        try {
+            val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+                ?: context.packageManager.getLaunchIntentForPackage("com.whatsapp")
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            } else {
+                report("WhatsApp app not found on device")
+            }
+        } catch (_: ActivityNotFoundException) {
+            report("Could not open WhatsApp")
+        } catch (_: Exception) {
+            report("Could not open WhatsApp")
+        }
     }
 }

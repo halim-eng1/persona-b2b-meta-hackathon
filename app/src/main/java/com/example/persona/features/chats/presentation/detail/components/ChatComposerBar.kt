@@ -10,8 +10,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.persona.ui.theme.chatColors
 
 /**
  * Chat Composer Bar.
@@ -25,9 +25,10 @@ fun ChatComposerBar(
     onSendMessage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val chatColors = MaterialTheme.chatColors
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = Color(0xFF1E293B)
+        color = chatColors.surface
     ) {
         Row(
             modifier = Modifier
@@ -41,16 +42,16 @@ fun ChatComposerBar(
                 modifier = Modifier
                     .weight(1f)
                     .padding(end = 8.dp),
-                placeholder = { Text("Type a manual reply...", color = Color(0xFF94A3B8)) },
+                placeholder = { Text("Type a manual reply...", color = chatColors.statusIdle) },
                 maxLines = 4,
                 shape = RoundedCornerShape(24.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0xFF0F172A),
-                    unfocusedContainerColor = Color(0xFF0F172A),
-                    focusedBorderColor = Color(0xFF3B82F6),
-                    unfocusedBorderColor = Color(0xFF334155)
+                    focusedTextColor = chatColors.onSurface,
+                    unfocusedTextColor = chatColors.onSurface,
+                    focusedContainerColor = chatColors.field,
+                    unfocusedContainerColor = chatColors.field,
+                    focusedBorderColor = chatColors.fieldBorderFocused,
+                    unfocusedBorderColor = chatColors.surfaceAlt
                 )
             )
 
@@ -60,21 +61,21 @@ fun ChatComposerBar(
                 modifier = Modifier
                     .size(48.dp)
                     .background(
-                        color = if (inputText.isNotBlank()) Color(0xFF25D366) else Color(0xFF334155),
+                        color = if (inputText.isNotBlank()) chatColors.accent else chatColors.surfaceAlt,
                         shape = CircleShape
                     )
             ) {
                 if (isSending) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
-                        color = Color.White,
+                        color = chatColors.onSurface,
                         strokeWidth = 2.dp
                     )
                 } else {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send",
-                        tint = if (inputText.isNotBlank()) Color.White else Color(0xFF94A3B8)
+                        tint = if (inputText.isNotBlank()) chatColors.onSurface else chatColors.statusIdle
                     )
                 }
             }
