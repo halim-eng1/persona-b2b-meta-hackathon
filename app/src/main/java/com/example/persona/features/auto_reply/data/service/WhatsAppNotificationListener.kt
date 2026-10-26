@@ -15,6 +15,7 @@ import com.example.persona.R
 import com.example.persona.features.auto_reply.domain.model.WhatsAppNotification
 import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
 import com.example.persona.features.chat_import.data.embedding.HuggingFaceTokenizer
+import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import java.util.concurrent.ConcurrentHashMap
@@ -26,6 +27,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     @Inject lateinit var messageDispatcher: IncomingMessageDispatcher
     @Inject lateinit var modelManager: OnnxModelManager
     @Inject lateinit var tokenizer: HuggingFaceTokenizer
+    @Inject lateinit var orchestrator: AutoReplyOrchestrator
 
     private val serviceScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Default + CoroutineName("NLS-AutoReply")
@@ -121,6 +123,9 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
         // Start listening to the messages flow
         startListeningForMessages()
+
+        // Start the orchestrator processing pipeline
+        orchestrator.start()
     }
 
     override fun onListenerDisconnected() {

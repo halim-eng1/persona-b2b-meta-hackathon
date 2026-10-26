@@ -1,6 +1,8 @@
 package com.example.persona.features.auto_reply.di
 
+import com.example.persona.features.auto_reply.data.repository.AuditLogRepositoryImpl
 import com.example.persona.features.auto_reply.data.repository.ReplyGenerationRepositoryImpl
+import com.example.persona.features.auto_reply.domain.repository.AuditLogRepository
 import com.example.persona.features.auto_reply.domain.repository.ReplyGenerationRepository
 import dagger.Binds
 import dagger.Module
@@ -17,4 +19,10 @@ abstract class AutoReplyModule {
     abstract fun bindReplyGenerationRepository(
         impl: ReplyGenerationRepositoryImpl
     ): ReplyGenerationRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAuditLogRepository(
+        impl: AuditLogRepositoryImpl
+    ): AuditLogRepository
 }

@@ -29,6 +29,8 @@ data class ReplyLogEntity(
     @ColumnInfo(name = "incoming_message") val incomingMessage: String,
     @ColumnInfo(name = "generated_reply") val generatedReply: String,
     @ColumnInfo(name = "confidence_score") val confidenceScore: Float,
+    @ColumnInfo(name = "similarity_score") val similarityScore: Float,
+    @ColumnInfo(name = "context_confidence") val contextConfidence: Float,
     @ColumnInfo(name = "was_auto_sent") val wasAutoSent: Boolean,
     @ColumnInfo(name = "was_approved") val wasApproved: Boolean?,
     @ColumnInfo(name = "timestamp") val timestamp: Instant,
