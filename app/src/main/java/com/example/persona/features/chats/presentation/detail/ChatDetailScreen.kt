@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.persona.features.chats.presentation.detail.components.AiThinkingIndicatorBubble
 import com.example.persona.features.chats.presentation.detail.components.ChatComposerBar
 import com.example.persona.features.chats.presentation.detail.components.CompactChatTopBar
 import com.example.persona.features.chats.presentation.detail.components.DateHeaderChip
@@ -44,10 +45,11 @@ fun ChatDetailScreen(
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
 
-    // Auto-scroll to bottom when messages list size changes or keyboard appears
-    LaunchedEffect(state.messages.size, imeBottom) {
-        if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem(state.messages.lastIndex)
+    // Auto-scroll to bottom when messages list size changes, AI starts generating, or keyboard appears
+    LaunchedEffect(state.messages.size, state.isAiGenerating, imeBottom) {
+        val totalItems = state.messages.size + if (state.isAiGenerating) 1 else 0
+        if (totalItems > 0) {
+            listState.animateScrollToItem(totalItems - 1)
         }
     }
 
@@ -66,6 +68,8 @@ fun ChatDetailScreen(
             sourceClass = state.sourceClass,
             replyCapability = state.replyCapability,
             isAiPaused = state.isAiPaused,
+            botName = state.botName,
+            isAiGenerating = state.isAiGenerating,
             onNavigateBack = onNavigateBack,
             onToggleAi = { viewModel.toggleAiPaused() }
         )
@@ -123,6 +127,7 @@ fun ChatDetailScreen(
 
                 MessageBubble(
                     message = msg,
+                    botName = state.botName,
                     onRetry = { viewModel.retryMessage(msg.id, msg.text) },
                     onOpenWhatsApp = {
                         val pkg = state.fallbackTargetPackage
@@ -130,6 +135,15 @@ fun ChatDetailScreen(
                         openWhatsAppFallback(context, pkg, msg.text)
                     }
                 )
+            }
+
+            if (state.isAiGenerating) {
+                item(key = "ai_thinking_indicator") {
+                    AiThinkingIndicatorBubble(
+                        botName = state.botName,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
             }
         }
 

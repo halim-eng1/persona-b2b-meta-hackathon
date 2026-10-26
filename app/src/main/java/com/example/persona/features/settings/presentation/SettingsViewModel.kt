@@ -43,6 +43,8 @@ data class SettingsUiState(
     val listenCloneApp: Boolean = false,
     val greetingTemplate: String = "",
     val farewellTemplate: String = "",
+    val botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
+    val storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME,
     val isLoading: Boolean = true
 )
 
@@ -93,6 +95,16 @@ class SettingsViewModel @Inject constructor(
             launch {
                 userPreferencesRepository.farewellTemplate.collect { value ->
                     _uiState.update { it.copy(farewellTemplate = value, isLoading = false) }
+                }
+            }
+            launch {
+                userPreferencesRepository.botName.collect { value ->
+                    _uiState.update { it.copy(botName = value, isLoading = false) }
+                }
+            }
+            launch {
+                userPreferencesRepository.storeName.collect { value ->
+                    _uiState.update { it.copy(storeName = value, isLoading = false) }
                 }
             }
         }
@@ -167,6 +179,20 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(farewellTemplate = text) }
         viewModelScope.launch {
             userPreferencesRepository.setFarewellTemplate(text)
+        }
+    }
+
+    fun setBotName(name: String) {
+        _uiState.update { it.copy(botName = name) }
+        viewModelScope.launch {
+            userPreferencesRepository.setBotName(name)
+        }
+    }
+
+    fun setStoreName(name: String) {
+        _uiState.update { it.copy(storeName = name) }
+        viewModelScope.launch {
+            userPreferencesRepository.setStoreName(name)
         }
     }
 

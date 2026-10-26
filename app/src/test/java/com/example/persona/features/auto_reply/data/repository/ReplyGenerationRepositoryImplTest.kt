@@ -1,6 +1,7 @@
 package com.example.persona.features.auto_reply.data.repository
 
 import android.content.Context
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.database.entity.OrderStatus
@@ -373,7 +374,8 @@ class ReplyGenerationRepositoryImplTest {
             httpClient = client,
             context = mockk<Context>(relaxed = true),
             primaryApiKey = "primary-key-123",
-            fallbackApiKey = "fallback-key-456"
+            fallbackApiKey = "fallback-key-456",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true)
         )
 
         val result = repo.callOpenRouter(
@@ -416,7 +418,8 @@ class ReplyGenerationRepositoryImplTest {
             httpClient = client,
             context = mockk<Context>(relaxed = true),
             primaryApiKey = "primary-key-123",
-            fallbackApiKey = "fallback-key-456"
+            fallbackApiKey = "fallback-key-456",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true)
         )
 
         val result = repo.callOpenRouter(
@@ -452,7 +455,8 @@ class ReplyGenerationRepositoryImplTest {
             httpClient = client,
             context = mockk<Context>(relaxed = true),
             primaryApiKey = "primary-key-123",
-            fallbackApiKey = "fallback-key-456"
+            fallbackApiKey = "fallback-key-456",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true)
         )
 
         val result = repo.callOpenRouter(
@@ -495,7 +499,8 @@ class ReplyGenerationRepositoryImplTest {
             httpClient = client,
             context = mockk<Context>(relaxed = true),
             primaryApiKey = "primary-key-123",
-            fallbackApiKey = "fallback-key-456"
+            fallbackApiKey = "fallback-key-456",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true)
         )
 
         val result = repo.callOpenRouter(
@@ -530,7 +535,8 @@ class ReplyGenerationRepositoryImplTest {
             httpClient = client,
             context = mockk<Context>(relaxed = true),
             primaryApiKey = "primary-key-123",
-            fallbackApiKey = "fallback-key-456"
+            fallbackApiKey = "fallback-key-456",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true)
         )
 
         val result = repo.callOpenRouter(
@@ -570,7 +576,8 @@ class ReplyGenerationRepositoryImplTest {
             httpClient = client,
             context = mockk<Context>(relaxed = true),
             primaryApiKey = "primary-key-123",
-            fallbackApiKey = "fallback-key-456"
+            fallbackApiKey = "fallback-key-456",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true)
         )
 
         val reply = repo.executeFailoverChain(
@@ -676,5 +683,24 @@ class ReplyGenerationRepositoryImplTest {
         assertEquals("تمام هبعت لحضرتك خصم 10%", decoded.finalReplyText)
         assertEquals("user", messages[3].role)
         assertEquals("شكرا جدا", messages[3].content)
+    }
+
+    @Test
+    fun `system prompt constants derive from single-source builders with default identities`() {
+        val first = PromptContextBuilder.buildFirstPassSystemPrompt()
+        val final = PromptContextBuilder.buildFinalPassSystemPrompt()
+
+        assertEquals(first, ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS)
+        assertEquals(final, ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS)
+
+        // Identity interpolation must come from the single-source-of-truth constants
+        assertTrue(first.contains("You are ${UserPreferencesRepository.DEFAULT_BOT_NAME}"))
+        assertTrue(first.contains(UserPreferencesRepository.DEFAULT_STORE_NAME))
+        assertTrue(final.contains("You are ${UserPreferencesRepository.DEFAULT_BOT_NAME}"))
+        assertTrue(final.contains(UserPreferencesRepository.DEFAULT_STORE_NAME))
+
+        // Authored-once business rules must appear in both passes
+        assertTrue(first.contains("GENERALIZED OUT-OF-BOUNDS MARKETING RECOVERY"))
+        assertTrue(final.contains("GENERALIZED OUT-OF-BOUNDS MARKETING RECOVERY"))
     }
 }

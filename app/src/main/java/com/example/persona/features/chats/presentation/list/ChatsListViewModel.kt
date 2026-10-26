@@ -20,7 +20,7 @@ enum class ChatFilter(val label: String) {
     MAIN_APP("Main WhatsApp"),
     BUSINESS("WhatsApp Business"),
     CLONE("Dual / Clone"),
-    NEEDS_ATTENTION("Needs Attention 🚨")
+    NEEDS_ATTENTION("Needs Attention")
 }
 
 data class ConversationItemUiModel(
@@ -102,8 +102,8 @@ class ChatsListViewModel @Inject constructor(
 
     private fun ConversationMetadataEntity.toUiModel(): ConversationItemUiModel {
         val prefix = when (lastMessageSenderType.uppercase()) {
-            "AI_AGENT" -> "🤖: "
-            "MERCHANT_MANUAL" -> "👤 You: "
+            "AI_AGENT" -> "AI: "
+            "MERCHANT_MANUAL" -> "You: "
             else -> ""
         }
         val snippet = lastMessageText?.let { "$prefix$it" } ?: "No messages yet"

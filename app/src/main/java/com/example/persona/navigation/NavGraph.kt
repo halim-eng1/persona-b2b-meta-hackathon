@@ -61,7 +61,11 @@ fun PersonaNavGraph(
         }
 
         composable<Screen.Orders> {
-            OrdersDashboardScreen()
+            OrdersDashboardScreen(
+                onNavigateToChat = { contactName, sourceClass ->
+                    navController.navigate(Screen.ChatDetail(contactName, sourceClass))
+                }
+            )
         }
 
         composable<Screen.KnowledgeManagement> {

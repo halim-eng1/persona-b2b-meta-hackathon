@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,11 +23,14 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -36,10 +40,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -49,29 +56,39 @@ import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.features.orders.presentation.components.MerchantNoteSheet
 import com.example.persona.features.orders.presentation.components.OrderCard
 import com.example.persona.features.orders.presentation.components.OrderMetricsRow
+import com.example.persona.features.orders.presentation.components.formatCourierManifest
+import kotlinx.coroutines.launch
 
 /**
- * Merchant Orders Dashboard — live view of LLM-extracted orders with status
- * transitions and merchant-note editing (notes feed into the LLM context).
+ * Dedicated Merchant Orders Management & Fulfillment Dashboard.
+ *
+ * Provides live LLM-extracted orders with 1-tap Kanban state transitions,
+ * instant courier manifest clipboard export, merchant note injection,
+ * and direct chat jumping.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OrdersDashboardScreen(
     modifier: Modifier = Modifier,
-    viewModel: OrdersViewModel = hiltViewModel()
+    viewModel: OrdersViewModel = hiltViewModel(),
+    onNavigateToChat: (contactName: String, sourceClass: String) -> Unit = { _, _ -> }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var noteEditingOrder by remember { mutableStateOf<OrderEntity?>(null) }
+    val clipboardManager = LocalClipboardManager.current
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text(text = "Orders", fontWeight = FontWeight.Bold)
+                        Text(text = "Orders & Fulfillment", fontWeight = FontWeight.Bold)
                         Text(
-                            text = "Live LLM-extracted orders",
+                            text = if (state.totalCount > 0) "${state.totalCount} total orders • Live from WhatsApp" else "Live LLM-extracted orders",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -94,21 +111,23 @@ fun OrdersDashboardScreen(
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary)
                 }
 
-                // ── Metrics chips ────────────────────────────────────────────
+                // ── Interactive metrics chips ────────────────────────────────
                 OrderMetricsRow(
                     pendingCount = state.pendingCount,
                     inPreparationCount = state.inPreparationCount,
-                    completedCount = state.completedCount
+                    completedCount = state.completedCount,
+                    selectedFilter = state.selectedTab,
+                    onFilterClick = viewModel::onFilterSelected
                 )
 
-                // ── Search ───────────────────────────────────────────────────
+                // ── Search field ─────────────────────────────────────────────
                 OutlinedTextField(
                     value = state.searchQuery,
                     onValueChange = viewModel::onSearchQueryChanged,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
-                    placeholder = { Text("Search contact or details…") },
+                    placeholder = { Text("Search contact, customer, address, or details…") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         if (state.searchQuery.isNotEmpty()) {
@@ -125,33 +144,69 @@ fun OrdersDashboardScreen(
                     shape = RoundedCornerShape(14.dp)
                 )
 
-                // ── Transient error banner ───────────────────────────────────
+                // ── Transient error banner (dismissable) ─────────────────────
                 state.errorMessage?.let { message ->
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp)
-                    )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                            IconButton(
+                                onClick = viewModel::clearErrorMessage
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Dismiss error",
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
                 }
 
-                // ── Filter tabs ──────────────────────────────────────────────
+                // ── Filter tabs with dynamic counts ──────────────────────────
                 val filters = OrderFilter.entries
                 val selectedTabIndex = filters.indexOf(state.selectedTab)
                 ScrollableTabRow(
                     selectedTabIndex = if (selectedTabIndex >= 0) selectedTabIndex else 0,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                     edgePadding = 4.dp,
                     containerColor = Color.Transparent,
                     divider = {}
                 ) {
                     filters.forEach { filter ->
+                        val count = when (filter) {
+                            OrderFilter.ALL -> state.totalCount
+                            OrderFilter.PENDING -> state.pendingCount
+                            OrderFilter.IN_PREPARATION -> state.inPreparationCount
+                            OrderFilter.COMPLETED -> state.completedCount
+                            OrderFilter.CANCELLED -> state.cancelledCount
+                            OrderFilter.RETURNED -> state.returnedCount
+                        }
+                        val tabText = if (count > 0) "${filter.label} ($count)" else filter.label
                         Tab(
                             selected = filter == state.selectedTab,
                             onClick = { viewModel.onFilterSelected(filter) },
-                            text = { Text(filter.label, fontWeight = if (filter == state.selectedTab) FontWeight.Bold else FontWeight.Normal) }
+                            text = {
+                                Text(
+                                    text = tabText,
+                                    fontWeight = if (filter == state.selectedTab) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
                         )
                     }
                 }
@@ -180,7 +235,24 @@ fun OrdersDashboardScreen(
                             OrderCard(
                                 order = order,
                                 onStatusChanged = viewModel::onStatusChanged,
-                                onEditNote = { noteEditingOrder = order }
+                                onAdvanceStatus = viewModel::advanceOrderStatus,
+                                onEditNote = { noteEditingOrder = order },
+                                onCopyCourierManifest = { targetOrder ->
+                                    val manifest = formatCourierManifest(targetOrder)
+                                    clipboardManager.setText(AnnotatedString(manifest))
+                                    coroutineScope.launch {
+                                        val customer = targetOrder.customerNameFromLlm?.takeIf { it.isNotBlank() }
+                                            ?: targetOrder.contactName
+                                        snackbarHostState.showSnackbar("Copied courier manifest for $customer")
+                                    }
+                                },
+                                onOpenChat = { contactName ->
+                                    coroutineScope.launch {
+                                        val resolvedSourceClass =
+                                            viewModel.getChatSourceClassForContact(contactName)
+                                        onNavigateToChat(contactName, resolvedSourceClass)
+                                    }
+                                }
                             )
                         }
                         item { Spacer(modifier = Modifier.height(24.dp)) }

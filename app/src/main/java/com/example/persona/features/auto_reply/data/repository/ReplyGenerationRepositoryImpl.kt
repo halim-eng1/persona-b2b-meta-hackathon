@@ -3,6 +3,7 @@ package com.example.persona.features.auto_reply.data.repository
 import android.content.Context
 import android.util.Log
 import com.example.persona.BuildConfig
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.logging.PersonaLogger
@@ -39,24 +40,22 @@ import javax.inject.Singleton
 class ReplyGenerationRepositoryImpl @Inject constructor(
     private val httpClient: HttpClient,
     private val promptContextBuilder: PromptContextBuilder,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) : ReplyGenerationRepository {
 
+    /** Test seam: overrides the OpenRouter auth keys and supplies dependencies explicitly. */
     internal constructor(
         httpClient: HttpClient,
         context: Context,
         primaryApiKey: String,
         fallbackApiKey: String,
-        promptContextBuilder: PromptContextBuilder = PromptContextBuilder()
-    ) : this(httpClient, promptContextBuilder, context) {
+        promptContextBuilder: PromptContextBuilder = PromptContextBuilder(),
+        userPreferencesRepository: UserPreferencesRepository
+    ) : this(httpClient, promptContextBuilder, context, userPreferencesRepository) {
         this.primaryApiKeyOverride = primaryApiKey
         this.fallbackApiKeyOverride = fallbackApiKey
     }
-
-    internal constructor(
-        httpClient: HttpClient,
-        context: Context
-    ) : this(httpClient, PromptContextBuilder(), context)
 
     private var primaryApiKeyOverride: String? = null
     private var fallbackApiKeyOverride: String? = null
@@ -73,9 +72,10 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         private const val MODEL_TIMEOUT_MS = 25000L
         private const val ABSOLUTE_FAILOVER_CEILING = 8000
 
-        const val CANONICAL_HITL_MESSAGE = PromptContextBuilder.CANONICAL_HITL_MESSAGE
         const val HITL_FALLBACK_JSON =
-            """{"action": "HITL", "refined_search_keyword": null, "order_action": null, "final_reply_text": "$CANONICAL_HITL_MESSAGE", "extracted_order": null}"""
+            """{"action":"HITL","refined_search_keyword":null,"order_action":null,"final_reply_text":"${PromptContextBuilder.CANONICAL_HITL_MESSAGE}","extracted_order":null}"""
+
+        val CANONICAL_HITL_MESSAGE = PromptContextBuilder.CANONICAL_HITL_MESSAGE
 
         private val FAILOVER_MODELS = listOf(
             "nvidia/nemotron-3.5-super-vl:free",
@@ -88,8 +88,10 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             "nvidia/nemotron-3.5-lightning:free"
         )
 
-        const val SYSTEM_PROMPT_FIRST_PASS = PromptContextBuilder.SYSTEM_PROMPT_FIRST_PASS
-        const val SYSTEM_PROMPT_FINAL_PASS = PromptContextBuilder.SYSTEM_PROMPT_FINAL_PASS
+        // Derived from the single-source builders; not `const` because the rule text is
+        // now assembled by Kotlin functions rather than compile-time literals.
+        val SYSTEM_PROMPT_FIRST_PASS = PromptContextBuilder.SYSTEM_PROMPT_FIRST_PASS
+        val SYSTEM_PROMPT_FINAL_PASS = PromptContextBuilder.SYSTEM_PROMPT_FINAL_PASS
 
         // Backward compatibility bridges for existing static callers & tests
         internal fun formatStoreKnowledge(
@@ -146,13 +148,15 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         personalChunks: List<ChatHistoryEntity>,
         maxTokens: Int
     ): String? {
-        val systemPromptWithContext = promptContextBuilder.let {
-            PromptContextBuilder.buildSystemPromptWithContext(
-                staticSystemPrompt = SYSTEM_PROMPT_FIRST_PASS,
-                candidates = candidates,
-                activeOrders = activeOrders
-            )
-        }
+        val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
+            botName = userPreferencesRepository.getBotNameSync(),
+            storeName = userPreferencesRepository.getStoreNameSync()
+        )
+        val systemPromptWithContext = PromptContextBuilder.buildSystemPromptWithContext(
+            staticSystemPrompt = baseSystemPrompt,
+            candidates = candidates,
+            activeOrders = activeOrders
+        )
         val messages = PromptContextBuilder.buildOpenRouterMessages(
             systemPrompt = systemPromptWithContext,
             chatHistory = chatHistory,
@@ -170,8 +174,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         personalChunks: List<ChatHistoryEntity>,
         maxTokens: Int
     ): String? {
+        val baseSystemPrompt = PromptContextBuilder.buildFinalPassSystemPrompt(
+            botName = userPreferencesRepository.getBotNameSync(),
+            storeName = userPreferencesRepository.getStoreNameSync()
+        )
         val systemPromptWithContext = PromptContextBuilder.buildSystemPromptWithContext(
-            staticSystemPrompt = SYSTEM_PROMPT_FINAL_PASS,
+            staticSystemPrompt = baseSystemPrompt,
             candidates = chunks,
             activeOrders = activeOrders
         )

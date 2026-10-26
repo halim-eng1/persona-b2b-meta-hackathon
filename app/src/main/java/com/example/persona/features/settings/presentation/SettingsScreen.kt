@@ -104,6 +104,36 @@ fun SettingsScreen(
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
+                    // ── Bot & Brand Identity ──────────────────────────────────
+                    SettingsSection(
+                        title = "BOT & BRAND IDENTITY",
+                        subtitle = "Configure the persona name and store brand name used in AI conversations."
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = state.botName,
+                                onValueChange = { viewModel.setBotName(it) },
+                                label = { Text("Bot Representative Name") },
+                                placeholder = { Text("e.g. سارة / مساعد المبيعات") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = state.storeName,
+                                onValueChange = { viewModel.setStoreName(it) },
+                                label = { Text("Store / Brand Name") },
+                                placeholder = { Text("e.g. متجرنا / متجر الأناقة") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
                     // ── App Routing ───────────────────────────────────────────
                     SettingsSection(
                         title = "APP ROUTING",
@@ -179,7 +209,7 @@ fun SettingsScreen(
                         }
                     }
 
-                    // ── Style Profile ─────────────────────────────────────────
+                    // ── Reply Style ─────────────────────────────────────────
                     SettingsSection(title = "REPLY STYLE") {
                         StyleProfile.entries.forEach { profile ->
                             ProfileOption(

@@ -122,7 +122,7 @@ class HitlNotificationHandler @Inject constructor(
             )
             val notification = NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("طلب تحويل لبشري 🚨")
+                .setContentTitle("طلب تحويل لبشري")
                 .setContentText("العميل $contactName يطلب التحدث مع موظف بشري الآن!")
                 .setStyle(NotificationCompat.BigTextStyle().bigText("العميل $contactName يطلب التحدث مع موظف بشري الآن!"))
                 .setVibrate(vibrationPattern)

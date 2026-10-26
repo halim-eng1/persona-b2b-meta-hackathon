@@ -51,7 +51,12 @@ class UserPreferencesRepository @Inject constructor(
         /** Response text sent when the ContextDetector classifies the query as CLOSING. */
         val KEY_FAREWELL_TEMPLATE = stringPreferencesKey("farewell_template")
 
-        // KEY_OWNER_NAME removed — no longer required in B2B architecture.
+        // ── Bot & Store Brand Identity ────────────────────────────────────────
+        val KEY_BOT_NAME = stringPreferencesKey("bot_name")
+        val KEY_STORE_NAME = stringPreferencesKey("store_name")
+
+        const val DEFAULT_BOT_NAME = "مساعد المبيعات"
+        const val DEFAULT_STORE_NAME = "متجرنا"
     }
 
     // ── Flows ─────────────────────────────────────────────────────────────────
@@ -89,6 +94,14 @@ class UserPreferencesRepository @Inject constructor(
         prefs[KEY_FAREWELL_TEMPLATE] ?: ""
     }
 
+    val botName: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_BOT_NAME]?.takeIf { it.isNotBlank() } ?: DEFAULT_BOT_NAME
+    }
+
+    val storeName: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_STORE_NAME]?.takeIf { it.isNotBlank() } ?: DEFAULT_STORE_NAME
+    }
+
     // ── Suspend setters ───────────────────────────────────────────────────────
 
     suspend fun setAutoReplyEnabled(enabled: Boolean) {
@@ -124,6 +137,14 @@ class UserPreferencesRepository @Inject constructor(
         dataStore.edit { prefs -> prefs[KEY_FAREWELL_TEMPLATE] = text }
     }
 
+    suspend fun setBotName(name: String) {
+        dataStore.edit { prefs -> prefs[KEY_BOT_NAME] = name.trim() }
+    }
+
+    suspend fun setStoreName(name: String) {
+        dataStore.edit { prefs -> prefs[KEY_STORE_NAME] = name.trim() }
+    }
+
     // ── Sync readers (for worker/service contexts) ────────────────────────────
 
     suspend fun isAutoReplyEnabledSync(): Boolean =
@@ -157,6 +178,12 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun getFarewellTemplateSync(default: String): String =
         dataStore.data.first()[KEY_FAREWELL_TEMPLATE]?.takeIf { it.isNotBlank() } ?: default
+
+    suspend fun getBotNameSync(): String =
+        dataStore.data.first()[KEY_BOT_NAME]?.takeIf { it.isNotBlank() } ?: DEFAULT_BOT_NAME
+
+    suspend fun getStoreNameSync(): String =
+        dataStore.data.first()[KEY_STORE_NAME]?.takeIf { it.isNotBlank() } ?: DEFAULT_STORE_NAME
 }
 
 /** Snapshot of app-routing preferences. Immutable value object. */

@@ -2,6 +2,7 @@ package com.example.persona.features.orders.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.database.entity.OrderStatus
 import com.example.persona.features.orders.domain.repository.OrderRepository
@@ -17,27 +18,47 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
-/** Tab/status filter applied to the orders list.
+/**
+ * Tab/status filter applied to the orders list.
  *
- * Coverage note: [SHIPPING_IN_PROGRESS] and [RETURNED] have their own tabs so a
- * merchant-set status is always reachable from some tab — neither state may fall
- * into the "only visible under All" gap. */
+ * Covers all stages of the fulfillment pipeline so merchants can triage
+ * new orders, packing in preparation, dispatches, and exceptions.
+ *
+ * Chip↔tab invariant: the metric chips and the filter tabs share the same
+ * state-set definitions ([IN_PREP_STATES], [FULFILLED_STATES]), so a chip count
+ * exactly equals the number of items displayed by the matching tab.
+ */
 enum class OrderFilter(val label: String) {
     ALL("All"),
-    UNFULFILLED("Unfulfilled"),
-    SHIPPING_IN_PROGRESS("Shipping"),
-    SHIPPED("Shipped"),
-    RETURNED("Returned"),
-    CANCELLED("Cancelled");
+    PENDING("New"),
+    IN_PREPARATION("In Prep"),
+    COMPLETED("Completed"),
+    CANCELLED("Cancelled"),
+    RETURNED("Returned");
 
     /** Returns true when [order] passes this filter. */
     fun matches(order: OrderEntity): Boolean = when (this) {
         ALL -> true
-        UNFULFILLED -> order.status in OrderStatus.UNFULFILLED_STATE_NAMES
-        SHIPPING_IN_PROGRESS -> order.status == OrderStatus.SHIPPING_IN_PROGRESS.name
-        SHIPPED -> order.status == OrderStatus.SHIPPED.name
-        RETURNED -> order.status == OrderStatus.RETURNED.name
+        PENDING -> order.status == OrderStatus.PENDING.name
+        IN_PREPARATION -> order.status in IN_PREP_STATE_NAMES
+        COMPLETED -> order.status in FULFILLED_STATE_NAMES
         CANCELLED -> order.status == OrderStatus.CANCELLED.name
+        RETURNED -> order.status == OrderStatus.RETURNED.name
+    }
+
+    companion object {
+        /** Orders currently being prepared or handed to the courier. */
+        private val IN_PREP_STATES = setOf(OrderStatus.IN_PREPARATION, OrderStatus.SHIPPING_IN_PROGRESS)
+
+        /** Terminal-success bucket: delivered or returned to stock. */
+        private val FULFILLED_STATES = setOf(OrderStatus.SHIPPED, OrderStatus.RETURNED)
+
+        /**
+         * Pre-computed TEXT names of the state sets, for cheap `in`-matches
+         * against the persisted TEXT column without per-order list allocation.
+         */
+        internal val IN_PREP_STATE_NAMES: Set<String> = IN_PREP_STATES.map { it.name }.toSet()
+        internal val FULFILLED_STATE_NAMES: Set<String> = FULFILLED_STATES.map { it.name }.toSet()
     }
 }
 
@@ -46,12 +67,15 @@ data class OrdersUiState(
     val selectedTab: OrderFilter = OrderFilter.ALL,
     /** Orders filtered by [selectedTab] AND the free-text search query. */
     val ordersList: List<OrderEntity> = emptyList(),
-    /** Search query — matches contact name or order details (case-insensitive). */
+    /** Search query — matches contact name, customer name, address, or order details (case-insensitive). */
     val searchQuery: String = "",
-    // ── Metric chips ─────────────────────────────────────────────────────────
+    // ── Metric chips & counts (always aligned with [OrderFilter] tabs) ────────
     val pendingCount: Int = 0,
     val inPreparationCount: Int = 0,
     val completedCount: Int = 0,
+    val cancelledCount: Int = 0,
+    val returnedCount: Int = 0,
+    val totalCount: Int = 0,
     // ── Indicators ───────────────────────────────────────────────────────────
     val isLoading: Boolean = true,
     /** True while any status/note write is in flight (used for progress UI). */
@@ -62,13 +86,14 @@ data class OrdersUiState(
 
 @HiltViewModel
 class OrdersViewModel @Inject constructor(
-    private val orderRepository: OrderRepository
+    private val orderRepository: OrderRepository,
+    private val conversationMetadataDao: ConversationMetadataDao
 ) : ViewModel() {
 
-    private var selectedTab = MutableStateFlow(OrderFilter.ALL)
-    private var searchQuery = MutableStateFlow("")
-    private var isUpdating = MutableStateFlow(false)
-    private var errorMessage = MutableStateFlow<String?>(null)
+    private val selectedTab = MutableStateFlow(OrderFilter.ALL)
+    private val searchQuery = MutableStateFlow("")
+    private val isUpdating = MutableStateFlow(false)
+    private val errorMessage = MutableStateFlow<String?>(null)
 
     /** Tracks concurrent in-flight writes so [isUpdating] clears at the right time. */
     private val inFlightWrites = AtomicInteger(0)
@@ -90,7 +115,7 @@ class OrdersViewModel @Inject constructor(
             .filter { tab.matches(it) }
             .filter { order ->
                 if (queryTrimmed.isEmpty()) return@filter true
-                // Search by contact name or order details (case-insensitive).
+                // Search by contact name, customer name, order details, notes, address
                 listOfNotNull(
                     order.contactName,
                     order.customerNameFromLlm,
@@ -99,21 +124,25 @@ class OrdersViewModel @Inject constructor(
                     order.deliveryAddress
                 ).any { field -> field.contains(queryTrimmed, ignoreCase = true) }
             }
+
+        val pending = allOrders.count { it.status == OrderStatus.PENDING.name }
+        val inPrep = allOrders.count { it.status in OrderFilter.IN_PREP_STATE_NAMES }
+        val fulfilled = allOrders.count { it.status in OrderFilter.FULFILLED_STATE_NAMES }
+        val cancelled = allOrders.count { it.status == OrderStatus.CANCELLED.name }
+        val returned = allOrders.count { it.status == OrderStatus.RETURNED.name }
+
         OrdersUiState(
             selectedTab = tab,
             ordersList = filtered,
             // Keep the RAW query in state so the TextField stays in sync with what
-            // the user typed (trailing spaces included). Only filtering trims —
-            // emitting the trimmed value back into the field makes multi-word
-            // queries ("Ahmed Ali") impossible to type.
+            // the user typed (trailing spaces included). Only filtering trims.
             searchQuery = query,
-            pendingCount = allOrders.count { it.status == OrderStatus.PENDING.name },
-            inPreparationCount = allOrders.count { it.status == OrderStatus.IN_PREPARATION.name },
-            completedCount = allOrders.count {
-                // "Completed" = terminal success states across both tabs:
-                // Shipped counts SHIPPED, Returned counts RETURNED.
-                it.status == OrderStatus.SHIPPED.name || it.status == OrderStatus.RETURNED.name
-            },
+            pendingCount = pending,
+            inPreparationCount = inPrep,
+            completedCount = fulfilled,
+            cancelledCount = cancelled,
+            returnedCount = returned,
+            totalCount = allOrders.size,
             isLoading = false,
             isUpdating = updating,
             errorMessage = error
@@ -128,6 +157,16 @@ class OrdersViewModel @Inject constructor(
         selectedTab.value = filter
     }
 
+    /**
+     * Resolves the chat thread a given contact actually lives in. Orders are
+     * ingested from any enabled WhatsApp source app, so the chat shortcut must query
+     * [ConversationMetadataDao.getLatestConversationForContact] instead of
+     * hard-coding "BUSINESS" — otherwise the jump lands on an empty thread.
+     */
+    suspend fun getChatSourceClassForContact(contactName: String): String =
+        conversationMetadataDao.getLatestConversationForContact(contactName)?.sourceClass
+            ?: "BUSINESS"
+
     fun onSearchQueryChanged(query: String) {
         searchQuery.value = query
     }
@@ -138,20 +177,41 @@ class OrdersViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Tactile Kanban advancement: moves an order to its natural next lifecycle state:
+     * - [OrderStatus.PENDING] -> [OrderStatus.IN_PREPARATION]
+     * - [OrderStatus.IN_PREPARATION] -> [OrderStatus.SHIPPED]
+     * - [OrderStatus.SHIPPING_IN_PROGRESS] -> [OrderStatus.SHIPPED]
+     */
+    fun advanceOrderStatus(order: OrderEntity) {
+        val nextStatus = when (OrderStatus.fromString(order.status)) {
+            OrderStatus.PENDING -> OrderStatus.IN_PREPARATION
+            OrderStatus.IN_PREPARATION -> OrderStatus.SHIPPED
+            OrderStatus.SHIPPING_IN_PROGRESS -> OrderStatus.SHIPPED
+            else -> null
+        }
+        if (nextStatus != null) {
+            onStatusChanged(order.id, nextStatus)
+        }
+    }
+
     fun onMerchantNoteSaved(orderId: Long, note: String) {
         runTrackedWrite {
             // Blank == "clear the note" — the DAO column is nullable, so map an
             // empty/whitespace-only save to null instead of persisting "".
-            orderRepository.updateMerchantNote(orderId, note.ifBlank { null })
+            orderRepository.updateMerchantNote(orderId, note.trim().ifBlank { null })
         }
+    }
+
+    fun clearErrorMessage() {
+        errorMessage.value = null
     }
 
     /**
      * Wraps a repository write with the [isUpdating] progress bookkeeping.
      *
      * Failures are caught and surfaced via [errorMessage] instead of crashing the
-     * process (a bare `launch` would let a SQLiteException reach the default
-     * uncaught handler). [CancellationException] is always re-thrown.
+     * process. [CancellationException] is always re-thrown.
      */
     private fun runTrackedWrite(write: suspend () -> Unit) {
         viewModelScope.launch {
@@ -165,8 +225,6 @@ class OrdersViewModel @Inject constructor(
             } catch (e: Exception) {
                 errorMessage.value = "Couldn't save changes. Please try again."
             } finally {
-                // On cancellation the finally still runs while the VM is alive;
-                // clearing the flag then is harmless (state collector is dead).
                 if (inFlightWrites.decrementAndGet() == 0) {
                     isUpdating.value = false
                 }

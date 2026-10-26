@@ -86,10 +86,10 @@ class ChatsListViewModelTest {
 
         // Customer message has no prefix
         assertEquals("السعر كام؟", state.conversations[0].lastMessageSnippet)
-        // AI message has 🤖: prefix
-        assertEquals("🤖: السعر 250 جنيه", state.conversations[1].lastMessageSnippet)
-        // Merchant manual message has 👤 You: prefix
-        assertEquals("👤 You: تم إرسال الشحنة", state.conversations[2].lastMessageSnippet)
+        // AI message has clean AI: prefix (zero-emoji policy)
+        assertEquals("AI: السعر 250 جنيه", state.conversations[1].lastMessageSnippet)
+        // Merchant manual message has clean You: prefix (zero-emoji policy)
+        assertEquals("You: تم إرسال الشحنة", state.conversations[2].lastMessageSnippet)
     }
 
     @Test

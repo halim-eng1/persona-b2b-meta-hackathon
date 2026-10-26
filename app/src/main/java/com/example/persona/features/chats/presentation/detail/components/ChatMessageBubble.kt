@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.chats.presentation.detail.ChatMessageUiModel
 
 @Composable
@@ -40,6 +41,7 @@ fun DateHeaderChip(dateText: String) {
 @Composable
 fun MessageBubble(
     message: ChatMessageUiModel,
+    botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
     onRetry: () -> Unit,
     onOpenWhatsApp: () -> Unit,
     modifier: Modifier = Modifier
@@ -75,11 +77,22 @@ fun MessageBubble(
                 tonalElevation = 1.dp
             ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    // Badge for Outbound sender (🤖 Auto vs 👤 Manual)
+                    // Sender badge (Bot Name vs Manual) — iconified, zero-emoji
                     if (isOutbound) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (message.senderType == "MERCHANT_MANUAL") {
+                                    Icons.Default.Person
+                                } else {
+                                    Icons.Default.SmartToy
+                                },
+                                contentDescription = null,
+                                tint = Color(0xFF8696A0),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (message.senderType == "MERCHANT_MANUAL") "👤 You (Manual)" else "🤖 AI Auto",
+                                text = if (message.senderType == "MERCHANT_MANUAL") "You (Manual)" else botName,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold

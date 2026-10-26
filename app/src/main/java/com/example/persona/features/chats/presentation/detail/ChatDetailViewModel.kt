@@ -3,11 +3,13 @@ package com.example.persona.features.chats.presentation.detail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.dao.ChatHistoryDao
 import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.features.auto_reply.data.service.NotificationActionCache
 import com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener
+import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
 import com.example.persona.features.chats.domain.usecase.ManualReplyResult
 import com.example.persona.features.chats.domain.usecase.SendManualReplyUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -44,7 +46,9 @@ data class ChatDetailUiState(
     val replyCapability: ReplyCapability = ReplyCapability.AWAITING_ACTIVE_NOTIFICATION,
     val inputText: String = "",
     val isSending: Boolean = false,
-    val fallbackTargetPackage: String? = null
+    val fallbackTargetPackage: String? = null,
+    val botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
+    val isAiGenerating: Boolean = false
 )
 
 @HiltViewModel
@@ -52,7 +56,8 @@ class ChatDetailViewModel @Inject constructor(
     private val chatHistoryDao: ChatHistoryDao,
     private val conversationMetadataDao: ConversationMetadataDao,
     private val sendManualReplyUseCase: SendManualReplyUseCase,
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
     val contactName: String = savedStateHandle["contactName"] ?: ""
@@ -80,12 +85,27 @@ class ChatDetailViewModel @Inject constructor(
         InputState(text, sending, pkg)
     }
 
+    private data class AiPersonaState(
+        val botName: String,
+        val isAiGenerating: Boolean
+    )
+
+    private val _botNameFlow = userPreferencesRepository.botName
+    private val _isAiGeneratingFlow = AutoReplyOrchestrator.activeProcessingContacts.map { activeSet ->
+        activeSet.contains(contactName.trim().lowercase())
+    }
+
+    private val _aiPersonaState = combine(_botNameFlow, _isAiGeneratingFlow) { botName, isGenerating ->
+        AiPersonaState(botName, isGenerating)
+    }
+
     val uiState: StateFlow<ChatDetailUiState> = combine(
         chatHistoryDao.observeMessagesForContact(contactName, sourceClass),
         conversationMetadataDao.observeAllConversations(),
         _replyCapability,
-        _inputState
-    ) { rawMessages, allConversations, capability, inputState ->
+        _inputState,
+        _aiPersonaState
+    ) { rawMessages, allConversations, capability, inputState, personaState ->
         val convMeta = allConversations.firstOrNull {
             it.contactName.equals(contactName, ignoreCase = true) &&
                 it.sourceClass.equals(sourceClass, ignoreCase = true)
@@ -102,7 +122,9 @@ class ChatDetailViewModel @Inject constructor(
             replyCapability = capability,
             inputText = inputState.text,
             isSending = inputState.isSending,
-            fallbackTargetPackage = inputState.fallbackPkg
+            fallbackTargetPackage = inputState.fallbackPkg,
+            botName = personaState.botName,
+            isAiGenerating = personaState.isAiGenerating
         )
     }.stateIn(
         scope = viewModelScope,

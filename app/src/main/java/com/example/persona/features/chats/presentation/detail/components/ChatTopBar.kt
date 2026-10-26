@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.chats.presentation.detail.ReplyCapability
 
 @Composable
@@ -25,6 +26,8 @@ fun CompactChatTopBar(
     sourceClass: String,
     replyCapability: ReplyCapability,
     isAiPaused: Boolean,
+    botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
+    isAiGenerating: Boolean = false,
     onNavigateBack: () -> Unit,
     onToggleAi: () -> Unit,
     modifier: Modifier = Modifier
@@ -109,18 +112,19 @@ fun CompactChatTopBar(
                 }
 
                 // Subtitle
+                val (statusText, statusColor) = when {
+                    isAiGenerating -> "● $botName is generating reply..." to Color(0xFF2DD4BF)
+                    isAiPaused -> "AI Paused" to Color(0xFFF59E0B)
+                    replyCapability == ReplyCapability.READY_VIA_NOTIFICATION -> "● Ready • $botName" to Color(0xFF4ADE80)
+                    else -> "○ Awaiting notification" to Color(0xFF94A3B8)
+                }
+
                 Text(
-                    text = if (replyCapability == ReplyCapability.READY_VIA_NOTIFICATION) {
-                        "● متاح للرد"
-                    } else {
-                        "○ بانتظار إشعار"
-                    },
+                    text = statusText,
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                    color = if (replyCapability == ReplyCapability.READY_VIA_NOTIFICATION) {
-                        Color(0xFF4ADE80)
-                    } else {
-                        Color(0xFF94A3B8)
-                    }
+                    color = statusColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 

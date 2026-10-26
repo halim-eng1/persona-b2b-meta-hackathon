@@ -73,6 +73,26 @@ class AutoReplyOrchestrator @Inject constructor(
         const val ALARM_CHANNEL_ID = HitlNotificationHandler.ALARM_CHANNEL_ID
         const val CANONICAL_HITL_MESSAGE = ReasoningLeakSanitizer.CANONICAL_HITL_MESSAGE
 
+        private val _activeProcessingContacts = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
+        val activeProcessingContacts: kotlinx.coroutines.flow.StateFlow<Set<String>> = _activeProcessingContacts
+
+        fun setContactProcessing(contactName: String, isProcessing: Boolean) {
+            val key = contactName.trim().lowercase()
+            _activeProcessingContacts.value = if (isProcessing) {
+                _activeProcessingContacts.value + key
+            } else {
+                _activeProcessingContacts.value - key
+            }
+        }
+
+        fun isContactProcessing(contactName: String): Boolean {
+            return _activeProcessingContacts.value.contains(contactName.trim().lowercase())
+        }
+
+        fun clearActiveProcessingContacts() {
+            _activeProcessingContacts.value = emptySet()
+        }
+
         internal fun sanitizeLlmJson(raw: String): String = ReasoningLeakSanitizer.sanitizeLlmJson(raw)
 
         const val PIVOT_MARKER = OrderIngestionManager.PIVOT_MARKER
@@ -306,407 +326,412 @@ class AutoReplyOrchestrator @Inject constructor(
             return
         }
 
-        // 11. RAG Retrieval Engine (Single-Query Pass 1)
-        val activeHashes = antiEchoGuard.getActiveReplyHashes()
-        val ragBaseThreshold = calculateRagBaseThreshold(stylePrefs.similarityThreshold)
-        var candidates: List<RetrievalCandidate> = emptyList()
-        var maxScore = 0f
+        setContactProcessing(processed.contactName, true)
+        try {
+            // 11. RAG Retrieval Engine (Single-Query Pass 1)
+            val activeHashes = antiEchoGuard.getActiveReplyHashes()
+            val ragBaseThreshold = calculateRagBaseThreshold(stylePrefs.similarityThreshold)
+            var candidates: List<RetrievalCandidate> = emptyList()
+            var maxScore = 0f
 
-        val queryEmbedding = embeddingEngine.embedForAutoReply(processed.normalizedText)
-        if (queryEmbedding != null) {
-            val (retrievedCandidates, bestScore) = semanticRetrievalRepository.retrieveCandidates(
-                queryEmbedding = queryEmbedding,
-                minimumSimilarityThreshold = ragBaseThreshold,
-                queryText = processed.normalizedText,
-                recentReplyHashes = activeHashes
+            val queryEmbedding = embeddingEngine.embedForAutoReply(processed.normalizedText)
+            if (queryEmbedding != null) {
+                val (retrievedCandidates, bestScore) = semanticRetrievalRepository.retrieveCandidates(
+                    queryEmbedding = queryEmbedding,
+                    minimumSimilarityThreshold = ragBaseThreshold,
+                    queryText = processed.normalizedText,
+                    recentReplyHashes = activeHashes
+                )
+                candidates = retrievedCandidates.filter { it.similarityScore >= 0.38f }
+                maxScore = bestScore
+            }
+
+            // Context Assembly
+            val contextStart = System.currentTimeMillis()
+            val chatHistory = chatHistoryDao.getRecentMessagesExceptForSource(
+                contactName = processed.contactName,
+                sourceClass = sourceClassStr,
+                excludeId = insertedId,
+                limit = 6
             )
-            candidates = retrievedCandidates.filter { it.similarityScore >= 0.38f }
-            maxScore = bestScore
-        }
+            val activeOrders = orderDao.getActiveOrdersByContact(processed.contactName)
+            val contextBuildMs = System.currentTimeMillis() - contextStart
+            Log.d(TAG, "📊 Context assembly completed in ${contextBuildMs}ms: chatTurns=${chatHistory.size}, activeOrders=${activeOrders.size}")
+            Log.i("PersonaMetrics", "metric=context_build_ms value=$contextBuildMs contact=${processed.contactName.hashCode()}")
 
-        // Context Assembly
-        val contextStart = System.currentTimeMillis()
-        val chatHistory = chatHistoryDao.getRecentMessagesExceptForSource(
-            contactName = processed.contactName,
-            sourceClass = sourceClassStr,
-            excludeId = insertedId,
-            limit = 6
-        )
-        val activeOrders = orderDao.getActiveOrdersByContact(processed.contactName)
-        val contextBuildMs = System.currentTimeMillis() - contextStart
-        Log.d(TAG, "📊 Context assembly completed in ${contextBuildMs}ms: chatTurns=${chatHistory.size}, activeOrders=${activeOrders.size}")
-        Log.i("PersonaMetrics", "metric=context_build_ms value=$contextBuildMs contact=${processed.contactName.hashCode()}")
+            // 12. Agentic LLM Generation Pass 1
+            val lastSessionReplyTime = lastReplyTimestamps[processed.contactName] ?: 0L
+            val isOngoing = (System.currentTimeMillis() - lastSessionReplyTime) < 300_000L
 
-        // 12. Agentic LLM Generation Pass 1
-        val lastSessionReplyTime = lastReplyTimestamps[processed.contactName] ?: 0L
-        val isOngoing = (System.currentTimeMillis() - lastSessionReplyTime) < 300_000L
-
-        val rawLlmOutput = replyGenerationRepository.generateReply(
-            notification = processed,
-            candidates = candidates,
-            isOngoingConversation = isOngoing,
-            chatHistory = chatHistory,
-            activeOrders = activeOrders,
-            personalChunks = emptyList(),
-            maxTokens = 600
-        )
-        if (rawLlmOutput.isNullOrBlank()) {
-            Log.d(TAG, "LLM returned null/blank — all models failed. HITL fallback.")
-            hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
-            Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
-            sendHitlHoldingReply(processed)
-            return
-        }
-
-        // Parse structured JSON
-        val agenticResponse = try {
-            ReasoningLeakSanitizer.decodeAgenticResponseSafely(rawLlmOutput)
-        } catch (e: Exception) {
-            if (ReasoningLeakSanitizer.isLeakedReasoningText(rawLlmOutput)) {
-                Log.w(TAG, "Raw LLM output contains reasoning leakage — degrading safely to HITL: ${rawLlmOutput.take(200)}", e)
-            } else {
-                Log.w(TAG, "LLM output is not valid JSON — degrading safely to HITL: ${rawLlmOutput.take(200)}", e)
+            val rawLlmOutput = replyGenerationRepository.generateReply(
+                notification = processed,
+                candidates = candidates,
+                isOngoingConversation = isOngoing,
+                chatHistory = chatHistory,
+                activeOrders = activeOrders,
+                personalChunks = emptyList(),
+                maxTokens = 600
+            )
+            if (rawLlmOutput.isNullOrBlank()) {
+                Log.d(TAG, "LLM returned null/blank — all models failed. HITL fallback.")
+                hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
+                Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
+                sendHitlHoldingReply(processed)
+                return
             }
-            ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse()
-        }.let { response ->
-            if (ReasoningLeakSanitizer.isLeakedReasoningText(response.finalReplyText)) {
-                PersonaLogger.w(PersonaLogTags.LLM, "Reasoning leakage in parsed final_reply_text — routing to HITL guard")
-                Log.w(TAG, "Reasoning leakage in parsed final_reply_text — overriding with HITL guard.")
+
+            // Parse structured JSON
+            val agenticResponse = try {
+                ReasoningLeakSanitizer.decodeAgenticResponseSafely(rawLlmOutput)
+            } catch (e: Exception) {
+                if (ReasoningLeakSanitizer.isLeakedReasoningText(rawLlmOutput)) {
+                    Log.w(TAG, "Raw LLM output contains reasoning leakage — degrading safely to HITL: ${rawLlmOutput.take(200)}", e)
+                } else {
+                    Log.w(TAG, "LLM output is not valid JSON — degrading safely to HITL: ${rawLlmOutput.take(200)}", e)
+                }
                 ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse()
-            } else {
-                response
-            }
-        }
-
-        // Agentic Order Actions & Ingestion Routing
-        var overriddenReplyText: String? = null
-        val orderAction = agenticResponse.orderAction?.trim()?.uppercase()
-            ?.takeIf { it == "CREATE" || it == "CANCEL" || it == "UPDATE" }
-
-        Log.i("PersonaMetrics", "metric=order_extraction_rate value=${if (agenticResponse.extractedOrder != null) 1 else 0} contact=${processed.contactName.hashCode()}")
-        Log.i("PersonaMetrics", "metric=order_action_usage value=${orderAction ?: if (agenticResponse.orderAction != null) "UNKNOWN" else "NONE"} contact=${processed.contactName.hashCode()}")
-
-        if (agenticResponse.extractedOrder != null) {
-            val extracted = agenticResponse.extractedOrder
-            val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
-
-            when {
-                orderAction == "CANCEL" -> {
-                    if (!orderIngestionManager.executeCancelOrderAction(processed)) {
-                        overriddenReplyText = NO_ACTIVE_ORDER_REPLY
-                    }
-                }
-                orderAction == "UPDATE" && existingOrder != null -> {
-                    orderIngestionManager.applyOrderUpdates(existingOrder, extracted)
-                    if (existingOrder.status == OrderStatus.PENDING.name) {
-                        orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
-                        Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirm/update")
-                    }
-                }
-                else -> {
-                    val result = orderIngestionManager.handleOrderCreation(
-                        extractedOrder = agenticResponse.extractedOrder,
-                        contactName = processed.contactName,
-                        customerText = processed.originalText,
-                        orderAction = orderAction ?: "",
-                        sourceClass = sourceClassStr
-                    )
-                    if (result is OrderIngestionResult.DuplicatePivot) {
-                        overriddenReplyText = result.pivotReplyText
-                    }
+            }.let { response ->
+                if (ReasoningLeakSanitizer.isLeakedReasoningText(response.finalReplyText)) {
+                    PersonaLogger.w(PersonaLogTags.LLM, "Reasoning leakage in parsed final_reply_text — routing to HITL guard")
+                    Log.w(TAG, "Reasoning leakage in parsed final_reply_text — overriding with HITL guard.")
+                    ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse()
+                } else {
+                    response
                 }
             }
-        } else {
-            when (orderAction) {
-                "CANCEL" -> {
-                    if (!orderIngestionManager.executeCancelOrderAction(processed)) {
-                        overriddenReplyText = NO_ACTIVE_ORDER_REPLY
-                    }
-                }
-                "UPDATE" -> {
-                    val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
-                    if (existingOrder == null) {
-                        Log.i(TAG, "order_action=UPDATE but no active order for ${processed.contactName} — nothing to update")
-                    } else if (existingOrder.status == OrderStatus.PENDING.name) {
-                        orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
-                        Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirmation")
-                    }
-                }
-                else -> Unit
-            }
-        }
 
-        val rawAction = agenticResponse.action.trim().uppercase()
-        val normalizedAction = when (rawAction) {
-            "UPDATE", "CREATE" -> "REPLY"
-            else -> rawAction
-        }
-        val effectiveAction = if (normalizedAction == "RE_QUERY" && agenticResponse.refinedSearchKeyword.isNullOrBlank() && !agenticResponse.finalReplyText.isNullOrBlank()) {
-            "REPLY"
-        } else {
-            normalizedAction
-        }
+            // Agentic Order Actions & Ingestion Routing
+            var overriddenReplyText: String? = null
+            val orderAction = agenticResponse.orderAction?.trim()?.uppercase()
+                ?.takeIf { it == "CREATE" || it == "CANCEL" || it == "UPDATE" }
 
-        val rawReplyText: String? = if (overriddenReplyText != null) {
-            overriddenReplyText
-        } else {
-            when {
-                effectiveAction == "HITL" -> {
-                    Log.i(TAG, "LLM action=HITL. Triggering alarm and hand-off notification.")
-                    hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
-                    hitlNotificationHandler.notifyMerchantHandover(processed.contactName, processed.sourceClass.name, "1003")
-                    val hitlReply = if (!agenticResponse.finalReplyText.isNullOrBlank()) {
-                        agenticResponse.finalReplyText
-                    } else {
-                        CANONICAL_HITL_MESSAGE
-                    }
-                    Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
-                    sendImmediateReply(processed, ReasoningLeakSanitizer.ensureHitlSuffix(hitlReply))
-                    return
-                }
+            Log.i("PersonaMetrics", "metric=order_extraction_rate value=${if (agenticResponse.extractedOrder != null) 1 else 0} contact=${processed.contactName.hashCode()}")
+            Log.i("PersonaMetrics", "metric=order_action_usage value=${orderAction ?: if (agenticResponse.orderAction != null) "UNKNOWN" else "NONE"} contact=${processed.contactName.hashCode()}")
 
-                effectiveAction == "REPLY" && !agenticResponse.finalReplyText.isNullOrBlank() -> {
-                    Log.i(TAG, "LLM action=REPLY. Dispatching final reply.")
-                    agenticResponse.finalReplyText
-                }
+            if (agenticResponse.extractedOrder != null) {
+                val extracted = agenticResponse.extractedOrder
+                val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
 
-                effectiveAction == "RE_QUERY" -> {
-                    val refinedKeyword = agenticResponse.refinedSearchKeyword?.trim().orEmpty()
-                    Log.i(TAG, "LLM action=RE_QUERY. Refined keyword: '$refinedKeyword'")
-                    PersonaLogger.d(PersonaLogTags.LLM, "RE_QUERY loop triggered")
-
-                    val isProductCatalogQuery = refinedKeyword.contains("منتج") ||
-                        refinedKeyword.contains("المنتجات") ||
-                        refinedKeyword.contains("أسعار") ||
-                        refinedKeyword.contains("كتالوج") ||
-                        processed.originalText.contains("منتج") ||
-                        processed.originalText.contains("المنتجات") ||
-                        processed.originalText.contains("أسعار") ||
-                        processed.originalText.contains("كتالوج")
-
-                    val catalogCandidates = if (isProductCatalogQuery) {
-                        try {
-                            businessKnowledgeDao.getProductCatalogChunks(limit = 5).map { proj ->
-                                RetrievalCandidate(
-                                    chunkId = proj.chunkId,
-                                    headerContext = proj.headerContext,
-                                    chunkText = proj.chunkText,
-                                    similarityScore = 0.99f,
-                                    baseSimilarityScore = 0.99f
-                                )
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to load product catalog chunks", e)
-                            emptyList()
+                when {
+                    orderAction == "CANCEL" -> {
+                        if (!orderIngestionManager.executeCancelOrderAction(processed)) {
+                            overriddenReplyText = NO_ACTIVE_ORDER_REPLY
                         }
-                    } else {
-                        emptyList()
+                    }
+                    orderAction == "UPDATE" && existingOrder != null -> {
+                        orderIngestionManager.applyOrderUpdates(existingOrder, extracted)
+                        if (existingOrder.status == OrderStatus.PENDING.name) {
+                            orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
+                            Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirm/update")
+                        }
+                    }
+                    else -> {
+                        val result = orderIngestionManager.handleOrderCreation(
+                            extractedOrder = agenticResponse.extractedOrder,
+                            contactName = processed.contactName,
+                            customerText = processed.originalText,
+                            orderAction = orderAction ?: "",
+                            sourceClass = sourceClassStr
+                        )
+                        if (result is OrderIngestionResult.DuplicatePivot) {
+                            overriddenReplyText = result.pivotReplyText
+                        }
+                    }
+                }
+            } else {
+                when (orderAction) {
+                    "CANCEL" -> {
+                        if (!orderIngestionManager.executeCancelOrderAction(processed)) {
+                            overriddenReplyText = NO_ACTIVE_ORDER_REPLY
+                        }
+                    }
+                    "UPDATE" -> {
+                        val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
+                        if (existingOrder == null) {
+                            Log.i(TAG, "order_action=UPDATE but no active order for ${processed.contactName} — nothing to update")
+                        } else if (existingOrder.status == OrderStatus.PENDING.name) {
+                            orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
+                            Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirmation")
+                        }
+                    }
+                    else -> Unit
+                }
+            }
+
+            val rawAction = agenticResponse.action.trim().uppercase()
+            val normalizedAction = when (rawAction) {
+                "UPDATE", "CREATE" -> "REPLY"
+                else -> rawAction
+            }
+            val effectiveAction = if (normalizedAction == "RE_QUERY" && agenticResponse.refinedSearchKeyword.isNullOrBlank() && !agenticResponse.finalReplyText.isNullOrBlank()) {
+                "REPLY"
+            } else {
+                normalizedAction
+            }
+
+            val rawReplyText: String? = if (overriddenReplyText != null) {
+                overriddenReplyText
+            } else {
+                when {
+                    effectiveAction == "HITL" -> {
+                        Log.i(TAG, "LLM action=HITL. Triggering alarm and hand-off notification.")
+                        hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
+                        hitlNotificationHandler.notifyMerchantHandover(processed.contactName, processed.sourceClass.name, "1003")
+                        val hitlReply = if (!agenticResponse.finalReplyText.isNullOrBlank()) {
+                            agenticResponse.finalReplyText
+                        } else {
+                            CANONICAL_HITL_MESSAGE
+                        }
+                        Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
+                        sendImmediateReply(processed, ReasoningLeakSanitizer.ensureHitlSuffix(hitlReply))
+                        return
                     }
 
-                    val retrievedPass2: List<RetrievalCandidate> = if (refinedKeyword.isNotBlank()) {
-                        val refinedEmbedding = embeddingEngine.embedForAutoReply(refinedKeyword)
-                        if (refinedEmbedding != null) {
-                            val (retrieved, _) = semanticRetrievalRepository.retrieveCandidates(
-                                queryEmbedding = refinedEmbedding,
-                                minimumSimilarityThreshold = ragBaseThreshold,
-                                queryText = refinedKeyword,
-                                recentReplyHashes = activeHashes
-                            )
-                            retrieved
+                    effectiveAction == "REPLY" && !agenticResponse.finalReplyText.isNullOrBlank() -> {
+                        Log.i(TAG, "LLM action=REPLY. Dispatching final reply.")
+                        agenticResponse.finalReplyText
+                    }
+
+                    effectiveAction == "RE_QUERY" -> {
+                        val refinedKeyword = agenticResponse.refinedSearchKeyword?.trim().orEmpty()
+                        Log.i(TAG, "LLM action=RE_QUERY. Refined keyword: '$refinedKeyword'")
+                        PersonaLogger.d(PersonaLogTags.LLM, "RE_QUERY loop triggered")
+
+                        val isProductCatalogQuery = refinedKeyword.contains("منتج") ||
+                            refinedKeyword.contains("المنتجات") ||
+                            refinedKeyword.contains("أسعار") ||
+                            refinedKeyword.contains("كتالوج") ||
+                            processed.originalText.contains("منتج") ||
+                            processed.originalText.contains("المنتجات") ||
+                            processed.originalText.contains("أسعار") ||
+                            processed.originalText.contains("كتالوج")
+
+                        val catalogCandidates = if (isProductCatalogQuery) {
+                            try {
+                                businessKnowledgeDao.getProductCatalogChunks(limit = 5).map { proj ->
+                                    RetrievalCandidate(
+                                        chunkId = proj.chunkId,
+                                        headerContext = proj.headerContext,
+                                        chunkText = proj.chunkText,
+                                        similarityScore = 0.99f,
+                                        baseSimilarityScore = 0.99f
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to load product catalog chunks", e)
+                                emptyList()
+                            }
                         } else {
                             emptyList()
                         }
-                    } else {
-                        emptyList()
-                    }
 
-                    val pass2Candidates = catalogCandidates + retrievedPass2
-                    val mergedChunks = mergeCandidates(
-                        pass1 = candidates,
-                        pass2 = pass2Candidates,
-                        limit = 8,
-                        minScore = 0.38f
-                    )
-
-                    Log.i(TAG, "RE_QUERY merged to ${mergedChunks.size} chunks (Pass1: ${candidates.size}, Pass2: ${pass2Candidates.size}). Executing final LLM pass.")
-
-                    val finalOutput = replyGenerationRepository.generateFinalReply(
-                        queryText = processed.originalText,
-                        chunks = mergedChunks,
-                        isOngoingConversation = isOngoing,
-                        chatHistory = chatHistory,
-                        activeOrders = activeOrders,
-                        personalChunks = emptyList(),
-                        maxTokens = 750
-                    )
-
-                    if (finalOutput.isNullOrBlank()) {
-                        null
-                    } else {
-                        val finalParsed = try {
-                            ReasoningLeakSanitizer.decodeAgenticResponseSafely(finalOutput)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "LLM final output is not valid JSON — degrading safely to HITL: ${finalOutput.take(200)}", e)
-                            ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse()
-                        }.let { response ->
-                            if (ReasoningLeakSanitizer.isLeakedReasoningText(response.finalReplyText)) {
-                                PersonaLogger.w(PersonaLogTags.LLM, "Reasoning leakage in final-pass final_reply_text — routing to HITL guard")
-                                Log.w(TAG, "Reasoning leakage in final-pass final_reply_text — overriding with HITL guard.")
-                                ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse()
-                            } else {
-                                response
-                            }
-                        }
-
-                        val finalReplyOverride = orderIngestionManager.handleFinalPassOrderActions(finalParsed, processed)
-
-                        if (finalParsed.action.trim().uppercase() == "HITL") {
-                            Log.i(TAG, "Second-pass LLM action=HITL. Handing off to human.")
-                            try {
-                                val failedQuery = FailedQueryEntity(
-                                    contactDisplayName = processed.contactName,
-                                    queryText = processed.originalText,
-                                    bestScore = maxScore
+                        val retrievedPass2: List<RetrievalCandidate> = if (refinedKeyword.isNotBlank()) {
+                            val refinedEmbedding = embeddingEngine.embedForAutoReply(refinedKeyword)
+                            if (refinedEmbedding != null) {
+                                val (retrieved, _) = semanticRetrievalRepository.retrieveCandidates(
+                                    queryEmbedding = refinedEmbedding,
+                                    minimumSimilarityThreshold = ragBaseThreshold,
+                                    queryText = refinedKeyword,
+                                    recentReplyHashes = activeHashes
                                 )
-                                failedQueryDao.insert(failedQuery)
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Failed to insert FailedQueryEntity", e)
-                            }
-                            hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
-                            hitlNotificationHandler.notifyMerchantHandover(processed.contactName, processed.sourceClass.name, "1003_2")
-                            val hitlReply = if (!finalParsed.finalReplyText.isNullOrBlank()) {
-                                finalParsed.finalReplyText
+                                retrieved
                             } else {
-                                CANONICAL_HITL_MESSAGE
+                                emptyList()
                             }
-                            Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
-                            sendImmediateReply(processed, ReasoningLeakSanitizer.ensureHitlSuffix(hitlReply))
-                            return
+                        } else {
+                            emptyList()
                         }
 
-                        finalReplyOverride
-                            ?: finalParsed.finalReplyText
-                            ?: ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse().finalReplyText
+                        val pass2Candidates = catalogCandidates + retrievedPass2
+                        val mergedChunks = mergeCandidates(
+                            pass1 = candidates,
+                            pass2 = pass2Candidates,
+                            limit = 8,
+                            minScore = 0.38f
+                        )
+
+                        Log.i(TAG, "RE_QUERY merged to ${mergedChunks.size} chunks (Pass1: ${candidates.size}, Pass2: ${pass2Candidates.size}). Executing final LLM pass.")
+
+                        val finalOutput = replyGenerationRepository.generateFinalReply(
+                            queryText = processed.originalText,
+                            chunks = mergedChunks,
+                            isOngoingConversation = isOngoing,
+                            chatHistory = chatHistory,
+                            activeOrders = activeOrders,
+                            personalChunks = emptyList(),
+                            maxTokens = 750
+                        )
+
+                        if (finalOutput.isNullOrBlank()) {
+                            null
+                        } else {
+                            val finalParsed = try {
+                                ReasoningLeakSanitizer.decodeAgenticResponseSafely(finalOutput)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "LLM final output is not valid JSON — degrading safely to HITL: ${finalOutput.take(200)}", e)
+                                ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse()
+                            }.let { response ->
+                                if (ReasoningLeakSanitizer.isLeakedReasoningText(response.finalReplyText)) {
+                                    PersonaLogger.w(PersonaLogTags.LLM, "Reasoning leakage in final-pass final_reply_text — routing to HITL guard")
+                                    Log.w(TAG, "Reasoning leakage in final-pass final_reply_text — overriding with HITL guard.")
+                                    ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse()
+                                } else {
+                                    response
+                                }
+                            }
+
+                            val finalReplyOverride = orderIngestionManager.handleFinalPassOrderActions(finalParsed, processed)
+
+                            if (finalParsed.action.trim().uppercase() == "HITL") {
+                                Log.i(TAG, "Second-pass LLM action=HITL. Handing off to human.")
+                                try {
+                                    val failedQuery = FailedQueryEntity(
+                                        contactDisplayName = processed.contactName,
+                                        queryText = processed.originalText,
+                                        bestScore = maxScore
+                                    )
+                                    failedQueryDao.insert(failedQuery)
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to insert FailedQueryEntity", e)
+                                }
+                                hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
+                                hitlNotificationHandler.notifyMerchantHandover(processed.contactName, processed.sourceClass.name, "1003_2")
+                                val hitlReply = if (!finalParsed.finalReplyText.isNullOrBlank()) {
+                                    finalParsed.finalReplyText
+                                } else {
+                                    CANONICAL_HITL_MESSAGE
+                                }
+                                Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
+                                sendImmediateReply(processed, ReasoningLeakSanitizer.ensureHitlSuffix(hitlReply))
+                                return
+                            }
+
+                            finalReplyOverride
+                                ?: finalParsed.finalReplyText
+                                ?: ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse().finalReplyText
+                        }
                     }
+
+                    else -> null
                 }
-
-                else -> null
             }
-        }
 
-        if (rawReplyText.isNullOrBlank()) {
-            Log.d(TAG, "Agentic loop produced no reply — HITL fallback.")
-            hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
-            Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
-            sendHitlHoldingReply(processed)
-            return
-        }
+            if (rawReplyText.isNullOrBlank()) {
+                Log.d(TAG, "Agentic loop produced no reply — HITL fallback.")
+                hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
+                Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
+                sendHitlHoldingReply(processed)
+                return
+            }
 
-        // Style post-processing
-        val styledReplyText = stylePostProcessor.process(
-            rawReply = rawReplyText,
-            prefs = stylePrefs,
-            context = processed.context,
-            userEmojiRate = 0f
-        )
+            // Style post-processing
+            val styledReplyText = stylePostProcessor.process(
+                rawReply = rawReplyText,
+                prefs = stylePrefs,
+                context = processed.context,
+                userEmojiRate = 0f
+            )
 
-        // Anti-echo guard
-        if (AntiEchoGuard.isEchoRepetition(styledReplyText, processed.originalText, chatHistory)) {
-            Log.w(TAG, "Anti-echo guard triggered: duplicate reply for ${processed.contactName}. Degrading to HITL.")
-            hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
-            sendHitlHoldingReply(processed)
-            return
-        }
+            // Anti-echo guard
+            if (AntiEchoGuard.isEchoRepetition(styledReplyText, processed.originalText, chatHistory)) {
+                Log.w(TAG, "Anti-echo guard triggered: duplicate reply for ${processed.contactName}. Degrading to HITL.")
+                hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
+                sendHitlHoldingReply(processed)
+                return
+            }
 
-        // 13. Execute direct reply via RemoteInput
-        delay(stylePrefs.replyDelaySeconds * 1000L)
-        val executionResult = directReplyExecutionUseCase.execute(
-            processed.notificationKey,
-            styledReplyText,
-            processed.contactName,
-            processed.sourceClass.name
-        )
+            // 13. Execute direct reply via RemoteInput
+            delay(stylePrefs.replyDelaySeconds * 1000L)
+            val executionResult = directReplyExecutionUseCase.execute(
+                processed.notificationKey,
+                styledReplyText,
+                processed.contactName,
+                processed.sourceClass.name
+            )
 
-        // 14. Audit logging
-        when (executionResult) {
-            is ReplyExecutionResult.Success -> {
-                cooldownMap[processed.contactName] = System.currentTimeMillis()
-                lastReplyTimestamps[processed.contactName] = System.currentTimeMillis()
-                antiEchoGuard.addReplyToCache(styledReplyText)
+            // 14. Audit logging
+            when (executionResult) {
+                is ReplyExecutionResult.Success -> {
+                    cooldownMap[processed.contactName] = System.currentTimeMillis()
+                    lastReplyTimestamps[processed.contactName] = System.currentTimeMillis()
+                    antiEchoGuard.addReplyToCache(styledReplyText)
 
-                val botChatHistory = ChatHistoryEntity(
-                    contactName = processed.contactName,
-                    messageText = styledReplyText,
-                    isFromUser = false,
-                    timestamp = System.currentTimeMillis(),
-                    embedding = null,
-                    embeddingState = "PENDING",
-                    sourceClass = processed.sourceClass.name,
-                    senderType = "AI_AGENT",
-                    deliveryStatus = "SENT",
-                    isRead = true
-                )
-                val botInsertedId = chatHistoryDao.insert(botChatHistory)
-                Log.d(TAG, "Bot reply persisted to chat history, id=$botInsertedId")
+                    val botChatHistory = ChatHistoryEntity(
+                        contactName = processed.contactName,
+                        messageText = styledReplyText,
+                        isFromUser = false,
+                        timestamp = System.currentTimeMillis(),
+                        embedding = null,
+                        embeddingState = "PENDING",
+                        sourceClass = processed.sourceClass.name,
+                        senderType = "AI_AGENT",
+                        deliveryStatus = "SENT",
+                        isRead = true
+                    )
+                    val botInsertedId = chatHistoryDao.insert(botChatHistory)
+                    Log.d(TAG, "Bot reply persisted to chat history, id=$botInsertedId")
 
-                conversationMetadataDao.recordMessageTurn(
-                    contactName = processed.contactName,
-                    sourceClass = processed.sourceClass.name,
-                    messageText = styledReplyText,
-                    senderType = "AI_AGENT",
-                    timestamp = System.currentTimeMillis(),
-                    notificationKey = processed.notificationKey,
-                    incrementUnread = false
-                )
+                    conversationMetadataDao.recordMessageTurn(
+                        contactName = processed.contactName,
+                        sourceClass = processed.sourceClass.name,
+                        messageText = styledReplyText,
+                        senderType = "AI_AGENT",
+                        timestamp = System.currentTimeMillis(),
+                        notificationKey = processed.notificationKey,
+                        incrementUnread = false
+                    )
 
-                scope.launch(Dispatchers.Default) {
-                    val claimSuccess = chatHistoryDao.claimForProcessing(botInsertedId)
-                    if (claimSuccess > 0) {
-                        try {
-                            val startTime = System.currentTimeMillis()
-                            val embedding = embeddingEngine.embedForAutoReply(styledReplyText)
-                            val latency = System.currentTimeMillis() - startTime
-                            Log.i("PersonaMetrics", "metric=embedding_latency_ms value=$latency contact=${processed.contactName.hashCode()}")
-                            if (embedding != null) {
-                                val embeddingBlob = Converters().fromFloatArray(embedding)
-                                if (embeddingBlob != null) {
-                                    chatHistoryDao.updateEmbeddingRaw(botInsertedId, embeddingBlob)
+                    scope.launch(Dispatchers.Default) {
+                        val claimSuccess = chatHistoryDao.claimForProcessing(botInsertedId)
+                        if (claimSuccess > 0) {
+                            try {
+                                val startTime = System.currentTimeMillis()
+                                val embedding = embeddingEngine.embedForAutoReply(styledReplyText)
+                                val latency = System.currentTimeMillis() - startTime
+                                Log.i("PersonaMetrics", "metric=embedding_latency_ms value=$latency contact=${processed.contactName.hashCode()}")
+                                if (embedding != null) {
+                                    val embeddingBlob = Converters().fromFloatArray(embedding)
+                                    if (embeddingBlob != null) {
+                                        chatHistoryDao.updateEmbeddingRaw(botInsertedId, embeddingBlob)
+                                    } else {
+                                        chatHistoryDao.updateEmbeddingState(botInsertedId, "FAILED")
+                                    }
                                 } else {
                                     chatHistoryDao.updateEmbeddingState(botInsertedId, "FAILED")
                                 }
-                            } else {
+                            } catch (e: Exception) {
                                 chatHistoryDao.updateEmbeddingState(botInsertedId, "FAILED")
                             }
-                        } catch (e: Exception) {
-                            chatHistoryDao.updateEmbeddingState(botInsertedId, "FAILED")
                         }
                     }
-                }
 
-                val auditCandidate = candidates.firstOrNull() ?: RetrievalCandidate(
-                    chunkId = "CONVERSATIONAL_REPLY",
-                    headerContext = "CONVERSATIONAL",
-                    chunkText = styledReplyText,
-                    similarityScore = 1.0f,
-                    baseSimilarityScore = 1.0f
-                )
-                auditLogRepository.logExecutedReply(processed, auditCandidate, styledReplyText)
-                PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Reply executed")
-                Log.i(TAG, "Auto-replied to ${processed.contactName}: '$styledReplyText'")
+                    val auditCandidate = candidates.firstOrNull() ?: RetrievalCandidate(
+                        chunkId = "CONVERSATIONAL_REPLY",
+                        headerContext = "CONVERSATIONAL",
+                        chunkText = styledReplyText,
+                        similarityScore = 1.0f,
+                        baseSimilarityScore = 1.0f
+                    )
+                    auditLogRepository.logExecutedReply(processed, auditCandidate, styledReplyText)
+                    PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Reply executed")
+                    Log.i(TAG, "Auto-replied to ${processed.contactName}: '$styledReplyText'")
                 
-                Log.i("PersonaMetrics", "metric=hitl_rate value=0 contact=${processed.contactName.hashCode()}")
-                Log.i("PersonaMetrics", "metric=notification_drop_rate value=0 contact=${processed.contactName.hashCode()}")
+                    Log.i("PersonaMetrics", "metric=hitl_rate value=0 contact=${processed.contactName.hashCode()}")
+                    Log.i("PersonaMetrics", "metric=notification_drop_rate value=0 contact=${processed.contactName.hashCode()}")
+                }
+                is ReplyExecutionResult.Aborted -> {
+                    auditLogRepository.clearPendingRepliesForContact(processed.contactName)
+                    PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Reply aborted: notification no longer active")
+                    Log.i(TAG, "Auto-reply aborted for ${processed.contactName}: notification is no longer active.")
+                }
+                is ReplyExecutionResult.Failed -> {
+                    auditLogRepository.queuePendingReply(processed, styledReplyText)
+                    PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Reply queued")
+                    Log.w(TAG, "Failed to send to ${processed.contactName}: ${executionResult.reason}. Queued.")
+                }
             }
-            is ReplyExecutionResult.Aborted -> {
-                auditLogRepository.clearPendingRepliesForContact(processed.contactName)
-                PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Reply aborted: notification no longer active")
-                Log.i(TAG, "Auto-reply aborted for ${processed.contactName}: notification is no longer active.")
-            }
-            is ReplyExecutionResult.Failed -> {
-                auditLogRepository.queuePendingReply(processed, styledReplyText)
-                PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Reply queued")
-                Log.w(TAG, "Failed to send to ${processed.contactName}: ${executionResult.reason}. Queued.")
-            }
+        } finally {
+            setContactProcessing(processed.contactName, false)
         }
     }
 

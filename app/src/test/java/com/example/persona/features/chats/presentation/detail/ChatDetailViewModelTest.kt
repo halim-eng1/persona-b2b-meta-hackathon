@@ -5,6 +5,8 @@ import com.example.persona.core.database.dao.ChatHistoryDao
 import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.core.database.entity.ConversationMetadataEntity
+import com.example.persona.core.data.repository.UserPreferencesRepository
+import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
 import com.example.persona.features.chats.domain.usecase.ManualReplyResult
 import com.example.persona.features.chats.domain.usecase.SendManualReplyUseCase
 import io.mockk.coEvery
@@ -35,6 +37,7 @@ class ChatDetailViewModelTest {
     private val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
     private val conversationMetadataDao = mockk<ConversationMetadataDao>(relaxed = true)
     private val sendManualReplyUseCase = mockk<SendManualReplyUseCase>(relaxed = true)
+    private val userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
     private val savedStateHandle = SavedStateHandle(
@@ -80,12 +83,15 @@ class ChatDetailViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        AutoReplyOrchestrator.clearActiveProcessingContacts()
         every { chatHistoryDao.observeMessagesForContact("أحمد مصطفى", "BUSINESS") } returns flowOf(listOf(msg1, msg2))
         every { conversationMetadataDao.observeAllConversations() } returns flowOf(listOf(convMeta))
+        every { userPreferencesRepository.botName } returns flowOf(UserPreferencesRepository.DEFAULT_BOT_NAME)
     }
 
     @After
     fun tearDown() {
+        AutoReplyOrchestrator.clearActiveProcessingContacts()
         Dispatchers.resetMain()
     }
 
@@ -95,7 +101,8 @@ class ChatDetailViewModelTest {
             chatHistoryDao = chatHistoryDao,
             conversationMetadataDao = conversationMetadataDao,
             sendManualReplyUseCase = sendManualReplyUseCase,
-            savedStateHandle = savedStateHandle
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
         )
         advanceUntilIdle()
 
@@ -109,7 +116,8 @@ class ChatDetailViewModelTest {
             chatHistoryDao = chatHistoryDao,
             conversationMetadataDao = conversationMetadataDao,
             sendManualReplyUseCase = sendManualReplyUseCase,
-            savedStateHandle = savedStateHandle
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect() }
         advanceUntilIdle()
@@ -136,7 +144,8 @@ class ChatDetailViewModelTest {
             chatHistoryDao = chatHistoryDao,
             conversationMetadataDao = conversationMetadataDao,
             sendManualReplyUseCase = sendManualReplyUseCase,
-            savedStateHandle = savedStateHandle
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
         )
         advanceUntilIdle()
 
@@ -157,7 +166,8 @@ class ChatDetailViewModelTest {
             chatHistoryDao = chatHistoryDao,
             conversationMetadataDao = conversationMetadataDao,
             sendManualReplyUseCase = sendManualReplyUseCase,
-            savedStateHandle = savedStateHandle
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
         )
         advanceUntilIdle()
 
@@ -186,7 +196,8 @@ class ChatDetailViewModelTest {
             chatHistoryDao = chatHistoryDao,
             conversationMetadataDao = conversationMetadataDao,
             sendManualReplyUseCase = sendManualReplyUseCase,
-            savedStateHandle = savedStateHandle
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
         )
         advanceUntilIdle()
 
@@ -201,5 +212,30 @@ class ChatDetailViewModelTest {
                 retryMessageId = 42L
             )
         }
+    }
+
+    @Test
+    fun `uiState reflects active AI generating state from orchestrator`() = runTest(testDispatcher) {
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isAiGenerating)
+
+        AutoReplyOrchestrator.setContactProcessing("أحمد مصطفى", true)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isAiGenerating)
+
+        AutoReplyOrchestrator.setContactProcessing("أحمد مصطفى", false)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isAiGenerating)
     }
 }

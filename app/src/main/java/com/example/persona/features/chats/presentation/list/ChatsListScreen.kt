@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -113,6 +114,18 @@ fun ChatsListScreen(
                         onClick = { viewModel.onFilterSelected(filter) },
                         label = {
                             Text(text = filter.label)
+                        },
+                        leadingIcon = if (filter == ChatFilter.NEEDS_ATTENTION) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Default.PriorityHigh,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        } else {
+                            null
                         }
                     )
                 }
