@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -104,61 +105,78 @@ fun SettingsScreen(
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    // ── My Identity ───────────────────────────────────────────
+                    // ── App Routing ───────────────────────────────────────────
                     SettingsSection(
-                        title = "MY IDENTITY",
-                        subtitle = "Enter your name exactly as it appears in WhatsApp chat exports."
+                        title = "APP ROUTING",
+                        subtitle = "Select which WhatsApp apps Persona should intercept and reply to."
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Main WhatsApp App", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                                    Text("com.whatsapp (Standard)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Switch(checked = state.listenMainApp, onCheckedChange = { viewModel.setListenMainApp(it) })
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("WhatsApp Business", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                                    Text("com.whatsapp.w4b (Business)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Switch(checked = state.listenBusinessApp, onCheckedChange = { viewModel.setListenBusinessApp(it) })
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Cloned / Dual SIM App", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                                    Text("Secondary profile clone instances", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Switch(checked = state.listenCloneApp, onCheckedChange = { viewModel.setListenCloneApp(it) })
+                            }
+                        }
+                    }
+
+                    // ── Interception Templates ────────────────────────────────
+                    SettingsSection(
+                        title = "RESPONSE TEMPLATES",
+                        subtitle = "Customize templates for short-circuit replies (Greetings and Farewell / Closing intent)."
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             OutlinedTextField(
-                                value = state.ownerName,
-                                onValueChange = { viewModel.setOwnerName(it) },
-                                label = { Text("My WhatsApp Name") },
-                                singleLine = true,
+                                value = state.greetingTemplate,
+                                onValueChange = { viewModel.setGreetingTemplate(it) },
+                                label = { Text("Greeting Template") },
                                 modifier = Modifier.fillMaxWidth(),
-                                isError = state.ownerName.isBlank()
+                                minLines = 2
                             )
-
-                            if (state.ownerName.isBlank()) {
-                                Text(
-                                    text = "Required to import chats",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                                ),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Info,
-                                        contentDescription = "Info",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        text = "If you've already imported contacts, setting your name correctly and re-importing will fix any identity issues.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
+                            OutlinedTextField(
+                                value = state.farewellTemplate,
+                                onValueChange = { viewModel.setFarewellTemplate(it) },
+                                label = { Text("Farewell / Closing Template") },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 2
+                            )
                         }
                     }
 

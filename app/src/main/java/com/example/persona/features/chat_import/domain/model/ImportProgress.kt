@@ -4,22 +4,19 @@ data class ImportProgress(
     val phase: ImportPhase,
     val currentBatch: Int,
     val totalBatches: Int,
-    val messagesProcessed: Int,
-    val totalMessages: Int,
+    val chunksProcessed: Int,
+    val totalChunks: Int,
     val errorCount: Int = 0
 ) {
     val progressFraction: Float
-        get() = if (totalMessages > 0) messagesProcessed.toFloat() / totalMessages else 0f
+        get() = if (totalChunks > 0) chunksProcessed.toFloat() / totalChunks else 0f
 
     enum class ImportPhase(val displayName: String) {
-        READING_FILE("Reading file..."),
-        DETECTING_FORMAT("Detecting format..."),
-        PARSING_MESSAGES("Parsing messages..."),
-        NORMALIZING_TEXT("Normalizing text..."),
-        GROUPING_MESSAGES("Grouping messages..."),
-        DETECTING_INTENT("Classifying intent..."),
-        EMBEDDING("Generating embeddings..."),
-        PERSISTING("Saving to database..."),
-        COMPLETE("Import complete!")
+        READING_FILE("قراءة الملف..."),
+        CHUNKING("تقسيم المحتوى..."),
+        PERSISTING("حفظ المعرفة..."),
+        EMBEDDING("توليد التضمينات..."),
+        CHECKPOINT("تحسين قاعدة البيانات..."),
+        COMPLETE("اكتمل الاستيراد!")
     }
 }

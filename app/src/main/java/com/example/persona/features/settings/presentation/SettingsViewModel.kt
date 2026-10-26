@@ -38,7 +38,11 @@ data class SettingsUiState(
     val replyDelaySeconds: Int = 2,
     val replyDelayInput: String = "2",
     val replyDelayError: String? = null,
-    val ownerName: String = "",
+    val listenMainApp: Boolean = true,
+    val listenBusinessApp: Boolean = true,
+    val listenCloneApp: Boolean = false,
+    val greetingTemplate: String = "",
+    val farewellTemplate: String = "",
     val isLoading: Boolean = true
 )
 
@@ -67,13 +71,28 @@ class SettingsViewModel @Inject constructor(
                 }
             }
             launch {
-                userPreferencesRepository.ownerName.collect { name ->
-                    _uiState.update {
-                        it.copy(
-                            ownerName = name,
-                            isLoading = false
-                        )
-                    }
+                userPreferencesRepository.listenMainApp.collect { value ->
+                    _uiState.update { it.copy(listenMainApp = value, isLoading = false) }
+                }
+            }
+            launch {
+                userPreferencesRepository.listenBusinessApp.collect { value ->
+                    _uiState.update { it.copy(listenBusinessApp = value, isLoading = false) }
+                }
+            }
+            launch {
+                userPreferencesRepository.listenCloneApp.collect { value ->
+                    _uiState.update { it.copy(listenCloneApp = value, isLoading = false) }
+                }
+            }
+            launch {
+                userPreferencesRepository.greetingTemplate.collect { value ->
+                    _uiState.update { it.copy(greetingTemplate = value, isLoading = false) }
+                }
+            }
+            launch {
+                userPreferencesRepository.farewellTemplate.collect { value ->
+                    _uiState.update { it.copy(farewellTemplate = value, isLoading = false) }
                 }
             }
         }
@@ -116,10 +135,38 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun setOwnerName(name: String) {
-        _uiState.update { it.copy(ownerName = name) }
+    fun setListenMainApp(enabled: Boolean) {
+        _uiState.update { it.copy(listenMainApp = enabled) }
         viewModelScope.launch {
-            userPreferencesRepository.setOwnerName(name)
+            userPreferencesRepository.setListenMainApp(enabled)
+        }
+    }
+
+    fun setListenBusinessApp(enabled: Boolean) {
+        _uiState.update { it.copy(listenBusinessApp = enabled) }
+        viewModelScope.launch {
+            userPreferencesRepository.setListenBusinessApp(enabled)
+        }
+    }
+
+    fun setListenCloneApp(enabled: Boolean) {
+        _uiState.update { it.copy(listenCloneApp = enabled) }
+        viewModelScope.launch {
+            userPreferencesRepository.setListenCloneApp(enabled)
+        }
+    }
+
+    fun setGreetingTemplate(text: String) {
+        _uiState.update { it.copy(greetingTemplate = text) }
+        viewModelScope.launch {
+            userPreferencesRepository.setGreetingTemplate(text)
+        }
+    }
+
+    fun setFarewellTemplate(text: String) {
+        _uiState.update { it.copy(farewellTemplate = text) }
+        viewModelScope.launch {
+            userPreferencesRepository.setFarewellTemplate(text)
         }
     }
 

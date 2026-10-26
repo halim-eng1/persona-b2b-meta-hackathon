@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +8,19 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
+}
+
+val secretsProperties = Properties().apply {
+    val secretsFile = rootProject.file("secrets.properties")
+    if (secretsFile.exists()) {
+        FileInputStream(secretsFile).use { load(it) }
+    }
+}
+
+fun resolveSecret(name: String): String? {
+    return System.getenv(name)
+        ?: secretsProperties.getProperty(name)
+        ?: project.findProperty(name)?.toString()
 }
 
 android {
@@ -27,6 +43,18 @@ android {
             stl = "c++_shared"
             abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a"))
         }
+
+        // OpenRouter credentials — resolved from environment or secrets properties
+        buildConfigField(
+            "String",
+            "OPENROUTER_API_KEY",
+            "\"${resolveSecret("OPENROUTER_API_KEY") ?: ""}\""
+        )
+        buildConfigField(
+            "String",
+            "OPENROUTER_BASE_URL",
+            "\"${resolveSecret("OPENROUTER_BASE_URL") ?: "https://openrouter.ai/api/v1/chat/completions"}\""
+        )
 
     }
 

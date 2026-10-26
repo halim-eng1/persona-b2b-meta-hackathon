@@ -18,6 +18,7 @@ import com.example.persona.features.chat_import.presentation.ChatImportScreen
 import com.example.persona.features.chat_import.presentation.ChatImportProgressScreen
 import com.example.persona.features.chat_import.presentation.ChatImportViewModel
 import com.example.persona.features.home.presentation.HomeScreen
+import com.example.persona.features.knowledge.presentation.KnowledgeManagementScreen
 import com.example.persona.features.onboarding.presentation.PermissionOnboardingScreen
 import com.example.persona.features.settings.presentation.SettingsScreen
 
@@ -40,8 +41,8 @@ fun PersonaNavGraph(
             )
         }
 
-        composable<Screen.Contacts> {
-            PlaceholderScreen(name = "Contacts — Phase 4")
+        composable<Screen.KnowledgeManagement> {
+            KnowledgeManagementScreen()
         }
 
         composable<Screen.AuditLog> {

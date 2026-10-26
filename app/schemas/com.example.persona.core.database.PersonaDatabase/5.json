@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 5,
-    "identityHash": "d18a593ed350486e9b1fbb62600fe646",
+    "identityHash": "d096559917b85c963645f0d69f2372ac",
     "entities": [
       {
         "tableName": "chat_messages",
@@ -132,6 +132,17 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_sentiment_type` ON `${TABLE_NAME}` (`sentiment_type`)"
+          },
+          {
+            "name": "index_chat_messages_contact_name_is_user_message_timestamp",
+            "unique": false,
+            "columnNames": [
+              "contact_name",
+              "is_user_message",
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_contact_name_is_user_message_timestamp` ON `${TABLE_NAME}` (`contact_name`, `is_user_message`, `timestamp`)"
           }
         ],
         "foreignKeys": []
@@ -482,7 +493,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd18a593ed350486e9b1fbb62600fe646')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd096559917b85c963645f0d69f2372ac')"
     ]
   }
 }

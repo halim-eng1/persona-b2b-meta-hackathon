@@ -12,15 +12,21 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.persona.R
+import com.example.persona.core.data.repository.RoutingPrefs
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.logging.PersonaLogTags
-import com.example.persona.features.auto_reply.domain.model.WhatsAppNotification
+import com.example.persona.core.debug.DebugFlags
+import com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceClass
+import com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceDiagnostics
 import com.example.persona.features.auto_reply.domain.model.ExtraMessage
-import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
-import com.example.persona.features.chat_import.data.embedding.HuggingFaceTokenizer
+import com.example.persona.features.auto_reply.domain.model.WhatsAppNotification
 import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
+import com.example.persona.features.chat_import.data.embedding.HuggingFaceTokenizer
+import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.combine
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
@@ -31,18 +37,46 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     @Inject lateinit var modelManager: OnnxModelManager
     @Inject lateinit var tokenizer: HuggingFaceTokenizer
     @Inject lateinit var orchestrator: AutoReplyOrchestrator
+    @Inject lateinit var sourceDiagnostics: NotificationSourceDiagnostics
+    @Inject lateinit var prefsRepository: UserPreferencesRepository
 
     private val serviceScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Default + CoroutineName("NLS-AutoReply")
     )
 
+    /**
+     * Cached routing prefs. Updated lazily from the DataStore on each notification
+     * using a lightweight in-memory cache — avoids a full suspend call on the hot path
+     * while still picking up pref changes within a few seconds.
+     */
+    @Volatile
+    private var cachedRoutingPrefs: RoutingPrefs = RoutingPrefs(
+        listenMainApp = true,
+        listenBusinessApp = true,
+        listenCloneApp = false
+    )
+
     companion object {
+        @Volatile
+        var instance: java.lang.ref.WeakReference<WhatsAppNotificationListener>? = null
+
         private val WHATSAPP_PACKAGES = setOf(
             "com.whatsapp",
             "com.whatsapp.w4b"
         )
-        private const val EXTRA_CONVERSATION_TITLE = "android.hiddenConversationTitle"
-        
+
+        /**
+         * Titles that indicate the notification is from the user's own outgoing
+         * messages or from WhatsApp system messages. These must be ignored to
+         * prevent the bot from replying to itself.
+         */
+        private val SELF_REPLY_TITLES = setOf(
+            "You",
+            "أنت",
+            "WhatsApp",
+            "WhatsApp Business"
+        )
+
         const val CHANNEL_ID = "persona_auto_reply_channel"
         const val NOTIFICATION_ID = 1001
         private const val DEDUP_TTL_MS = 30_000L  // 30 seconds
@@ -51,40 +85,75 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     private val recentKeys = ConcurrentHashMap<String, Long>(64)
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        // 1. Filter: only WhatsApp packages
+        // ── 1. Package filter ─────────────────────────────────────────────────
         if (sbn.packageName !in WHATSAPP_PACKAGES) return
 
-        // 2. Filter: only messaging-style notifications
+        // ── 1a. Diagnostics (non-blocking, fire-and-forget) ───────────────────
+        if (DebugFlags.ENABLE_NOTIFICATION_DIAGNOSTICS) {
+            sourceDiagnostics.captureAndLog(sbn)
+        }
+
+        // ── 2. UserHandle-based source classification ──────────────────────────
+        val userIdentifier = reflectUserIdentifier(sbn)
+        val sourceClass = NotificationSourceDiagnostics.classify(sbn.packageName, userIdentifier)
+
+        // ── 3. Routing gate ────────────────────────────────────────────────────
+        //     Check the cached routing prefs. The prefs are refreshed on a background
+        //     coroutine so we never block the NLS thread.
+        val prefs = cachedRoutingPrefs
+        val shouldProcess = when (sourceClass) {
+            NotificationSourceClass.MAIN_APP  -> prefs.listenMainApp
+            NotificationSourceClass.BUSINESS  -> prefs.listenBusinessApp
+            NotificationSourceClass.CLONE     -> prefs.listenCloneApp
+            NotificationSourceClass.UNKNOWN   -> false
+        }
+        if (!shouldProcess) {
+            PersonaLogger.d(
+                PersonaLogTags.NOTIFICATION,
+                "Skipped notification: sourceClass=$sourceClass key=${sbn.key}"
+            )
+            return
+        }
+
+        // ── 4. Messaging style filter ─────────────────────────────────────────
         val extras = sbn.notification?.extras ?: return
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: return
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
 
-        // 3. Skip group summary notifications
+        // Skip group summary banners
         if (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
 
-        // Log notification receipt
+        // ── 4a. Self-reply guard ──────────────────────────────────────────────
+        //     Ignore notifications from the user's own outgoing messages or
+        //     WhatsApp system messages to prevent the bot from replying to itself.
+        if (title in SELF_REPLY_TITLES) {
+            PersonaLogger.d(
+                PersonaLogTags.NOTIFICATION,
+                "Skipped self-reply notification: title=$title key=${sbn.key}"
+            )
+            return
+        }
+
         PersonaLogger.d(
             PersonaLogTags.NOTIFICATION,
-            "Notification received: Title=$title, NotificationKey=${sbn.key}"
+            "Notification accepted: source=$sourceClass title=$title key=${sbn.key}"
         )
 
-        // 4. ConcurrentHashMap-based dedup with TTL
+        // ── 5. Dedup ──────────────────────────────────────────────────────────
         val dedupeKey = "${sbn.key}_${text.hashCode()}"
         val now = System.currentTimeMillis()
         recentKeys.entries.removeAll { now - it.value > DEDUP_TTL_MS }
-        if (recentKeys.putIfAbsent(dedupeKey, now) != null) return // Already processed
+        if (recentKeys.putIfAbsent(dedupeKey, now) != null) return
 
-        // 5. Extract the RemoteInput reply action and cache it
+        // ── 6. Cache reply action ─────────────────────────────────────────────
         val replyAction = sbn.notification.actions?.firstOrNull { action ->
             action.remoteInputs?.any { it.resultKey != null } == true
         }
-
-        // Cache the reply action for later DirectReply execution
         if (replyAction != null) {
             NotificationActionCache.put(sbn.key, replyAction)
         }
 
-        // Extract extra messages for context compilation
+        // ── 7. Extract extra messages ─────────────────────────────────────────
         val extraMessagesList = mutableListOf<ExtraMessage>()
         try {
             val parcelableMessages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
@@ -94,26 +163,19 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         val msgText = parcelable.getCharSequence("text")?.toString()
                         val msgTimestamp = parcelable.getLong("time")
                         var senderName: String? = null
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                             val senderPerson = parcelable.getParcelable<android.app.Person>("sender_person")
                             senderName = senderPerson?.name?.toString()
                         }
                         if (senderName == null) {
                             senderName = parcelable.getCharSequence("sender")?.toString()
                         }
-
                         if (msgText != null) {
                             val isUser = senderName != null && (
-                                senderName.equals("You", ignoreCase = true) || 
+                                senderName.equals("You", ignoreCase = true) ||
                                 senderName.equals("أنت", ignoreCase = true)
                             )
-                            extraMessagesList.add(
-                                ExtraMessage(
-                                    text = msgText,
-                                    timestamp = msgTimestamp,
-                                    isUser = isUser
-                                )
-                            )
+                            extraMessagesList.add(ExtraMessage(text = msgText, timestamp = msgTimestamp, isUser = isUser))
                         }
                     }
                 }
@@ -122,13 +184,14 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             Log.w("NLS", "Failed to extract EXTRA_MESSAGES for ${sbn.key}", e)
         }
 
-        // 6. Build domain model and dispatch
+        // ── 8. Build domain model with sourceClass and dispatch ───────────────
         val whatsappNotification = WhatsAppNotification(
             title = title,
             text = text,
             postTime = sbn.postTime,
             notificationKey = sbn.key,
-            extraMessages = extraMessagesList
+            extraMessages = extraMessagesList,
+            sourceClass = sourceClass
         )
 
         messageDispatcher.dispatch(whatsappNotification)
@@ -142,57 +205,96 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        instance = java.lang.ref.WeakReference(this)
         createNotificationChannel()
-        
+
         val notification = buildSilentNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
-            startForeground(
-                NOTIFICATION_ID,
-                notification
-            )
+            startForeground(NOTIFICATION_ID, notification)
         }
 
-        // Lazy Initialization: pre-warm ONNX model and tokenizer in a background coroutine to prevent ANR
+        // Pre-warm ONNX model + tokenizer in background
         serviceScope.launch(Dispatchers.IO) {
             try {
                 tokenizer.initialize()
                 modelManager.loadModel()
-                Log.i("NLS", "ONNX model and tokenizer pre-warmed in background successfully")
+                Log.i("NLS", "ONNX model and tokenizer pre-warmed successfully")
             } catch (e: Exception) {
-                Log.e("NLS", "Failed to lazy initialize ONNX model/tokenizer in background", e)
+                Log.e("NLS", "Failed to pre-warm ONNX model/tokenizer", e)
             }
         }
 
-        // Start listening to the messages flow
-        startListeningForMessages()
+        // Continuously refresh routing prefs in the background
+        serviceScope.launch(Dispatchers.IO) {
+            combine(
+                prefsRepository.listenMainApp,
+                prefsRepository.listenBusinessApp,
+                prefsRepository.listenCloneApp
+            ) { listenMain, listenBusiness, listenClone ->
+                RoutingPrefs(
+                    listenMainApp = listenMain,
+                    listenBusinessApp = listenBusiness,
+                    listenCloneApp = listenClone
+                )
+            }.collect { prefs ->
+                cachedRoutingPrefs = prefs
+            }
+        }
 
-        // Start the orchestrator processing pipeline
+        startListeningForMessages()
         orchestrator.start()
     }
 
     override fun onListenerDisconnected() {
+        if (instance?.get() === this) instance = null
         serviceScope.cancel()
-        // Request rebind so the OS restores the NLS on next opportunity
         requestRebind(ComponentName(this, WhatsAppNotificationListener::class.java))
         super.onListenerDisconnected()
     }
 
     override fun onDestroy() {
+        if (instance?.get() === this) instance = null
         serviceScope.cancel()
         super.onDestroy()
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // Private helpers
+    // ──────────────────────────────────────────────────────────────────────────
+
     private fun startListeningForMessages() {
         serviceScope.launch {
             messageDispatcher.notifications.collect { notification ->
-                Log.d("NLS", "Received notification: ${notification.notificationKey} - ${notification.title}: ${notification.text}")
+                Log.d("NLS", "Dispatched: key=${notification.notificationKey} source=${notification.sourceClass} title=${notification.title}")
             }
+        }
+    }
+
+    /**
+     * Refreshes the routing prefs cache from DataStore.
+     * Called once on connect and whenever the routing prefs flows emit.
+     */
+    private suspend fun refreshRoutingPrefs() {
+        try {
+            cachedRoutingPrefs = prefsRepository.getRoutingPrefsSync()
+        } catch (e: Exception) {
+            Log.w("NLS", "Failed to refresh routing prefs: ${e.message}")
+        }
+    }
+
+    /**
+     * Reflectively reads [UserHandle.identifier] from the SBN's user field.
+     * Returns 0 on any failure (treats as primary user — MAIN_APP path).
+     */
+    private fun reflectUserIdentifier(sbn: StatusBarNotification): Int {
+        return try {
+            val userHandle = sbn.user ?: return 0
+            val raw = userHandle.javaClass.getMethod("getIdentifier").invoke(userHandle) ?: return 0
+            (raw as? Int) ?: raw.toString().toIntOrNull() ?: 0
+        } catch (_: Throwable) {
+            0
         }
     }
 
@@ -212,8 +314,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
     private fun buildSilentNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("PersonaChat Active")
-            .setContentText("Auto-reply is monitoring messages")
+            .setContentTitle("Persona B2B Active")
+            .setContentText("المساعد الآلي يراقب الرسائل الواردة")
             .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)

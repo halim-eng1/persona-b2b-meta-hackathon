@@ -2,8 +2,8 @@ package com.example.persona.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -30,7 +30,7 @@ fun BottomNavBar(
 ) {
     val items = listOf(
         BottomNavItem(Screen.Home, "Home", Icons.Default.Home),
-        BottomNavItem(Screen.Contacts, "Contacts", Icons.Default.Person),
+        BottomNavItem(Screen.KnowledgeManagement, "Knowledge", Icons.Default.Info),
         BottomNavItem(Screen.AuditLog, "Audit Log", Icons.AutoMirrored.Filled.List),
         BottomNavItem(Screen.Settings, "Settings", Icons.Default.Settings)
     )

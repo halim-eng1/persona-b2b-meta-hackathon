@@ -1,66 +1,80 @@
 package com.example.persona.features.chat_import.data.worker
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
+import androidx.room.withTransaction
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.example.persona.R
 import com.example.persona.core.common.Constants
 import com.example.persona.core.database.PersonaDatabase
-import com.example.persona.core.database.dao.ChatMessageDao
-import com.example.persona.core.database.dao.EmbeddingDao
-import com.example.persona.core.database.dao.LinkedContactDao
-import com.example.persona.core.database.entity.ChatMessageEntity
-import com.example.persona.core.database.entity.EmbeddingEntity
-import com.example.persona.core.database.entity.LinkedContactEntity
-import com.example.persona.core.data.repository.UserPreferencesRepository
+import com.example.persona.core.database.dao.BusinessKnowledgeDao
+import com.example.persona.core.database.dao.EmbeddingIndexDao
+import com.example.persona.core.database.entity.BusinessKnowledgeEntity
+import com.example.persona.core.database.entity.EmbeddingIndexEntity
 import com.example.persona.core.di.IoDispatcher
 import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
-import com.example.persona.features.chat_import.data.parser.ChatFileParser
-import com.example.persona.features.chat_import.data.parser.ParseFileResult
-import com.example.persona.features.chat_import.data.processor.MessageProcessor
+import com.example.persona.features.chat_import.data.parser.KnowledgeChunk
+import com.example.persona.features.chat_import.data.parser.MarkdownChunker
 import com.example.persona.features.chat_import.domain.model.ImportProgress
-import com.example.persona.features.chat_import.domain.model.ParsedMessage
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
 
+/**
+ * WorkManager worker that ingests a Markdown or plain-text business knowledge
+ * document into the global RAG knowledge base.
+ *
+ * **Pipeline (6 phases):**
+ * 1. READ_FILE    — Read raw text from content URI
+ * 2. CHUNKING     — Split document with [MarkdownChunker]
+ * 3. PERSISTING   — Clear old CORE_DOCUMENT entries, insert new chunks in transaction
+ * 4. EMBEDDING    — Batched embedding generation via [EmbeddingEngine]
+ * 5. CHECKPOINT   — PRAGMA wal_checkpoint(TRUNCATE)
+ * 6. COMPLETE     — Report summary output
+ *
+ * All B2C dependencies (ChatFileParser, MessageProcessor, ownerName validation,
+ * LinkedContactEntity, ChatMessageDao, EmbeddingDao) have been removed.
+ */
 @HiltWorker
 class ChatImportWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val chatFileParser: ChatFileParser,
-    private val messageProcessor: MessageProcessor,
+    private val markdownChunker: MarkdownChunker,
     private val embeddingEngine: EmbeddingEngine,
     private val modelManager: OnnxModelManager,
-    private val chatMessageDao: ChatMessageDao,
-    private val embeddingDao: EmbeddingDao,
-    private val linkedContactDao: LinkedContactDao,
+    private val businessKnowledgeDao: BusinessKnowledgeDao,
+    private val embeddingIndexDao: EmbeddingIndexDao,
     private val database: PersonaDatabase,
-    private val prefsRepository: UserPreferencesRepository,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : CoroutineWorker(context, params) {
 
     companion object {
-        // Input data keys
+        // Input
         const val KEY_FILE_URI = "file_uri"
 
-        // Progress data keys
+        // Progress
         const val KEY_PHASE = "phase"
         const val KEY_CURRENT_BATCH = "current_batch"
         const val KEY_TOTAL_BATCHES = "total_batches"
         const val KEY_MESSAGES_PROCESSED = "messages_processed"
         const val KEY_TOTAL_MESSAGES = "total_messages"
 
-        // Output data keys
+        // Output
         const val KEY_RESULT_CONTACT = "result_contact"
         const val KEY_RESULT_TOTAL = "result_total"
         const val KEY_RESULT_USER_MSGS = "result_user_msgs"
@@ -68,203 +82,224 @@ class ChatImportWorker @AssistedInject constructor(
         const val KEY_ERROR_MESSAGE = "error_message"
 
         const val UNIQUE_WORK_NAME = "chat_import"
+
+        private const val FOREGROUND_CHUNK_THRESHOLD = 50
     }
 
     override suspend fun doWork(): Result = withContext(ioDispatcher) {
-        PersonaLogger.d(PersonaLogTags.IMPORT, "Import started")
+        PersonaLogger.d(PersonaLogTags.IMPORT, "Knowledge import started")
+
         val fileUriString = inputData.getString(KEY_FILE_URI)
             ?: return@withContext failWithError("No file URI provided")
-        val ownerName = prefsRepository.getOwnerNameSync()
-        if (ownerName.isBlank()) {
-            return@withContext failWithError("Owner name not configured. Please set your WhatsApp name in Settings.")
+        val fileUri = Uri.parse(fileUriString)
+
+        // Read the raw file text first (lightweight) so we can decide on foreground promotion
+        val rawText = try {
+            applicationContext.contentResolver.openInputStream(fileUri)
+                ?.bufferedReader(Charsets.UTF_8)
+                ?.readText()
+                ?: return@withContext failWithError("Cannot open file for reading")
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            return@withContext failWithError("File read error: ${e.message}")
         }
 
-        try {
-            // ── Phase 1: Read file ──────────────────────────────
-            reportProgress(ImportProgress.ImportPhase.READING_FILE, 0, 0, 0, 0)
+        if (rawText.isBlank()) {
+            return@withContext failWithError("File is empty or contains only whitespace")
+        }
 
-            val fileUri = Uri.parse(fileUriString)
-            val lineSequence = applicationContext.contentResolver
-                .openInputStream(fileUri)
-                ?.bufferedReader(Charsets.UTF_8)
-                ?.lineSequence()
-                ?: return@withContext failWithError("Cannot read file")
-
-            // ── Phase 2: Parse ──────────────────────────────────
-            reportProgress(ImportProgress.ImportPhase.DETECTING_FORMAT, 0, 0, 0, 0)
-
-            val parseResult = chatFileParser.parse(lineSequence, ownerName)
-
-            when (parseResult) {
-                is ParseFileResult.FormatError ->
-                    return@withContext failWithError("Unsupported chat format")
-                is ParseFileResult.Success -> { /* continue */ }
+        // Promote to foreground for large files
+        if (rawText.length > FOREGROUND_CHUNK_THRESHOLD * Constants.EMBEDDING_MAX_CHUNK_CHARS) {
+            try { setForeground(getForegroundInfo()) } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                PersonaLogger.e(PersonaLogTags.IMPORT, "setForeground failed", e)
             }
+        }
 
-            val parsed = (parseResult as ParseFileResult.Success)
-            val messages = parsed.messages
-            PersonaLogger.d(PersonaLogTags.IMPORT, "Messages parsed")
+        // Infer the source filename from the URI (best-effort)
+        val sourceFileName = fileUri.lastPathSegment?.substringAfterLast('/')
 
-            // ── Data Quality Gate ───────────────────────────────
-            if (messages.size < Constants.MIN_MESSAGES_REQUIRED) {
+        try {
+            // ── Phase 1: Read file ─────────────────────────────────────────────
+            reportProgress(ImportProgress.ImportPhase.READING_FILE, 0, 0, 0, 0)
+            PersonaLogger.d(PersonaLogTags.IMPORT, "File read: ${rawText.length} chars, file=$sourceFileName")
+
+            // ── Phase 2: Chunking ──────────────────────────────────────────────
+            reportProgress(ImportProgress.ImportPhase.CHUNKING, 0, 0, 0, 0)
+            val chunks: List<KnowledgeChunk> = markdownChunker.chunk(
+                documentText = rawText,
+                sourceFileName = sourceFileName,
+                sourceType = "CORE_DOCUMENT"
+            )
+
+            if (chunks.isEmpty()) {
                 return@withContext failWithError(
-                    "Insufficient messages: ${messages.size} found, ${Constants.MIN_MESSAGES_REQUIRED} required"
+                    "Document produced no chunks after splitting. " +
+                        "Ensure the file contains readable text content."
                 )
             }
 
-            // ── Phase 3: Process (normalize + intent + group) ──
-            reportProgress(ImportProgress.ImportPhase.PARSING_MESSAGES, 0, 0, 0, messages.size)
+            PersonaLogger.d(PersonaLogTags.IMPORT, "Chunking complete: ${chunks.size} chunks")
 
-            val processed = messageProcessor.process(messages)
-            PersonaLogger.d(PersonaLogTags.IMPORT, "Messages grouped")
+            // ── Phase 3: Persist (clear CORE_DOCUMENT + insert in transaction) ─
+            reportProgress(ImportProgress.ImportPhase.PERSISTING, 0, 0, 0, chunks.size)
 
-            // ── Phase 4: Load model ─────────────────────────────
-            if (!modelManager.isLoaded()) {
-                val loaded = modelManager.loadModel()
-                if (!loaded) {
-                    return@withContext failWithError("Failed to load AI model")
+            database.withTransaction {
+                // Remove previous CORE_DOCUMENT entries for this filename (re-import flow).
+                // MANUAL_ENTRY and TEMPORARY_OFFER rows are intentionally preserved.
+                if (sourceFileName != null) {
+                    // Delete only chunks from the same source file to support multi-file imports
+                    database.openHelper.writableDatabase.execSQL(
+                        "DELETE FROM business_knowledge WHERE source_type = 'CORE_DOCUMENT' AND source_file_name = ?",
+                        arrayOf(sourceFileName)
+                    )
+                } else {
+                    // No filename → nuke all CORE_DOCUMENT rows (single-file default)
+                    businessKnowledgeDao.deleteBySourceType("CORE_DOCUMENT")
                 }
+
+                val entities = chunks.map { chunk ->
+                    BusinessKnowledgeEntity(
+                        chunkId = chunk.chunkId,
+                        headerContext = chunk.headerContext,
+                        chunkText = chunk.chunkText,
+                        sourceType = chunk.sourceType,
+                        sourceFileName = chunk.sourceFileName
+                    )
+                }
+                businessKnowledgeDao.insertAll(entities)
             }
 
-            // Identify the contact name (the unique non-owner sender name)
-            val contactName = parsed.messages
-                .firstOrNull { !it.isUserMessage }?.senderName ?: "Unknown"
+            PersonaLogger.d(PersonaLogTags.IMPORT, "Chunks persisted: ${chunks.size}")
 
-            // ── Phase 5: Clear old data ─────────────────────────
-            embeddingDao.deleteEmbeddingsForContact(contactName)
-            chatMessageDao.deleteMessagesForContact(contactName)
+            // ── Phase 4: Load model + Embed ───────────────────────────────────
+            if (!modelManager.isLoaded()) {
+                val loaded = modelManager.loadModel()
+                if (!loaded) return@withContext failWithError("Failed to load AI embedding model")
+            }
 
-            // ── Phase 6: Persist all messages to DB ─────────────
-            reportProgress(ImportProgress.ImportPhase.PERSISTING, 0, 0, 0, processed.size)
-
-            val messageEntities = processed.map { it.toEntity(contactName) }
-            chatMessageDao.insertAll(messageEntities)
-
-            // Re-query user messages to get database auto-generated IDs and their corresponding triggers
-            val storedUserMessagesWithTriggers = chatMessageDao.getUserMessagesWithTriggersForContact(contactName)
-            val totalBatches = (storedUserMessagesWithTriggers.size + Constants.EMBEDDING_BATCH_SIZE - 1) /
-                Constants.EMBEDDING_BATCH_SIZE
-
-            // ── Phase 7: Batched embedding generation ───────────
+            val totalChunks = chunks.size
+            val totalBatches = (totalChunks + Constants.EMBEDDING_BATCH_SIZE - 1) / Constants.EMBEDDING_BATCH_SIZE
             var processedCount = 0
+
             for (batchIndex in 0 until totalBatches) {
+                ensureActive()
                 if (isStopped) return@withContext Result.failure()
 
                 val start = batchIndex * Constants.EMBEDDING_BATCH_SIZE
-                val end = minOf(start + Constants.EMBEDDING_BATCH_SIZE, storedUserMessagesWithTriggers.size)
-                val batch = storedUserMessagesWithTriggers.subList(start, end)
+                val end = minOf(start + Constants.EMBEDDING_BATCH_SIZE, totalChunks)
+                val batchChunks = chunks.subList(start, end)
 
                 reportProgress(
                     ImportProgress.ImportPhase.EMBEDDING,
                     batchIndex + 1, totalBatches,
-                    processedCount, storedUserMessagesWithTriggers.size
+                    processedCount, totalChunks
                 )
 
-                // Generate embeddings (Embed the TRIGGER text, fallback to message text if no trigger)
-                val textsToEmbed = batch.map { it.triggerText ?: (it.message.normalizedText ?: it.message.messageText) }
+                val textsToEmbed = batchChunks.map { it.chunkText }
+
+                ensureActive()
                 val embeddings = embeddingEngine.embedBatch(textsToEmbed)
 
-                // Save embeddings
-                val embeddingEntities = batch.zip(embeddings).mapNotNull { (item, vec) ->
+                val embeddingEntities = batchChunks.zip(embeddings).mapNotNull { (chunk, vec) ->
                     vec?.let {
-                        EmbeddingEntity(
-                            messageId = item.message.id,
-                            vector = it,
-                            modelVersion = EmbeddingEntity.CURRENT_MODEL_VERSION,
-                            createdAt = Clock.System.now()
+                        EmbeddingIndexEntity(
+                            chunkId = chunk.chunkId,
+                            vectorBlob = it,
+                            modelVersion = EmbeddingIndexEntity("", FloatArray(0)).modelVersion
                         )
                     }
                 }
-                embeddingDao.insertAll(embeddingEntities)
 
-                processedCount += batch.size
-
-                // Free memory
-                System.gc()
+                ensureActive()
+                embeddingIndexDao.insertAll(embeddingEntities)
+                processedCount += batchChunks.size
             }
-            PersonaLogger.d(PersonaLogTags.IMPORT, "Embeddings generated")
 
-            // ── Phase 8: Register linked contact ────────────────
-            linkedContactDao.insert(
-                LinkedContactEntity(
-                    whatsappDisplayName = contactName,
-                    isActive = true,
-                    autoReplyEnabled = true,
-                    cooldownCount = 0,
-                    cooldownResetAt = null,
-                    linkedAt = Clock.System.now(),
-                    totalMessagesParsed = processed.size
-                )
-            )
+            PersonaLogger.d(PersonaLogTags.IMPORT, "Embeddings generated: $processedCount")
 
-            // ── Phase 9: SQLite WAL Checkpoint (Exactly Once) ──
+            // ── Phase 5: WAL Checkpoint ───────────────────────────────────────
+            reportProgress(ImportProgress.ImportPhase.CHECKPOINT, totalBatches, totalBatches, totalChunks, totalChunks)
             try {
                 database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").use { cursor ->
                     if (cursor.moveToFirst()) {
-                        Log.i("ChatImportWorker", "WAL checkpoint executed successfully: busy=${cursor.getInt(0)}, log=${cursor.getInt(1)}, checkpointed=${cursor.getInt(2)}")
-                    } else {
-                        Log.i("ChatImportWorker", "WAL checkpoint executed successfully")
+                        Log.i("ChatImportWorker",
+                            "WAL checkpoint: busy=${cursor.getInt(0)}, log=${cursor.getInt(1)}, " +
+                                "checkpointed=${cursor.getInt(2)}")
                     }
                 }
             } catch (e: Exception) {
-                Log.e("PersonaImport", "WAL Checkpoint Failed -> Exception: ${e.javaClass.simpleName} | Message: ${e.message}")
+                if (e is CancellationException) throw e
+                Log.e("ChatImportWorker", "WAL Checkpoint failed: ${e.message}")
             }
 
-            reportProgress(
-                ImportProgress.ImportPhase.COMPLETE,
-                totalBatches, totalBatches,
-                storedUserMessagesWithTriggers.size, storedUserMessagesWithTriggers.size
-            )
-            PersonaLogger.d(PersonaLogTags.IMPORT, "Import completed")
+            // ── Phase 6: Complete ─────────────────────────────────────────────
+            reportProgress(ImportProgress.ImportPhase.COMPLETE, totalBatches, totalBatches, totalChunks, totalChunks)
+            PersonaLogger.d(PersonaLogTags.IMPORT, "Knowledge import completed: $totalChunks chunks")
 
-            val outputData = workDataOf(
-                KEY_RESULT_CONTACT to contactName,
-                KEY_RESULT_TOTAL to processed.size,
-                KEY_RESULT_USER_MSGS to storedUserMessagesWithTriggers.size,
-                KEY_RESULT_FORMAT to parsed.format.name
+            Result.success(
+                workDataOf(
+                    KEY_RESULT_TOTAL to totalChunks,
+                    KEY_RESULT_USER_MSGS to processedCount,
+                    KEY_RESULT_FORMAT to "MARKDOWN"
+                )
             )
-
-            Result.success(outputData)
 
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e("PersonaImport", "Global Import Core Failure -> Exception: ${e.javaClass.simpleName} | Message: ${e.message}")
+            if (e.javaClass.name == "androidx.work.impl.WorkerStoppedException") {
+                PersonaLogger.w(PersonaLogTags.IMPORT, "Import worker stopped cleanly")
+                return@withContext Result.failure()
+            }
+            Log.e("ChatImportWorker", "Import failure: ${e.javaClass.simpleName} | ${e.message}")
             failWithError(e.message ?: "Unknown error")
         }
     }
 
-    private fun failWithError(message: String): Result {
-        return Result.failure(workDataOf(KEY_ERROR_MESSAGE to message))
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        val channelId = "knowledge_import_channel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Knowledge Import Service",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Shows progress of importing business knowledge documents"
+            }
+            val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(channel)
+        }
+
+        val notification = NotificationCompat.Builder(applicationContext, channelId)
+            .setContentTitle("استيراد قاعدة المعرفة")
+            .setContentText("جاري معالجة بيانات المتجر وتوليد التضمينات...")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+
+        return ForegroundInfo(2002, notification)
     }
+
+    private fun failWithError(message: String): Result =
+        Result.failure(workDataOf(KEY_ERROR_MESSAGE to message))
 
     private suspend fun reportProgress(
         phase: ImportProgress.ImportPhase,
         currentBatch: Int,
         totalBatches: Int,
-        messagesProcessed: Int,
-        totalMessages: Int
+        chunksProcessed: Int,
+        totalChunks: Int
     ) {
-        setProgress(workDataOf(
-            KEY_PHASE to phase.name,
-            KEY_CURRENT_BATCH to currentBatch,
-            KEY_TOTAL_BATCHES to totalBatches,
-            KEY_MESSAGES_PROCESSED to messagesProcessed,
-            KEY_TOTAL_MESSAGES to totalMessages
-        ))
+        setProgress(
+            workDataOf(
+                KEY_PHASE to phase.name,
+                KEY_CURRENT_BATCH to currentBatch,
+                KEY_TOTAL_BATCHES to totalBatches,
+                KEY_MESSAGES_PROCESSED to chunksProcessed,
+                KEY_TOTAL_MESSAGES to totalChunks
+            )
+        )
     }
-
-    private fun ParsedMessage.toEntity(contact: String) = ChatMessageEntity(
-        contactName = contact,
-        messageText = messageText,
-        isUserMessage = isUserMessage,
-        timestamp = timestamp,
-        intentType = context.intent.name,
-        topicType = context.topic.name,
-        sentimentType = context.sentiment.name,
-        contextConfidence = context.confidence,
-        isGrouped = isGrouped,
-        sourceFormat = sourceFormat.name,
-        normalizedText = normalizedText
-    )
 }

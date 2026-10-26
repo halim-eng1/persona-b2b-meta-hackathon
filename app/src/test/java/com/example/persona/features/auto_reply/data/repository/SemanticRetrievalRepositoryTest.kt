@@ -1,235 +1,101 @@
 package com.example.persona.features.auto_reply.data.repository
 
-import com.example.persona.core.database.dao.EmbeddingDao
-import com.example.persona.core.database.dao.LinkedContactDao
-import com.example.persona.core.database.dao.ChatMessageDao
-import com.example.persona.core.database.dao.ShortMessageReplyCandidate
-import com.example.persona.core.database.entity.EmbeddingWithMessage
-import com.example.persona.core.database.entity.LinkedContactEntity
-import com.example.persona.features.chat_import.domain.model.ConversationContext
-import com.example.persona.features.chat_import.domain.model.IntentType
-import com.example.persona.features.chat_import.domain.model.TopicType
-import com.example.persona.features.chat_import.domain.model.SentimentType
+import com.example.persona.core.database.dao.BusinessKnowledgeDao
+import com.example.persona.core.database.dao.EmbeddingIndexDao
+import com.example.persona.core.database.dao.ChunkVectorProjection
+import com.example.persona.core.database.dao.ChunkTextProjection
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
-import kotlinx.datetime.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class SemanticRetrievalRepositoryTest {
 
-    private val embeddingDao = mockk<EmbeddingDao>()
-    private val linkedContactDao = mockk<LinkedContactDao>()
-    private val chatMessageDao = mockk<ChatMessageDao>()
-    private val repository = SemanticRetrievalRepository(embeddingDao, linkedContactDao, chatMessageDao)
+    private val embeddingIndexDao = mockk<EmbeddingIndexDao>()
+    private val businessKnowledgeDao = mockk<BusinessKnowledgeDao>()
+    private lateinit var repository: SemanticRetrievalRepository
+
+    @Before
+    fun setUp() {
+        repository = SemanticRetrievalRepository(embeddingIndexDao, businessKnowledgeDao)
+    }
 
     @Test
-    fun retrieveCandidates_contactNotLinked_returnsEmptyList(): Unit = runBlocking {
-        coEvery { linkedContactDao.getByDisplayName("Alice") } returns null
+    fun retrieveCandidates_whenIndexIsEmpty_returnsEmptyPair(): Unit = runBlocking {
+        coEvery { embeddingIndexDao.getAllVectors() } returns emptyList()
 
-        val result = repository.retrieveCandidates(
-            contactName = "Alice",
+        val (candidates, bestScore) = repository.retrieveCandidates(
             queryEmbedding = floatArrayOf(1.0f, 0.0f),
-            queryContext = ConversationContext(IntentType.GREETING, TopicType.GENERAL, SentimentType.NEUTRAL, 0.8f)
+            minimumSimilarityThreshold = 0.75f
         )
 
-        assertTrue(result.isEmpty())
+        assertTrue(candidates.isEmpty())
+        assertEquals(0f, bestScore)
     }
 
     @Test
-    fun retrieveCandidates_exactContextMatchesSortedCorrectly(): Unit = runBlocking {
-        // Arrange
-        val contact = LinkedContactEntity(
-            id = 42L,
-            whatsappDisplayName = "Alice",
-            isActive = true,
-            autoReplyEnabled = true,
-            cooldownCount = 0,
-            cooldownResetAt = null,
-            linkedAt = Instant.fromEpochMilliseconds(0)
+    fun retrieveCandidates_selectsAndFiltersBySimilarity(): Unit = runBlocking {
+        // Arrange: 3 vectors:
+        // - A: [1.0f, 0.0f] (similarity with [1.0f, 0.0f] is 1.0f, above 0.75f)
+        // - B: [0.8f, 0.0f] (similarity is 0.8f, above 0.75f)
+        // - C: [0.5f, 0.0f] (similarity is 0.5f, below 0.75f)
+        val projections = listOf(
+            ChunkVectorProjection("chunk_A", floatArrayOf(1.0f, 0.0f)),
+            ChunkVectorProjection("chunk_B", floatArrayOf(0.8f, 0.0f)),
+            ChunkVectorProjection("chunk_C", floatArrayOf(0.5f, 0.0f))
         )
-        coEvery { linkedContactDao.getByDisplayName("Alice") } returns contact
+        coEvery { embeddingIndexDao.getAllVectors() } returns projections
 
-        // Query: Intent = QUESTION, Topic = LOCATION, Sentiment = NEUTRAL
-        val queryContext = ConversationContext(IntentType.QUESTION, TopicType.LOCATION, SentimentType.NEUTRAL, 0.9f)
-        val queryEmbedding = floatArrayOf(1.0f, 0.0f, 0.0f) // 3D vectors for simplified testing
-
-        // Create 105 candidates:
-        // - 5 candidates with score = 4 (Intent=QUESTION, Topic=LOCATION, Sentiment=NEUTRAL) and vector [0.85f, 0.0f, 0.0f] (dot = 0.85)
-        // - 95 candidates with score = 0 (Intent=GENERAL, Topic=WORK, Sentiment=NEGATIVE) and vector [0.95f, 0.0f, 0.0f] (dot = 0.95)
-        // - 5 candidates with score = 0 (Intent=GENERAL, Topic=WORK, Sentiment=NEGATIVE) and vector [0.99f, 0.0f, 0.0f] (dot = 0.99), excluded from top 100 slice.
-        
-        val highContextEmbeddings = (1..5).map { i ->
-            EmbeddingWithMessage(
-                id = i.toLong(),
-                messageId = i.toLong(),
-                vector = floatArrayOf(0.85f, 0.0f, 0.0f),
-                modelVersion = "test",
-                createdAt = Instant.fromEpochMilliseconds(0),
-                messageText = "High context message $i",
-                intentType = IntentType.QUESTION.name,
-                topicType = TopicType.LOCATION.name,
-                sentimentType = SentimentType.NEUTRAL.name,
-                contextConfidence = 0.9f,
-                messageTimestamp = Instant.fromEpochMilliseconds(1000L * i)
-            )
-        }
-
-        val lowContextEvaluated = (6..100).map { i ->
-            EmbeddingWithMessage(
-                id = i.toLong(),
-                messageId = i.toLong(),
-                vector = floatArrayOf(0.95f, 0.0f, 0.0f),
-                modelVersion = "test",
-                createdAt = Instant.fromEpochMilliseconds(0),
-                messageText = "Low context evaluated $i",
-                intentType = IntentType.GENERAL.name,
-                topicType = TopicType.WORK.name,
-                sentimentType = SentimentType.NEGATIVE.name,
-                contextConfidence = 0.5f,
-                messageTimestamp = Instant.fromEpochMilliseconds(1000L * i)
-            )
-        }
-
-        val lowContextExcluded = (101..105).map { i ->
-            EmbeddingWithMessage(
-                id = i.toLong(),
-                messageId = i.toLong(),
-                vector = floatArrayOf(0.99f, 0.0f, 0.0f), // Extremely high dot product, but context score is 0 and excluded
-                modelVersion = "test",
-                createdAt = Instant.fromEpochMilliseconds(0),
-                messageText = "Low context excluded $i",
-                intentType = IntentType.GENERAL.name,
-                topicType = TopicType.WORK.name,
-                sentimentType = SentimentType.NEGATIVE.name,
-                contextConfidence = 0.5f,
-                messageTimestamp = Instant.fromEpochMilliseconds(1000L * i)
-            )
-        }
-
-        coEvery { embeddingDao.getUserEmbeddingsForContact("Alice") } returns (highContextEmbeddings + lowContextEvaluated + lowContextExcluded)
+        coEvery { businessKnowledgeDao.getChunkTextsByIds(any()) } returns listOf(
+            ChunkTextProjection("chunk_A", "Knowledge A", "Header A"),
+            ChunkTextProjection("chunk_B", "Knowledge B", "Header B"),
+            ChunkTextProjection("chunk_C", "Knowledge C", "Header C")
+        )
 
         // Act
-        val result = repository.retrieveCandidates(
-            contactName = "Alice",
-            queryEmbedding = queryEmbedding,
-            queryContext = queryContext,
-            limit = 5,
-            minimumSimilarityThreshold = 0.7f
+        val (candidates, bestScore) = repository.retrieveCandidates(
+            queryEmbedding = floatArrayOf(1.0f, 0.0f),
+            minimumSimilarityThreshold = 0.75f,
+            queryText = "this is a long query"
         )
 
         // Assert
-        assertEquals(5, result.size)
-        // Verify that no candidate in the results belongs to the excluded group
-        result.forEach { candidate ->
-            assertTrue(!candidate.messageText.contains("excluded"))
-        }
-
-        // Verify ordering: highest similarity score first
-        assertEquals(0.95f, result[0].similarityScore, 0.001f)
-        assertEquals(42L, result[0].contactId)
+        assertEquals(2, candidates.size)
+        assertEquals("chunk_A", candidates[0].chunkId)
+        assertEquals(1.0f, candidates[0].similarityScore, 0.001f)
+        assertEquals("chunk_B", candidates[1].chunkId)
+        assertEquals(0.8f, candidates[1].similarityScore, 0.001f)
+        assertEquals(1.0f, bestScore, 0.001f)
     }
 
     @Test
-    fun retrieveCandidates_highestScoreBelowThreshold_returnsEmptyList(): Unit = runBlocking {
+    fun retrieveCandidates_appliesRepetitionPenalty(): Unit = runBlocking {
         // Arrange
-        val contact = LinkedContactEntity(
-            id = 42L,
-            whatsappDisplayName = "Alice",
-            isActive = true,
-            autoReplyEnabled = true,
-            cooldownCount = 0,
-            cooldownResetAt = null,
-            linkedAt = Instant.fromEpochMilliseconds(0)
+        val projections = listOf(
+            ChunkVectorProjection("chunk_A", floatArrayOf(0.9f, 0.0f))
         )
-        coEvery { linkedContactDao.getByDisplayName("Alice") } returns contact
-
-        val queryContext = ConversationContext(IntentType.QUESTION, TopicType.LOCATION, SentimentType.NEUTRAL, 0.9f)
-        val queryEmbedding = floatArrayOf(1.0f, 0.0f)
-
-        val embedding = EmbeddingWithMessage(
-            id = 1L,
-            messageId = 10L,
-            vector = floatArrayOf(0.6f, 0.8f), // dot product = 0.6
-            modelVersion = "test",
-            createdAt = Instant.fromEpochMilliseconds(0),
-            messageText = "Hello",
-            intentType = IntentType.QUESTION.name,
-            topicType = TopicType.LOCATION.name,
-            sentimentType = SentimentType.NEUTRAL.name,
-            contextConfidence = 0.9f,
-            messageTimestamp = Instant.fromEpochMilliseconds(5000L)
+        coEvery { embeddingIndexDao.getAllVectors() } returns projections
+        coEvery { businessKnowledgeDao.getChunkTextsByIds(any()) } returns listOf(
+            ChunkTextProjection("chunk_A", "Knowledge A", "Header A")
         )
-        coEvery { embeddingDao.getUserEmbeddingsForContact("Alice") } returns listOf(embedding)
+
+        // Text hash of "Knowledge A" is passed as recent
+        val textHash = "Knowledge A".hashCode()
 
         // Act
-        val result = repository.retrieveCandidates(
-            contactName = "Alice",
-            queryEmbedding = queryEmbedding,
-            queryContext = queryContext,
-            limit = 5,
-            minimumSimilarityThreshold = 0.7f
+        val (candidates, bestScore) = repository.retrieveCandidates(
+            queryEmbedding = floatArrayOf(1.0f, 0.0f),
+            minimumSimilarityThreshold = 0.60f,
+            queryText = "this is a long query",
+            recentReplyHashes = listOf(textHash)
         )
 
-        // Assert
-        assertTrue(result.isEmpty())
-    }
-
-    @Test
-    fun retrieveShortMessageReply_safetyGuardAbortsIfUnderThreeMatches(): Unit = runBlocking {
-        val contact = LinkedContactEntity(
-            id = 42L,
-            whatsappDisplayName = "Alice",
-            isActive = true,
-            autoReplyEnabled = true,
-            cooldownCount = 0,
-            cooldownResetAt = null,
-            linkedAt = Instant.fromEpochMilliseconds(0)
-        )
-        coEvery { linkedContactDao.getByDisplayName("Alice") } returns contact
-        // Return only 2 exact match candidates
-        coEvery { chatMessageDao.getExactShortMessageReplies("Alice", "الو") } returns listOf(
-            ShortMessageReplyCandidate("نايم", Instant.fromEpochMilliseconds(1000L)),
-            ShortMessageReplyCandidate("مين معايا", Instant.fromEpochMilliseconds(2000L))
-        )
-        // Return 0 fuzzy matches
-        coEvery { chatMessageDao.getFuzzyShortMessageReplies("Alice", "الو") } returns emptyList()
-
-        val result = repository.retrieveShortMessageReply("Alice", "الو")
-
-        assertTrue(result == null)
-    }
-
-    @Test
-    fun retrieveShortMessageReply_exactMatchSanitizedAndWeightedSelection(): Unit = runBlocking {
-        val contact = LinkedContactEntity(
-            id = 42L,
-            whatsappDisplayName = "Alice",
-            isActive = true,
-            autoReplyEnabled = true,
-            cooldownCount = 0,
-            cooldownResetAt = null,
-            linkedAt = Instant.fromEpochMilliseconds(0)
-        )
-        coEvery { linkedContactDao.getByDisplayName("Alice") } returns contact
-
-        coEvery { chatMessageDao.getExactShortMessageReplies("Alice", "الو") } returns listOf(
-            ShortMessageReplyCandidate("نايم", Instant.fromEpochMilliseconds(1000L)),
-            ShortMessageReplyCandidate("مين معايا", Instant.fromEpochMilliseconds(2000L))
-        )
-        coEvery { chatMessageDao.getFuzzyShortMessageReplies("Alice", "الو") } returns listOf(
-            ShortMessageReplyCandidate("نايم", Instant.fromEpochMilliseconds(1000L)),
-            ShortMessageReplyCandidate("نايم", Instant.fromEpochMilliseconds(1500L)),
-            ShortMessageReplyCandidate("مين معايا", Instant.fromEpochMilliseconds(2000L))
-        )
-
-        val result = repository.retrieveShortMessageReply("Alice", "الو")
-
-        assertTrue(result != null)
-        assertTrue(result?.replyText == "نايم" || result?.replyText == "مين معايا")
-        assertEquals(42L, result?.contactId)
-        assertEquals("الو", result?.triggerText)
+        // Assert: 0.9f - 0.20f penalty = 0.70f
+        assertEquals(1, candidates.size)
+        assertEquals(0.70f, candidates[0].similarityScore, 0.001f)
+        assertEquals(0.90f, candidates[0].baseSimilarityScore, 0.001f)
     }
 }

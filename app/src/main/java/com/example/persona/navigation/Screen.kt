@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 sealed class Screen {
     // Bottom nav tabs
     @Serializable data object Home : Screen()
-    @Serializable data object Contacts : Screen()
+    @Serializable data object KnowledgeManagement : Screen()
     @Serializable data object AuditLog : Screen()
     @Serializable data object Settings : Screen()
 

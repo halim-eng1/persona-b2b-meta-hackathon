@@ -87,19 +87,35 @@ class EmbeddingEngineTest {
     }
 
     @Test
-    fun embedBatch_processesSequentiallyOncePerItem() = runTest {
-        val expectedEmbedding1 = FloatArray(384) { 0.3f }
-        val expectedEmbedding2 = FloatArray(384) { 0.4f }
+    fun embedBatch_processesInChunksOf32() = runTest {
+        val tokenized = TokenizedInput(
+            inputIds = longArrayOf(1L),
+            attentionMask = longArrayOf(1L),
+            tokenTypeIds = longArrayOf(0L)
+        )
 
-        coEvery { modelManager.withInferenceLock<FloatArray?>(0L, any()) } returnsMany listOf(expectedEmbedding1, expectedEmbedding2)
+        val tokenVec1 = FloatArray(384) { 0f }.also { it[0] = 2f }
+        val tokenVec2 = FloatArray(384) { 0f }.also { it[1] = 3f }
+        val rawBatchOutput = arrayOf(
+            arrayOf(tokenVec1),
+            arrayOf(tokenVec2)
+        )
+
+        coEvery { tokenizer.batchTokenize(any()) } returns listOf(tokenized, tokenized)
+        coEvery { modelManager.withInferenceLock<Array<Array<FloatArray>>>(0L, any()) } returns rawBatchOutput
 
         val results = embeddingEngine.embedBatch(listOf("Msg1", "Msg2"))
 
         assertEquals(2, results.size)
-        assertArrayEquals(expectedEmbedding1, results[0], 0.0001f)
-        assertArrayEquals(expectedEmbedding2, results[1], 0.0001f)
+        assertNotNull(results[0])
+        assertNotNull(results[1])
+        assertEquals(1f, results[0]!![0], 0.0001f)
+        assertEquals(0f, results[0]!![1], 0.0001f)
+        assertEquals(0f, results[1]!![0], 0.0001f)
+        assertEquals(1f, results[1]!![1], 0.0001f)
 
-        coVerify(exactly = 2) { modelManager.withInferenceLock<FloatArray?>(0L, any()) }
+        coVerify(exactly = 1) { tokenizer.batchTokenize(any()) }
+        coVerify(exactly = 1) { modelManager.withInferenceLock<Array<Array<FloatArray>>>(0L, any()) }
     }
 }
 

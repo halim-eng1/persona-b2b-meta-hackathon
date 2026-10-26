@@ -73,15 +73,20 @@ class OnnxModelManager @Inject constructor(
 
             try {
                 environment = OrtEnvironment.getEnvironment()
+                val availableProcessors = Runtime.getRuntime().availableProcessors()
+                val intraOpThreads = (availableProcessors / 2).coerceIn(2, 4)
                 val sessionOptions = OrtSession.SessionOptions().apply {
-                    setIntraOpNumThreads(2)
+                    setIntraOpNumThreads(intraOpThreads)
                     setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-                    addConfigEntry("session.intra_op.allow_spinning", "0")
+                    addConfigEntry("session.intra_op.allow_spinning", "1")
                 }
 
                 session = environment!!.createSession(modelFile.absolutePath, sessionOptions)
 
-                Log.i(TAG, "ONNX model loaded successfully from file. Input: ${session!!.inputNames}")
+                Log.i(
+                    TAG,
+                    "ONNX model loaded successfully from file. Input: ${session!!.inputNames}, intraOpThreads=$intraOpThreads, availableProcessors=$availableProcessors"
+                )
                 true
             } catch (e: Exception) {
                 Log.e("AiModel", "CRITICAL: Model file exists but failed to load. Details: ${e.message}", e)

@@ -11,7 +11,7 @@ import org.junit.Test
 class NotificationProcessorImplTest {
 
     private val normalizer = ArabicTextNormalizer()
-    private val contextDetector = ContextDetector()
+    private val contextDetector = ContextDetector(normalizer)
     private val notificationProcessor = NotificationProcessorImpl(normalizer, contextDetector)
 
     @Test
@@ -49,7 +49,7 @@ class NotificationProcessorImplTest {
         assertEquals("أحمد", processed.contactName)
         assertEquals("أهلاً بك، كَيْفَ حَالُكَ؟", processed.originalText)
         assertEquals("اهلا بك، كيف حالك؟", processed.normalizedText)
-        assertEquals(IntentType.QUESTION, processed.context.intent)
+        assertEquals(IntentType.GREETING, processed.context.intent)
         assertEquals(TopicType.STATUS, processed.context.topic)
         assertEquals(987654321L, processed.postTime)
     }

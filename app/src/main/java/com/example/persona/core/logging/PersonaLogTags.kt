@@ -9,4 +9,5 @@ object PersonaLogTags {
     const val NOTIFICATION = "PersonaNotification"
     const val DATABASE = "PersonaDatabase"
     const val CONTACT = "PersonaContact"
+    const val LLM = "PersonaLLM"
 }

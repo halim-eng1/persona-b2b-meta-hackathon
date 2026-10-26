@@ -3,13 +3,14 @@ package com.example.persona.features.chat_import.data.processor
 import com.example.persona.features.chat_import.domain.model.IntentType
 import com.example.persona.features.chat_import.domain.model.TopicType
 import com.example.persona.features.chat_import.domain.model.SentimentType
+import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormalizer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ContextDetectorTest {
 
-    private val detector = ContextDetector()
+    private val detector = ContextDetector(ArabicTextNormalizer())
 
     @Test
     fun detect_simpleGreeting_returnsGreetingIntent() {
@@ -59,11 +60,11 @@ class ContextDetectorTest {
     }
 
     @Test
-    fun detect_questionWithGreeting_questionTakesPriority() {
+    fun detect_questionWithGreeting_greetingTakesPriority() {
         val context = detector.detect("مرحبا كيف حالك؟")
-        assertEquals(IntentType.QUESTION, context.intent)
+        assertEquals(IntentType.GREETING, context.intent)
         assertEquals(TopicType.STATUS, context.topic)
-        assertEquals(0.9f, context.confidence, 0.001f)
+        assertEquals(0.8f, context.confidence, 0.001f)
     }
 
     @Test

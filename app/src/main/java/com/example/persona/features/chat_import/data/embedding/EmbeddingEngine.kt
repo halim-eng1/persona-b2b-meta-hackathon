@@ -74,20 +74,44 @@ class EmbeddingEngine @Inject constructor(
     }
 
     /**
-     * Batch embedding for import pipeline. Processes sequentially to
-     * control memory. Each embedding is ~1.5KB (384 × 4 bytes).
-     * Acquires and releases the Mutex PER ITEM to yield to auto-reply.
+     * Batch embedding for import pipeline. Processes in chunks of 32 to
+     * control memory and allow concurrent auto-replies to yield.
+     * Each embedding is ~1.5KB (384 × 4 bytes).
+     * Acquires and releases the Mutex PER CHUNK.
      */
     suspend fun embedBatch(texts: List<String>): List<FloatArray?> = withContext(aiDispatcher) {
         PersonaLogger.d(PersonaLogTags.EMBEDDING, "Embedding request: batchSize=${texts.size}")
         val startTime = System.currentTimeMillis()
-        val results = texts.map { text ->
-            // Hidden #6: Release mutex between items so auto-reply
-            // can acquire it within the 5s timeout window
-            modelManager.withInferenceLock { session ->
-                runInference(session, text)
+        
+        val chunkSize = 32
+        val chunks = texts.chunked(chunkSize)
+        val results = mutableListOf<FloatArray?>()
+
+        for (chunk in chunks) {
+            val chunkResults = try {
+                runInferenceBatch(chunk)
+            } catch (e: Exception) {
+                null
+            }
+
+            if (chunkResults != null) {
+                results.addAll(chunkResults)
+            } else {
+                // FALLBACK: Chunk failed. Process sequentially, yielding lock PER ITEM
+                Log.w(TAG, "Chunk failed, falling back to sequential inference...")
+                for (text in chunk) {
+                    val singleResult = try {
+                        modelManager.withInferenceLock { session ->
+                            runInference(session, text)
+                        }
+                    } catch (e: Exception) {
+                        null
+                    }
+                    results.add(singleResult)
+                }
             }
         }
+
         val duration = System.currentTimeMillis() - startTime
         val count = results.count { it != null }
         PersonaLogger.d(
@@ -103,19 +127,18 @@ class EmbeddingEngine @Inject constructor(
      */
     @Suppress("UNCHECKED_CAST")
     private fun runInference(session: OrtSession, text: String): FloatArray? {
-        return try {
-            val tokenized = tokenizer.tokenize(text)
-            val env = OrtEnvironment.getEnvironment()
+        val tokenized = tokenizer.tokenize(text)
+        val env = OrtEnvironment.getEnvironment()
 
-            val inputIdsTensor = OnnxTensor.createTensor(
-                env, arrayOf(tokenized.inputIds)
-            )
-            val attentionMaskTensor = OnnxTensor.createTensor(
-                env, arrayOf(tokenized.attentionMask)
-            )
-            val tokenTypeIdsTensor = OnnxTensor.createTensor(
-                env, arrayOf(tokenized.tokenTypeIds)
-            )
+        var inputIdsTensor: OnnxTensor? = null
+        var attentionMaskTensor: OnnxTensor? = null
+        var tokenTypeIdsTensor: OnnxTensor? = null
+        var output: OrtSession.Result? = null
+
+        return try {
+            inputIdsTensor = OnnxTensor.createTensor(env, arrayOf(tokenized.inputIds))
+            attentionMaskTensor = OnnxTensor.createTensor(env, arrayOf(tokenized.attentionMask))
+            tokenTypeIdsTensor = OnnxTensor.createTensor(env, arrayOf(tokenized.tokenTypeIds))
 
             val inputs = mapOf(
                 "input_ids" to inputIdsTensor,
@@ -123,22 +146,89 @@ class EmbeddingEngine @Inject constructor(
                 "token_type_ids" to tokenTypeIdsTensor
             )
 
-            val output = session.run(inputs)
-            
-            // Output shape of MiniLM last_hidden_state is [1, seqLen, 384]
-            // Standard casting in ONNX Runtime Java API yields Array<Array<FloatArray>>
+            output = session.run(inputs)
             val rawOutput = (output[0].value as Array<Array<FloatArray>>)[0]
-
-            // Mean pooling with attention mask
             val pooled = meanPool(rawOutput, tokenized.attentionMask)
-
-            // Refactor #8: L2-normalize at storage time
             l2Normalize(pooled)
         } catch (e: Throwable) {
             Log.e(TAG, "Inference failed -> Exception: ${e.javaClass.simpleName} | Message: ${e.message}")
             null
+        } finally {
+            inputIdsTensor?.close()
+            attentionMaskTensor?.close()
+            tokenTypeIdsTensor?.close()
+            output?.close()
+        }
+    }
+
+    /**
+     * Runs true batch inference on a list of texts.
+     * Input sequences are padded to exactly 128 tokens, and 2D arrays are shaped explicitly.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private suspend fun runInferenceBatch(texts: List<String>): List<FloatArray?> {
+        if (texts.isEmpty()) return emptyList()
+
+        val tokenizedBatch = tokenizer.batchTokenize(texts)
+        val size = texts.size
+
+        // Build flat arrays: shape [size, 128]
+        val inputIds = LongArray(size * 128)
+        val attentionMask = LongArray(size * 128)
+        val tokenTypeIds = LongArray(size * 128)
+
+        for (i in 0 until size) {
+            val tokenized = tokenizedBatch[i]
+            for (j in 0 until 128) {
+                val idx = i * 128 + j
+                inputIds[idx] = if (j < tokenized.inputIds.size) tokenized.inputIds[j] else 0L
+                attentionMask[idx] = if (j < tokenized.attentionMask.size) tokenized.attentionMask[j] else 0L
+                tokenTypeIds[idx] = if (j < tokenized.tokenTypeIds.size) tokenized.tokenTypeIds[j] else 0L
+            }
         }
 
+        return try {
+            val rawOutputCopy = modelManager.withInferenceLock { session ->
+                val env = OrtEnvironment.getEnvironment()
+                var inputIdsTensor: OnnxTensor? = null
+                var attentionMaskTensor: OnnxTensor? = null
+                var tokenTypeIdsTensor: OnnxTensor? = null
+                var output: OrtSession.Result? = null
+
+                try {
+                    inputIdsTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(inputIds), longArrayOf(size.toLong(), 128L))
+                    attentionMaskTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(attentionMask), longArrayOf(size.toLong(), 128L))
+                    tokenTypeIdsTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(tokenTypeIds), longArrayOf(size.toLong(), 128L))
+
+                    val inputs = mapOf(
+                        "input_ids" to inputIdsTensor,
+                        "attention_mask" to attentionMaskTensor,
+                        "token_type_ids" to tokenTypeIdsTensor
+                    )
+
+                    output = session.run(inputs)
+                    val rawOutput = output[0].value as Array<Array<FloatArray>>
+                    Array(size) { i ->
+                        Array(rawOutput[i].size) { j ->
+                            rawOutput[i][j].clone()
+                        }
+                    }
+                } finally {
+                    inputIdsTensor?.close()
+                    attentionMaskTensor?.close()
+                    tokenTypeIdsTensor?.close()
+                    output?.close()
+                }
+            } ?: throw IllegalStateException("ONNX session is unavailable")
+
+            (0 until size).map { i ->
+                val pooled = meanPool(rawOutputCopy[i], tokenizedBatch[i].attentionMask)
+                l2Normalize(pooled)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Batch inference failed for chunk of size $size -> Exception: ${e.javaClass.simpleName} | Message: ${e.message}")
+            throw e
+        }
     }
 
     /**

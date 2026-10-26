@@ -3,7 +3,7 @@ package com.example.persona.features.home.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.persona.core.data.repository.UserPreferencesRepository
-import com.example.persona.core.database.dao.LinkedContactDao
+import com.example.persona.core.database.dao.BusinessKnowledgeDao
 import com.example.persona.features.auto_reply.domain.model.AuditLogItem
 import com.example.persona.features.auto_reply.domain.repository.AuditLogRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,7 +17,7 @@ import javax.inject.Inject
 data class HomeUiState(
     val isAutoReplyEnabled: Boolean = false,
     val totalRepliesSent: Int = 0,
-    val activeContactCount: Int = 0,
+    val knowledgeChunkCount: Int = 0,
     val recentActivity: List<AuditLogItem> = emptyList(),
     val isLoading: Boolean = true
 )
@@ -26,7 +26,7 @@ data class HomeUiState(
 class HomeViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
     private val auditLogRepository: AuditLogRepository,
-    private val linkedContactDao: LinkedContactDao
+    private val businessKnowledgeDao: BusinessKnowledgeDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -34,17 +34,17 @@ class HomeViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            // Combine toggle state, reply count, and recent 3 logs into a single coherent state
+            // Combine toggle state, reply count, recent 3 logs, and knowledge chunk count into a single coherent state
             combine(
                 userPreferencesRepository.isAutoReplyEnabled,
                 auditLogRepository.observeReplyCount(),
-                auditLogRepository.observeLogs(limit = 3)
-            ) { isEnabled, replyCount, recentLogs ->
-                val activeContacts = linkedContactDao.getActiveContactCount()
+                auditLogRepository.observeLogs(limit = 3),
+                businessKnowledgeDao.observeChunkCount()
+            ) { isEnabled, replyCount, recentLogs, chunkCount ->
                 HomeUiState(
                     isAutoReplyEnabled = isEnabled,
                     totalRepliesSent = replyCount,
-                    activeContactCount = activeContacts,
+                    knowledgeChunkCount = chunkCount,
                     recentActivity = recentLogs,
                     isLoading = false
                 )

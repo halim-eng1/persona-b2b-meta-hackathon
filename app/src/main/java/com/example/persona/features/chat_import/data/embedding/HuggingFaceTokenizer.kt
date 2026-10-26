@@ -12,6 +12,7 @@ class HuggingFaceTokenizer @Inject constructor(
 ) {
     private var tokenizer: ai.djl.huggingface.tokenizers.HuggingFaceTokenizer? = null
     private var isInitialized = false
+    private val cache = ThreadSafeLruCache<String, TokenizedInput>(500)
 
     companion object {
         private const val TOKENIZER_JSON_PATH = "models/tokenizer.json"
@@ -56,21 +57,73 @@ class HuggingFaceTokenizer @Inject constructor(
     /**
      * Tokenizes input text and returns input_ids, attention_mask, and token_type_ids
      * as LongArrays, padded/truncated to [MAX_SEQ_LENGTH].
-     * DJL handles [CLS]/[SEP] insertion, padding, and truncation internally.
+     * Checks the LRU cache first to prevent JNI boundary crossing.
+     * This method is completely lock-free for the JNI call.
      */
     fun tokenize(text: String): TokenizedInput {
+        val cached = cache.get(text)
+        if (cached != null) return cached
+
         if (!isInitialized) {
             initialize()
         }
-        synchronized(this) {
-            check(isInitialized) { "Tokenizer not initialized. Call initialize() first." }
-            val encoding = tokenizer!!.encode(text)
-            return TokenizedInput(
-                inputIds = encoding.ids,
-                attentionMask = encoding.attentionMask,
-                tokenTypeIds = encoding.typeIds
-            )
+        check(isInitialized) { "Tokenizer not initialized. Call initialize() first." }
+        
+        val encoding = tokenizer!!.encode(text)
+        val tokenized = TokenizedInput(
+            inputIds = encoding.ids,
+            attentionMask = encoding.attentionMask,
+            tokenTypeIds = encoding.typeIds
+        )
+        cache.put(text, tokenized)
+        return tokenized
+    }
+
+    /**
+     * Batch tokenizes a list of strings.
+     * Checks the LRU cache first to prevent JNI boundary crossing.
+     * Cache misses are batched and encoded natively in a single lock-free JNI call.
+     * The original order of the input texts is strictly preserved.
+     */
+    fun batchTokenize(texts: List<String>): List<TokenizedInput> {
+        if (texts.isEmpty()) return emptyList()
+        if (!isInitialized) {
+            initialize()
         }
+
+        val results = arrayOfNulls<TokenizedInput>(texts.size)
+        val missIndices = ArrayList<Int>()
+        val missTexts = ArrayList<String>()
+
+        for (i in texts.indices) {
+            val text = texts[i]
+            val cached = cache.get(text)
+            if (cached != null) {
+                results[i] = cached
+            } else {
+                missIndices.add(i)
+                missTexts.add(text)
+            }
+        }
+
+        if (missTexts.isNotEmpty()) {
+            check(isInitialized) { "Tokenizer not initialized. Call initialize() first." }
+            val encodings = tokenizer!!.batchEncode(missTexts.toTypedArray())
+            
+            for (k in missTexts.indices) {
+                val encoding = encodings[k]
+                val tokenized = TokenizedInput(
+                    inputIds = encoding.ids,
+                    attentionMask = encoding.attentionMask,
+                    tokenTypeIds = encoding.typeIds
+                )
+                val originalIndex = missIndices[k]
+                results[originalIndex] = tokenized
+                cache.put(missTexts[k], tokenized)
+            }
+        }
+
+        return results.map { it!! }
     }
 
     fun release() {
@@ -78,6 +131,24 @@ class HuggingFaceTokenizer @Inject constructor(
             tokenizer?.close()
             tokenizer = null
             isInitialized = false
+        }
+    }
+}
+
+private class ThreadSafeLruCache<K, V>(private val maxEntries: Int) {
+    private val map = object : java.util.LinkedHashMap<K, V>(maxEntries, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?): Boolean {
+            return size > maxEntries
+        }
+    }
+
+    fun get(key: K): V? = synchronized(map) {
+        map[key]
+    }
+
+    fun put(key: K, value: V) {
+        synchronized(map) {
+            map[key] = value
         }
     }
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.persona.core.database.PersonaDatabase
 import com.example.persona.core.database.dao.*
+import com.example.persona.core.common.Constants
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -18,21 +19,24 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): PersonaDatabase =
-        Room.databaseBuilder(context, PersonaDatabase::class.java, "persona_db")
+        Room.databaseBuilder(context, PersonaDatabase::class.java, Constants.DB_NAME)
             .fallbackToDestructiveMigration()
             .build()
 
     @Provides
     @Singleton
-    fun provideChatMessageDao(db: PersonaDatabase): ChatMessageDao = db.chatMessageDao()
+    fun provideBusinessKnowledgeDao(db: PersonaDatabase): BusinessKnowledgeDao =
+        db.businessKnowledgeDao()
 
     @Provides
     @Singleton
-    fun provideEmbeddingDao(db: PersonaDatabase): EmbeddingDao = db.embeddingDao()
+    fun provideEmbeddingIndexDao(db: PersonaDatabase): EmbeddingIndexDao =
+        db.embeddingIndexDao()
 
     @Provides
     @Singleton
-    fun provideLinkedContactDao(db: PersonaDatabase): LinkedContactDao = db.linkedContactDao()
+    fun provideFailedQueryDao(db: PersonaDatabase): FailedQueryDao =
+        db.failedQueryDao()
 
     @Provides
     @Singleton
@@ -41,4 +45,12 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideReplyQueueDao(db: PersonaDatabase): ReplyQueueDao = db.replyQueueDao()
+
+    @Provides
+    @Singleton
+    fun provideChatHistoryDao(db: PersonaDatabase): ChatHistoryDao = db.chatHistoryDao()
+
+    @Provides
+    @Singleton
+    fun provideOrderDao(db: PersonaDatabase): OrderDao = db.orderDao()
 }

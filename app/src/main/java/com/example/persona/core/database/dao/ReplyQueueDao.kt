@@ -22,4 +22,7 @@ interface ReplyQueueDao {
 
     @Query("UPDATE reply_queue SET status = 'EXPIRED' WHERE status = 'PENDING' AND created_at < :cutoff")
     suspend fun expireOldReplies(cutoff: Instant)
+
+    @Query("DELETE FROM reply_queue WHERE contact_display_name = :contactName AND status = 'PENDING'")
+    suspend fun deletePendingRepliesForContact(contactName: String)
 }

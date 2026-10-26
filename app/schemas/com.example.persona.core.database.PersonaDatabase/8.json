@@ -1,0 +1,550 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 8,
+    "identityHash": "125a701f092521280c45e01a14dd0474",
+    "entities": [
+      {
+        "tableName": "business_knowledge",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`chunk_id` TEXT NOT NULL, `header_context` TEXT, `chunk_text` TEXT NOT NULL, `source_type` TEXT NOT NULL, `source_file_name` TEXT, `timestamp` INTEGER NOT NULL, PRIMARY KEY(`chunk_id`))",
+        "fields": [
+          {
+            "fieldPath": "chunkId",
+            "columnName": "chunk_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "headerContext",
+            "columnName": "header_context",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "chunkText",
+            "columnName": "chunk_text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceType",
+            "columnName": "source_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceFileName",
+            "columnName": "source_file_name",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "chunk_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_business_knowledge_source_type",
+            "unique": false,
+            "columnNames": [
+              "source_type"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_business_knowledge_source_type` ON `${TABLE_NAME}` (`source_type`)"
+          },
+          {
+            "name": "index_business_knowledge_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_business_knowledge_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "embeddings_index",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`chunk_id` TEXT NOT NULL, `vector_blob` BLOB NOT NULL, `model_version` TEXT NOT NULL, PRIMARY KEY(`chunk_id`), FOREIGN KEY(`chunk_id`) REFERENCES `business_knowledge`(`chunk_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "chunkId",
+            "columnName": "chunk_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vectorBlob",
+            "columnName": "vector_blob",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modelVersion",
+            "columnName": "model_version",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "chunk_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_embeddings_index_chunk_id",
+            "unique": true,
+            "columnNames": [
+              "chunk_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_embeddings_index_chunk_id` ON `${TABLE_NAME}` (`chunk_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "business_knowledge",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "chunk_id"
+            ],
+            "referencedColumns": [
+              "chunk_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "failed_unanswered_queries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `contact_display_name` TEXT NOT NULL, `query_text` TEXT NOT NULL, `best_score` REAL NOT NULL, `timestamp` INTEGER NOT NULL, `is_reviewed` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contactDisplayName",
+            "columnName": "contact_display_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "queryText",
+            "columnName": "query_text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bestScore",
+            "columnName": "best_score",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isReviewed",
+            "columnName": "is_reviewed",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_failed_unanswered_queries_is_reviewed",
+            "unique": false,
+            "columnNames": [
+              "is_reviewed"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_failed_unanswered_queries_is_reviewed` ON `${TABLE_NAME}` (`is_reviewed`)"
+          },
+          {
+            "name": "index_failed_unanswered_queries_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_failed_unanswered_queries_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "reply_log",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `contact_display_name` TEXT NOT NULL, `incoming_message` TEXT NOT NULL, `generated_reply` TEXT NOT NULL, `confidence_score` REAL NOT NULL, `similarity_score` REAL NOT NULL, `context_confidence` REAL NOT NULL, `was_auto_sent` INTEGER NOT NULL, `was_approved` INTEGER, `timestamp` INTEGER NOT NULL, `retrieved_chunk_ids` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contactDisplayName",
+            "columnName": "contact_display_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "incomingMessage",
+            "columnName": "incoming_message",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "generatedReply",
+            "columnName": "generated_reply",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidenceScore",
+            "columnName": "confidence_score",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "similarityScore",
+            "columnName": "similarity_score",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contextConfidence",
+            "columnName": "context_confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wasAutoSent",
+            "columnName": "was_auto_sent",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wasApproved",
+            "columnName": "was_approved",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "retrievedChunkIds",
+            "columnName": "retrieved_chunk_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_reply_log_contact_display_name",
+            "unique": false,
+            "columnNames": [
+              "contact_display_name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_reply_log_contact_display_name` ON `${TABLE_NAME}` (`contact_display_name`)"
+          },
+          {
+            "name": "index_reply_log_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_reply_log_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
+          },
+          {
+            "name": "index_reply_log_confidence_score",
+            "unique": false,
+            "columnNames": [
+              "confidence_score"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_reply_log_confidence_score` ON `${TABLE_NAME}` (`confidence_score`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "reply_queue",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `contact_display_name` TEXT NOT NULL, `reply_text` TEXT NOT NULL, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `attempt_count` INTEGER NOT NULL, `last_error` TEXT, `notification_key` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contactDisplayName",
+            "columnName": "contact_display_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "replyText",
+            "columnName": "reply_text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attempt_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastError",
+            "columnName": "last_error",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "notificationKey",
+            "columnName": "notification_key",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_reply_queue_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_reply_queue_status` ON `${TABLE_NAME}` (`status`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "chat_history",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `contact_name` TEXT NOT NULL, `message_text` TEXT NOT NULL, `is_from_user` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, `embedding` BLOB, `embedding_state` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contactName",
+            "columnName": "contact_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageText",
+            "columnName": "message_text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isFromUser",
+            "columnName": "is_from_user",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "embedding",
+            "columnName": "embedding",
+            "affinity": "BLOB",
+            "notNull": false
+          },
+          {
+            "fieldPath": "embeddingState",
+            "columnName": "embedding_state",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_chat_history_contact_name_timestamp",
+            "unique": false,
+            "columnNames": [
+              "contact_name",
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_history_contact_name_timestamp` ON `${TABLE_NAME}` (`contact_name`, `timestamp`)"
+          },
+          {
+            "name": "index_chat_history_contact_name",
+            "unique": false,
+            "columnNames": [
+              "contact_name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_history_contact_name` ON `${TABLE_NAME}` (`contact_name`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "orders_table",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `contact_name` TEXT NOT NULL, `customer_name_from_llm` TEXT, `delivery_address` TEXT, `order_details` TEXT, `custom_notes` TEXT, `merchant_note` TEXT, `timestamp` INTEGER NOT NULL, `status` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contactName",
+            "columnName": "contact_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "customerNameFromLlm",
+            "columnName": "customer_name_from_llm",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "deliveryAddress",
+            "columnName": "delivery_address",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "orderDetails",
+            "columnName": "order_details",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "customNotes",
+            "columnName": "custom_notes",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "merchantNote",
+            "columnName": "merchant_note",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_orders_table_contact_name_status",
+            "unique": false,
+            "columnNames": [
+              "contact_name",
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_orders_table_contact_name_status` ON `${TABLE_NAME}` (`contact_name`, `status`)"
+          },
+          {
+            "name": "index_orders_table_contact_name",
+            "unique": false,
+            "columnNames": [
+              "contact_name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_orders_table_contact_name` ON `${TABLE_NAME}` (`contact_name`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '125a701f092521280c45e01a14dd0474')"
+    ]
+  }
+}

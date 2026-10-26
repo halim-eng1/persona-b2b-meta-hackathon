@@ -23,4 +23,6 @@ interface AuditLogRepository {
 
     /** Observe the total number of auto-replies that have been executed. */
     fun observeReplyCount(): Flow<Int>
+
+    suspend fun clearPendingRepliesForContact(contactName: String)
 }

@@ -1,6 +1,8 @@
 package com.example.persona.core.database
 
 import androidx.room.TypeConverter
+import com.example.persona.core.database.entity.EmbeddingJobState
+import com.example.persona.core.database.entity.OrderStatus
 import kotlinx.datetime.Instant
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
@@ -44,4 +46,38 @@ class Converters {
         if (value == null) return null
         return Json.decodeFromString(value)
     }
+
+    // ── OrderStatus ↔ String ──────────────────────────────────────────────────
+
+    /**
+     * Serialises [OrderStatus] to its [Enum.name] string for TEXT column storage.
+     * Null input → null output (column stores SQL NULL).
+     */
+    @TypeConverter
+    fun fromOrderStatus(value: OrderStatus?): String? = value?.name
+
+    /**
+     * Deserialises a TEXT column value back to [OrderStatus].
+     * Unknown or corrupted values fall back safely to [OrderStatus.PENDING] via
+     * [OrderStatus.fromString] — never throws.
+     */
+    @TypeConverter
+    fun toOrderStatus(value: String?): OrderStatus = OrderStatus.fromString(value)
+
+    // ── EmbeddingJobState ↔ String ────────────────────────────────────────────
+
+    /**
+     * Serialises [EmbeddingJobState] to its [Enum.name] string for TEXT column storage.
+     * Null input → null output (column stores SQL NULL).
+     */
+    @TypeConverter
+    fun fromEmbeddingJobState(value: EmbeddingJobState?): String? = value?.name
+
+    /**
+     * Deserialises a TEXT column value back to [EmbeddingJobState].
+     * Unknown or corrupted values fall back safely to [EmbeddingJobState.PENDING] via
+     * [EmbeddingJobState.fromString] — never throws.
+     */
+    @TypeConverter
+    fun toEmbeddingJobState(value: String?): EmbeddingJobState = EmbeddingJobState.fromString(value)
 }

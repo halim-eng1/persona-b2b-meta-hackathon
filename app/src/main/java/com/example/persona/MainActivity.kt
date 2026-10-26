@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
                 val currentDestination = currentBackStackEntry?.destination
                 val showBottomBar = currentDestination?.let { dest ->
                     dest.hasRoute(Screen.Home::class) ||
-                    dest.hasRoute(Screen.Contacts::class) ||
+                    dest.hasRoute(Screen.KnowledgeManagement::class) ||
                     dest.hasRoute(Screen.AuditLog::class) ||
                     dest.hasRoute(Screen.Settings::class)
                 } ?: false

@@ -1,3 +1,32 @@
 <resources>
-    <string name="app_name">Persona</string>
+    <string name="app_name">Persona B2B</string>
+
+    <!-- ── Orchestrator: Tier A short-circuit templates ─────────────────────── -->
+    <!-- Greeting response (shown when ContextDetector classifies query as GREETING) -->
+    <string name="greeting_template_default">أهلاً بك في متجرنا! كيف يمكننا مساعدتك اليوم؟ 🥰</string>
+
+    <!-- Farewell / closing response (shown when ContextDetector classifies query as CLOSING) -->
+    <string name="farewell_template_default">سعدنا بخدمتك! لو عندك أي استفسار آخر، لا تتردد في مراسلتنا. 🌟</string>
+
+    <!-- ── Orchestrator: Tier B HITL fallback templates ─────────────────────── -->
+    <!-- Holding message sent to the customer when RAG confidence is below threshold -->
+    <string name="hitl_holding_message">عفواً، جاري تحويلك لممثلي خدمة العملاء…</string>
+
+    <!-- Notification title for the HITL alarm shown to the business owner -->
+    <string name="hitl_alarm_title">⚠️ تنبيه: عميل يحتاج مساعدة فورية</string>
+
+    <!-- Notification body for the HITL alarm -->
+    <string name="hitl_alarm_body">لم يتمكن المساعد الآلي من الإجابة على استفسار العميل. يرجى المتابعة يدوياً.</string>
+
+    <!-- ── Orchestrator: Media fallback message ──────────────────────────────── -->
+    <!-- Sent when the incoming notification contains media (image/video/audio) -->
+    <string name="media_fallback_message">عفواً، لا يمكنني معالجة الوسائط. يرجى كتابة استفسارك في رسالة نصية.</string>
+
+    <!-- ── Knowledge Management UI ────────────────────────────────────────────── -->
+    <string name="knowledge_management_title">إدارة قاعدة المعرفة</string>
+    <string name="knowledge_add_hint">أضف معلومة أو عرضاً جديداً...</string>
+    <string name="knowledge_source_core">ملف مستورد</string>
+    <string name="knowledge_source_manual">إدخال يدوي</string>
+    <string name="knowledge_source_offer">عرض مؤقت</string>
+    <string name="knowledge_empty_state">لا توجد معلومات في قاعدة المعرفة بعد.\nاستورد ملف Markdown أو أضف إدخالاً يدوياً.</string>
 </resources>

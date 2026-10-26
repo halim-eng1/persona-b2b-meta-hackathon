@@ -1,234 +1,162 @@
 package com.example.persona.features.auto_reply.data.repository
 
-import com.example.persona.core.database.dao.EmbeddingDao
-import com.example.persona.core.database.dao.LinkedContactDao
-import com.example.persona.core.database.dao.ChatMessageDao
-import com.example.persona.core.database.dao.ShortMessageReplyCandidate
+import android.util.Log
+import com.example.persona.core.database.dao.BusinessKnowledgeDao
+import com.example.persona.core.database.dao.EmbeddingIndexDao
 import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
-import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
-import com.example.persona.features.chat_import.domain.model.ConversationContext
-import com.example.persona.features.chat_import.domain.model.IntentType
-import com.example.persona.features.chat_import.domain.model.TopicType
-import com.example.persona.features.chat_import.domain.model.SentimentType
-import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Global knowledge base retrieval engine — the core of the B2B RAG pipeline.
+ *
+ * B2B migration changes:
+ *  - Removed Layer 1 (SQL short-message mode) entirely.
+ *  - Removed contact-scoped filtering (no [contactName] parameter).
+ *  - Removed intent-mismatch penalty matrix (B2B chunks are answers, not typed messages).
+ *  - Removed [linkedContactDao] and [chatMessageDao] dependencies.
+ *  - Added [businessKnowledgeDao] and [embeddingIndexDao] for global vector search.
+ *  - Retained: dynamic thresholding, repetition penalty, top-50 sweep.
+ */
 @Singleton
 class SemanticRetrievalRepository @Inject constructor(
-    private val embeddingDao: EmbeddingDao,
-    private val linkedContactDao: LinkedContactDao,
-    private val chatMessageDao: ChatMessageDao
+    private val embeddingIndexDao: EmbeddingIndexDao,
+    private val businessKnowledgeDao: BusinessKnowledgeDao
 ) {
+
     /**
-     * Retrieves the top N similar messages for a given contact using weighted pre-filtering,
-     * dot product calculations, and a similarity threshold.
+     * Performs a global cosine-similarity sweep over the entire [embeddings_index] table,
+     * applies the repetition penalty, and returns the top [limit] chunks that exceed
+     * the dynamic similarity threshold.
+     *
+     * @param queryEmbedding         384-dim embedding of the normalized incoming query.
+     * @param limit                  Maximum number of candidates to return.
+     * @param minimumSimilarityThreshold  Base threshold from user preferences.
+     * @param queryText              Raw query text (used for dynamic thresholding by word count).
+     * @param recentReplyHashes      Hash set of recently-sent chunk texts (repetition gate).
      */
     suspend fun retrieveCandidates(
-        contactName: String,
         queryEmbedding: FloatArray,
-        queryContext: ConversationContext,
         limit: Int = 5,
-        minimumSimilarityThreshold: Float = 0.7f
-    ): List<RetrievalCandidate> {
-        // Step 0: Find the linked contact to get its ID
-        val contactEntity = linkedContactDao.getByDisplayName(contactName) ?: return emptyList()
+        minimumSimilarityThreshold: Float = 0.75f,
+        queryText: String = "",
+        recentReplyHashes: List<Int> = emptyList()
+    ): Pair<List<RetrievalCandidate>, Float> {
 
-        // Step 1: Query the Room Database for the linked contact
-        val allUserEmbeddings = embeddingDao.getUserEmbeddingsForContact(contactName)
+        // ── Step 1: Load all vectors from the global index ─────────────────────
+        val allVectorProjections = embeddingIndexDao.getAllVectors()
 
-        // Filter candidates FIRST using the ConversationContext (Weighted Scoring)
-        // Exact Intent match: +2 points
-        // Exact Topic match: +1 point
-        // Exact Sentiment match: +1 point
-        val scoredEmbeddings = allUserEmbeddings.map { entity ->
-            var contextScore = 0
-            if (entity.intentType == queryContext.intent.name) contextScore += 2
-            if (entity.topicType == queryContext.topic.name) contextScore += 1
-            if (entity.sentimentType == queryContext.sentiment.name) contextScore += 1
-            entity to contextScore
-        }.sortedByDescending { it.second }
-            .take(100)
-            .map { it.first }
+        if (allVectorProjections.isEmpty()) {
+            PersonaLogger.d(PersonaLogTags.RETRIEVAL, "No embeddings in index — knowledge base is empty")
+            return Pair(emptyList(), 0f)
+        }
 
-        // Step 2: Vector Math (Dot Product since vectors are L2-normalized)
-        val candidates = scoredEmbeddings.map { entity ->
-            val similarity = dotProduct(queryEmbedding, entity.vector)
-            val candidateContext = ConversationContext(
-                intent = try { IntentType.valueOf(entity.intentType) } catch (e: Exception) { IntentType.GENERAL },
-                topic = try { TopicType.valueOf(entity.topicType) } catch (e: Exception) { TopicType.GENERAL },
-                sentiment = try { SentimentType.valueOf(entity.sentimentType) } catch (e: Exception) { SentimentType.NEUTRAL },
-                confidence = entity.contextConfidence
-            )
+        // ── Step 2: Dynamic Thresholding by word count ─────────────────────────
+        val wordCount = queryText.split("\\s+".toRegex()).filter { it.isNotEmpty() }.size
+        val adjustedThreshold = when {
+            wordCount <= 2 -> (minimumSimilarityThreshold + 0.15f).coerceAtMost(0.98f)
+            wordCount <= 4 -> (minimumSimilarityThreshold + 0.08f).coerceAtMost(0.95f)
+            else           -> minimumSimilarityThreshold
+        }
+
+        // ── Step 3: In-memory dot-product sweep (top 50) ───────────────────────
+        val topProjections = allVectorProjections.asSequence()
+            .map { it to dotProduct(queryEmbedding, it.vectorBlob) }
+            .sortedByDescending { it.second }
+            .take(50)
+            .toList()
+
+        if (topProjections.isEmpty()) {
+            logEmpty(adjustedThreshold, wordCount)
+            return Pair(emptyList(), 0f)
+        }
+
+        // ── Step 4: Resolve chunk text from business_knowledge table ───────────
+        val chunkIds = topProjections.map { it.first.chunkId }
+        val chunkDetails = businessKnowledgeDao.getChunkTextsByIds(chunkIds)
+            .associateBy { it.chunkId }
+
+        // ── Step 5: Apply repetition penalty & map to domain model ─────────────
+        val candidates = topProjections.mapNotNull { (projection, similarity) ->
+            val details = chunkDetails[projection.chunkId] ?: return@mapNotNull null
+
+            var finalScore = similarity
+
+            // Repetition Penalty: demote a chunk if its text was recently sent
+            val textHash = details.chunkText.hashCode()
+            if (recentReplyHashes.contains(textHash)) {
+                finalScore = (finalScore - 0.20f).coerceAtLeast(0.0f)
+                Log.d("SemanticRetrieval",
+                    "Repetition penalty applied to chunk ${projection.chunkId}: " +
+                        "${"%.4f".format(similarity)} → ${"%.4f".format(finalScore)}")
+            }
+
             RetrievalCandidate(
-                messageText = entity.messageText,
-                context = candidateContext,
-                similarityScore = similarity,
-                messageTimestamp = entity.messageTimestamp.toEpochMilliseconds(),
-                contactId = contactEntity.id,
-                triggerText = entity.triggerText ?: "",
-                replyText = entity.messageText
+                chunkId = projection.chunkId,
+                headerContext = details.headerContext,
+                chunkText = details.chunkText,
+                similarityScore = finalScore,
+                baseSimilarityScore = similarity
             )
         }
 
         if (candidates.isEmpty()) {
-            PersonaLogger.d(PersonaLogTags.RETRIEVAL, "Incoming context: $queryContext")
-            PersonaLogger.d(PersonaLogTags.RETRIEVAL, "Candidate count: 0")
-            PersonaLogger.d(PersonaLogTags.RETRIEVAL, "Best similarity score: 0.0")
-            PersonaLogger.d(PersonaLogTags.RETRIEVAL, "Best candidate selected: none")
-            return emptyList()
+            logEmpty(adjustedThreshold, wordCount)
+            return Pair(emptyList(), 0f)
         }
 
-        val nearestNeighbors = candidates.sortedByDescending { it.similarityScore }
-        nearestNeighbors.take(3).forEachIndexed { index, candidate ->
-            Log.d("PersonaRetrievalMatch", "Candidate #$index: HistoricTrigger='${candidate.triggerText}', HistoricReply='${candidate.replyText}', Score=${candidate.score}")
-        }
-
-        // Step 3: Thresholding & Ranking
+        // ── Step 6: Threshold filter, sort, take limit ─────────────────────────
         val maxScore = candidates.maxOf { it.similarityScore }
-        PersonaLogger.d(PersonaLogTags.RETRIEVAL, "Incoming context: $queryContext")
-        val filteredCandidates = candidates
-            .filter { it.similarityScore >= minimumSimilarityThreshold }
+
+        // Log top-5 for diagnostics
+        candidates.sortedByDescending { it.similarityScore }.take(5).forEachIndexed { i, c ->
+            Log.d("SemanticRetrieval",
+                "  #$i chunkId=${c.chunkId.take(8)} " +
+                    "score=${"%.4f".format(c.similarityScore)} " +
+                    "base=${"%.4f".format(c.baseSimilarityScore)} " +
+                    "text='${c.chunkText.take(60)}...'")
+        }
+
+        val filtered = candidates
+            .filter { it.similarityScore >= adjustedThreshold }
             .sortedByDescending { it.similarityScore }
             .take(limit)
-        PersonaLogger.d(PersonaLogTags.RETRIEVAL, "Candidate count: ${filteredCandidates.size}")
-        PersonaLogger.d(PersonaLogTags.RETRIEVAL, "Best similarity score: $maxScore")
 
-        val bestCandidate = filteredCandidates.firstOrNull()
-        if (bestCandidate != null) {
-            PersonaLogger.d(
-                PersonaLogTags.RETRIEVAL,
-                "Best candidate selected: score=${bestCandidate.similarityScore}, length=${bestCandidate.messageText.length}"
-            )
+        PersonaLogger.d(PersonaLogTags.RETRIEVAL,
+            "Query wordCount=$wordCount threshold=$adjustedThreshold " +
+                "totalVectors=${allVectorProjections.size} filtered=${filtered.size} maxScore=$maxScore")
+
+        if (filtered.isEmpty()) {
+            PersonaLogger.d(PersonaLogTags.RETRIEVAL, "No candidates above threshold — HITL trigger")
         } else {
-            PersonaLogger.d(PersonaLogTags.RETRIEVAL, "Best candidate selected: none")
+            PersonaLogger.d(PersonaLogTags.RETRIEVAL,
+                "Best candidate: score=${filtered.first().similarityScore} " +
+                    "chunk=${filtered.first().chunkId.take(8)}")
         }
 
-        if (maxScore < minimumSimilarityThreshold) {
-            return emptyList()
-        }
+        val bestScore = candidates.maxOfOrNull { it.similarityScore } ?: 0f
+        return Pair(filtered, bestScore)
+    }
 
-        return filteredCandidates
+    // ──────────────────────────────────────────────────────────────────────────
+    // Private helpers
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private fun logEmpty(threshold: Float, wordCount: Int) {
+        PersonaLogger.d(PersonaLogTags.RETRIEVAL,
+            "Candidate count: 0 (threshold=$threshold, wordCount=$wordCount)")
     }
 
     /**
-     * Attempts a contact-scoped SQL-based lookup for short messages (<= 2 words).
-     * Returns a RetrievalCandidate if successful, or null if aborted/insufficient matches.
+     * Dot-product of two equal-length float arrays.
+     * MiniLM embeddings are L2-normalised at export time, so dot-product == cosine similarity.
      */
-    suspend fun retrieveShortMessageReply(
-        contactName: String,
-        shortTrigger: String
-    ): RetrievalCandidate? {
-        val contactEntity = linkedContactDao.getByDisplayName(contactName) ?: return null
-
-        // Step 1: Exact Match
-        var rawCandidates = chatMessageDao.getExactShortMessageReplies(contactName, shortTrigger)
-        
-        // Sanitization Guard
-        var sanitized = rawCandidates.filter { candidate ->
-            candidate.messageText.length <= AutoReplyOrchestrator.SHORT_MSG_MAX_REPLY_LENGTH &&
-            candidate.messageText.count { it == '\n' } <= AutoReplyOrchestrator.SHORT_MSG_MAX_NEWLINES
-        }
-
-        // Step 2: Fuzzy Match fallback if Step 1 yields < SHORT_MSG_MIN_MATCHES results
-        if (sanitized.size < AutoReplyOrchestrator.SHORT_MSG_MIN_MATCHES) {
-            rawCandidates = chatMessageDao.getFuzzyShortMessageReplies(contactName, shortTrigger)
-            sanitized = rawCandidates.filter { candidate ->
-                candidate.messageText.length <= AutoReplyOrchestrator.SHORT_MSG_MAX_REPLY_LENGTH &&
-                candidate.messageText.count { it == '\n' } <= AutoReplyOrchestrator.SHORT_MSG_MAX_NEWLINES
-            }
-        }
-
-        // Safety Guard: Abort if fewer than SHORT_MSG_MIN_MATCHES matches
-        if (sanitized.size < AutoReplyOrchestrator.SHORT_MSG_MIN_MATCHES) {
-            return null
-        }
-
-        // Scoring Logic:
-        // Group the sanitized replies by text content.
-        // Weight = (Count of occurrences * W1) + (Recency bonus of the latest occurrence * W2)
-        // Recency bonus = 1.0f / (1.0f + ageInDays)
-        data class ReplyGroup(
-            val replyText: String,
-            val occurrences: Int,
-            val latestTimestamp: kotlinx.datetime.Instant
-        )
-
-        val groups = sanitized.groupBy { it.messageText }
-            .map { (text, list) ->
-                ReplyGroup(
-                    replyText = text,
-                    occurrences = list.size,
-                    latestTimestamp = list.maxOf { it.timestamp }
-                )
-            }
-
-        val scoredReplies = groups.map { group ->
-            val ageMs = System.currentTimeMillis() - group.latestTimestamp.toEpochMilliseconds()
-            val ageDays = (ageMs.toDouble() / (24.0 * 60.0 * 60.0 * 1000.0)).coerceAtLeast(0.0)
-            val recencyBonus = 1.0f / (1.0f + ageDays.toFloat())
-            val weight = (group.occurrences * AutoReplyOrchestrator.SHORT_MSG_FREQUENCY_WEIGHT) +
-                    (recencyBonus * AutoReplyOrchestrator.SHORT_MSG_RECENCY_WEIGHT)
-            group.replyText to weight
-        }
-
-        // Selection: Take Top 5 highest-weighted replies
-        val top5Candidates = scoredReplies.sortedByDescending { it.second }.take(5)
-
-        // Perform Weighted Random Selection
-        val totalWeight = top5Candidates.sumOf { it.second.toDouble() }
-        val finalReply = if (totalWeight <= 0.0) {
-            top5Candidates.random().first
-        } else {
-            val randomValue = kotlin.random.Random.nextDouble() * totalWeight
-            var accumulated = 0.0
-            var selected = top5Candidates.last().first
-            for (candidate in top5Candidates) {
-                accumulated += candidate.second
-                if (accumulated >= randomValue) {
-                    selected = candidate.first
-                    break
-                }
-            }
-            selected
-        }
-
-        // Phase C: Required Logging
-        val candidateLines = top5Candidates.joinToString("\n") { "    - ${it.first} (Weight: ${it.second})" }
-        Log.d("ShortMessageMode", """
-            ShortMessageMode Activated
-            Trigger=${shortTrigger}
-            Candidate Replies:
-            $candidateLines
-            Selected: ${finalReply}
-        """.trimIndent())
-
-        // Wrap selected reply in a synthetic RetrievalCandidate
-        val matchedGroup = groups.first { it.replyText == finalReply }
-        return RetrievalCandidate(
-            messageText = finalReply,
-            context = ConversationContext(
-                intent = IntentType.GENERAL,
-                topic = TopicType.GENERAL,
-                sentiment = SentimentType.NEUTRAL,
-                confidence = 1.0f
-            ),
-            similarityScore = 1.0f,
-            messageTimestamp = matchedGroup.latestTimestamp.toEpochMilliseconds(),
-            contactId = contactEntity.id,
-            triggerText = shortTrigger,
-            replyText = finalReply
-        )
-    }
-
     private fun dotProduct(a: FloatArray, b: FloatArray): Float {
-        require(a.size == b.size) { "Vector dimensions must match: ${a.size} vs ${b.size}" }
+        require(a.size == b.size) { "Vector dimension mismatch: ${a.size} vs ${b.size}" }
         var sum = 0f
-        for (i in a.indices) {
-            sum += a[i] * b[i]
-        }
+        for (i in a.indices) sum += a[i] * b[i]
         return sum
     }
 }

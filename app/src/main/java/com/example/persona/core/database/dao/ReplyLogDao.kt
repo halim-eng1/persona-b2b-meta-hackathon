@@ -14,8 +14,8 @@ interface ReplyLogDao {
     @Insert
     suspend fun insert(log: ReplyLogEntity): Long
 
-    @Query("SELECT * FROM reply_log WHERE contact_id = :contactId ORDER BY timestamp DESC LIMIT :limit")
-    fun observeLogsForContact(contactId: Long, limit: Int = 50): Flow<List<ReplyLogEntity>>
+    @Query("SELECT * FROM reply_log WHERE contact_display_name = :contactName ORDER BY timestamp DESC LIMIT :limit")
+    fun observeLogsForContact(contactName: String, limit: Int = 50): Flow<List<ReplyLogEntity>>
 
     @Query("SELECT * FROM reply_log ORDER BY timestamp DESC LIMIT :limit")
     fun observeAllLogs(limit: Int = 100): Flow<List<ReplyLogEntity>>
@@ -27,21 +27,20 @@ interface ReplyLogDao {
     suspend fun deleteOlderThan(before: Instant)
 
     /**
-     * Joins reply_log with linked_contacts to resolve contact display names.
-     * Returns a raw projection used by [AuditLogRepositoryImpl] to build domain models.
+     * Reads the audit log without any JOIN — contact name is stored directly
+     * in the row since the B2B migration dropped the linked_contacts FK.
      */
     @Query("""
-        SELECT 
-            rl.id            AS id,
-            lc.whatsapp_display_name AS contactName,
-            rl.incoming_message       AS incomingMessage,
-            rl.generated_reply        AS generatedReply,
-            rl.similarity_score       AS similarityScore,
-            rl.was_auto_sent          AS wasAutoSent,
-            rl.timestamp              AS timestamp
-        FROM reply_log rl
-        INNER JOIN linked_contacts lc ON lc.id = rl.contact_id
-        ORDER BY rl.timestamp DESC
+        SELECT
+            id                    AS id,
+            contact_display_name  AS contact_display_name,
+            incoming_message      AS incoming_message,
+            generated_reply       AS generated_reply,
+            similarity_score      AS similarity_score,
+            was_auto_sent         AS was_auto_sent,
+            timestamp             AS timestamp
+        FROM reply_log
+        ORDER BY timestamp DESC
         LIMIT :limit
     """)
     fun observeLogsWithContact(limit: Int = 100): Flow<List<AuditLogProjection>>

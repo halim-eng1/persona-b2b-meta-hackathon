@@ -26,7 +26,7 @@ class AuditLogRepositoryImpl @Inject constructor(
         replyText: String
     ) {
         val entity = ReplyLogEntity(
-            contactId = candidate.contactId,
+            contactDisplayName = notification.contactName,
             incomingMessage = notification.originalText,
             generatedReply = replyText,
             confidenceScore = candidate.similarityScore,
@@ -35,7 +35,7 @@ class AuditLogRepositoryImpl @Inject constructor(
             wasAutoSent = true,
             wasApproved = null,
             timestamp = Clock.System.now(),
-            retrievedMessageIds = emptyList()
+            retrievedChunkIds = listOf(candidate.chunkId)
         )
         replyLogDao.insert(entity)
     }
@@ -72,4 +72,8 @@ class AuditLogRepositoryImpl @Inject constructor(
         }
 
     override fun observeReplyCount(): Flow<Int> = replyLogDao.observeAutoSentCount()
+
+    override suspend fun clearPendingRepliesForContact(contactName: String) {
+        replyQueueDao.deletePendingRepliesForContact(contactName)
+    }
 }

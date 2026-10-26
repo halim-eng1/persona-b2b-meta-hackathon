@@ -1,17 +1,20 @@
 package com.example.persona.core.database.dao
 
+import androidx.room.ColumnInfo
 import kotlinx.datetime.Instant
 
 /**
- * Room POJO that holds the result of the JOIN between [reply_log] and
- * [linked_contacts]. Column names must match the aliases in the @Query.
+ * Lightweight projection returned by [ReplyLogDao.observeLogsWithContact].
+ *
+ * B2B migration: the old JOIN on `linked_contacts` has been removed.
+ * `contactName` is now read directly from `reply_log.contact_display_name`.
  */
 data class AuditLogProjection(
-    val id: Long,
-    val contactName: String,
-    val incomingMessage: String,
-    val generatedReply: String,
-    val similarityScore: Float,
-    val wasAutoSent: Boolean,
-    val timestamp: Instant
+    @ColumnInfo(name = "id") val id: Long,
+    @ColumnInfo(name = "contact_display_name") val contactName: String,
+    @ColumnInfo(name = "incoming_message") val incomingMessage: String,
+    @ColumnInfo(name = "generated_reply") val generatedReply: String,
+    @ColumnInfo(name = "similarity_score") val similarityScore: Float,
+    @ColumnInfo(name = "was_auto_sent") val wasAutoSent: Boolean,
+    @ColumnInfo(name = "timestamp") val timestamp: Instant
 )

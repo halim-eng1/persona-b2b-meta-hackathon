@@ -149,14 +149,14 @@ fun HomeScreen(
                 StatCard(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.Person,
-                    value = state.activeContactCount.toString(),
-                    label = "Active Contacts",
+                    value = state.knowledgeChunkCount.toString(),
+                    label = "Knowledge Chunks",
                     iconTint = MaterialTheme.colorScheme.tertiary
                 )
             }
 
             // ── Section: Import CTA ───────────────────────────────────────────
-            if (state.activeContactCount == 0) {
+            if (state.knowledgeChunkCount == 0) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -170,13 +170,13 @@ fun HomeScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Bring Your Personas to Life",
+                            text = "Populate Your Knowledge Base",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Import a WhatsApp export to train your on-device reply model.",
+                            text = "Import a Markdown/Text document to train your on-device vector search model.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
@@ -195,7 +195,7 @@ fun HomeScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "Import WhatsApp Chat", fontWeight = FontWeight.Bold)
+                            Text(text = "Import Knowledge Base", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
