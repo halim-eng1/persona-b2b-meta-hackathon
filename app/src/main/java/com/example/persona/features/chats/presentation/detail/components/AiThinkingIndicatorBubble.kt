@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -70,16 +70,15 @@ fun AiThinkingIndicatorBubble(
         label = "dot3"
     )
 
-    Box(
-        modifier = modifier.fillMaxWidth(),
-        contentAlignment = Alignment.CenterStart
-    ) {
+    // Wrap-content width here: the caller (ChatDetailScreen) owns the row-level
+    // alignment (Alignment.CenterEnd), matching the outgoing AI bubble stream.
+    Box(modifier = modifier) {
         Surface(
             shape = RoundedCornerShape(
                 topStart = 16.dp,
                 topEnd = 16.dp,
-                bottomStart = 4.dp,
-                bottomEnd = 16.dp
+                bottomStart = 16.dp,
+                bottomEnd = 4.dp
             ),
             color = Color(0xFF1E293B),
             tonalElevation = 2.dp
@@ -93,8 +92,20 @@ fun AiThinkingIndicatorBubble(
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
+                    // botName in its own segment: a mixed Arabic/English name must not
+                    // flip the trailing "..." punctuation (BiDi first-strong rule).
                     Text(
-                        text = "$botName is generating reply...",
+                        text = botName,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textDirection = TextDirection.Content
+                        ),
+                        color = Color(0xFF2DD4BF)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "is generating reply...",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold

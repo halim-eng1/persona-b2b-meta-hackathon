@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.persona.core.database.entity.OrderEntity
@@ -193,7 +194,11 @@ fun OrderCard(
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = order.orderDetails,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                // BiDi: order details mix Arabic with English product
+                                // names ("Classic Backpack", "VELO") and specs
+                                textDirection = TextDirection.ContentOrRtl
+                            ),
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 4,
                             overflow = TextOverflow.Ellipsis
@@ -217,7 +222,9 @@ fun OrderCard(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = order.deliveryAddress,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            textDirection = TextDirection.ContentOrRtl
+                        ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -249,7 +256,11 @@ fun OrderCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "AI Note: \"${order.merchantNote}\"",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                // BiDi: merchant notes are usually Arabic and may embed
+                                // English courier/brand names
+                                textDirection = TextDirection.ContentOrRtl
+                            ),
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -261,7 +272,9 @@ fun OrderCard(
             if (!order.customNotes.isNullOrBlank()) {
                 Text(
                     text = "Customer Notes: ${order.customNotes}",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        textDirection = TextDirection.ContentOrRtl
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis

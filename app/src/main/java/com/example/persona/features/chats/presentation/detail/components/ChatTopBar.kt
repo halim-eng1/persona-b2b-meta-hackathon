@@ -14,6 +14,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -111,21 +112,74 @@ fun CompactChatTopBar(
                     }
                 }
 
-                // Subtitle
-                val (statusText, statusColor) = when {
-                    isAiGenerating -> "● $botName is generating reply..." to Color(0xFF2DD4BF)
-                    isAiPaused -> "AI Paused" to Color(0xFFF59E0B)
-                    replyCapability == ReplyCapability.READY_VIA_NOTIFICATION -> "● Ready • $botName" to Color(0xFF4ADE80)
-                    else -> "○ Awaiting notification" to Color(0xFF94A3B8)
+                // Subtitle. The bot name is rendered as its own Text segment so a mixed
+                // Arabic/English name cannot invert the surrounding punctuation under
+                // the LTR root layout (BiDi first-strong rule).
+                val subtitleColor = when {
+                    isAiGenerating -> Color(0xFF2DD4BF)
+                    isAiPaused -> Color(0xFFF59E0B)
+                    replyCapability == ReplyCapability.READY_VIA_NOTIFICATION -> Color(0xFF4ADE80)
+                    else -> Color(0xFF94A3B8)
                 }
 
-                Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                    color = statusColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    when {
+                        isAiGenerating -> {
+                            Text(
+                                text = botName,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    textDirection = TextDirection.Content
+                                ),
+                                color = subtitleColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "is generating reply...",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                color = subtitleColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        replyCapability == ReplyCapability.READY_VIA_NOTIFICATION -> {
+                            Text(
+                                text = "● Ready • ",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                color = subtitleColor
+                            )
+                            Text(
+                                text = botName,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    textDirection = TextDirection.Content
+                                ),
+                                color = subtitleColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        isAiPaused -> {
+                            Text(
+                                text = "AI Paused",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                color = subtitleColor
+                            )
+                        }
+                        else -> {
+                            Text(
+                                text = "○ Awaiting notification",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                color = subtitleColor
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.width(8.dp))

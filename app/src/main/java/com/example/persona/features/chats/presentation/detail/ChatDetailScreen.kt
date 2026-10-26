@@ -139,10 +139,16 @@ fun ChatDetailScreen(
 
             if (state.isAiGenerating) {
                 item(key = "ai_thinking_indicator") {
-                    AiThinkingIndicatorBubble(
-                        botName = state.botName,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
+                    // Align to the outgoing (AI) side, matching the green bubble stream
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        AiThinkingIndicatorBubble(
+                            botName = state.botName,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
                 }
             }
         }

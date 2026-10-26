@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.persona.core.data.repository.UserPreferencesRepository
@@ -132,10 +133,15 @@ fun MessageBubble(
                         }
                     }
 
-                    // Message text
+                    // Message text. ContentOrRtls picks the paragraph direction from the
+                    // first strong directional character, so mixed Arabic/English content
+                    // (brand names, product names, specs) keeps correct word order and
+                    // punctuation placement regardless of the LTR root layout.
                     Text(
                         text = message.text,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            textDirection = TextDirection.ContentOrRtl
+                        ),
                         color = Color.White
                     )
 

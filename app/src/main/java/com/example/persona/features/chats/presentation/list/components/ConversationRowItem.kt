@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -82,7 +83,9 @@ fun ConversationRowItem(
                 Text(
                     text = item.contactName,
                     style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = if (item.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold
+                        fontWeight = if (item.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
+                        // BiDi: contact names mix Arabic with Latin (store/brand names)
+                        textDirection = TextDirection.ContentOrRtl
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -105,7 +108,11 @@ fun ConversationRowItem(
             ) {
                 Text(
                     text = item.lastMessageSnippet,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        // BiDi: snippets mix Arabic text with "AI:"/"You:" prefixes and
+                        // English product names; resolve direction from content
+                        textDirection = TextDirection.ContentOrRtl
+                    ),
                     color = if (item.unreadCount > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
