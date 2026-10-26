@@ -4,7 +4,9 @@ import android.content.Context
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.database.entity.OrderStatus
+import com.example.persona.core.network.dto.AgenticLlmResponse
 import com.example.persona.core.network.dto.ChatMessage
+import com.example.persona.core.network.dto.OpenRouterRequest
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -132,15 +134,15 @@ class ReplyGenerationRepositoryImplTest {
         val messages = ReplyGenerationRepositoryImpl.buildOpenRouterMessages(
             systemPrompt = ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS,
             chatHistory = historyTurns,
-            dynamicContextBlock = dynamicBlock
+            currentInboundText = dynamicBlock
         )
 
         // 0: system
         // 1: user (سلام عليكم)
-        // 2: assistant (جار تجهيزه يا فندم)
+        // 2: assistant (جار تجهيزه يا فندم wrapped in AgenticLlmResponse JSON)
         // 3: user (وصل؟)
-        // 4: assistant (تمام شكراً)
-        // 5: user (final dynamic context)
+        // 4: assistant (تمام شكراً wrapped in AgenticLlmResponse JSON)
+        // 5: user (final customer message without metadata markers)
         assertEquals(6, messages.size)
         assertEquals("system", messages[0].role)
         assertEquals(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS, messages[0].content)
@@ -149,16 +151,19 @@ class ReplyGenerationRepositoryImplTest {
         assertEquals("سلام عليكم", messages[1].content)
 
         assertEquals("assistant", messages[2].role)
-        assertEquals("جار تجهيزه يا فندم", messages[2].content)
+        assertTrue(messages[2].content.contains("\"action\":\"REPLY\""))
+        assertTrue(messages[2].content.contains("\"final_reply_text\":\"جار تجهيزه يا فندم\""))
 
         assertEquals("user", messages[3].role)
         assertEquals("وصل؟", messages[3].content)
 
         assertEquals("assistant", messages[4].role)
-        assertEquals("تمام شكراً", messages[4].content)
+        assertTrue(messages[4].content.contains("\"action\":\"REPLY\""))
+        assertTrue(messages[4].content.contains("\"final_reply_text\":\"تمام شكراً\""))
 
         assertEquals("user", messages[5].role)
-        assertTrue(messages[5].content.contains("=== CURRENT CUSTOMER MESSAGE ==="))
+        assertEquals("هيوصل امتى؟", messages[5].content)
+        assertFalse(messages[5].content.contains("=== CURRENT CUSTOMER MESSAGE ==="))
     }
 
     @Test
@@ -174,15 +179,15 @@ class ReplyGenerationRepositoryImplTest {
         val messages = ReplyGenerationRepositoryImpl.buildOpenRouterMessages(
             systemPrompt = ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS,
             chatHistory = historyTurns,
-            dynamicContextBlock = dynamicBlock
+            currentInboundText = dynamicBlock
         )
 
         // Since all turns were from user and final is user, they coalesce into 1 final user turn to strictly alternate with system
         assertEquals(2, messages.size)
         assertEquals("system", messages[0].role)
         assertEquals("user", messages[1].role)
-        assertTrue(messages[1].content.contains("مساء الخير\nعاوز حذاء مقاس 42"))
-        assertTrue(messages[1].content.contains("=== CURRENT CUSTOMER MESSAGE ==="))
+        assertEquals("مساء الخير\nعاوز حذاء مقاس 42\nلونه أسود", messages[1].content)
+        assertFalse(messages[1].content.contains("=== CURRENT CUSTOMER MESSAGE ==="))
     }
 
     @Test
@@ -192,8 +197,8 @@ class ReplyGenerationRepositoryImplTest {
         assertFalse(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS.endsWith("\\\""))
 
         // Assert essential sections are in both
-        assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS.contains("IDENTITY & CONTINUITY:"))
-        assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS.contains("IDENTITY & CONTINUITY:"))
+        assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS.contains("IDENTITY & ZERO HALLUCINATION:"))
+        assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS.contains("IDENTITY & ZERO HALLUCINATION:"))
 
         assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS.contains("CONCISENESS & TONE:"))
         assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS.contains("CONCISENESS & TONE:"))
@@ -214,6 +219,132 @@ class ReplyGenerationRepositoryImplTest {
         assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS.contains("\"action\": \"REPLY\" | \"RE_QUERY\" | \"HITL\""))
         assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS.contains("\"action\": \"REPLY\" | \"HITL\""))
         assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS.contains("\"RE_QUERY\" is completely forbidden"))
+    }
+
+    @Test
+    fun `outgoing OpenRouterRequest does not serialize reasoning_content`() {
+        val json = Json {
+            encodeDefaults = true
+            explicitNulls = false
+            ignoreUnknownKeys = true
+            isLenient = true
+        }
+        val request = OpenRouterRequest(
+            model = "test-model",
+            messages = listOf(
+                ChatMessage(role = "system", content = "sys"),
+                ChatMessage(role = "user", content = "user"),
+                ChatMessage(role = "assistant", content = "bot")
+            )
+        )
+        val serialized = json.encodeToString(OpenRouterRequest.serializer(), request)
+        assertFalse("reasoning_content must not be serialized when null", serialized.contains("reasoning_content"))
+    }
+
+    @Test
+    fun `user messages contain only raw text and dynamic context lives in system prompt Message 0`() {
+        val staticPrompt = ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS
+        val candidates = listOf(
+            RetrievalCandidate(
+                chunkId = "c1",
+                headerContext = "المنتجات",
+                chunkText = "لدينا أحذية وملابس",
+                similarityScore = 0.7f,
+                baseSimilarityScore = 0.7f
+            )
+        )
+        val orders = listOf(
+            OrderEntity(
+                id = 1L,
+                contactName = "test",
+                status = OrderStatus.PENDING.name,
+                orderDetails = "حذاء أسود"
+            )
+        )
+        val systemPromptWithContext = ReplyGenerationRepositoryImpl.buildSystemPromptWithContext(
+            staticSystemPrompt = staticPrompt,
+            candidates = candidates,
+            activeOrders = orders
+        )
+
+        assertTrue(systemPromptWithContext.contains("<store_knowledge>"))
+        assertTrue(systemPromptWithContext.contains("لدينا أحذية وملابس"))
+        assertTrue(systemPromptWithContext.contains("</store_knowledge>"))
+        assertTrue(systemPromptWithContext.contains("<customer_order_state>"))
+        assertTrue(systemPromptWithContext.contains("Order Details: حذاء أسود"))
+        assertTrue(systemPromptWithContext.contains("</customer_order_state>"))
+
+        val history = listOf(
+            ChatHistoryEntity(id = 2L, contactName = "c", messageText = "أهلاً بك", isFromUser = false, timestamp = 200L),
+            ChatHistoryEntity(id = 1L, contactName = "c", messageText = "السلام عليكم", isFromUser = true, timestamp = 100L)
+        )
+
+        val messages = ReplyGenerationRepositoryImpl.buildOpenRouterMessages(
+            systemPrompt = systemPromptWithContext,
+            chatHistory = history,
+            currentInboundText = "بكام الشحن؟"
+        )
+
+        // Message 0 is system with store_knowledge and customer_order_state
+        assertEquals("system", messages[0].role)
+        assertTrue(messages[0].content.contains("<store_knowledge>"))
+        assertTrue(messages[0].content.contains("<customer_order_state>"))
+
+        // All user messages contain only raw text
+        val userMessages = messages.filter { it.role == "user" }
+        assertEquals(2, userMessages.size)
+        assertEquals("السلام عليكم", userMessages[0].content)
+        assertEquals("بكام الشحن؟", userMessages[1].content)
+
+        userMessages.forEach { msg ->
+            assertFalse(msg.content.contains("<store_knowledge>"))
+            assertFalse(msg.content.contains("=== STORE KNOWLEDGE ==="))
+            assertFalse(msg.content.contains("<customer_order_state>"))
+            assertFalse(msg.content.contains("=== CUSTOMER ORDER STATE ==="))
+            assertFalse(msg.content.contains("=== CURRENT CUSTOMER MESSAGE ==="))
+        }
+    }
+
+    @Test
+    fun `historical assistant turns are formatted as valid AgenticLlmResponse JSON`() {
+        val history = listOf(
+            ChatHistoryEntity(id = 2L, contactName = "c", messageText = "أهلاً وسهلاً بحضرتك", isFromUser = false, timestamp = 200L),
+            ChatHistoryEntity(id = 1L, contactName = "c", messageText = "مرحبا", isFromUser = true, timestamp = 100L)
+        )
+        val messages = ReplyGenerationRepositoryImpl.buildOpenRouterMessages(
+            systemPrompt = "sys",
+            chatHistory = history,
+            currentInboundText = "عايز أسأل"
+        )
+
+        val assistantMessage = messages.first { it.role == "assistant" }
+        val json = Json { ignoreUnknownKeys = true }
+        val decoded = json.decodeFromString<AgenticLlmResponse>(assistantMessage.content)
+
+        assertEquals("REPLY", decoded.action)
+        assertEquals("أهلاً وسهلاً بحضرتك", decoded.finalReplyText)
+        assertEquals(null, decoded.refinedSearchKeyword)
+        assertEquals(null, decoded.orderAction)
+        assertEquals(null, decoded.extractedOrder)
+    }
+
+    @Test
+    fun `consecutive identical canonical HITL fallback replies are deduplicated in history`() {
+        val history = listOf(
+            // Descending order (most recent first): 3 identical HITL fallback turns in a row from 429 outages
+            ChatHistoryEntity(id = 3L, contactName = "c", messageText = ReplyGenerationRepositoryImpl.CANONICAL_HITL_MESSAGE, isFromUser = false, timestamp = 300L),
+            ChatHistoryEntity(id = 2L, contactName = "c", messageText = ReplyGenerationRepositoryImpl.CANONICAL_HITL_MESSAGE, isFromUser = false, timestamp = 200L),
+            ChatHistoryEntity(id = 1L, contactName = "c", messageText = "سلام عليكم", isFromUser = true, timestamp = 100L)
+        )
+
+        val messages = ReplyGenerationRepositoryImpl.buildOpenRouterMessages(
+            systemPrompt = "sys",
+            chatHistory = history,
+            currentInboundText = "حد يرد"
+        )
+
+        val assistantMessages = messages.filter { it.role == "assistant" }
+        assertEquals("Should only have 1 assistant message instead of 2 consecutive identical HITL duplicates", 1, assistantMessages.size)
     }
 
     @Test

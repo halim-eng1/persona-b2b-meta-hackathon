@@ -28,6 +28,7 @@ object NetworkModule {
                 // Required so reasoning-suppression fields (include_reasoning,
                 // reasoning) with default values are actually sent to OpenRouter.
                 encodeDefaults = true
+                explicitNulls = false
             })
         }
         install(Logging) {

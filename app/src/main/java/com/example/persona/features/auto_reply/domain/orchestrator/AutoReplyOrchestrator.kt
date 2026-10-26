@@ -71,6 +71,29 @@ class AutoReplyOrchestrator @Inject constructor(
     companion object {
         private const val TAG = "AutoReplyOrchestrator"
         private const val ALARM_CHANNEL_ID = "hitl_alarm_channel"
+        const val CANONICAL_HITL_MESSAGE =
+            "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
+
+        /**
+         * Strips Markdown code-block wrappers that free-tier LLMs frequently inject
+         * around their JSON output (e.g., ```json ... ``` or ``` ... ```).
+         * Also extracts the substring between the first '{' and last '}' to protect
+         * against leading/trailing conversational filler or tokens.
+         */
+        internal fun sanitizeLlmJson(raw: String): String {
+            var cleaned = raw.trim()
+            cleaned = cleaned.removePrefix("```json").removePrefix("```JSON").removePrefix("```")
+            if (cleaned.endsWith("```")) {
+                cleaned = cleaned.substring(0, cleaned.length - 3)
+            }
+            cleaned = cleaned.trim()
+            val firstBrace = cleaned.indexOf('{')
+            val lastBrace = cleaned.lastIndexOf('}')
+            if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
+                cleaned = cleaned.substring(firstBrace, lastBrace + 1)
+            }
+            return cleaned.trim()
+        }
 
         /**
          * Stable prefix of the dedup verification pivot message. Used for the
@@ -247,7 +270,7 @@ class AutoReplyOrchestrator @Inject constructor(
         Log.i(TAG, "AutoReplyOrchestrator started listening to IncomingMessageDispatcher")
     }
 
-    private suspend fun processNotificationSequentially(rawNotification: WhatsAppNotification) {
+    internal suspend fun processNotificationSequentially(rawNotification: WhatsAppNotification) {
         // 1. Global switch
         if (!prefsRepository.isAutoReplyEnabledSync()) {
             PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Notification rejected")
@@ -334,7 +357,7 @@ class AutoReplyOrchestrator @Inject constructor(
             Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
 
             // Auto-reply with holding message to customer
-            sendImmediateReply(processed, ensureHitlSuffix(context.getString(R.string.hitl_holding_message)))
+            sendHitlHoldingReply(processed)
             return
         }
 
@@ -369,13 +392,11 @@ class AutoReplyOrchestrator @Inject constructor(
         val ragBaseThreshold = calculateRagBaseThreshold(stylePrefs.similarityThreshold)
         var candidates: List<RetrievalCandidate> = emptyList()
         var maxScore = 0f
-        val queryEmbeddingForPersonalSweep: FloatArray?
 
         if (hasContext) {
             // Late Fusion Parallel Dual Search (Late Fusion)
             val queryEmbeddingA = embeddingEngine.embedForAutoReply(richContext)
             val queryEmbeddingB = embeddingEngine.embedForAutoReply(processed.normalizedText)
-            queryEmbeddingForPersonalSweep = queryEmbeddingB ?: queryEmbeddingA
 
             if (queryEmbeddingA != null && queryEmbeddingB != null) {
                 val (candidatesA, scoreA) = semanticRetrievalRepository.retrieveCandidates(
@@ -412,7 +433,6 @@ class AutoReplyOrchestrator @Inject constructor(
             }
         } else {
             val queryEmbedding = embeddingEngine.embedForAutoReply(richContext)
-            queryEmbeddingForPersonalSweep = queryEmbedding
             if (queryEmbedding != null) {
                 val (retrievedCandidates, bestScore) = semanticRetrievalRepository.retrieveCandidates(
                     queryEmbedding = queryEmbedding,
@@ -425,7 +445,7 @@ class AutoReplyOrchestrator @Inject constructor(
             }
         }
 
-        // 8.1. Context Assembly (Sources A, B, C)
+        // 8.1. Context Assembly (Sources A, B)
         val contextStart = System.currentTimeMillis()
         
         // Source A: Chronological turns
@@ -435,58 +455,12 @@ class AutoReplyOrchestrator @Inject constructor(
             limit = 6
         )
         
-        // Source B: Global candidates (candidates)
-        
-        // Source C: Personal client state (excluding current inbound and recent chat turns)
+        // Source B: Active orders
         val activeOrders = orderDao.getActiveOrdersByContact(processed.contactName)
-        val embeddedMessages = chatHistoryDao.getEmbeddedMessages(processed.contactName, limit = 20)
-        val excludedPersonalIds = buildSet {
-            add(insertedId)
-            chatHistory.forEach { add(it.id) }
-        }
-        val personalChunks = if (queryEmbeddingForPersonalSweep != null) {
-            embeddedMessages
-                .filterNot { it.id in excludedPersonalIds }
-                .mapNotNull { msg ->
-                    val msgEmbedding = msg.embedding
-                    if (msgEmbedding != null) {
-                        val score = dotProduct(queryEmbeddingForPersonalSweep, msgEmbedding)
-                        if (score >= 0.45f) msg to score else null
-                    } else {
-                        null
-                    }
-                }.sortedByDescending { it.second }
-                 .take(2)
-                 .map { it.first }
-        } else {
-            emptyList()
-        }
         
         val contextBuildMs = System.currentTimeMillis() - contextStart
-        Log.d(TAG, "📊 Context assembly completed in ${contextBuildMs}ms: chatTurns=${chatHistory.size}, activeOrders=${activeOrders.size}, personalChunks=${personalChunks.size}")
+        Log.d(TAG, "📊 Context assembly completed in ${contextBuildMs}ms: chatTurns=${chatHistory.size}, activeOrders=${activeOrders.size}")
         Log.i("PersonaMetrics", "metric=context_build_ms value=$contextBuildMs contact=${processed.contactName.hashCode()}")
-
-        // 9. Tier B HITL Trigger
-        if (candidates.isEmpty()) {
-            Log.d(TAG, "No RAG candidates above threshold for ${processed.contactName}. Best score: $maxScore. Triggering Tier B HITL.")
-
-            // Log unanswered failed query
-            val failedQuery = FailedQueryEntity(
-                contactDisplayName = processed.contactName,
-                queryText = processed.originalText,
-                bestScore = maxScore
-            )
-            failedQueryDao.insert(failedQuery)
-
-            // Trigger alarm notification to notify owner immediately
-            triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
-            
-            Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
-
-            // Auto-reply with holding message to customer
-            sendImmediateReply(processed, ensureHitlSuffix(context.getString(R.string.hitl_holding_message)))
-            return
-        }
 
         // 10. Agentic LLM Generation with Re-Query Loop
         val lastSessionReplyTime = lastReplyTimestamps[processed.contactName] ?: 0L
@@ -499,14 +473,14 @@ class AutoReplyOrchestrator @Inject constructor(
             isOngoingConversation = isOngoing,
             chatHistory = chatHistory,
             activeOrders = activeOrders,
-            personalChunks = personalChunks,
+            personalChunks = emptyList(),
             maxTokens = 600
         )
         if (rawLlmOutput.isNullOrBlank()) {
             Log.d(TAG, "LLM returned null/blank — all models failed. HITL fallback.")
             triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
             Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
-            sendImmediateReply(processed, ensureHitlSuffix(context.getString(R.string.hitl_holding_message)))
+            sendHitlHoldingReply(processed)
             return
         }
 
@@ -645,7 +619,7 @@ class AutoReplyOrchestrator @Inject constructor(
                     val hitlReply = if (!agenticResponse.finalReplyText.isNullOrBlank()) {
                         agenticResponse.finalReplyText
                     } else {
-                        "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك 🙏"
+                        CANONICAL_HITL_MESSAGE
                     }
                     Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
                     sendImmediateReply(processed, ensureHitlSuffix(hitlReply))
@@ -681,6 +655,16 @@ class AutoReplyOrchestrator @Inject constructor(
 
                         if (mergedChunks.isEmpty()) {
                             Log.d(TAG, "RE_QUERY returned no relevant chunks after merge — HITL fallback")
+                            try {
+                                val failedQuery = FailedQueryEntity(
+                                    contactDisplayName = processed.contactName,
+                                    queryText = processed.originalText,
+                                    bestScore = maxScore
+                                )
+                                failedQueryDao.insert(failedQuery)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to insert FailedQueryEntity", e)
+                            }
                             null
                         } else {
                             Log.i(TAG, "RE_QUERY merged to ${mergedChunks.size} chunks (Pass1: ${candidates.size}, Pass2: ${newChunks.size}). Executing final LLM pass.")
@@ -692,7 +676,7 @@ class AutoReplyOrchestrator @Inject constructor(
                                 isOngoingConversation = isOngoing,
                                 chatHistory = chatHistory,
                                 activeOrders = activeOrders,
-                                personalChunks = personalChunks,
+                                personalChunks = emptyList(),
                                 maxTokens = 750
                             )
 
@@ -728,6 +712,16 @@ class AutoReplyOrchestrator @Inject constructor(
 
                                 if (finalParsed.action == "HITL") {
                                     Log.i(TAG, "Second-pass LLM action=HITL. Handing off to human.")
+                                    try {
+                                        val failedQuery = FailedQueryEntity(
+                                            contactDisplayName = processed.contactName,
+                                            queryText = processed.originalText,
+                                            bestScore = maxScore
+                                        )
+                                        failedQueryDao.insert(failedQuery)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Failed to insert FailedQueryEntity", e)
+                                    }
                                     triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
                                     try {
                                         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -748,7 +742,7 @@ class AutoReplyOrchestrator @Inject constructor(
                                     val hitlReply = if (!finalParsed.finalReplyText.isNullOrBlank()) {
                                         finalParsed.finalReplyText
                                     } else {
-                                        "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك 🙏"
+                                        CANONICAL_HITL_MESSAGE
                                     }
                                     Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
                                     sendImmediateReply(processed, ensureHitlSuffix(hitlReply))
@@ -781,7 +775,7 @@ class AutoReplyOrchestrator @Inject constructor(
             Log.d(TAG, "Agentic loop produced no reply — HITL fallback.")
             triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
             Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
-            sendImmediateReply(processed, ensureHitlSuffix(context.getString(R.string.hitl_holding_message)))
+            sendHitlHoldingReply(processed)
             return
         }
 
@@ -798,7 +792,7 @@ class AutoReplyOrchestrator @Inject constructor(
         if (isEchoRepetition(styledReplyText, chatHistory)) {
             Log.w(TAG, "Anti-echo guard triggered: LLM produced verbatim duplicate of recent assistant reply for ${processed.contactName}. Degrading to HITL.")
             triggerHitlAlarm(processed.contactName, processed.originalText, maxScore)
-            sendImmediateReply(processed, ensureHitlSuffix(context.getString(R.string.hitl_holding_message)))
+            sendHitlHoldingReply(processed)
             return
         }
 
@@ -854,7 +848,14 @@ class AutoReplyOrchestrator @Inject constructor(
                     }
                 }
 
-                auditLogRepository.logExecutedReply(processed, candidates.first(), styledReplyText)
+                val auditCandidate = candidates.firstOrNull() ?: RetrievalCandidate(
+                    chunkId = "CONVERSATIONAL_REPLY",
+                    headerContext = "CONVERSATIONAL",
+                    chunkText = styledReplyText,
+                    similarityScore = 1.0f,
+                    baseSimilarityScore = 1.0f
+                )
+                auditLogRepository.logExecutedReply(processed, auditCandidate, styledReplyText)
                 PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Reply executed")
                 Log.i(TAG, "Auto-replied to ${processed.contactName}: '$styledReplyText'")
                 
@@ -970,9 +971,16 @@ class AutoReplyOrchestrator @Inject constructor(
     }
 
     private fun ensureHitlSuffix(text: String): String {
-        val suffix = "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
-        return if (text.trimEnd().endsWith(suffix.trim())) text
-               else "$text\n$suffix"
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || trimmed == CANONICAL_HITL_MESSAGE) {
+            return CANONICAL_HITL_MESSAGE
+        }
+        return if (trimmed.endsWith(CANONICAL_HITL_MESSAGE)) trimmed
+               else "$trimmed\n$CANONICAL_HITL_MESSAGE"
+    }
+
+    private suspend fun sendHitlHoldingReply(processed: ProcessedNotification) {
+        sendImmediateReply(processed, CANONICAL_HITL_MESSAGE)
     }
 
     private fun normalizeField(value: String?): String? {
@@ -1022,22 +1030,6 @@ class AutoReplyOrchestrator @Inject constructor(
     }
 
     /**
-     * Strips Markdown code-block wrappers that free-tier LLMs frequently inject
-     * around their JSON output (e.g., ```json ... ``` or ``` ... ```).
-     * Also trims leading/trailing whitespace and blank lines.
-     */
-    private fun sanitizeLlmJson(raw: String): String {
-        var cleaned = raw.trim()
-        // Remove opening ```json or ``` with optional language tag
-        cleaned = cleaned.removePrefix("```json").removePrefix("```JSON").removePrefix("```")
-        // Remove closing ```
-        if (cleaned.endsWith("```")) {
-            cleaned = cleaned.substring(0, cleaned.length - 3)
-        }
-        return cleaned.trim()
-    }
-
-    /**
      * English chain-of-thought markers indicating reasoning-token leakage in
      * LLM output. Checked both on raw output (when JSON decoding fails) and
      * on parsed `final_reply_text` from well-formed JSON, as a last line of
@@ -1069,7 +1061,7 @@ class AutoReplyOrchestrator @Inject constructor(
      */
     private fun buildUnsafeOutputHitlResponse(): AgenticLlmResponse = AgenticLlmResponse(
         action = "HITL",
-        finalReplyText = "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
+        finalReplyText = CANONICAL_HITL_MESSAGE
     )
 
     /**

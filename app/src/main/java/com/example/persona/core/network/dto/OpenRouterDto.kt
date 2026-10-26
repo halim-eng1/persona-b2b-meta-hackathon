@@ -39,9 +39,13 @@ data class ReasoningConfig(
 
 @Serializable
 data class ChatMessage(
-    val role: String,   // "system" | "user"
-    val content: String
+    val role: String,   // "system" | "user" | "assistant"
+    val content: String,
+    @SerialName("reasoning_content")
+    val reasoningContent: String? = null
 )
+
+typealias OpenRouterMessageDto = ChatMessage
 
 // ── Response DTOs ─────────────────────────────────────────────────────────────
 
@@ -58,7 +62,9 @@ data class Choice(
 
 @Serializable
 data class ChoiceMessage(
-    val content: String? = null
+    val content: String? = null,
+    @SerialName("reasoning_content")
+    val reasoningContent: String? = null
 )
 
 @Serializable

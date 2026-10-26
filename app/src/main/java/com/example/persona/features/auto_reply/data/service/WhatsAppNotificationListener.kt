@@ -85,8 +85,9 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     private val recentKeys = ConcurrentHashMap<String, Long>(64)
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        // ── 1. Package filter ─────────────────────────────────────────────────
+        // ── 1. Package filter & Ongoing filter ─────────────────────────────────
         if (sbn.packageName !in WHATSAPP_PACKAGES) return
+        if (sbn.isOngoing) return
 
         // ── 1a. Diagnostics (non-blocking, fire-and-forget) ───────────────────
         if (DebugFlags.ENABLE_NOTIFICATION_DIAGNOSTICS) {
@@ -123,13 +124,28 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         // Skip group summary banners
         if (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
 
-        // ── 4a. Self-reply guard ──────────────────────────────────────────────
+        // ── 4a. Self-reply guard (case-insensitive) ───────────────────────────
         //     Ignore notifications from the user's own outgoing messages or
         //     WhatsApp system messages to prevent the bot from replying to itself.
-        if (title in SELF_REPLY_TITLES) {
+        if (SELF_REPLY_TITLES.any { it.equals(title.trim(), ignoreCase = true) }) {
             PersonaLogger.d(
                 PersonaLogTags.NOTIFICATION,
                 "Skipped self-reply notification: title=$title key=${sbn.key}"
+            )
+            return
+        }
+
+        // ── 4b. RemoteInput reply action filter ───────────────────────────────
+        //     Non-replyable system/sync/backup notifications (e.g., "Checking for new messages")
+        //     must be dropped immediately at the source so they never enter
+        //     IncomingMessageDispatcher or chat_history.
+        val replyAction = sbn.notification.actions?.firstOrNull { action ->
+            action.remoteInputs?.any { it.resultKey != null } == true
+        }
+        if (replyAction == null) {
+            PersonaLogger.d(
+                PersonaLogTags.NOTIFICATION,
+                "Skipped non-replyable notification (no RemoteInput action): title=$title key=${sbn.key}"
             )
             return
         }
@@ -146,12 +162,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         if (recentKeys.putIfAbsent(dedupeKey, now) != null) return
 
         // ── 6. Cache reply action ─────────────────────────────────────────────
-        val replyAction = sbn.notification.actions?.firstOrNull { action ->
-            action.remoteInputs?.any { it.resultKey != null } == true
-        }
-        if (replyAction != null) {
-            NotificationActionCache.put(sbn.key, replyAction)
-        }
+        NotificationActionCache.put(sbn.key, replyAction)
 
         // ── 7. Extract extra messages ─────────────────────────────────────────
         val extraMessagesList = mutableListOf<ExtraMessage>()
