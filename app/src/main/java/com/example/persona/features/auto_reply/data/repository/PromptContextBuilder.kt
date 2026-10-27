@@ -40,7 +40,7 @@ Inside final_reply_text, NEVER use unescaped double quotes ("); use single quote
 Output Schema:
 {
   "action": "REPLY" | "RE_QUERY" | "HITL",
-  "refined_search_keyword": "2-4 keywords in Modern Standard Arabic for catalog search, or null",
+  "refined_search_keyword": "A SINGLE flat string with 2-4 space-separated keywords (e.g. 'كتالوج المنتجات الأسعار'), NEVER a JSON array [] or list!",
   "order_action": "CREATE" | "CANCEL" | "UPDATE" | null,
   "final_reply_text": "The message to send to the customer",
   "extracted_order": {
@@ -77,7 +77,7 @@ Output Schema:
 - "REPLY": Use for:
   a. ALL natural conversational turns — greetings ("السلام عليكم", "هلا"), friendly check-ins ("انت اخبارك اي"), thanks, farewells, clarifications, and witty off-topic pivots — even when <store_knowledge> is NO_MATCHING_CHUNKS_RETRIEVED.
   b. Store, product, policy, or order answers supported by <store_knowledge> or <customer_order_state>.
-- "RE_QUERY": Use ONLY when the customer asks about store products, catalog items, recommendations ("بتبيعوا ايه", "اقترح عليا"), prices, shipping, or policies, AND <store_knowledge> is NO_MATCHING_CHUNKS_RETRIEVED or lacks the specific product/policy details. Provide 2–4 formal Arabic keywords in `refined_search_keyword` (e.g., "بيانات المنتج الأسعار" or "الشحن التوصيل المحافظات") to run a secondary catalog search.
+- "RE_QUERY": Use ONLY when the customer asks about store products, catalog items, recommendations ("بتبيعوا ايه", "اقترح عليا"), prices, shipping, or policies, AND <store_knowledge> is NO_MATCHING_CHUNKS_RETRIEVED or lacks the specific product/policy details. Provide 2–4 formal Arabic keywords in `refined_search_keyword` (e.g., "بيانات المنتج الأسعار" or "الشحن التوصيل المحافظات") to run a secondary catalog search. refined_search_keyword MUST always be a single plain text string, never an array of strings.
 - STORE TOPICS INDEX (<store_topics>):
   * Use <store_topics> as your high-level index of what the business covers.
   * When formulating 'refined_search_keyword' for RE_QUERY, align your search query with the most relevant topic header from <store_topics>.

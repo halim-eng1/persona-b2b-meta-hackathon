@@ -1,7 +1,51 @@
 package com.example.persona.core.network.dto
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+
+/**
+ * Resilient serializer for [AgenticLlmResponse.refinedSearchKeyword].
+ * Accepts either a flat JSON string, a JSON null, or a JSON array of strings
+ * (joining array items into a single space-separated string).
+ */
+@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+object LenientKeywordSerializer : KSerializer<String?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("LenientKeyword", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: String?) {
+        if (value == null) {
+            encoder.encodeNull()
+        } else {
+            encoder.encodeString(value)
+        }
+    }
+
+    override fun deserialize(decoder: Decoder): String? {
+        val jsonDecoder = decoder as? JsonDecoder ?: return decoder.decodeString()
+        return when (val element = jsonDecoder.decodeJsonElement()) {
+            is JsonNull -> null
+            is JsonPrimitive -> element.content
+            is JsonArray -> {
+                val joined = element.mapNotNull { item ->
+                    (item as? JsonPrimitive)?.content?.trim()
+                }.filter { it.isNotEmpty() }.joinToString(" ")
+                joined.ifEmpty { null }
+            }
+            else -> element.toString()
+        }
+    }
+}
 
 // ── Request DTOs ──────────────────────────────────────────────────────────────
 
@@ -98,6 +142,7 @@ data class OpenRouterError(
 @Serializable
 data class AgenticLlmResponse(
     val action: String,
+    @Serializable(with = LenientKeywordSerializer::class)
     @SerialName("refined_search_keyword")
     val refinedSearchKeyword: String? = null,
     /**

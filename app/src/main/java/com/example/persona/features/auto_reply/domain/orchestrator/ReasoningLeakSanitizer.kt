@@ -82,12 +82,50 @@ class ReasoningLeakSanitizer @Inject constructor() {
             return sb.toString()
         }
 
+        private val REFINED_KEYWORD_ARRAY_REGEX = Regex(
+            """("refined_search_keyword"\s*:\s*)\[(.*?)\]""",
+            RegexOption.DOT_MATCHES_ALL
+        )
+        private val STRING_ITEM_REGEX = Regex("""["']((?:\\.|[^"'\\])*)["']""")
+
+        /**
+         * Normalizes malformed LLM outputs where `refined_search_keyword` was emitted
+         * as a JSON array `["keyword1", "keyword2"]` instead of a flat string `"keyword1 keyword2"`.
+         */
+        fun normalizeRefinedSearchKeywordArray(json: String): String {
+            if (!json.contains("refined_search_keyword")) return json
+            return REFINED_KEYWORD_ARRAY_REGEX.replace(json) { matchResult ->
+                val prefix = matchResult.groupValues[1]
+                val arrayContent = matchResult.groupValues[2].trim()
+                if (arrayContent.isEmpty()) {
+                    "${prefix}null"
+                } else {
+                    val quotedMatches = STRING_ITEM_REGEX.findAll(arrayContent)
+                        .map { it.groupValues[1].trim() }
+                        .filter { it.isNotEmpty() }
+                        .toList()
+
+                    val combined = if (quotedMatches.isNotEmpty()) {
+                        quotedMatches.joinToString(" ")
+                    } else {
+                        arrayContent.split(",")
+                            .map { it.trim().trim('"', '\'') }
+                            .filter { it.isNotEmpty() }
+                            .joinToString(" ")
+                    }
+                    val safeCombined = combined.replace("\"", "\\\"")
+                    "$prefix\"$safeCombined\""
+                }
+            }
+        }
+
         fun decodeAgenticResponseSafely(raw: String): AgenticLlmResponse {
             val sanitized = sanitizeLlmJson(raw)
+            val normalized = normalizeRefinedSearchKeywordArray(sanitized)
             return try {
-                agenticJson.decodeFromString<AgenticLlmResponse>(sanitized)
+                agenticJson.decodeFromString<AgenticLlmResponse>(normalized)
             } catch (e: Exception) {
-                val repaired = repairUnescapedJsonQuotes(sanitized)
+                val repaired = repairUnescapedJsonQuotes(normalized)
                 agenticJson.decodeFromString<AgenticLlmResponse>(repaired)
             }
         }
