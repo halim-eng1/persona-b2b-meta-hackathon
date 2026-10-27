@@ -6,6 +6,10 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -32,6 +37,7 @@ import com.example.persona.features.chats.presentation.detail.components.ChatCom
 import com.example.persona.features.chats.presentation.detail.components.CompactChatTopBar
 import com.example.persona.features.chats.presentation.detail.components.DateHeaderChip
 import com.example.persona.features.chats.presentation.detail.components.MessageBubble
+import com.example.persona.features.chats.presentation.detail.components.ScrollToBottomButton
 import com.example.persona.ui.theme.chatColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -51,14 +57,69 @@ fun ChatDetailScreen(
     val chatColors = MaterialTheme.chatColors
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Auto-scroll to bottom when the message list grows, AI starts/stops generating, or the
-    // keyboard appears — but only when the user is already at (or near) the bottom, so
-    // reading history is never yanked away. First load: the fresh list can't scroll
-    // forward yet, so the initial position lands on the latest message.
+    // Track whether initial scroll to bottom has completed for the active contact
+    var isInitialScrolled by remember(state.contactName) { mutableStateOf(false) }
+    var previousMessageCount by remember(state.contactName) { mutableIntStateOf(0) }
+    var unreadCountBelow by remember(state.contactName) { mutableIntStateOf(0) }
+
+    // Derived state: is the user currently viewing the bottom of the message stream?
+    val isAtBottom by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val visibleItems = layoutInfo.visibleItemsInfo
+            if (visibleItems.isEmpty()) {
+                true
+            } else {
+                !listState.canScrollForward || (visibleItems.last().index >= layoutInfo.totalItemsCount - 1)
+            }
+        }
+    }
+
+    // Reset unread counter whenever the user returns to the bottom
+    LaunchedEffect(isAtBottom) {
+        if (isAtBottom) {
+            unreadCountBelow = 0
+        }
+    }
+
+    // Master Scroll Orchestrator:
+    // 1. Initial Load: Instantly positions directly at the bottom without top-message flicker.
+    // 2. Incoming Messages: If the user was viewing the bottom, smooth auto-scroll reveals the message.
+    // 3. History Reading: If the user scrolled up, keeps reading position stable and increments unread badge.
     LaunchedEffect(state.messages.size, state.isAiGenerating, imeBottom) {
         val totalItems = state.messages.size + if (state.isAiGenerating) 1 else 0
-        if (totalItems > 0 && !listState.canScrollForward) {
-            listState.animateScrollToItem(totalItems - 1)
+        if (totalItems <= 0) return@LaunchedEffect
+
+        if (!isInitialScrolled) {
+            // First load: immediate jump to bottom with zero visual jitter
+            listState.scrollToItem(totalItems - 1)
+            isInitialScrolled = true
+            previousMessageCount = state.messages.size
+        } else {
+            val currentCount = state.messages.size
+            val newMessagesCount = currentCount - previousMessageCount
+
+            if (newMessagesCount > 0) {
+                val layoutInfo = listState.layoutInfo
+                val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                val wasAtBottom = (lastVisibleIndex >= previousMessageCount - 1) || !listState.canScrollForward
+                val isOutgoingFromMe = state.messages.lastOrNull()?.isFromUser == true
+
+                if (wasAtBottom || isOutgoingFromMe) {
+                    listState.animateScrollToItem(totalItems - 1)
+                    unreadCountBelow = 0
+                } else {
+                    unreadCountBelow += newMessagesCount
+                }
+                previousMessageCount = currentCount
+            } else if (newMessagesCount < 0) {
+                previousMessageCount = currentCount
+            } else {
+                // AI generating state or keyboard size changed while at the bottom
+                if (isAtBottom || !listState.canScrollForward) {
+                    listState.animateScrollToItem(totalItems - 1)
+                }
+            }
         }
     }
 
@@ -130,7 +191,9 @@ fun ChatDetailScreen(
         ) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .alpha(if (isInitialScrolled || state.messages.isEmpty()) 1f else 0f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -171,6 +234,29 @@ fun ChatDetailScreen(
                         }
                     }
                 }
+            }
+
+            // WhatsApp-style Scroll to Bottom Floating Action Button with Unread Counter
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !isAtBottom && isInitialScrolled,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 12.dp)
+            ) {
+                ScrollToBottomButton(
+                    unreadCount = unreadCountBelow,
+                    onClick = {
+                        coroutineScope.launch {
+                            val totalItems = state.messages.size + if (state.isAiGenerating) 1 else 0
+                            if (totalItems > 0) {
+                                listState.animateScrollToItem(totalItems - 1)
+                            }
+                            unreadCountBelow = 0
+                        }
+                    }
+                )
             }
 
             SnackbarHost(
