@@ -10,7 +10,7 @@ enum class PersonaTone(
         id = "WITTY_EGYPTIAN",
         titleArabic = "ابن بلد لمّاح",
         subtitle = "Witty & Dynamic",
-        samplePreview = "واقفين على رجلينا مستنيين الأوردر بتاعك أهو 😏 قولّي نجهزلك إيه؟"
+        samplePreview = "واقفين على رجلينا مستنيين الأوردر بتاعك أهو 😎 قولّي نجهزلك إيه؟"
     ),
     STANDARD_POLITE(
         id = "STANDARD_POLITE",

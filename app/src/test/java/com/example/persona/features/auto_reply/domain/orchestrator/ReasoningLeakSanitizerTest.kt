@@ -126,6 +126,46 @@ class ReasoningLeakSanitizerTest {
     }
 
     @Test
+    fun `decodeAgenticResponseSafely normalizes malformed final_reply_text keys with spaces and missing underscores`() {
+        val rawWithSpace = """{"action":"REPLY","final_reply text":"أهلاً بك يا فندم"}"""
+        val resp1 = ReasoningLeakSanitizer.decodeAgenticResponseSafely(rawWithSpace)
+        assertEquals("REPLY", resp1.action)
+        assertEquals("أهلاً بك يا فندم", resp1.finalReplyText)
+
+        val rawMissingUnderscore = """{"action":"REPLY","final_replytext":"منورنا يا باشا"}"""
+        val resp2 = ReasoningLeakSanitizer.decodeAgenticResponseSafely(rawMissingUnderscore)
+        assertEquals("REPLY", resp2.action)
+        assertEquals("منورنا يا باشا", resp2.finalReplyText)
+
+        val rawFullSpaces = """{"action":"REPLY","final reply text":"تحت أمرك"}"""
+        val resp3 = ReasoningLeakSanitizer.decodeAgenticResponseSafely(rawFullSpaces)
+        assertEquals("REPLY", resp3.action)
+        assertEquals("تحت أمرك", resp3.finalReplyText)
+
+        val rawComplex = """
+            {
+              "action": "REPLY",
+              "final reply text": "تمام يا غالي",
+              "order action": "CREATE",
+              "extracted order": {
+                "customer name": "أحمد",
+                "delivery address": "المعادي",
+                "order details": "2 هودي أسود",
+                "custom notes": "مستعجل"
+              }
+            }
+        """.trimIndent()
+        val resp4 = ReasoningLeakSanitizer.decodeAgenticResponseSafely(rawComplex)
+        assertEquals("REPLY", resp4.action)
+        assertEquals("تمام يا غالي", resp4.finalReplyText)
+        assertEquals("CREATE", resp4.orderAction)
+        assertEquals("أحمد", resp4.extractedOrder?.customerName)
+        assertEquals("المعادي", resp4.extractedOrder?.deliveryAddress)
+        assertEquals("2 هودي أسود", resp4.extractedOrder?.orderDetails)
+        assertEquals("مستعجل", resp4.extractedOrder?.customNotes)
+    }
+
+    @Test
     fun `PromptContextBuilder system prompt includes tightened schema and array prohibition`() {
         val prompt = PromptContextBuilder.buildFirstPassSystemPrompt()
         assertTrue(
@@ -139,6 +179,10 @@ class ReasoningLeakSanitizerTest {
         assertTrue(
             "Prompt must emphasize plain text in RE_QUERY action instructions",
             prompt.contains("refined_search_keyword MUST always be a single plain text string, never an array of strings.")
+        )
+        assertTrue(
+            "Prompt must emphasize exact key for final_reply_text",
+            prompt.contains("MUST be exact key 'final_reply_text', no spaces")
         )
     }
 }

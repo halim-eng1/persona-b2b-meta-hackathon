@@ -129,7 +129,7 @@ class PromptContextBuilderTest {
             confidence = 1.0f
         )
 
-        val input = "واقفين على رجلينا مستنيين الأوردر بتاعك أهو 😏 قولّي نجهزلك إيه؟"
+        val input = "واقفين على رجلينا مستنيين الأوردر بتاعك أهو 😎 قولّي نجهزلك إيه؟"
         val output = processor.process(
             rawReply = input,
             prefs = prefs,

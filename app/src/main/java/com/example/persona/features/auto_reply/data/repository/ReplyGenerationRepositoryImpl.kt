@@ -30,6 +30,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -72,6 +73,11 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         private const val MODEL_TIMEOUT_MS = 25000L
         private const val ABSOLUTE_FAILOVER_CEILING = 8000
+
+        private val jsonParser = Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+        }
 
         const val HITL_FALLBACK_JSON =
             """{"action":"HITL","refined_search_keyword":null,"order_action":null,"final_reply_text":"${PromptContextBuilder.CANONICAL_HITL_MESSAGE}","extracted_order":null}"""
@@ -366,7 +372,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                         CallResult.ServerError(response.status.value)
                     }
                     response.status.isSuccess() -> {
-                        val body = response.body<OpenRouterResponse>()
+                        val responseBody = response.body<String>()
+                        PersonaLogger.d(PersonaLogTags.LLM, "📥 Raw LLM Output from $model: $responseBody")
+                        val body = jsonParser.decodeFromString<OpenRouterResponse>(responseBody)
                         val content = body.choices?.firstOrNull()?.message?.content
                         if (content.isNullOrBlank()) {
                             Log.w(TAG, "Empty content in successful response from $model (key ...$keySuffix)")

@@ -487,7 +487,7 @@ class AutoReplyOrchestrator @Inject constructor(
                         return
                     }
 
-                    effectiveAction == "REPLY" && !agenticResponse.finalReplyText.isNullOrBlank() -> {
+                    effectiveAction == "REPLY" -> {
                         Log.i(TAG, "LLM action=REPLY. Dispatching final reply.")
                         agenticResponse.finalReplyText
                     }
@@ -606,9 +606,7 @@ class AutoReplyOrchestrator @Inject constructor(
                                 return
                             }
 
-                            finalReplyOverride
-                                ?: finalParsed.finalReplyText
-                                ?: ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse().finalReplyText
+                            finalReplyOverride ?: finalParsed.finalReplyText
                         }
                     }
 
@@ -616,7 +614,13 @@ class AutoReplyOrchestrator @Inject constructor(
                 }
             }
 
-            if (rawReplyText.isNullOrBlank()) {
+            val safeReplyText = if (!rawReplyText.isNullOrBlank()) {
+                rawReplyText
+            } else if (orderAction == null) {
+                val storeName = prefsRepository.getStoreNameSync()
+                PersonaLogger.w(TAG, "LLM returned blank final_reply_text for benign turn. Using persona fallback.")
+                "أنا معاك وسامعك كويس يا فندم، بس قولّي نقدر نجهزلك إيه النهارده من منتجاتنا في ${storeName}؟ 💙"
+            } else {
                 Log.d(TAG, "Agentic loop produced no reply — HITL fallback.")
                 hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
                 Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
@@ -625,8 +629,8 @@ class AutoReplyOrchestrator @Inject constructor(
             }
 
             // Style post-processing
-            val styledReplyText = stylePostProcessor.process(
-                rawReply = rawReplyText,
+            var styledReplyText = stylePostProcessor.process(
+                rawReply = safeReplyText,
                 prefs = stylePrefs,
                 context = processed.context,
                 userEmojiRate = 0f
@@ -634,10 +638,16 @@ class AutoReplyOrchestrator @Inject constructor(
 
             // Anti-echo guard
             if (AntiEchoGuard.isEchoRepetition(styledReplyText, processed.originalText, chatHistory)) {
-                Log.w(TAG, "Anti-echo guard triggered: duplicate reply for ${processed.contactName}. Degrading to HITL.")
-                hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
-                sendHitlHoldingReply(processed)
-                return
+                if (orderAction == null) {
+                    val storeName = prefsRepository.getStoreNameSync()
+                    PersonaLogger.w(TAG, "Anti-echo guard triggered on standard conversational turn. Replacing with alternative persona closing.")
+                    styledReplyText = "معاك يا فندم، اطلب اللي نفسك فيه من $storeName وأنا في الخدمة علطول 💙"
+                } else {
+                    Log.w(TAG, "Anti-echo guard triggered: duplicate reply for ${processed.contactName}. Degrading to HITL.")
+                    hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
+                    sendHitlHoldingReply(processed)
+                    return
+                }
             }
 
             // 13. Execute direct reply via RemoteInput

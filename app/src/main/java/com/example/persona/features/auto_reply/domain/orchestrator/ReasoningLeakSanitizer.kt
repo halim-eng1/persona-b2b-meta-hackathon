@@ -119,9 +119,35 @@ class ReasoningLeakSanitizer @Inject constructor() {
             }
         }
 
+        /**
+         * Normalizes malformed LLM JSON keys where the model emitted spaces, hyphens,
+         * or missed underscores (e.g. "final_reply text", "final reply text", "finalreplytext").
+         */
+        fun normalizeJsonKeys(json: String): String {
+            var result = json
+            // 1. final_reply_text
+            result = result.replace(Regex("\"final[\\s_-]*reply[\\s_-]*text\"\\s*:", RegexOption.IGNORE_CASE), "\"final_reply_text\":")
+            // 2. refined_search_keyword
+            result = result.replace(Regex("\"refined[\\s_-]*search[\\s_-]*keyword\"\\s*:", RegexOption.IGNORE_CASE), "\"refined_search_keyword\":")
+            // 3. order_action
+            result = result.replace(Regex("\"order[\\s_-]*action\"\\s*:", RegexOption.IGNORE_CASE), "\"order_action\":")
+            // 4. extracted_order
+            result = result.replace(Regex("\"extracted[\\s_-]*order\"\\s*:", RegexOption.IGNORE_CASE), "\"extracted_order\":")
+            // 5. customer_name
+            result = result.replace(Regex("\"customer[\\s_-]*name\"\\s*:", RegexOption.IGNORE_CASE), "\"customer_name\":")
+            // 6. delivery_address
+            result = result.replace(Regex("\"delivery[\\s_-]*address\"\\s*:", RegexOption.IGNORE_CASE), "\"delivery_address\":")
+            // 7. order_details
+            result = result.replace(Regex("\"order[\\s_-]*details\"\\s*:", RegexOption.IGNORE_CASE), "\"order_details\":")
+            // 8. custom_notes
+            result = result.replace(Regex("\"custom[\\s_-]*notes\"\\s*:", RegexOption.IGNORE_CASE), "\"custom_notes\":")
+            return result
+        }
+
         fun decodeAgenticResponseSafely(raw: String): AgenticLlmResponse {
             val sanitized = sanitizeLlmJson(raw)
-            val normalized = normalizeRefinedSearchKeywordArray(sanitized)
+            val normalizedKeys = normalizeJsonKeys(sanitized)
+            val normalized = normalizeRefinedSearchKeywordArray(normalizedKeys)
             return try {
                 agenticJson.decodeFromString<AgenticLlmResponse>(normalized)
             } catch (e: Exception) {
