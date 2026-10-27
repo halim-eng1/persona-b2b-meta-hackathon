@@ -806,4 +806,177 @@ class ReplyGenerationRepositoryImplTest {
         val knowledgeIndex = systemPromptWithContext.lastIndexOf("<store_knowledge>")
         assertTrue("store_topics must precede store_knowledge", topicsIndex in 0 until knowledgeIndex)
     }
+
+    @Test
+    fun `maskKey masks long and short keys safely`() {
+        assertEquals("gsk_12...cdef", ReplyGenerationRepositoryImpl.maskKey("gsk_1234567890abcdef1234567890abcdef1234567890cdef"))
+        assertEquals("...1234", ReplyGenerationRepositoryImpl.maskKey("1234"))
+        assertEquals("[BLANK]", ReplyGenerationRepositoryImpl.maskKey(""))
+    }
+
+    @Test
+    fun `callGroq returns success when Groq primary key succeeds on openai gpt-oss-120b`() = runTest {
+        val capturedAuthHeaders = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            capturedAuthHeaders.add(request.headers[HttpHeaders.Authorization] ?: "")
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"منور يا فندم\"}","reasoning":"quick test"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-or-key",
+            fallbackApiKey = "fallback-or-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "gsk_primary_test_key_1",
+            groqFallbackApiKey = "gsk_fallback_test_key_2"
+        )
+
+        val result = repo.callGroq(
+            model = "openai/gpt-oss-120b",
+            messages = listOf(ChatMessage(role = "user", content = "hi")),
+            maxTokens = 100
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"منور يا فندم\"}", (result as ReplyGenerationRepositoryImpl.CallResult.Success).content)
+        assertEquals(1, capturedAuthHeaders.size)
+        assertEquals("Bearer gsk_primary_test_key_1", capturedAuthHeaders[0])
+    }
+
+    @Test
+    fun `callGroq falls back to GROQ_API_KEY_V2 when primary key returns 429`() = runTest {
+        val capturedAuthHeaders = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val auth = request.headers[HttpHeaders.Authorization] ?: ""
+            capturedAuthHeaders.add(auth)
+            if (auth.contains("gsk_primary")) {
+                respond(
+                    content = """{"error":{"message":"Rate limit exceeded","type":"rate_limit_exceeded"}}""",
+                    status = HttpStatusCode.TooManyRequests,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"أهلاً بك\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-or-key",
+            fallbackApiKey = "fallback-or-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "gsk_primary_123456",
+            groqFallbackApiKey = "gsk_fallback_789012"
+        )
+
+        val result = repo.callGroq(
+            model = "openai/gpt-oss-120b",
+            messages = listOf(ChatMessage(role = "user", content = "hi")),
+            maxTokens = 100
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals(2, capturedAuthHeaders.size)
+        assertEquals("Bearer gsk_primary_123456", capturedAuthHeaders[0])
+        assertEquals("Bearer gsk_fallback_789012", capturedAuthHeaders[1])
+    }
+
+    @Test
+    fun `executeFailoverChain executes Groq Tier 1 first and returns immediately without touching OpenRouter`() = runTest {
+        val capturedUrls = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            capturedUrls.add(request.url.toString())
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد من جروك\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-or-key",
+            fallbackApiKey = "fallback-or-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "gsk_primary_123456",
+            groqFallbackApiKey = "gsk_fallback_789012"
+        )
+
+        val reply = repo.executeFailoverChain(
+            messages = listOf(ChatMessage(role = "user", content = "hi")),
+            maxTokens = 100
+        )
+
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد من جروك\"}", reply)
+        assertEquals(1, capturedUrls.size)
+        assertTrue(capturedUrls[0].contains("groq.com"))
+    }
+
+    @Test
+    fun `executeFailoverChain cascades to Tier 2 OpenRouter when both Groq models and keys fail`() = runTest {
+        val capturedUrls = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val url = request.url.toString()
+            capturedUrls.add(url)
+            if (url.contains("groq.com")) {
+                respond(
+                    content = """{"error":{"message":"Internal server error"}}""",
+                    status = HttpStatusCode.InternalServerError,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد من أوبن راوتر\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-or-key",
+            fallbackApiKey = "fallback-or-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "gsk_primary_123456",
+            groqFallbackApiKey = "gsk_fallback_789012"
+        )
+
+        val reply = repo.executeFailoverChain(
+            messages = listOf(ChatMessage(role = "user", content = "hi")),
+            maxTokens = 100
+        )
+
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد من أوبن راوتر\"}", reply)
+        assertTrue(capturedUrls.any { it.contains("groq.com") })
+        assertTrue(capturedUrls.any { it.contains("openrouter.ai") })
+    }
 }

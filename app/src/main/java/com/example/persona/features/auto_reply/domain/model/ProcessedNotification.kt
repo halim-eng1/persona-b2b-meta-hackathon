@@ -10,5 +10,6 @@ data class ProcessedNotification(
     val normalizedText: String,
     val context: ConversationContext,
     val postTime: Long,
-    val sourceClass: NotificationSourceClass = NotificationSourceClass.UNKNOWN
+    val sourceClass: NotificationSourceClass = NotificationSourceClass.UNKNOWN,
+    val mediaFilePath: String? = null
 )

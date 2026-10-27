@@ -39,6 +39,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     @Inject lateinit var orchestrator: AutoReplyOrchestrator
     @Inject lateinit var sourceDiagnostics: NotificationSourceDiagnostics
     @Inject lateinit var prefsRepository: UserPreferencesRepository
+    @Inject lateinit var mediaExtractor: WhatsAppMediaExtractor
 
     private val serviceScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Default + CoroutineName("NLS-AutoReply")
@@ -226,17 +227,47 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return
         }
 
-        // ── 8. Build domain model with sourceClass and dispatch ───────────────
-        val whatsappNotification = WhatsAppNotification(
-            title = title,
-            text = text,
-            postTime = sbn.postTime,
-            notificationKey = sbn.key,
-            extraMessages = extraMessagesList,
-            sourceClass = sourceClass
-        )
+        // ── 8. Extract media, transcribe voice notes if present, and dispatch ─
+        serviceScope.launch(Dispatchers.IO) {
+            var effectiveText = text
+            var mediaFilePath: String? = null
 
-        messageDispatcher.dispatch(whatsappNotification)
+            try {
+                // Phase 1: Direct Image Extraction from Notification Extras
+                if (mediaExtractor.isImageIndicator(text) || mediaExtractor.hasNotificationImage(sbn)) {
+                    val imageFile = mediaExtractor.extractImage(sbn, sourceClass)
+                    if (imageFile != null) {
+                        mediaFilePath = imageFile.absolutePath
+                    }
+                }
+
+                // Phase 2: Voice Note (.opus) Interception & Whisper Transcription
+                if (mediaExtractor.isVoiceMessageIndicator(text)) {
+                    val audioFile = mediaExtractor.captureLatestVoiceNote(sourceClass, sbn.postTime)
+                    if (audioFile != null) {
+                        val transcribed = mediaExtractor.transcribeVoiceNote(audioFile)
+                        if (!transcribed.isNullOrBlank()) {
+                            effectiveText = "[رسالة صوتية من العميل]: $transcribed"
+                            Log.i("PersonaMedia", "Voice message converted to text turn: '$effectiveText'")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("PersonaMedia", "Error during media extraction or transcription: ${e.message}", e)
+            }
+
+            val whatsappNotification = WhatsAppNotification(
+                title = title,
+                text = effectiveText,
+                postTime = sbn.postTime,
+                notificationKey = sbn.key,
+                extraMessages = extraMessagesList,
+                sourceClass = sourceClass,
+                mediaFilePath = mediaFilePath
+            )
+
+            messageDispatcher.dispatch(whatsappNotification)
+        }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {

@@ -1,7 +1,11 @@
 package com.example.persona
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
+import com.example.persona.features.onboarding.data.PermissionChecker
+import javax.inject.Inject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -28,7 +32,16 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    @Inject lateinit var permissionChecker: PermissionChecker
+
     private var pendingDeepLinkContact by mutableStateOf<Pair<String, String>?>(null)
+
+    override fun onResume() {
+        super.onResume()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !permissionChecker.isManageStorageGranted()) {
+            Log.w("MainActivity", "MANAGE_EXTERNAL_STORAGE not granted: merchant has not enabled All Files Access yet")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

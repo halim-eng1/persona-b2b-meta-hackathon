@@ -1,11 +1,13 @@
 package com.example.persona.features.settings.presentation
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
+import com.example.persona.features.onboarding.data.PermissionChecker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -50,12 +52,14 @@ data class SettingsUiState(
     val botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
     val storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME,
     val isAutoPauseOnHitl: Boolean = false,
+    val isStorageAccessGranted: Boolean = false,
     val isLoading: Boolean = true
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val permissionChecker: PermissionChecker? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -69,6 +73,7 @@ class SettingsViewModel @Inject constructor(
         )
 
     init {
+        refreshStoragePermission()
         viewModelScope.launch {
             launch {
                 userPreferencesRepository.stylePreferences.collect { prefs ->
@@ -126,6 +131,15 @@ class SettingsViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun refreshStoragePermission() {
+        val granted = permissionChecker?.isManageStorageGranted() ?: false
+        _uiState.update { it.copy(isStorageAccessGranted = granted) }
+    }
+
+    fun requestStoragePermission(context: Context) {
+        permissionChecker?.requestManageStoragePermission(context)
     }
 
     fun setPersonaTone(tone: PersonaTone) {

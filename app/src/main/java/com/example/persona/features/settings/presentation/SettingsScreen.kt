@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -29,14 +31,19 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
@@ -51,6 +58,20 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshStoragePermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Box(
         modifier = modifier
@@ -179,6 +200,61 @@ fun SettingsScreen(
                                     Text("Secondary profile clone instances", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Switch(checked = state.listenCloneApp, onCheckedChange = { viewModel.setListenCloneApp(it) })
+                            }
+                        }
+                    }
+
+                    // ── WhatsApp Media & Voice Notes Storage Access ────────────
+                    SettingsSection(
+                        title = "WHATSAPP MEDIA & VOICE ACCESS",
+                        subtitle = "Allows Persona to read incoming WhatsApp images and voice notes directly."
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "All Files Access (WhatsApp Media)",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                    Text(
+                                        text = if (state.isStorageAccessGranted)
+                                            "مفعل ✓ - يمكن قراءة صور ورسائل الواتساب الصوتية ومعالجتها بالذكاء الاصطناعي"
+                                        else
+                                            "غير مفعل - يلزم منح الإذن لقراءة وسائط الواتساب والرسائل الصوتية",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (state.isStorageAccessGranted)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.error
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(
+                                    onClick = { viewModel.requestStoragePermission(context) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (state.isStorageAccessGranted)
+                                            MaterialTheme.colorScheme.secondaryContainer
+                                        else
+                                            MaterialTheme.colorScheme.primary
+                                    )
+                                ) {
+                                    Text(
+                                        text = if (state.isStorageAccessGranted) "مفعل ✓" else "منح الإذن",
+                                        color = if (state.isStorageAccessGranted)
+                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                        else
+                                            MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
                             }
                         }
                     }

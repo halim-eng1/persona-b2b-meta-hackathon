@@ -28,7 +28,8 @@ class NotificationProcessorImpl @Inject constructor(
             normalizedText = normalizedText,
             context = context,
             postTime = notification.postTime,
-            sourceClass = notification.sourceClass
+            sourceClass = notification.sourceClass,
+            mediaFilePath = notification.mediaFilePath
         )
     }
 }

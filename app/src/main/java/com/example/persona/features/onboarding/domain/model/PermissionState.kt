@@ -6,7 +6,8 @@ data class PermissionState(
     val isNotificationListenerGranted: Boolean = false,
     val isBatteryOptimizationIgnored: Boolean = false,
     val isPostNotificationsGranted: Boolean = false,  // Android 13+ only
-    val isAutoStartEnabled: Boolean? = null            // null = not applicable, false = applicable but not confirmed, true = confirmed
+    val isAutoStartEnabled: Boolean? = null,           // null = not applicable, false = applicable but not confirmed, true = confirmed
+    val isManageStorageGranted: Boolean = false
 ) {
     val allCriticalGranted: Boolean
         get() = isNotificationListenerGranted &&

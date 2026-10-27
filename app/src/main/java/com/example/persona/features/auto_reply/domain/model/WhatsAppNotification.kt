@@ -14,6 +14,9 @@ data class ExtraMessage(
  * [sourceClass] is populated by [WhatsAppNotificationListener] using the
  * [NotificationSourceDiagnostics.classify] logic, so the orchestrator and
  * downstream components can make routing decisions without re-inspecting the SBN.
+ *
+ * [mediaFilePath] contains the absolute path to an extracted image or captured media file on disk,
+ * or null if no media was extracted.
  */
 data class WhatsAppNotification(
     val title: String,
@@ -21,5 +24,6 @@ data class WhatsAppNotification(
     val postTime: Long,
     val notificationKey: String,
     val extraMessages: List<ExtraMessage> = emptyList(),
-    val sourceClass: NotificationSourceClass = NotificationSourceClass.UNKNOWN
+    val sourceClass: NotificationSourceClass = NotificationSourceClass.UNKNOWN,
+    val mediaFilePath: String? = null
 )

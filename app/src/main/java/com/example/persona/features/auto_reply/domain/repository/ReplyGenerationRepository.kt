@@ -35,6 +35,7 @@ interface ReplyGenerationRepository {
      * @param activeOrders Active unfulfilled orders.
      * @param personalChunks Top personal chunks from vector sweep.
      * @param maxTokens The max tokens limit for the output response.
+     * @param imageUrl Optional base64 or remote URL of an attached image for vision models.
      * @return Raw LLM output string, or null if all models failed.
      */
     suspend fun generateFinalReply(
@@ -44,6 +45,7 @@ interface ReplyGenerationRepository {
         chatHistory: List<ChatHistoryEntity> = emptyList(),
         activeOrders: List<OrderEntity> = emptyList(),
         personalChunks: List<ChatHistoryEntity> = emptyList(),
-        maxTokens: Int = 350
+        maxTokens: Int = 350,
+        imageUrl: String? = null
     ): String?
 }

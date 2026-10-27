@@ -84,6 +84,23 @@ android {
             "OPENROUTER_BASE_URL",
             "\"${resolveSecret("OPENROUTER_BASE_URL") ?: "https://openrouter.ai/api/v1/chat/completions"}\""
         )
+
+        // Groq Cloud credentials — resolved from environment or secrets properties
+        buildConfigField(
+            "String",
+            "GROQ_API_KEY",
+            "\"${resolveSecret("GROQ_API_KEY") ?: ""}\""
+        )
+        buildConfigField(
+            "String",
+            "GROQ_API_KEY_V2",
+            "\"${resolveSecret("GROQ_API_KEY_V2") ?: ""}\""
+        )
+        buildConfigField(
+            "String",
+            "GROQ_BASE_URL",
+            "\"${resolveSecret("GROQ_BASE_URL") ?: "https://api.groq.com/openai/v1/chat/completions"}\""
+        )
     }
 
     buildTypes {

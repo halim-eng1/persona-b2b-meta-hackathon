@@ -506,7 +506,8 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             systemPrompt: String,
             chatHistory: List<ChatHistoryEntity>,
             currentInboundText: String,
-            nowMs: Long = System.currentTimeMillis()
+            nowMs: Long = System.currentTimeMillis(),
+            imageUrl: String? = null
         ): List<ChatMessage> {
             val messages = mutableListOf<ChatMessage>()
             messages.add(ChatMessage(role = "system", content = systemPrompt))
@@ -563,10 +564,10 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
                     taggedCurrentText
                 }
                 messages.addAll(nativeHistory)
-                messages.add(ChatMessage(role = "user", content = merged))
+                messages.add(ChatMessage(role = "user", content = merged, imageUrl = imageUrl))
             } else {
                 messages.addAll(nativeHistory)
-                messages.add(ChatMessage(role = "user", content = taggedCurrentText))
+                messages.add(ChatMessage(role = "user", content = taggedCurrentText, imageUrl = imageUrl))
             }
 
             return messages

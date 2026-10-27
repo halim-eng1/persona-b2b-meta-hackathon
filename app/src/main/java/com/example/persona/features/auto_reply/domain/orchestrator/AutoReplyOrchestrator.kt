@@ -17,6 +17,7 @@ import com.example.persona.core.di.ApplicationScope
 import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.features.auto_reply.data.service.IncomingMessageDispatcher
+import com.example.persona.features.auto_reply.data.service.WhatsAppMediaExtractor
 import com.example.persona.features.auto_reply.data.repository.NotificationProcessorImpl
 import com.example.persona.features.auto_reply.data.repository.SemanticRetrievalRepository
 import com.example.persona.features.auto_reply.domain.modifier.StylePostProcessor
@@ -63,6 +64,7 @@ class AutoReplyOrchestrator @Inject constructor(
     private val conversationMetadataDao: ConversationMetadataDao,
     @ApplicationContext private val context: Context,
     @ApplicationScope private val scope: CoroutineScope,
+    private val mediaExtractor: WhatsAppMediaExtractor? = null,
     private val orderIngestionManager: OrderIngestionManager = OrderIngestionManager(orderDao, chatHistoryDao),
     private val hitlNotificationHandler: HitlNotificationHandler = HitlNotificationHandler(context, conversationMetadataDao, prefsRepository),
     private val antiEchoGuard: AntiEchoGuard = AntiEchoGuard(),
@@ -318,15 +320,51 @@ class AutoReplyOrchestrator @Inject constructor(
             return
         }
 
-        // 10. Media Fallback handling
-        if (containsMediaIndicators(processed.originalText)) {
-            Log.i(TAG, "Media indicator detected in message from ${processed.contactName}. Sending media fallback.")
-            Log.i("PersonaMetrics", "metric=notification_drop_rate value=1 contact=${processed.contactName.hashCode()}")
-            sendImmediateReply(processed, context.getString(R.string.media_fallback_message))
+        // 10. Multimodal Media Processing & Fallback handling
+        val isTranscribedVoice = processed.originalText.startsWith("[رسالة صوتية من العميل]:")
+        var currentMediaFilePath = processed.mediaFilePath
+        var effectiveProcessed = processed
+
+        if (!isTranscribedVoice && containsMediaIndicators(processed.originalText)) {
+            if (mediaExtractor != null) {
+                if (mediaExtractor.isVoiceMessageIndicator(processed.originalText)) {
+                    val voiceFile = mediaExtractor.captureLatestVoiceNote(processed.sourceClass, processed.postTime)
+                    if (voiceFile != null) {
+                        val transcribed = mediaExtractor.transcribeVoiceNote(voiceFile)
+                        if (!transcribed.isNullOrBlank()) {
+                            val updatedText = "[رسالة صوتية من العميل]: $transcribed"
+                            effectiveProcessed = processed.copy(
+                                originalText = updatedText,
+                                normalizedText = normalizer.normalize(updatedText) ?: updatedText
+                            )
+                            Log.i(TAG, "🎙️ Successfully captured voice note and transcribed: '$updatedText'")
+                        }
+                    }
+                } else if (currentMediaFilePath == null && mediaExtractor.isImageIndicator(processed.originalText)) {
+                    val diskImage = mediaExtractor.findLatestImageOnDisk(processed.sourceClass, processed.postTime)
+                    if (diskImage != null) {
+                        currentMediaFilePath = diskImage.absolutePath
+                        effectiveProcessed = processed.copy(mediaFilePath = currentMediaFilePath)
+                        Log.i(TAG, "📸 Successfully captured image from disk fallback: $currentMediaFilePath")
+                    }
+                }
+            }
+        }
+
+        val isVoiceTranscribedNow = effectiveProcessed.originalText.startsWith("[رسالة صوتية من العميل]:")
+        // ONLY send media fallback if media indicator is present AND media extraction genuinely failed
+        if (!isVoiceTranscribedNow && currentMediaFilePath == null && containsMediaIndicators(effectiveProcessed.originalText)) {
+            Log.i(TAG, "Media indicator detected but extraction failed for ${effectiveProcessed.contactName}. Sending media fallback.")
+            Log.i("PersonaMetrics", "metric=notification_drop_rate value=1 contact=${effectiveProcessed.contactName.hashCode()}")
+            sendImmediateReply(effectiveProcessed, context.getString(R.string.media_fallback_message))
             return
         }
 
-        setContactProcessing(processed.contactName, true)
+        if (currentMediaFilePath != null && effectiveProcessed.mediaFilePath == null) {
+            effectiveProcessed = effectiveProcessed.copy(mediaFilePath = currentMediaFilePath)
+        }
+
+        setContactProcessing(effectiveProcessed.contactName, true)
         try {
             // 11. RAG Retrieval Engine (Single-Query Pass 1)
             val activeHashes = antiEchoGuard.getActiveReplyHashes()
@@ -334,38 +372,65 @@ class AutoReplyOrchestrator @Inject constructor(
             var candidates: List<RetrievalCandidate> = emptyList()
             var maxScore = 0f
 
-            val queryEmbedding = embeddingEngine.embedForAutoReply(processed.normalizedText)
+            val queryTextForEmbedding = if (effectiveProcessed.originalText.startsWith("[رسالة صوتية من العميل]:")) {
+                effectiveProcessed.originalText.removePrefix("[رسالة صوتية من العميل]:").trim()
+            } else {
+                effectiveProcessed.normalizedText
+            }
+
+            val queryEmbedding = embeddingEngine.embedForAutoReply(queryTextForEmbedding)
             if (queryEmbedding != null) {
                 val (retrievedCandidates, bestScore) = semanticRetrievalRepository.retrieveCandidates(
                     queryEmbedding = queryEmbedding,
                     minimumSimilarityThreshold = ragBaseThreshold,
-                    queryText = processed.normalizedText,
+                    queryText = queryTextForEmbedding,
                     recentReplyHashes = activeHashes
                 )
                 candidates = retrievedCandidates.filter { it.similarityScore >= 0.38f }
                 maxScore = bestScore
             }
 
+            val isImageWithGenericText = effectiveProcessed.mediaFilePath != null &&
+                (effectiveProcessed.originalText.contains("Sent a photo", ignoreCase = true) || effectiveProcessed.originalText.trim() == "📷" || candidates.isEmpty())
+
+            val finalCandidates = if (isImageWithGenericText && candidates.isEmpty()) {
+                try {
+                    businessKnowledgeDao.getProductCatalogChunks(limit = 5).map { proj ->
+                        RetrievalCandidate(
+                            chunkId = proj.chunkId,
+                            headerContext = proj.headerContext,
+                            chunkText = proj.chunkText,
+                            similarityScore = 0.95f,
+                            baseSimilarityScore = 0.95f
+                        )
+                    }
+                } catch (e: Exception) {
+                    candidates
+                }
+            } else {
+                candidates
+            }
+
             // Context Assembly
             val contextStart = System.currentTimeMillis()
             val chatHistory = chatHistoryDao.getRecentMessagesExceptForSource(
-                contactName = processed.contactName,
+                contactName = effectiveProcessed.contactName,
                 sourceClass = sourceClassStr,
                 excludeId = insertedId,
                 limit = 6
             )
-            val activeOrders = orderDao.getActiveOrdersByContact(processed.contactName)
+            val activeOrders = orderDao.getActiveOrdersByContact(effectiveProcessed.contactName)
             val contextBuildMs = System.currentTimeMillis() - contextStart
             Log.d(TAG, "📊 Context assembly completed in ${contextBuildMs}ms: chatTurns=${chatHistory.size}, activeOrders=${activeOrders.size}")
-            Log.i("PersonaMetrics", "metric=context_build_ms value=$contextBuildMs contact=${processed.contactName.hashCode()}")
+            Log.i("PersonaMetrics", "metric=context_build_ms value=$contextBuildMs contact=${effectiveProcessed.contactName.hashCode()}")
 
             // 12. Agentic LLM Generation Pass 1
-            val lastSessionReplyTime = lastReplyTimestamps[processed.contactName] ?: 0L
+            val lastSessionReplyTime = lastReplyTimestamps[effectiveProcessed.contactName] ?: 0L
             val isOngoing = (System.currentTimeMillis() - lastSessionReplyTime) < 300_000L
 
             val rawLlmOutput = replyGenerationRepository.generateReply(
-                notification = processed,
-                candidates = candidates,
+                notification = effectiveProcessed,
+                candidates = finalCandidates,
                 isOngoingConversation = isOngoing,
                 chatHistory = chatHistory,
                 activeOrders = activeOrders,
@@ -831,7 +896,8 @@ class AutoReplyOrchestrator @Inject constructor(
         sendImmediateReply(processed, CANONICAL_HITL_MESSAGE)
     }
 
-    private fun containsMediaIndicators(text: String): Boolean {
+    internal fun containsMediaIndicators(text: String): Boolean {
+        if (text.startsWith("[رسالة صوتية من العميل]:")) return false
         val mediaEmojis = listOf("📷", "🎵", "🎤", "📹", "🎥", "📄", "📸", "🎬", "🎙️")
         if (mediaEmojis.any { text.contains(it) }) return true
         val lower = text.lowercase()
