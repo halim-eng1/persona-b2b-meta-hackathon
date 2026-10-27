@@ -1,5 +1,6 @@
 package com.example.persona.features.knowledge.presentation
 
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.dao.FailedQueryDao
 import com.example.persona.core.database.entity.BusinessKnowledgeEntity
 import com.example.persona.core.database.entity.FailedQueryEntity
@@ -24,6 +25,7 @@ class KnowledgeManagementViewModelTest {
     private val failedQueryDao = mockk<FailedQueryDao>()
     private val addManualKnowledgeUseCase = mockk<AddManualKnowledgeUseCase>()
     private val deleteKnowledgeEntryUseCase = mockk<DeleteKnowledgeEntryUseCase>()
+    private val userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true)
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -50,6 +52,14 @@ class KnowledgeManagementViewModelTest {
         )
     )
 
+    private fun createViewModel() = KnowledgeManagementViewModel(
+        repository = repository,
+        failedQueryDao = failedQueryDao,
+        addManualKnowledgeUseCase = addManualKnowledgeUseCase,
+        deleteKnowledgeEntryUseCase = deleteKnowledgeEntryUseCase,
+        userPreferencesRepository = userPreferencesRepository
+    )
+
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
@@ -64,12 +74,7 @@ class KnowledgeManagementViewModelTest {
 
     @Test
     fun init_loadsDataAndUpdatesState() = runTest {
-        val viewModel = KnowledgeManagementViewModel(
-            repository,
-            failedQueryDao,
-            addManualKnowledgeUseCase,
-            deleteKnowledgeEntryUseCase
-        )
+        val viewModel = createViewModel()
 
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -82,12 +87,7 @@ class KnowledgeManagementViewModelTest {
 
     @Test
     fun onInputQueryChanged_updatesState() = runTest {
-        val viewModel = KnowledgeManagementViewModel(
-            repository,
-            failedQueryDao,
-            addManualKnowledgeUseCase,
-            deleteKnowledgeEntryUseCase
-        )
+        val viewModel = createViewModel()
 
         viewModel.onInputQueryChanged("New Query")
 
@@ -96,12 +96,7 @@ class KnowledgeManagementViewModelTest {
 
     @Test
     fun addManualEntry_onSuccess_resetsInput() = runTest {
-        val viewModel = KnowledgeManagementViewModel(
-            repository,
-            failedQueryDao,
-            addManualKnowledgeUseCase,
-            deleteKnowledgeEntryUseCase
-        )
+        val viewModel = createViewModel()
         coEvery { addManualKnowledgeUseCase("Valid Fact", false) } returns true
 
         viewModel.onInputQueryChanged("Valid Fact")
@@ -116,12 +111,7 @@ class KnowledgeManagementViewModelTest {
 
     @Test
     fun addManualEntry_onFailure_setsErrorMessage() = runTest {
-        val viewModel = KnowledgeManagementViewModel(
-            repository,
-            failedQueryDao,
-            addManualKnowledgeUseCase,
-            deleteKnowledgeEntryUseCase
-        )
+        val viewModel = createViewModel()
         coEvery { addManualKnowledgeUseCase("Valid Fact", false) } returns false
 
         viewModel.onInputQueryChanged("Valid Fact")
@@ -136,12 +126,7 @@ class KnowledgeManagementViewModelTest {
 
     @Test
     fun deleteEntry_callsUseCase() = runTest {
-        val viewModel = KnowledgeManagementViewModel(
-            repository,
-            failedQueryDao,
-            addManualKnowledgeUseCase,
-            deleteKnowledgeEntryUseCase
-        )
+        val viewModel = createViewModel()
         coEvery { deleteKnowledgeEntryUseCase("chunk_1") } just Runs
 
         viewModel.deleteEntry("chunk_1")
@@ -152,12 +137,7 @@ class KnowledgeManagementViewModelTest {
 
     @Test
     fun markQueryReviewed_callsDao() = runTest {
-        val viewModel = KnowledgeManagementViewModel(
-            repository,
-            failedQueryDao,
-            addManualKnowledgeUseCase,
-            deleteKnowledgeEntryUseCase
-        )
+        val viewModel = createViewModel()
         coEvery { failedQueryDao.markReviewed(42L) } just Runs
 
         viewModel.markQueryReviewed(42L)
@@ -168,12 +148,7 @@ class KnowledgeManagementViewModelTest {
 
     @Test
     fun useQueryAsInput_updatesQueryText() = runTest {
-        val viewModel = KnowledgeManagementViewModel(
-            repository,
-            failedQueryDao,
-            addManualKnowledgeUseCase,
-            deleteKnowledgeEntryUseCase
-        )
+        val viewModel = createViewModel()
 
         viewModel.useQueryAsInput("Query Text")
 
@@ -182,17 +157,29 @@ class KnowledgeManagementViewModelTest {
 
     @Test
     fun deleteQuery_callsDao() = runTest {
-        val viewModel = KnowledgeManagementViewModel(
-            repository,
-            failedQueryDao,
-            addManualKnowledgeUseCase,
-            deleteKnowledgeEntryUseCase
-        )
+        val viewModel = createViewModel()
         coEvery { failedQueryDao.deleteById(42L) } just Runs
 
         viewModel.deleteQuery(42L)
 
         testDispatcher.scheduler.advanceUntilIdle()
         coVerify(exactly = 1) { failedQueryDao.deleteById(42L) }
+    }
+
+    @Test
+    fun clearAllKnowledge_clearsRepositoryTopicsAndState() = runTest {
+        coEvery { repository.clearAllKnowledge() } just Runs
+        coEvery { userPreferencesRepository.clearStoreKnowledgeTopics() } just Runs
+
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.clearAllKnowledge()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.clearAllKnowledge() }
+        coVerify(exactly = 1) { userPreferencesRepository.clearStoreKnowledgeTopics() }
+        assertTrue(viewModel.uiState.value.entries.isEmpty())
+        assertFalse(viewModel.uiState.value.isProcessing)
     }
 }

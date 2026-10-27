@@ -2,6 +2,7 @@ package com.example.persona.features.knowledge.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.dao.FailedQueryDao
 import com.example.persona.core.database.entity.FailedQueryEntity
 import com.example.persona.features.knowledge.domain.model.KnowledgeEntry
@@ -31,7 +32,8 @@ class KnowledgeManagementViewModel @Inject constructor(
     private val repository: KnowledgeRepository,
     private val failedQueryDao: FailedQueryDao,
     private val addManualKnowledgeUseCase: AddManualKnowledgeUseCase,
-    private val deleteKnowledgeEntryUseCase: DeleteKnowledgeEntryUseCase
+    private val deleteKnowledgeEntryUseCase: DeleteKnowledgeEntryUseCase,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(KnowledgeManagementUiState())
@@ -119,6 +121,26 @@ class KnowledgeManagementViewModel @Inject constructor(
     fun deleteQuery(id: Long) {
         viewModelScope.launch {
             failedQueryDao.deleteById(id)
+        }
+    }
+
+    /**
+     * Wipes the entire knowledge base:
+     * 1. Deletes all chunks and embeddings from Room tables via repository.
+     * 2. Clears store knowledge topics from DataStore preferences.
+     * 3. Clears active UI state list.
+     */
+    fun clearAllKnowledge() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isProcessing = true, errorMessage = null) }
+            repository.clearAllKnowledge()
+            userPreferencesRepository.clearStoreKnowledgeTopics()
+            _uiState.update {
+                it.copy(
+                    entries = emptyList(),
+                    isProcessing = false
+                )
+            }
         }
     }
 }

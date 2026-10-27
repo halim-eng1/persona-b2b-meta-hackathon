@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -36,6 +37,45 @@ fun KnowledgeManagementScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableStateOf(0) }
+    var showClearConfirmationDialog by remember { mutableStateOf(false) }
+
+    if (showClearConfirmationDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirmationDialog = false },
+            title = {
+                Text(
+                    text = "مسح قاعدة المعرفة بالكامل؟",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "هل أنت متأكد من حذف جميع المقاطع والبيانات المخزنة؟ ستتمكن من استيراد ملف جديد بالكامل."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showClearConfirmationDialog = false
+                        viewModel.clearAllKnowledge()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text("حذف الكل")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showClearConfirmationDialog = false }
+                ) {
+                    Text("إلغاء")
+                }
+            }
+        )
+    }
 
     Box(
         modifier = modifier
@@ -55,14 +95,30 @@ fun KnowledgeManagementScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Title Header
-            Text(
-                text = stringResource(R.string.knowledge_management_title),
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
+            // Title Header with Clear Action Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.knowledge_management_title),
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
                 )
-            )
+
+                IconButton(
+                    onClick = { showClearConfirmationDialog = true }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteSweep,
+                        contentDescription = "مسح قاعدة المعرفة بالكامل",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
 
             // Tab Row
             TabRow(

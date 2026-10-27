@@ -33,6 +33,12 @@ interface BusinessKnowledgeDao {
     suspend fun deleteByChunkId(chunkId: String)
 
     /**
+     * Deletes all chunks from the business_knowledge table.
+     */
+    @Query("DELETE FROM business_knowledge")
+    suspend fun deleteAll()
+
+    /**
      * Bulk-delete by source type — used before a re-import to clear out
      * the existing CORE_DOCUMENT set without touching MANUAL_ENTRY rows.
      */

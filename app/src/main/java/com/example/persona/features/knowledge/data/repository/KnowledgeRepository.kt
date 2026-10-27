@@ -50,4 +50,9 @@ class KnowledgeRepository @Inject constructor(
         businessKnowledgeDao.deleteByChunkId(chunkId)
         // embeddingIndexDao.deleteByChunkId is handled by ON DELETE CASCADE in SQLite
     }
+
+    suspend fun clearAllKnowledge() {
+        businessKnowledgeDao.deleteAll()
+        embeddingIndexDao.deleteAll()
+    }
 }

@@ -101,6 +101,21 @@ class PromptContextBuilderTest {
     }
 
     @Test
+    fun `both tones contain strict emoji mirroring and graceful closing anti-looping rules`() {
+        val wittyFirst = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val politeFirst = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
+        val wittyFinal = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val politeFinal = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
+
+        for (prompt in listOf(wittyFirst, politeFirst, wittyFinal, politeFinal)) {
+            assertTrue(prompt.contains("STRICT EMOJI MIRRORING"))
+            assertTrue(prompt.contains("Default state: ZERO EMOJIS"))
+            assertTrue(prompt.contains("GRACEFUL CLOSING & THANKS (Anti-Looping)"))
+            assertTrue(prompt.contains("العفو يا فندم، نورتنا ونتمنى لك يوم سعيد! 💙"))
+        }
+    }
+
+    @Test
     fun `PersonaTone deserialization and fallback`() {
         // Unknown or legacy strings fall back to WITTY_EGYPTIAN
         assertEquals(PersonaTone.WITTY_EGYPTIAN, PersonaTone.fromString(null))
