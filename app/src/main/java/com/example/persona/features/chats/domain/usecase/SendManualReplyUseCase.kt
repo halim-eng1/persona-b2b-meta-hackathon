@@ -66,7 +66,9 @@ class SendManualReplyUseCase @Inject constructor(
             chatHistoryDao.insert(optimisticEntity)
         }
 
-        // 3. Human-AI race guard: automatically pause AI for this contact
+        // 3. Human-AI race guard: unconditionally pause AI for this contact when merchant sends a manual reply.
+        // Note: This is an intentional manual merchant takeover (distinct from automated HITL escalation
+        // which respects the merchant's `auto_pause_on_hitl` preference).
         conversationMetadataDao.setAiPaused(contactName, sourceClass, true)
 
         // 4. Update conversation metadata snippet and timestamp, preserving isAiPaused = true

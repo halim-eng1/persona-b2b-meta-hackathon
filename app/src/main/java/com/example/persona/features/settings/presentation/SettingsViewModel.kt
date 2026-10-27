@@ -7,8 +7,10 @@ import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -45,6 +47,7 @@ data class SettingsUiState(
     val farewellTemplate: String = "",
     val botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
     val storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME,
+    val isAutoPauseOnHitl: Boolean = false,
     val isLoading: Boolean = true
 )
 
@@ -55,6 +58,13 @@ class SettingsViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    val isAutoPauseOnHitl: StateFlow<Boolean> = userPreferencesRepository.isAutoPauseOnHitlEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
 
     init {
         viewModelScope.launch {
@@ -105,6 +115,11 @@ class SettingsViewModel @Inject constructor(
             launch {
                 userPreferencesRepository.storeName.collect { value ->
                     _uiState.update { it.copy(storeName = value, isLoading = false) }
+                }
+            }
+            launch {
+                userPreferencesRepository.isAutoPauseOnHitlEnabledFlow.collect { value ->
+                    _uiState.update { it.copy(isAutoPauseOnHitl = value, isLoading = false) }
                 }
             }
         }
@@ -193,6 +208,13 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(storeName = name) }
         viewModelScope.launch {
             userPreferencesRepository.setStoreName(name)
+        }
+    }
+
+    fun onAutoPauseOnHitlToggled(enabled: Boolean) {
+        _uiState.update { it.copy(isAutoPauseOnHitl = enabled) }
+        viewModelScope.launch {
+            userPreferencesRepository.setAutoPauseOnHitl(enabled)
         }
     }
 

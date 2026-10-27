@@ -181,6 +181,41 @@ fun SettingsScreen(
                         }
                     }
 
+                    // ── Human Takeover & Safety ───────────────────────────────
+                    SettingsSection(
+                        title = "HUMAN TAKEOVER & SAFETY",
+                        subtitle = "Configure automated escalation and customer hand-off behavior."
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Auto-pause AI on Hand-off",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                    Text(
+                                        text = "Automatically freeze bot replies for a contact when escalated to human customer service (HITL).",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = state.isAutoPauseOnHitl,
+                                    onCheckedChange = { viewModel.onAutoPauseOnHitlToggled(it) }
+                                )
+                            }
+                        }
+                    }
+
                     // ── Interception Templates ────────────────────────────────
                     SettingsSection(
                         title = "RESPONSE TEMPLATES",

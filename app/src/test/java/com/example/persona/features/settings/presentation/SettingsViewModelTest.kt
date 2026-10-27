@@ -1,0 +1,92 @@
+package com.example.persona.features.settings.presentation
+
+import com.example.persona.core.data.repository.UserPreferencesRepository
+import com.example.persona.features.auto_reply.domain.model.StylePreferences
+import com.example.persona.features.auto_reply.domain.model.StyleProfile
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class SettingsViewModelTest {
+
+    private val userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true)
+    private val testDispatcher = StandardTestDispatcher()
+
+    private val autoPauseFlow = MutableStateFlow(false)
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(testDispatcher)
+        every { userPreferencesRepository.stylePreferences } returns flowOf(
+            StylePreferences(StyleProfile.CASUAL, 0.75f, 5, 2)
+        )
+        every { userPreferencesRepository.listenMainApp } returns flowOf(true)
+        every { userPreferencesRepository.listenBusinessApp } returns flowOf(true)
+        every { userPreferencesRepository.listenCloneApp } returns flowOf(false)
+        every { userPreferencesRepository.greetingTemplate } returns flowOf("")
+        every { userPreferencesRepository.farewellTemplate } returns flowOf("")
+        every { userPreferencesRepository.botName } returns flowOf("مساعد المبيعات")
+        every { userPreferencesRepository.storeName } returns flowOf("متجرنا")
+        every { userPreferencesRepository.isAutoPauseOnHitlEnabledFlow } returns autoPauseFlow
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `default auto_pause_on_hitl is false in uiState and StateFlow`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isAutoPauseOnHitl)
+        assertFalse(viewModel.isAutoPauseOnHitl.value)
+    }
+
+    @Test
+    fun `when isAutoPauseOnHitlEnabledFlow emits true, uiState updates`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isAutoPauseOnHitl)
+
+        autoPauseFlow.value = true
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isAutoPauseOnHitl)
+    }
+
+    @Test
+    fun `onAutoPauseOnHitlToggled updates state and calls repository`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository)
+        advanceUntilIdle()
+
+        viewModel.onAutoPauseOnHitlToggled(true)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isAutoPauseOnHitl)
+        coVerify(exactly = 1) { userPreferencesRepository.setAutoPauseOnHitl(true) }
+
+        viewModel.onAutoPauseOnHitlToggled(false)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isAutoPauseOnHitl)
+        coVerify(exactly = 1) { userPreferencesRepository.setAutoPauseOnHitl(false) }
+    }
+}

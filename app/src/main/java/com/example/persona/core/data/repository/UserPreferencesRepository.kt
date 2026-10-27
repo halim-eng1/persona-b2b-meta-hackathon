@@ -59,6 +59,10 @@ class UserPreferencesRepository @Inject constructor(
         /** Newline-joined list of Level-1 (`#`) headings extracted from the imported knowledge document. */
         private val STORE_KNOWLEDGE_TOPICS_KEY = stringPreferencesKey("store_knowledge_topics")
 
+        // ── Human Takeover & Safety ───────────────────────────────────────────
+        val KEY_AUTO_PAUSE_ON_HITL = booleanPreferencesKey("auto_pause_on_hitl")
+        private val AUTO_PAUSE_ON_HITL_KEY = KEY_AUTO_PAUSE_ON_HITL
+
         const val DEFAULT_BOT_NAME = "مساعد المبيعات"
         const val DEFAULT_STORE_NAME = "متجرنا"
     }
@@ -114,6 +118,10 @@ class UserPreferencesRepository @Inject constructor(
     val storeKnowledgeTopicsFlow: Flow<List<String>> = dataStore.data.map { preferences ->
         val raw = preferences[STORE_KNOWLEDGE_TOPICS_KEY] ?: ""
         if (raw.isBlank()) emptyList() else raw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
+    val isAutoPauseOnHitlEnabledFlow: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[AUTO_PAUSE_ON_HITL_KEY] ?: false // Default is FALSE
     }
 
     // ── Suspend setters ───────────────────────────────────────────────────────
@@ -176,6 +184,12 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
+    suspend fun setAutoPauseOnHitl(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[AUTO_PAUSE_ON_HITL_KEY] = enabled
+        }
+    }
+
     // ── Sync readers (for worker/service contexts) ────────────────────────────
 
     suspend fun isAutoReplyEnabledSync(): Boolean =
@@ -215,6 +229,10 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun getStoreNameSync(): String =
         dataStore.data.first()[KEY_STORE_NAME]?.takeIf { it.isNotBlank() } ?: DEFAULT_STORE_NAME
+
+    suspend fun isAutoPauseOnHitlEnabledSync(): Boolean {
+        return isAutoPauseOnHitlEnabledFlow.first()
+    }
 }
 
 /** Snapshot of app-routing preferences. Immutable value object. */

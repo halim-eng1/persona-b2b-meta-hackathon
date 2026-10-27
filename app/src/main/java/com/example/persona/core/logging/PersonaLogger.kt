@@ -10,10 +10,18 @@ object PersonaLogger {
         }
     }
 
+    fun d(message: String) {
+        d("Persona", message)
+    }
+
     fun i(tag: String, message: String) {
         if (BuildConfig.DEBUG) {
             Log.i(tag, message)
         }
+    }
+
+    fun i(message: String) {
+        i("Persona", message)
     }
 
     fun w(tag: String, message: String) {
@@ -22,9 +30,17 @@ object PersonaLogger {
         }
     }
 
+    fun w(message: String) {
+        w("Persona", message)
+    }
+
     fun e(tag: String, message: String, throwable: Throwable? = null) {
         if (BuildConfig.DEBUG) {
             Log.e(tag, message, throwable)
         }
+    }
+
+    fun e(message: String, throwable: Throwable? = null) {
+        e("Persona", message, throwable)
     }
 }

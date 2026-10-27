@@ -9,7 +9,9 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.persona.R
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.dao.ConversationMetadataDao
+import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -21,7 +23,8 @@ import javax.inject.Singleton
 @Singleton
 class HitlNotificationHandler @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val conversationMetadataDao: ConversationMetadataDao
+    private val conversationMetadataDao: ConversationMetadataDao,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) {
     companion object {
         private const val TAG = "HitlNotificationHandler"
@@ -53,7 +56,15 @@ class HitlNotificationHandler @Inject constructor(
     ) {
         val sourceClassStr = processed.sourceClass.name
         conversationMetadataDao.setNeedsHumanAttention(processed.contactName, sourceClassStr, true)
-        conversationMetadataDao.setAiPaused(processed.contactName, sourceClassStr, true)
+
+        val shouldAutoPause = userPreferencesRepository.isAutoPauseOnHitlEnabledSync()
+        if (shouldAutoPause) {
+            conversationMetadataDao.setAiPaused(processed.contactName, sourceClassStr, true)
+            PersonaLogger.i("AI auto-paused for contact ${processed.contactName} due to HITL escalation (setting: enabled).")
+        } else {
+            PersonaLogger.i("AI remains active for contact ${processed.contactName} after HITL escalation (setting: disabled).")
+        }
+
         triggerHitlAlarm(processed.contactName, processed.originalText, score, sourceClassStr)
     }
 
