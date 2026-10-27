@@ -97,7 +97,7 @@ class ChatDetailViewModelTest {
 
     @Test
     fun `initialization marks messages and conversation as read`() = runTest(testDispatcher) {
-        val viewModel = ChatDetailViewModel(
+        ChatDetailViewModel(
             chatHistoryDao = chatHistoryDao,
             conversationMetadataDao = conversationMetadataDao,
             sendManualReplyUseCase = sendManualReplyUseCase,
@@ -237,5 +237,131 @@ class ChatDetailViewModelTest {
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.isAiGenerating)
+    }
+
+    @Test
+    fun `calculateSinceTimestamp returns expected boundaries for each range`() {
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+
+        val fixedTimeMs = 1730048400000L // arbitrary fixed timestamp
+
+        // ALL_TIME -> 0L
+        assertEquals(0L, viewModel.calculateSinceTimestamp(ExportTimeRange.ALL_TIME, fixedTimeMs))
+
+        // LAST_TWO_HOURS -> fixedTimeMs - 7_200_000L
+        assertEquals(
+            fixedTimeMs - (2 * 60 * 60 * 1000L),
+            viewModel.calculateSinceTimestamp(ExportTimeRange.LAST_TWO_HOURS, fixedTimeMs)
+        )
+
+        // TODAY -> midnight of that day
+        val cal = java.util.Calendar.getInstance().apply {
+            timeInMillis = fixedTimeMs
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        assertEquals(
+            cal.timeInMillis,
+            viewModel.calculateSinceTimestamp(ExportTimeRange.TODAY, fixedTimeMs)
+        )
+    }
+
+    @Test
+    fun `buildExportTranscript produces properly formatted transcript with header, sender labels and dividers`() {
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+
+        val msg3 = ChatHistoryEntity(
+            id = 3L,
+            contactName = "أحمد مصطفى",
+            messageText = "تم يا فندم شرفتنا.",
+            isFromUser = false,
+            timestamp = 3000L,
+            sourceClass = "BUSINESS",
+            senderType = "MERCHANT_MANUAL",
+            deliveryStatus = "SENT"
+        )
+
+        val transcript = viewModel.buildExportTranscript(
+            contactName = "أحمد مصطفى",
+            sourceClass = "BUSINESS",
+            storeName = "متجر التجربة",
+            botName = "مساعد المبيعات",
+            range = ExportTimeRange.ALL_TIME,
+            exportTimestampMs = 1730048400000L,
+            messages = listOf(msg1, msg2, msg3)
+        )
+
+        assertTrue(transcript.contains("سجل محادثة: أحمد مصطفى (BUSINESS)"))
+        assertTrue(transcript.contains("المتجر: متجر التجربة"))
+        assertTrue(transcript.contains("تاريخ التصدير: "))
+        assertTrue(transcript.contains("نطاق التصدير: All Time (كامل المحادثة)"))
+        assertTrue(transcript.contains(ChatDetailViewModel.TRANSCRIPT_DIVIDER))
+
+        // Customer message
+        assertTrue(transcript.contains("العميل: السلام عليكم"))
+        // AI bot message
+        assertTrue(transcript.contains("مساعد المبيعات (AI): وعليكم السلام يا فندم! 📷 صورة المنتج"))
+        // Manual merchant message
+        assertTrue(transcript.contains("التاجر (Manual): تم يا فندم شرفتنا."))
+    }
+
+    @Test
+    fun `exportChat queries messages from dao and invokes onExportReady callback`() = runTest(testDispatcher) {
+        val msg3 = ChatHistoryEntity(
+            id = 3L,
+            contactName = "أحمد مصطفى",
+            messageText = "تم يا فندم شرفتنا.",
+            isFromUser = false,
+            timestamp = 3000L,
+            sourceClass = "BUSINESS",
+            senderType = "MERCHANT_MANUAL",
+            deliveryStatus = "SENT"
+        )
+
+        coEvery {
+            chatHistoryDao.getMessagesSince("أحمد مصطفى", "BUSINESS", 0L)
+        } returns listOf(msg1, msg2, msg3)
+
+        coEvery { userPreferencesRepository.getStoreNameSync() } returns "متجر التجربة"
+        coEvery { userPreferencesRepository.getBotNameSync() } returns "مساعد المبيعات"
+
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        advanceUntilIdle()
+
+        var receivedExport: String? = null
+        viewModel.exportChat(ExportTimeRange.ALL_TIME) { text ->
+            receivedExport = text
+        }
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            chatHistoryDao.getMessagesSince("أحمد مصطفى", "BUSINESS", 0L)
+        }
+        assertTrue(receivedExport != null)
+        assertTrue(receivedExport!!.contains("سجل محادثة: أحمد مصطفى (BUSINESS)"))
+        assertTrue(receivedExport!!.contains("المتجر: متجر التجربة"))
+        assertTrue(receivedExport!!.contains("العميل: السلام عليكم"))
+        assertTrue(receivedExport!!.contains("مساعد المبيعات (AI): وعليكم السلام يا فندم! 📷 صورة المنتج"))
+        assertTrue(receivedExport!!.contains("التاجر (Manual): تم يا فندم شرفتنا."))
     }
 }

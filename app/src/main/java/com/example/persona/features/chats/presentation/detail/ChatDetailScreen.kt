@@ -36,6 +36,7 @@ import com.example.persona.features.chats.presentation.detail.components.AiThink
 import com.example.persona.features.chats.presentation.detail.components.ChatComposerBar
 import com.example.persona.features.chats.presentation.detail.components.CompactChatTopBar
 import com.example.persona.features.chats.presentation.detail.components.DateHeaderChip
+import com.example.persona.features.chats.presentation.detail.components.ExportChatDialog
 import com.example.persona.features.chats.presentation.detail.components.MessageBubble
 import com.example.persona.features.chats.presentation.detail.components.ScrollToBottomButton
 import com.example.persona.ui.theme.chatColors
@@ -61,6 +62,30 @@ fun ChatDetailScreen(
     var isInitialScrolled by remember(state.contactName) { mutableStateOf(false) }
     var previousMessageCount by remember(state.contactName) { mutableIntStateOf(0) }
     var unreadCountBelow by remember(state.contactName) { mutableIntStateOf(0) }
+    var showExportDialog by remember { mutableStateOf(false) }
+
+    if (showExportDialog) {
+        ExportChatDialog(
+            onDismissRequest = { showExportDialog = false },
+            onConfirmExport = { range ->
+                showExportDialog = false
+                viewModel.exportChat(range) { exportText ->
+                    try {
+                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "سجل محادثة ${state.contactName}")
+                            putExtra(Intent.EXTRA_TEXT, exportText)
+                        }
+                        context.startActivity(Intent.createChooser(sendIntent, "مشاركة سجل المحادثة"))
+                    } catch (e: Exception) {
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("تعذر فتح قائمة المشاركة")
+                        }
+                    }
+                }
+            }
+        )
+    }
 
     // Derived state: is the user currently viewing the bottom of the message stream?
     val isAtBottom by remember {
@@ -141,7 +166,8 @@ fun ChatDetailScreen(
             botName = state.botName,
             isAiGenerating = state.isAiGenerating,
             onNavigateBack = onNavigateBack,
-            onToggleAi = { viewModel.toggleAiPaused() }
+            onToggleAi = { viewModel.toggleAiPaused() },
+            onExportChat = { showExportDialog = true }
         )
 
         // In-chat banner when AI is paused. Interactive: carries a button role, a tap

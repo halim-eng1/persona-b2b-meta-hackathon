@@ -217,4 +217,21 @@ interface ChatHistoryDao {
     /** Row count per contact — useful for pagination limit calculations. */
     @Query("SELECT COUNT(*) FROM chat_history WHERE contact_name = :contactName")
     suspend fun getCountForContact(contactName: String): Int
+
+    /**
+     * Fetches all messages for a specific contact and source package since [sinceTimestamp],
+     * ordered in natural chronological order (oldest first, timestamp ASC) for chat export.
+     */
+    @Query("""
+        SELECT * FROM chat_history
+        WHERE contact_name = :contactName
+          AND source_class = :sourceClass
+          AND timestamp >= :sinceTimestamp
+        ORDER BY timestamp ASC
+    """)
+    suspend fun getMessagesSince(
+        contactName: String,
+        sourceClass: String,
+        sinceTimestamp: Long
+    ): List<ChatHistoryEntity>
 }

@@ -1,16 +1,24 @@
 package com.example.persona.features.chats.presentation.detail.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -33,6 +41,7 @@ fun CompactChatTopBar(
     isAiGenerating: Boolean = false,
     onNavigateBack: () -> Unit,
     onToggleAi: () -> Unit,
+    onExportChat: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val chatColors = MaterialTheme.chatColors
@@ -79,9 +88,17 @@ fun CompactChatTopBar(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Contact info column
+            // Contact info column - clicking header provides direct access to export chat
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(
+                        role = Role.Button,
+                        onClickLabel = "Export Chat (تصدير المحادثة)",
+                        onClick = onExportChat
+                    )
+                    .padding(vertical = 4.dp, horizontal = 4.dp),
                 verticalArrangement = Arrangement.Center
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -181,10 +198,11 @@ fun CompactChatTopBar(
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
-            // Right row: AI Auto-Reply switch with clean label ("AI"). The switch is
-            // full-size (48dp enforced touch target) and self-describing for TalkBack.
+            var menuExpanded by remember { mutableStateOf(false) }
+
+            // Right row: AI Auto-Reply switch with clean label ("AI") & More options menu
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(end = 4.dp)
@@ -213,6 +231,48 @@ fun CompactChatTopBar(
                         uncheckedTrackColor = chatColors.surfaceAlt
                     )
                 )
+
+                Spacer(modifier = Modifier.width(2.dp))
+
+                Box {
+                    IconButton(
+                        onClick = { menuExpanded = true },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "خيارات إضافية (More options)",
+                            tint = chatColors.onSurface
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                        modifier = Modifier.background(chatColors.surface)
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = "Export Chat (تصدير المحادثة)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = chatColors.onSurface
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = null,
+                                    tint = chatColors.accent
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onExportChat()
+                            }
+                        )
+                    }
+                }
             }
         }
     }

@@ -18,11 +18,39 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import java.util.Calendar
+import java.util.Locale
 import javax.inject.Inject
 
 enum class ReplyCapability {
     READY_VIA_NOTIFICATION,
     AWAITING_ACTIVE_NOTIFICATION
+}
+
+enum class ExportTimeRange(
+    val titleArabic: String,
+    val titleEnglish: String,
+    val subtitle: String,
+    val exportLabel: String
+) {
+    ALL_TIME(
+        titleArabic = "كامل المحادثة",
+        titleEnglish = "All Time",
+        subtitle = "All Time • كافة الرسائل المسجلة",
+        exportLabel = "All Time (كامل المحادثة)"
+    ),
+    TODAY(
+        titleArabic = "محادثة اليوم",
+        titleEnglish = "Today",
+        subtitle = "Today • رسائل اليوم",
+        exportLabel = "Today (محادثة اليوم)"
+    ),
+    LAST_TWO_HOURS(
+        titleArabic = "آخر ساعتين",
+        titleEnglish = "Last 2 Hours",
+        subtitle = "Last 2 Hours • آخر ساعتين",
+        exportLabel = "Last 2 Hours (آخر ساعتين)"
+    )
 }
 
 data class ChatMessageUiModel(
@@ -287,5 +315,108 @@ class ChatDetailViewModel @Inject constructor(
         } catch (e: Exception) {
             ""
         }
+    }
+
+    /**
+     * Exports the chat history for this contact in the chosen [range].
+     * Fetches rows from [ChatHistoryDao], formats the transcript into a clean Arabic/English
+     * text report, and invokes [onExportReady] on completion.
+     */
+    fun exportChat(
+        range: ExportTimeRange,
+        currentTimeMs: Long = System.currentTimeMillis(),
+        onExportReady: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val sinceTimestamp = calculateSinceTimestamp(range, currentTimeMs)
+            val messages = chatHistoryDao.getMessagesSince(contactName, sourceClass, sinceTimestamp)
+            val storeName = userPreferencesRepository.getStoreNameSync()
+            val botName = userPreferencesRepository.getBotNameSync()
+            val transcript = buildExportTranscript(
+                contactName = contactName,
+                sourceClass = sourceClass,
+                storeName = storeName,
+                botName = botName,
+                range = range,
+                exportTimestampMs = currentTimeMs,
+                messages = messages
+            )
+            onExportReady(transcript)
+        }
+    }
+
+    internal fun calculateSinceTimestamp(
+        range: ExportTimeRange,
+        currentTimeMs: Long = System.currentTimeMillis()
+    ): Long {
+        return when (range) {
+            ExportTimeRange.ALL_TIME -> 0L
+            ExportTimeRange.TODAY -> {
+                val cal = Calendar.getInstance().apply {
+                    timeInMillis = currentTimeMs
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                cal.timeInMillis
+            }
+            ExportTimeRange.LAST_TWO_HOURS -> {
+                currentTimeMs - (2 * 60 * 60 * 1000L)
+            }
+        }
+    }
+
+    internal fun buildExportTranscript(
+        contactName: String,
+        sourceClass: String,
+        storeName: String,
+        botName: String,
+        range: ExportTimeRange,
+        exportTimestampMs: Long,
+        messages: List<ChatHistoryEntity>
+    ): String {
+        val exportDateStr = formatExportTimestamp(exportTimestampMs)
+        val lines = mutableListOf<String>()
+        lines.add("سجل محادثة: $contactName ($sourceClass)")
+        lines.add("المتجر: $storeName")
+        lines.add("تاريخ التصدير: $exportDateStr")
+        lines.add("نطاق التصدير: ${range.exportLabel}")
+        lines.add(TRANSCRIPT_DIVIDER)
+
+        for (msg in messages) {
+            val timeStr = formatExportTimestamp(msg.timestamp)
+            val senderLabel = when {
+                msg.isFromUser || msg.senderType.equals("CUSTOMER", ignoreCase = true) -> "العميل"
+                msg.senderType.equals("MERCHANT_MANUAL", ignoreCase = true) -> "التاجر (Manual)"
+                else -> "$botName (AI)"
+            }
+            lines.add("[$timeStr] $senderLabel: ${msg.messageText}")
+        }
+
+        lines.add(TRANSCRIPT_DIVIDER)
+        return lines.joinToString("\n")
+    }
+
+    private fun formatExportTimestamp(timestampMs: Long): String {
+        return try {
+            val dt = Instant.fromEpochMilliseconds(timestampMs).toLocalDateTime(TimeZone.currentSystemDefault())
+            String.format(
+                Locale.US,
+                "%04d-%02d-%02d %02d:%02d:%02d",
+                dt.year,
+                dt.monthNumber,
+                dt.dayOfMonth,
+                dt.hour,
+                dt.minute,
+                dt.second
+            )
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    companion object {
+        const val TRANSCRIPT_DIVIDER = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     }
 }
