@@ -1,6 +1,7 @@
 package com.example.persona.features.settings.presentation
 
 import com.example.persona.core.data.repository.UserPreferencesRepository
+import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import io.mockk.coVerify
@@ -16,6 +17,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -88,5 +90,29 @@ class SettingsViewModelTest {
 
         assertFalse(viewModel.uiState.value.isAutoPauseOnHitl)
         coVerify(exactly = 1) { userPreferencesRepository.setAutoPauseOnHitl(false) }
+    }
+
+    @Test
+    fun `default personaTone in uiState is WITTY_EGYPTIAN`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository)
+        advanceUntilIdle()
+
+        assertEquals(PersonaTone.WITTY_EGYPTIAN, viewModel.uiState.value.personaTone)
+    }
+
+    @Test
+    fun `setPersonaTone updates uiState and calls repository with new tone`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository)
+        advanceUntilIdle()
+
+        viewModel.setPersonaTone(PersonaTone.STANDARD_POLITE)
+        advanceUntilIdle()
+
+        assertEquals(PersonaTone.STANDARD_POLITE, viewModel.uiState.value.personaTone)
+        coVerify(exactly = 1) {
+            userPreferencesRepository.setStylePreferences(match {
+                it.personaTone == PersonaTone.STANDARD_POLITE
+            })
+        }
     }
 }

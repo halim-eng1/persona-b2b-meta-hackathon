@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +26,7 @@ class UserPreferencesRepository @Inject constructor(
 
         // ── Style & thresholds ────────────────────────────────────────────────
         val KEY_STYLE_PROFILE = stringPreferencesKey("style_profile")
+        val KEY_PERSONA_TONE = KEY_STYLE_PROFILE
         val KEY_SIMILARITY_THRESHOLD = floatPreferencesKey("similarity_threshold")
         val KEY_COOLDOWN_MINS = intPreferencesKey("cooldown_mins")
         val KEY_REPLY_DELAY_SECONDS = intPreferencesKey("reply_delay_seconds")
@@ -74,13 +76,17 @@ class UserPreferencesRepository @Inject constructor(
     }
 
     val stylePreferences: Flow<StylePreferences> = dataStore.data.map { prefs ->
+        val rawTone = prefs[KEY_PERSONA_TONE] ?: prefs[KEY_STYLE_PROFILE]
         StylePreferences(
+            personaTone = PersonaTone.fromString(rawTone),
             styleProfile = StyleProfile.fromString(prefs[KEY_STYLE_PROFILE] ?: StyleProfile.CASUAL.name),
             similarityThreshold = prefs[KEY_SIMILARITY_THRESHOLD] ?: 0.75f,
             cooldownMins = prefs[KEY_COOLDOWN_MINS] ?: 5,
             replyDelaySeconds = prefs[KEY_REPLY_DELAY_SECONDS] ?: 2
         )
     }
+
+    val personaToneFlow: Flow<PersonaTone> = stylePreferences.map { it.personaTone }
 
     val listenMainApp: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[KEY_LISTEN_MAIN_APP] ?: true
@@ -132,10 +138,18 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun setStylePreferences(stylePreferences: StylePreferences) {
         dataStore.edit { prefs ->
-            prefs[KEY_STYLE_PROFILE] = stylePreferences.styleProfile.name
+            prefs[KEY_PERSONA_TONE] = stylePreferences.personaTone.name
+            prefs[KEY_STYLE_PROFILE] = stylePreferences.personaTone.name
             prefs[KEY_SIMILARITY_THRESHOLD] = stylePreferences.similarityThreshold
             prefs[KEY_COOLDOWN_MINS] = stylePreferences.cooldownMins
             prefs[KEY_REPLY_DELAY_SECONDS] = stylePreferences.replyDelaySeconds
+        }
+    }
+
+    suspend fun setPersonaTone(tone: PersonaTone) {
+        dataStore.edit { prefs ->
+            prefs[KEY_PERSONA_TONE] = tone.name
+            prefs[KEY_STYLE_PROFILE] = tone.name
         }
     }
 
@@ -197,13 +211,17 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun getStylePreferencesSync(): StylePreferences {
         val prefs = dataStore.data.first()
+        val rawTone = prefs[KEY_PERSONA_TONE] ?: prefs[KEY_STYLE_PROFILE]
         return StylePreferences(
+            personaTone = PersonaTone.fromString(rawTone),
             styleProfile = StyleProfile.fromString(prefs[KEY_STYLE_PROFILE] ?: StyleProfile.CASUAL.name),
             similarityThreshold = prefs[KEY_SIMILARITY_THRESHOLD] ?: 0.75f,
             cooldownMins = prefs[KEY_COOLDOWN_MINS] ?: 5,
             replyDelaySeconds = prefs[KEY_REPLY_DELAY_SECONDS] ?: 2
         )
     }
+
+    suspend fun getPersonaToneSync(): PersonaTone = getStylePreferencesSync().personaTone
 
     /**
      * Reads all routing toggles and template strings in a single DataStore read.

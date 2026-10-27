@@ -15,8 +15,24 @@ enum class StyleProfile(val displayName: String) {
 }
 
 data class StylePreferences(
-    val styleProfile: StyleProfile = StyleProfile.CASUAL,
+    val personaTone: PersonaTone = PersonaTone.WITTY_EGYPTIAN,
     val similarityThreshold: Float = 0.75f, // Balanced default
     val cooldownMins: Int = 5,
-    val replyDelaySeconds: Int = 2
-)
+    val replyDelaySeconds: Int = 2,
+    @Deprecated("Legacy post-processing style profile; prompt-level PersonaTone is now used")
+    val styleProfile: StyleProfile = StyleProfile.CASUAL
+) {
+    /** Secondary constructor for backward compatibility with legacy tests using (StyleProfile, Float, Int, Int) */
+    constructor(
+        styleProfile: StyleProfile,
+        similarityThreshold: Float = 0.75f,
+        cooldownMins: Int = 5,
+        replyDelaySeconds: Int = 2
+    ) : this(
+        personaTone = PersonaTone.WITTY_EGYPTIAN,
+        similarityThreshold = similarityThreshold,
+        cooldownMins = cooldownMins,
+        replyDelaySeconds = replyDelaySeconds,
+        styleProfile = styleProfile
+    )
+}

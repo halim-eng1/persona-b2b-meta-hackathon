@@ -71,19 +71,8 @@ class StylePostProcessor @Inject constructor() {
         context: ConversationContext,
         userEmojiRate: Float = 0f
     ): String {
-        if (rawReply.isBlank()) return rawReply
-
-        return when (prefs.styleProfile) {
-            StyleProfile.STRICT_MATCH -> rawReply.trim()
-
-            StyleProfile.SHORT_DIRECT -> applyShortDirect(rawReply)
-
-            StyleProfile.PROFESSIONAL -> applyProfessional(rawReply)
-
-            StyleProfile.CASUAL -> applyCasual(rawReply, context, userEmojiRate)
-
-            StyleProfile.EMOJI_HEAVY -> applyEmojiHeavy(rawReply, context)
-        }
+        // Passive pass-through: preserves the LLM's prompt-calibrated persona, emojis, and phrasing intact
+        return rawReply.trim()
     }
 
     // ── Style Handlers ────────────────────────────────────────────────────────

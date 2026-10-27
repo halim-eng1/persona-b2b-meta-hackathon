@@ -151,9 +151,11 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         maxTokens: Int
     ): String? {
         val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
+        val tone = userPreferencesRepository.stylePreferences.first().personaTone
         val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
             botName = userPreferencesRepository.getBotNameSync(),
-            storeName = userPreferencesRepository.getStoreNameSync()
+            storeName = userPreferencesRepository.getStoreNameSync(),
+            tone = tone
         )
         val systemPromptWithContext = PromptContextBuilder.buildSystemPromptWithContext(
             staticSystemPrompt = baseSystemPrompt,
@@ -179,9 +181,11 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         maxTokens: Int
     ): String? {
         val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
+        val tone = userPreferencesRepository.stylePreferences.first().personaTone
         val baseSystemPrompt = PromptContextBuilder.buildFinalPassSystemPrompt(
             botName = userPreferencesRepository.getBotNameSync(),
-            storeName = userPreferencesRepository.getStoreNameSync()
+            storeName = userPreferencesRepository.getStoreNameSync(),
+            tone = tone
         )
         val systemPromptWithContext = PromptContextBuilder.buildSystemPromptWithContext(
             staticSystemPrompt = baseSystemPrompt,

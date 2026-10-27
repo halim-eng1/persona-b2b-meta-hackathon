@@ -3,6 +3,7 @@ package com.example.persona.features.settings.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.persona.core.data.repository.UserPreferencesRepository
+import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,6 +35,7 @@ enum class ThresholdLevel(val displayName: String, val threshold: Float) {
 }
 
 data class SettingsUiState(
+    val personaTone: PersonaTone = PersonaTone.WITTY_EGYPTIAN,
     val styleProfile: StyleProfile = StyleProfile.CASUAL,
     val thresholdLevel: ThresholdLevel = ThresholdLevel.BALANCED,
     val cooldownMins: Int = 5,
@@ -72,6 +74,7 @@ class SettingsViewModel @Inject constructor(
                 userPreferencesRepository.stylePreferences.collect { prefs ->
                     _uiState.update {
                         it.copy(
+                            personaTone = prefs.personaTone,
                             styleProfile = prefs.styleProfile,
                             thresholdLevel = ThresholdLevel.fromThreshold(prefs.similarityThreshold),
                             cooldownMins = prefs.cooldownMins,
@@ -123,6 +126,11 @@ class SettingsViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun setPersonaTone(tone: PersonaTone) {
+        _uiState.update { it.copy(personaTone = tone) }
+        save()
     }
 
     fun setStyleProfile(profile: StyleProfile) {
@@ -225,10 +233,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             userPreferencesRepository.setStylePreferences(
                 StylePreferences(
-                    styleProfile = s.styleProfile,
+                    personaTone = s.personaTone,
                     similarityThreshold = s.thresholdLevel.threshold,
                     cooldownMins = s.cooldownMins,
-                    replyDelaySeconds = s.replyDelaySeconds
+                    replyDelaySeconds = s.replyDelaySeconds,
+                    styleProfile = s.styleProfile
                 )
             )
         }

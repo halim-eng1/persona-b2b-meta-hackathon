@@ -38,8 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import com.example.persona.features.settings.presentation.components.CooldownOption
+import com.example.persona.features.settings.presentation.components.PersonaToneCard
 import com.example.persona.features.settings.presentation.components.ProfileOption
 import com.example.persona.features.settings.presentation.components.ThresholdOption
 
@@ -244,14 +246,24 @@ fun SettingsScreen(
                         }
                     }
 
-                    // ── Reply Style ─────────────────────────────────────────
-                    SettingsSection(title = "REPLY STYLE") {
-                        StyleProfile.entries.forEach { profile ->
-                            ProfileOption(
-                                profile = profile,
-                                isSelected = state.styleProfile == profile,
-                                onSelect = { viewModel.setStyleProfile(profile) }
-                            )
+                    // ── AI Persona Tone ─────────────────────────────────────
+                    SettingsSection(
+                        title = "AI PERSONA TONE",
+                        subtitle = "Choose how the AI communicates with your customers."
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            PersonaTone.entries.forEach { tone ->
+                                PersonaToneCard(
+                                    tone = tone,
+                                    isSelected = state.personaTone == tone,
+                                    onSelect = { viewModel.setPersonaTone(tone) }
+                                )
+                            }
                         }
                     }
 
