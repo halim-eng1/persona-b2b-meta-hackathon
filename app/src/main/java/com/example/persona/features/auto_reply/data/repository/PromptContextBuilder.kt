@@ -111,6 +111,7 @@ Output Schema:
     "custom_notes": "string or null"
   } or null
 }
+- STRICT INVARIANT: NEVER copy, echo, or output timestamp tags (e.g. [الآن], [منذ دقيقة], [منذ ساعتين]) in your final_reply_text! Your reply must contain only the direct message for the customer.
 
 2. IDENTITY & ZERO HALLUCINATION:
 - You are $botName, the sharp, witty, grounded voice of $storeName's sales & support team.
@@ -131,6 +132,12 @@ Output Schema:
 $section3
 
 4. ACTIONS & WORKFLOW:
+- TEMPORAL AWARENESS & TIMESTAMPS:
+  * User messages are tagged with relative timestamps like [الآن], [منذ 5 دقائق], [منذ ساعتين], [منذ يومين].
+  * Use these tags to understand conversation flow:
+    - If a greeting arrives after hours or days of silence (e.g. [منذ يومين]), treat it as a fresh new session and welcome them warmly.
+    - If messages are close in time (e.g. [الآن], [منذ دقيقة]), maintain continuous dialogue context.
+  * STRICT INVARIANT: NEVER copy, echo, or output timestamps like [الآن] or [منذ ساعتين] in your final_reply_text! Your reply must contain only the direct message for the customer.
 - "REPLY": Use for:
   a. ALL natural conversational turns — greetings, check-ins, thanks, farewells, haggling banter, mild impatience, dramatic excuses, and witty off-topic pivots — even when <store_knowledge> is NO_MATCHING_CHUNKS_RETRIEVED.
   b. Store, product, policy, or order answers supported by <store_knowledge> or <customer_order_state>.
@@ -208,6 +215,7 @@ Output Schema:
     "custom_notes": "string or null"
   } or null
 }
+- STRICT INVARIANT: NEVER copy, echo, or output timestamp tags (e.g. [الآن], [منذ دقيقة], [منذ ساعتين]) in your final_reply_text! Your reply must contain only the direct message for the customer.
 
 2. IDENTITY & ZERO HALLUCINATION:
 - You are $botName, the sharp, witty, grounded voice of $storeName's sales & support team.
@@ -228,6 +236,12 @@ Output Schema:
 $section3
 
 4. ACTIONS & WORKFLOW:
+- TEMPORAL AWARENESS & TIMESTAMPS:
+  * User messages are tagged with relative timestamps like [الآن], [منذ 5 دقائق], [منذ ساعتين], [منذ يومين].
+  * Use these tags to understand conversation flow:
+    - If a greeting arrives after hours or days of silence (e.g. [منذ يومين]), treat it as a fresh new session and welcome them warmly.
+    - If messages are close in time (e.g. [الآن], [منذ دقيقة]), maintain continuous dialogue context.
+  * STRICT INVARIANT: NEVER copy, echo, or output timestamps like [الآن] or [منذ ساعتين] in your final_reply_text! Your reply must contain only the direct message for the customer.
 - Action MUST be strictly "REPLY" or "HITL" ("RE_QUERY" is completely forbidden in this pass, refined_search_keyword must be null).
 - Out-of-catalog rule: if foreign to <store_topics>, clarify with light Egyptian wit as specified in Section 2; do NOT trigger HITL for category absence.
 - "REPLY": Use for:
@@ -472,6 +486,22 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             return chronological.filterIndexed { index, _ -> !indicesToDrop.contains(index) }
         }
 
+        fun formatRelativeTime(timestampMs: Long, nowMs: Long = System.currentTimeMillis()): String {
+            val diffSeconds = (nowMs - timestampMs) / 1000
+            val diffMinutes = diffSeconds / 60
+            val diffHours = diffMinutes / 60
+            val diffDays = diffHours / 24
+
+            return when {
+                diffSeconds < 60 -> "الآن"
+                diffMinutes < 60 -> "منذ $diffMinutes دقيقة"
+                diffHours < 24 -> "منذ $diffHours ساعة"
+                diffDays == 1L -> "أمس"
+                diffDays < 7L -> "منذ $diffDays أيام"
+                else -> "منذ فترة"
+            }
+        }
+
         fun buildOpenRouterMessages(
             systemPrompt: String,
             chatHistory: List<ChatHistoryEntity>,
@@ -492,7 +522,8 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
                 val formattedContent = if (role == "assistant") {
                     formatHistoricalAssistantTurn(text)
                 } else {
-                    text
+                    val relativeTime = formatRelativeTime(turn.timestamp, nowMs)
+                    "[$relativeTime] $text"
                 }
 
                 if (nativeHistory.isNotEmpty() && nativeHistory.last().role == role) {
@@ -518,18 +549,24 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
                 currentInboundText.trim()
             }
 
+            val taggedCurrentText = if (currentText.isNotBlank() && !currentText.startsWith("[")) {
+                "[الآن] $currentText"
+            } else {
+                currentText
+            }
+
             if (nativeHistory.isNotEmpty() && nativeHistory.last().role == "user") {
                 val lastUser = nativeHistory.removeAt(nativeHistory.lastIndex)
                 val merged = if (lastUser.content.isNotBlank()) {
-                    "${lastUser.content}\n$currentText"
+                    "${lastUser.content}\n$taggedCurrentText"
                 } else {
-                    currentText
+                    taggedCurrentText
                 }
                 messages.addAll(nativeHistory)
                 messages.add(ChatMessage(role = "user", content = merged))
             } else {
                 messages.addAll(nativeHistory)
-                messages.add(ChatMessage(role = "user", content = currentText))
+                messages.add(ChatMessage(role = "user", content = taggedCurrentText))
             }
 
             return messages

@@ -85,14 +85,18 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val CANONICAL_HITL_MESSAGE = PromptContextBuilder.CANONICAL_HITL_MESSAGE
 
         private val FAILOVER_MODELS = listOf(
-            "nvidia/nemotron-3.5-super-vl:free",
-            "google/gemma-4-31b-it:free",
-            "cohere/north-mini-code:free",
-            "liquid/lfm-2.5-2.6b:free",
-            "openrouter/free",
-            "dots-studio/dots-3-note-preview:free",
+            "nvidia/nemotron-3-ultra-550b-a55b:free", // #1: Ultra 550B, 6.7s RTT, highly witty & structured
+            "liquid/lfm-2.5-2.6b:free",               // #2: 5.4s RTT, ultra-fast generation, clean Arabic
+            "cohere/north-mini-code:free",            // #3: 10.2s RTT, sharp dry wit, highly reliable JSON
+            "nvidia/nemotron-3.5-super-vl:free",       // #4: 5.2s baseline (Reasoning OFF)
+            "nvidia/nemotron-3.5-lightning:free",      // #5: Capable backup
+            "openrouter/free"                          // #6: Wildcard auto-router fallback
+        )
+
+        internal val REASONING_MODELS = setOf(
             "nvidia/nemotron-3-ultra-550b-a55b:free",
-            "nvidia/nemotron-3.5-lightning:free"
+            "liquid/lfm-2.5-2.6b:free",
+            "cohere/north-mini-code:free"
         )
 
         // Derived from the single-source builders; not `const` because the rule text is
@@ -141,6 +145,11 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             currentInboundText: String,
             nowMs: Long = System.currentTimeMillis()
         ): List<ChatMessage> = PromptContextBuilder.buildOpenRouterMessages(systemPrompt, chatHistory, currentInboundText, nowMs)
+
+        internal fun formatRelativeTime(
+            timestampMs: Long,
+            nowMs: Long = System.currentTimeMillis()
+        ): String = PromptContextBuilder.formatRelativeTime(timestampMs, nowMs)
 
         internal fun estimateTokens(text: String): Int = PromptContextBuilder.estimateTokens(text)
     }
@@ -329,6 +338,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         return try {
             withTimeout(MODEL_TIMEOUT_MS) {
+                val reasoning = if (model in REASONING_MODELS) ReasoningConfig(effort = "low") else null
                 var response = httpClient.post(BuildConfig.OPENROUTER_BASE_URL) {
                     contentType(ContentType.Application.Json)
                     bearerAuth(apiKey)
@@ -337,12 +347,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                             model = model,
                             messages = messages,
                             maxTokens = maxTokens,
-                            reasoning = ReasoningConfig(effort = "none", exclude = true)
+                            reasoning = reasoning
                         )
                     )
                 }
 
-                if (response.status.value == 400) {
+                if (response.status.value == 400 && reasoning != null) {
                     Log.w(TAG, "HTTP 400 on $model with reasoning object. Retrying without reasoning payload.")
                     response = httpClient.post(BuildConfig.OPENROUTER_BASE_URL) {
                         contentType(ContentType.Application.Json)

@@ -72,25 +72,17 @@ data class OpenRouterRequest(
     @SerialName("include_reasoning")
     val includeReasoning: Boolean = false,
     /**
-     * Disables extended thinking entirely (`effort: "none"`) and asks OpenRouter
-     * to exclude reasoning tokens from the response (`exclude: true`).
+     * Optional reasoning configuration. Only attached for benchmark-proven models.
      */
-    val reasoning: ReasoningConfig? = ReasoningConfig(effort = "none", exclude = true)
+    val reasoning: ReasoningConfig? = null
 )
 
-/** OpenRouter-recommended reasoning suppression payload.
- *
- * - `effort: "none"` — OpenAI-style value that disables extended thinking entirely.
- * - `exclude: true` — all models support it; strips reasoning tokens from the
- *   response so chain-of-thought cannot bleed into `content`.
- *
- * `max_tokens: 0` inside `reasoning` was removed deliberately: it can trigger
- * HTTP 400 validation errors with certain providers.
+/**
+ * OpenRouter reasoning configuration for selective reasoning support.
  */
 @Serializable
 data class ReasoningConfig(
-    val effort: String? = "none",
-    val exclude: Boolean? = true
+    val effort: String = "low"
 )
 
 // ── Response DTOs ─────────────────────────────────────────────────────────────

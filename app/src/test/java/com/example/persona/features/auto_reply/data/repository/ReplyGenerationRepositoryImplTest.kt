@@ -149,21 +149,21 @@ class ReplyGenerationRepositoryImplTest {
         assertEquals(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS, messages[0].content)
 
         assertEquals("user", messages[1].role)
-        assertEquals("سلام عليكم", messages[1].content)
+        assertEquals("[منذ فترة] سلام عليكم", messages[1].content)
 
         assertEquals("assistant", messages[2].role)
         assertTrue(messages[2].content.contains("\"action\":\"REPLY\""))
         assertTrue(messages[2].content.contains("\"final_reply_text\":\"جار تجهيزه يا فندم\""))
 
         assertEquals("user", messages[3].role)
-        assertEquals("وصل؟", messages[3].content)
+        assertEquals("[منذ فترة] وصل؟", messages[3].content)
 
         assertEquals("assistant", messages[4].role)
         assertTrue(messages[4].content.contains("\"action\":\"REPLY\""))
         assertTrue(messages[4].content.contains("\"final_reply_text\":\"تمام شكراً\""))
 
         assertEquals("user", messages[5].role)
-        assertEquals("هيوصل امتى؟", messages[5].content)
+        assertEquals("[الآن] هيوصل امتى؟", messages[5].content)
         assertFalse(messages[5].content.contains("=== CURRENT CUSTOMER MESSAGE ==="))
     }
 
@@ -187,7 +187,7 @@ class ReplyGenerationRepositoryImplTest {
         assertEquals(2, messages.size)
         assertEquals("system", messages[0].role)
         assertEquals("user", messages[1].role)
-        assertEquals("مساء الخير\nعاوز حذاء مقاس 42\nلونه أسود", messages[1].content)
+        assertEquals("[منذ فترة] مساء الخير\n[منذ فترة] عاوز حذاء مقاس 42\n[الآن] لونه أسود", messages[1].content)
         assertFalse(messages[1].content.contains("=== CURRENT CUSTOMER MESSAGE ==="))
     }
 
@@ -300,8 +300,8 @@ class ReplyGenerationRepositoryImplTest {
         // All user messages contain only raw text
         val userMessages = messages.filter { it.role == "user" }
         assertEquals(2, userMessages.size)
-        assertEquals("السلام عليكم", userMessages[0].content)
-        assertEquals("بكام الشحن؟", userMessages[1].content)
+        assertEquals("[منذ فترة] السلام عليكم", userMessages[0].content)
+        assertEquals("[الآن] بكام الشحن؟", userMessages[1].content)
 
         userMessages.forEach { msg ->
             assertFalse(msg.content.contains("<store_knowledge>"))
@@ -638,10 +638,10 @@ class ReplyGenerationRepositoryImplTest {
         assertEquals(4, messages.size)
         assertEquals("system", messages[0].role)
         assertEquals("user", messages[1].role)
-        assertEquals("السلام عليكم", messages[1].content)
+        assertEquals("[الآن] السلام عليكم", messages[1].content)
         assertEquals("assistant", messages[2].role)
         assertEquals("user", messages[3].role)
-        assertEquals("سؤال جديد", messages[3].content)
+        assertEquals("[الآن] سؤال جديد", messages[3].content)
         assertFalse("Failed user query must not be in prompt", messages.any { it.content.contains("سؤال فشل الرد عليه") })
     }
 
@@ -676,13 +676,34 @@ class ReplyGenerationRepositoryImplTest {
         assertEquals(4, messages.size)
         assertEquals("system", messages[0].role)
         assertEquals("user", messages[1].role)
-        assertEquals("ممكن خصم؟", messages[1].content)
+        assertEquals("[منذ فترة] ممكن خصم؟", messages[1].content)
         assertEquals("assistant", messages[2].role)
         val json = Json { ignoreUnknownKeys = true }
         val decoded = json.decodeFromString<AgenticLlmResponse>(messages[2].content)
         assertEquals("تمام هبعت لحضرتك خصم 10%", decoded.finalReplyText)
         assertEquals("user", messages[3].role)
-        assertEquals("شكرا جدا", messages[3].content)
+        assertEquals("[الآن] شكرا جدا", messages[3].content)
+    }
+
+    @Test
+    fun `formatRelativeTime formats elapsed intervals accurately in Egyptian Arabic`() {
+        val now = 1_000_000_000L
+        assertEquals("الآن", PromptContextBuilder.formatRelativeTime(now - 10_000L, now))
+        assertEquals("منذ 5 دقيقة", PromptContextBuilder.formatRelativeTime(now - 5 * 60 * 1000L, now))
+        assertEquals("منذ 2 ساعة", PromptContextBuilder.formatRelativeTime(now - 2 * 60 * 60 * 1000L, now))
+        assertEquals("أمس", PromptContextBuilder.formatRelativeTime(now - 24 * 60 * 60 * 1000L, now))
+        assertEquals("منذ 3 أيام", PromptContextBuilder.formatRelativeTime(now - 3 * 24 * 60 * 60 * 1000L, now))
+        assertEquals("منذ فترة", PromptContextBuilder.formatRelativeTime(now - 10 * 24 * 60 * 60 * 1000L, now))
+    }
+
+    @Test
+    fun `REASONING_MODELS configuration includes only benchmark-proven bounded reasoning models`() {
+        assertTrue(ReplyGenerationRepositoryImpl.REASONING_MODELS.contains("nvidia/nemotron-3-ultra-550b-a55b:free"))
+        assertTrue(ReplyGenerationRepositoryImpl.REASONING_MODELS.contains("liquid/lfm-2.5-2.6b:free"))
+        assertTrue(ReplyGenerationRepositoryImpl.REASONING_MODELS.contains("cohere/north-mini-code:free"))
+        assertFalse(ReplyGenerationRepositoryImpl.REASONING_MODELS.contains("nvidia/nemotron-3.5-super-vl:free"))
+        assertFalse(ReplyGenerationRepositoryImpl.REASONING_MODELS.contains("nvidia/nemotron-3.5-lightning:free"))
+        assertFalse(ReplyGenerationRepositoryImpl.REASONING_MODELS.contains("openrouter/free"))
     }
 
     @Test
