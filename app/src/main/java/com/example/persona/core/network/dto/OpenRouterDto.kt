@@ -65,7 +65,7 @@ typealias ChatMessage = OpenRouterChatMessage
 data class OpenRouterRequest(
     val model: String,
     val messages: List<OpenRouterChatMessage>,
-    val temperature: Float = 0.3f,
+    val temperature: Float = 0.45f,
     @SerialName("max_tokens")
     val maxTokens: Int = 512,
     /** Suppresses chain-of-thought / reasoning token leakage on supporting models. */
