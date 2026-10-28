@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.persona.core.database.entity.OrderEntity
+import com.example.persona.core.database.entity.OrderStatusCount
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -67,6 +68,31 @@ interface OrderDao {
         ORDER BY timestamp DESC
     """)
     suspend fun getActiveOrdersByContact(contactName: String): List<OrderEntity>
+
+    /**
+     * Returns the single most recent order for [contactName], regardless of status.
+     * Injected into the prompt's 'Last Inactive/Cancelled Order' block so the LLM
+     * has instant context when an order was just cancelled or completed.
+     */
+    @Query("""
+        SELECT * FROM orders_table
+        WHERE contact_name = :contactName
+        ORDER BY timestamp DESC
+        LIMIT 1
+    """)
+    suspend fun getLatestOrderByContact(contactName: String): OrderEntity?
+
+    /**
+     * Returns the aggregate count of orders grouped by status for [contactName].
+     * Feeds the 'Orders Summary' line in <customer_order_state>.
+     */
+    @Query("""
+        SELECT status, COUNT(*) as count
+        FROM orders_table
+        WHERE contact_name = :contactName
+        GROUP BY status
+    """)
+    suspend fun getOrderStatusCounts(contactName: String): List<OrderStatusCount>
 
     /**
      * **Deduplication verification lookup.**

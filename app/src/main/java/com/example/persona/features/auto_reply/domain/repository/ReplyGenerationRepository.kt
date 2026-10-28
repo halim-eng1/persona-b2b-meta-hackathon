@@ -2,6 +2,7 @@ package com.example.persona.features.auto_reply.domain.repository
 
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.core.database.entity.OrderEntity
+import com.example.persona.core.database.entity.OrderStatusCount
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 
@@ -21,7 +22,9 @@ interface ReplyGenerationRepository {
         chatHistory: List<ChatHistoryEntity> = emptyList(),
         activeOrders: List<OrderEntity> = emptyList(),
         personalChunks: List<ChatHistoryEntity> = emptyList(),
-        maxTokens: Int = 180
+        maxTokens: Int = 180,
+        lastOrder: OrderEntity? = null,
+        orderStatusCounts: List<OrderStatusCount> = emptyList()
     ): String?
 
     /**
@@ -46,6 +49,8 @@ interface ReplyGenerationRepository {
         activeOrders: List<OrderEntity> = emptyList(),
         personalChunks: List<ChatHistoryEntity> = emptyList(),
         maxTokens: Int = 350,
-        imageUrl: String? = null
+        imageUrl: String? = null,
+        lastOrder: OrderEntity? = null,
+        orderStatusCounts: List<OrderStatusCount> = emptyList()
     ): String?
 }

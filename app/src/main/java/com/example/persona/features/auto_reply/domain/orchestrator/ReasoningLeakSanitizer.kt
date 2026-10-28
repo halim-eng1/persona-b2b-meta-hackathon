@@ -162,20 +162,20 @@ class ReasoningLeakSanitizer @Inject constructor() {
             return REASONING_LEAK_MARKERS.any { lowered.contains(it) }
         }
 
-        fun buildUnsafeOutputHitlResponse(): AgenticLlmResponse = AgenticLlmResponse(
+        fun buildUnsafeOutputHitlResponse(hitlMessage: String = CANONICAL_HITL_MESSAGE): AgenticLlmResponse = AgenticLlmResponse(
             action = "HITL",
-            finalReplyText = CANONICAL_HITL_MESSAGE
+            finalReplyText = hitlMessage
         )
 
-        fun ensureHitlSuffix(text: String): String {
+        fun ensureHitlSuffix(text: String, hitlSuffix: String = CANONICAL_HITL_MESSAGE): String {
             val trimmed = text.trim()
-            if (trimmed.isEmpty() || trimmed == CANONICAL_HITL_MESSAGE) {
-                return CANONICAL_HITL_MESSAGE
+            if (trimmed.isEmpty() || trimmed == hitlSuffix) {
+                return hitlSuffix
             }
-            if (trimmed.contains(CANONICAL_HITL_MESSAGE) || trimmed.contains("ثواني وهيكون مع حضرتك")) {
+            if (trimmed.contains(hitlSuffix) || trimmed.contains("ثواني وهيكون مع حضرتك")) {
                 return trimmed
             }
-            return "$trimmed\n$CANONICAL_HITL_MESSAGE"
+            return "$trimmed\n$hitlSuffix"
         }
     }
 }

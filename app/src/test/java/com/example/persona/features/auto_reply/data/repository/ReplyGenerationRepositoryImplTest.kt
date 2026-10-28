@@ -341,7 +341,7 @@ class ReplyGenerationRepositoryImplTest {
     }
 
     @Test
-    fun `synthetic canonical HITL fallback replies and their triggering user turns are excluded from history`() {
+    fun `canonical HITL fallback replies and triggering user turns are preserved in history with HITL action`() {
         val history = listOf(
             // Descending order (most recent first): HITL fallback turns from outages
             ChatHistoryEntity(id = 3L, contactName = "c", messageText = ReplyGenerationRepositoryImpl.CANONICAL_HITL_MESSAGE, isFromUser = false, timestamp = 300L),
@@ -356,7 +356,9 @@ class ReplyGenerationRepositoryImplTest {
         )
 
         val assistantMessages = messages.filter { it.role == "assistant" }
-        assertEquals("Synthetic HITL messages should be excluded from prompt context", 0, assistantMessages.size)
+        assertEquals("Canonical HITL messages should be preserved in prompt context", 1, assistantMessages.size)
+        assertTrue(assistantMessages[0].content.contains("\"action\":\"HITL\""))
+        assertTrue(assistantMessages[0].content.contains(ReplyGenerationRepositoryImpl.CANONICAL_HITL_MESSAGE))
     }
 
     @Test
@@ -618,12 +620,12 @@ class ReplyGenerationRepositoryImplTest {
     }
 
     @Test
-    fun `buildOpenRouterMessages strips failed user and HITL-bot pairs cleanly without coalescing`() {
+    fun `buildOpenRouterMessages preserves historical user and HITL handoff turns with action HITL`() {
         val now = 10_000_000L
         val history = listOf(
             // Most recent first as returned by ChatHistoryDao
             ChatHistoryEntity(id = 4L, contactName = "c", messageText = "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏", isFromUser = false, timestamp = now - 1000L),
-            ChatHistoryEntity(id = 3L, contactName = "c", messageText = "سؤال فشل الرد عليه", isFromUser = true, timestamp = now - 2000L),
+            ChatHistoryEntity(id = 3L, contactName = "c", messageText = "سؤال يحتاج دعم", isFromUser = true, timestamp = now - 2000L),
             ChatHistoryEntity(id = 2L, contactName = "c", messageText = "{\"action\":\"REPLY\",\"final_reply_text\":\"أهلاً بك يا فندم\"}", isFromUser = false, timestamp = now - 10000L),
             ChatHistoryEntity(id = 1L, contactName = "c", messageText = "السلام عليكم", isFromUser = true, timestamp = now - 11000L)
         )
@@ -631,23 +633,21 @@ class ReplyGenerationRepositoryImplTest {
         val messages = ReplyGenerationRepositoryImpl.buildOpenRouterMessages(
             systemPrompt = "System Prompt",
             chatHistory = history,
-            currentInboundText = "سؤال جديد",
+            currentInboundText = "متبعتش لحد خلاص",
             nowMs = now
         )
 
-        // Expected messages:
-        // Message 0: system
-        // Message 1: user: "السلام عليكم"
-        // Message 2: assistant: {"action":"REPLY"...}
-        // Message 3: user: "سؤال جديد" (raw, not coalesced with "سؤال فشل الرد عليه")
-        assertEquals(4, messages.size)
+        assertEquals(6, messages.size)
         assertEquals("system", messages[0].role)
         assertEquals("user", messages[1].role)
-        assertEquals("[الآن] السلام عليكم", messages[1].content)
+        assertTrue(messages[1].content.contains("السلام عليكم"))
         assertEquals("assistant", messages[2].role)
         assertEquals("user", messages[3].role)
-        assertEquals("[الآن] سؤال جديد", messages[3].content)
-        assertFalse("Failed user query must not be in prompt", messages.any { it.content.contains("سؤال فشل الرد عليه") })
+        assertTrue(messages[3].content.contains("سؤال يحتاج دعم"))
+        assertEquals("assistant", messages[4].role)
+        assertTrue(messages[4].content.contains("\"action\":\"HITL\""))
+        assertEquals("user", messages[5].role)
+        assertTrue(messages[5].content.contains("متبعتش لحد خلاص"))
     }
 
     @Test

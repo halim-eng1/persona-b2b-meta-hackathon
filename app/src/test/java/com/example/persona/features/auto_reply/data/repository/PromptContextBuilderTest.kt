@@ -1,6 +1,9 @@
 package com.example.persona.features.auto_reply.data.repository
 
 import com.example.persona.core.data.repository.UserPreferencesRepository
+import com.example.persona.core.database.entity.ChatHistoryEntity
+import com.example.persona.core.database.entity.OrderEntity
+import com.example.persona.core.database.entity.OrderStatusCount
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
@@ -9,6 +12,7 @@ import com.example.persona.features.chat_import.domain.model.ConversationContext
 import com.example.persona.features.chat_import.domain.model.IntentType
 import com.example.persona.features.chat_import.domain.model.SentimentType
 import com.example.persona.features.chat_import.domain.model.TopicType
+import com.example.persona.core.database.entity.OrderStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -190,6 +194,89 @@ class PromptContextBuilderTest {
             assertTrue(prompt.contains("If <store_website> is NONE, state clearly and naturally that orders and inquiries are handled directly right here on WhatsApp."))
             assertFalse(prompt.contains("مفيش موقع أو فرع متسجل حالياً"))
         }
+    }
+
+    @Test
+    fun `formatCustomerOrderState renders active, cancelled, and summary correctly`() {
+        val activeOrder = OrderEntity(
+            id = 2L,
+            contactName = "حليم",
+            orderDetails = "تيشيرت أسود XL",
+            deliveryAddress = "طنطا، شارع البحر",
+            customNotes = "01012345678",
+            merchantNote = "عميل VIP",
+            status = OrderStatus.IN_PREPARATION.name
+        )
+        val cancelledOrder = OrderEntity(
+            id = 1L,
+            contactName = "حليم",
+            orderDetails = "مج سيراميك أبيض",
+            deliveryAddress = "طنطا، شارع البحر",
+            customNotes = "كتابة اسم حليم",
+            merchantNote = null,
+            status = OrderStatus.CANCELLED.name
+        )
+        val statusCounts = listOf(
+            OrderStatusCount(status = OrderStatus.IN_PREPARATION.name, count = 1),
+            OrderStatusCount(status = OrderStatus.CANCELLED.name, count = 1)
+        )
+
+        val rendered = PromptContextBuilder.formatCustomerOrderState(
+            activeOrders = listOf(activeOrder),
+            lastOrder = cancelledOrder,
+            statusCounts = statusCounts
+        )
+
+        assertTrue(rendered.contains("Active Order: #2 [IN_PREPARATION]"))
+        assertTrue(rendered.contains("Order Status: IN_PREPARATION"))
+        assertTrue(rendered.contains("Order Details: تيشيرت أسود XL"))
+        assertTrue(rendered.contains("Delivery Address: طنطا، شارع البحر"))
+        assertTrue(rendered.contains("Last Inactive/Cancelled Order: #1 [CANCELLED]"))
+        assertTrue(rendered.contains("Last Order Details: مج سيراميك أبيض"))
+        assertTrue(rendered.contains("Last Order Address: طنطا، شارع البحر"))
+        assertTrue(rendered.contains("Last Order Notes: كتابة اسم حليم"))
+        assertTrue(rendered.contains("Orders Summary: IN_PREPARATION: 1, CANCELLED: 1"))
+    }
+
+    @Test
+    fun `formatCustomerOrderState renders Active Order None and last cancelled order when no active order exists`() {
+        val cancelledOrder = OrderEntity(
+            id = 1L,
+            contactName = "حليم",
+            orderDetails = "مج سيراميك أبيض",
+            deliveryAddress = "طنطا",
+            status = OrderStatus.CANCELLED.name
+        )
+        val statusCounts = listOf(
+            OrderStatusCount(status = OrderStatus.CANCELLED.name, count = 1)
+        )
+
+        val rendered = PromptContextBuilder.formatCustomerOrderState(
+            activeOrders = emptyList(),
+            lastOrder = cancelledOrder,
+            statusCounts = statusCounts
+        )
+
+        assertTrue(rendered.contains("Active Order: None"))
+        assertTrue(rendered.contains("Last Inactive/Cancelled Order: #1 [CANCELLED]"))
+        assertTrue(rendered.contains("Last Order Details: مج سيراميك أبيض"))
+        assertTrue(rendered.contains("Orders Summary: CANCELLED: 1"))
+    }
+
+    @Test
+    fun `filterAndPairChatHistory preserves chronological turns without dropping HITL messages or user context`() {
+        val now = 10_000_000L
+        val history = listOf(
+            ChatHistoryEntity(id = 3L, contactName = "c", messageText = "لا لا متبعتش لحد!", isFromUser = true, timestamp = now - 500L),
+            ChatHistoryEntity(id = 2L, contactName = "c", messageText = PromptContextBuilder.CANONICAL_HITL_MESSAGE, isFromUser = false, timestamp = now - 1000L),
+            ChatHistoryEntity(id = 1L, contactName = "c", messageText = "عايز اتكلم مع حد ضروري", isFromUser = true, timestamp = now - 2000L)
+        )
+
+        val filtered = PromptContextBuilder.filterAndPairChatHistory(history, now)
+        assertEquals(3, filtered.size)
+        assertEquals(1L, filtered[0].id)
+        assertEquals(2L, filtered[1].id)
+        assertEquals(3L, filtered[2].id)
     }
 
     private fun extractSection(fullText: String, startHeader: String, endHeader: String): String {

@@ -11,6 +11,7 @@ import com.example.persona.core.database.dao.OrderDao
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceClass
 import com.example.persona.features.auto_reply.data.repository.NotificationProcessorImpl
+import com.example.persona.features.auto_reply.data.repository.PromptContextBuilder
 import com.example.persona.features.auto_reply.data.repository.SemanticRetrievalRepository
 import com.example.persona.features.auto_reply.data.service.IncomingMessageDispatcher
 import com.example.persona.features.auto_reply.data.service.WhatsAppMediaExtractor
@@ -75,6 +76,10 @@ class AutoReplyOrchestratorMediaTest {
                 "عفواً، لا يمكنني معالجة الوسائط. يرجى كتابة استفسارك في رسالة نصية."
 
         coEvery { prefsRepository.isAutoReplyEnabledSync() } returns true
+        coEvery { prefsRepository.getMediaFallbackMessageSync() } returns
+            "عفواً، لا يمكنني معالجة الوسائط. يرجى كتابة استفسارك في رسالة نصية."
+        coEvery { prefsRepository.getHitlHoldingMessageSync() } returns
+            PromptContextBuilder.CANONICAL_HITL_MESSAGE
         coEvery { prefsRepository.getStylePreferencesSync() } returns StylePreferences(
             styleProfile = StyleProfile.CASUAL,
             similarityThreshold = 0.75f,
@@ -94,6 +99,8 @@ class AutoReplyOrchestratorMediaTest {
         coEvery { chatHistoryDao.getRecentMessagesExcept(any(), any(), any()) } returns emptyList()
         coEvery { chatHistoryDao.getRecentMessagesExceptForSource(any(), any(), any(), any()) } returns emptyList()
         coEvery { orderDao.getActiveOrdersByContact(any()) } returns emptyList()
+        coEvery { orderDao.getLatestOrderByContact(any()) } returns null
+        coEvery { orderDao.getOrderStatusCounts(any()) } returns emptyList()
 
         orchestrator = AutoReplyOrchestrator(
             incomingMessageDispatcher = mockk(relaxed = true),

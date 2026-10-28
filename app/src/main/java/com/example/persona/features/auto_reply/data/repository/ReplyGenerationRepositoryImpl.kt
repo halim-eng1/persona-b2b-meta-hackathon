@@ -6,6 +6,7 @@ import com.example.persona.BuildConfig
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.core.database.entity.OrderEntity
+import com.example.persona.core.database.entity.OrderStatusCount
 import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.core.network.dto.ChatMessage
@@ -142,21 +143,29 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             budgetTokens: Int = 2500
         ): String = PromptContextBuilder.formatStoreKnowledge(candidates, budgetTokens)
 
-        internal fun formatCustomerOrderState(activeOrders: List<OrderEntity>): String =
-            PromptContextBuilder.formatCustomerOrderState(activeOrders)
+        internal fun formatCustomerOrderState(
+            activeOrders: List<OrderEntity>,
+            lastOrder: OrderEntity? = null,
+            statusCounts: List<OrderStatusCount> = emptyList()
+        ): String =
+            PromptContextBuilder.formatCustomerOrderState(activeOrders, lastOrder, statusCounts)
 
         internal fun buildSystemPromptWithContext(
             staticSystemPrompt: String,
             candidates: List<RetrievalCandidate>,
             activeOrders: List<OrderEntity>,
             storeTopics: List<String> = emptyList(),
-            storeWebsite: String? = null
+            storeWebsite: String? = null,
+            lastOrder: OrderEntity? = null,
+            statusCounts: List<OrderStatusCount> = emptyList()
         ): String = PromptContextBuilder.buildSystemPromptWithContext(
             staticSystemPrompt = staticSystemPrompt,
             candidates = candidates,
             activeOrders = activeOrders,
             storeTopics = storeTopics,
-            storeWebsite = storeWebsite
+            storeWebsite = storeWebsite,
+            lastOrder = lastOrder,
+            statusCounts = statusCounts
         )
 
         internal fun formatHistoricalAssistantTurn(rawText: String): String =
@@ -293,7 +302,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         chatHistory: List<ChatHistoryEntity>,
         activeOrders: List<OrderEntity>,
         personalChunks: List<ChatHistoryEntity>,
-        maxTokens: Int
+        maxTokens: Int,
+        lastOrder: OrderEntity?,
+        orderStatusCounts: List<OrderStatusCount>
     ): String? {
         val imageUri = resolveImageUri(notification.mediaFilePath)
 
@@ -312,7 +323,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             candidates = candidates,
             activeOrders = activeOrders,
             storeTopics = storeTopics,
-            storeWebsite = storeWebsite
+            storeWebsite = storeWebsite,
+            lastOrder = lastOrder,
+            statusCounts = orderStatusCounts
         )
 
         val inboundText = if (imageUri != null && (notification.originalText.contains("Sent a photo", ignoreCase = true) || notification.originalText.trim() == "📷")) {
@@ -339,7 +352,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         activeOrders: List<OrderEntity>,
         personalChunks: List<ChatHistoryEntity>,
         maxTokens: Int,
-        imageUrl: String?
+        imageUrl: String?,
+        lastOrder: OrderEntity?,
+        orderStatusCounts: List<OrderStatusCount>
     ): String? {
         val imageUri = resolveImageUri(imageUrl)
         val isMultimodal = imageUri != null
@@ -357,7 +372,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             candidates = chunks,
             activeOrders = activeOrders,
             storeTopics = storeTopics,
-            storeWebsite = storeWebsite
+            storeWebsite = storeWebsite,
+            lastOrder = lastOrder,
+            statusCounts = orderStatusCounts
         )
         val messages = PromptContextBuilder.buildOpenRouterMessages(
             systemPrompt = systemPromptWithContext,

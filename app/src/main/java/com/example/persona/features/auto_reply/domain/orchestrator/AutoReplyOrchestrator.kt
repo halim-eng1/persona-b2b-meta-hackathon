@@ -100,8 +100,8 @@ class AutoReplyOrchestrator @Inject constructor(
         const val PIVOT_MARKER = OrderIngestionManager.PIVOT_MARKER
         const val NO_ACTIVE_ORDER_REPLY = OrderIngestionManager.NO_ACTIVE_ORDER_REPLY
 
-        private val SAFETY_KEYWORDS = listOf(
-            "ضروري", "مشكلة", "مستشفى", "الحقني", "مصيبة", "urgent", "help"
+        private val SAFETY_KEYWORDS = setOf(
+            "مستشفى", "الحقني", "مصيبة", "كارثة", "نجدة", "emergency", "suicide", "police"
         )
 
         internal fun isPivotStillOpen(latestPivotTimestamp: Long?, consumedPivotTimestamps: Set<Long>): Boolean =
@@ -363,7 +363,9 @@ class AutoReplyOrchestrator @Inject constructor(
         if (!isVoiceTranscribedNow && currentMediaFilePath == null && containsMediaIndicators(effectiveProcessed.originalText)) {
             Log.i(TAG, "Media indicator detected but extraction failed for ${effectiveProcessed.contactName}. Sending media fallback.")
             Log.i("PersonaMetrics", "metric=notification_drop_rate value=1 contact=${effectiveProcessed.contactName.hashCode()}")
-            sendImmediateReply(effectiveProcessed, context.getString(R.string.media_fallback_message))
+            val fallbackMsg = runCatching { prefsRepository.getMediaFallbackMessageSync() }.getOrNull()?.takeIf { it.isNotBlank() }
+                ?: context.getString(R.string.media_fallback_message)
+            sendImmediateReply(effectiveProcessed, fallbackMsg)
             return
         }
 
@@ -409,8 +411,10 @@ class AutoReplyOrchestrator @Inject constructor(
                 limit = 6
             )
             val activeOrders = orderDao.getActiveOrdersByContact(effectiveProcessed.contactName)
+            val latestOrder = runCatching { orderDao.getLatestOrderByContact(effectiveProcessed.contactName) }.getOrNull()
+            val orderStatusCounts = runCatching { orderDao.getOrderStatusCounts(effectiveProcessed.contactName) }.getOrNull() ?: emptyList()
             val contextBuildMs = System.currentTimeMillis() - contextStart
-            Log.d(TAG, "📊 Context assembly completed in ${contextBuildMs}ms: chatTurns=${chatHistory.size}, activeOrders=${activeOrders.size}")
+            Log.d(TAG, "📊 Context assembly completed in ${contextBuildMs}ms: chatTurns=${chatHistory.size}, activeOrders=${activeOrders.size}, statusCounts=${orderStatusCounts.size}")
             Log.i("PersonaMetrics", "metric=context_build_ms value=$contextBuildMs contact=${effectiveProcessed.contactName.hashCode()}")
 
             // 12. Agentic LLM Generation Pass 1
@@ -426,7 +430,9 @@ class AutoReplyOrchestrator @Inject constructor(
                 chatHistory = chatHistory,
                 activeOrders = activeOrders,
                 personalChunks = emptyList(),
-                maxTokens = maxTokensForGeneration
+                maxTokens = maxTokensForGeneration,
+                lastOrder = latestOrder,
+                orderStatusCounts = orderStatusCounts
             )
             if (rawLlmOutput.isNullOrBlank()) {
                 Log.d(TAG, "LLM returned null/blank — all models failed. HITL fallback.")
@@ -435,6 +441,9 @@ class AutoReplyOrchestrator @Inject constructor(
                 sendHitlHoldingReply(processed)
                 return
             }
+
+            val hitlHoldingMessage = runCatching { prefsRepository.getHitlHoldingMessageSync() }.getOrNull()?.takeIf { it.isNotBlank() }
+                ?: CANONICAL_HITL_MESSAGE
 
             // Parse structured JSON
             val agenticResponse = try {
@@ -445,12 +454,12 @@ class AutoReplyOrchestrator @Inject constructor(
                 } else {
                     Log.w(TAG, "LLM output is not valid JSON — degrading safely to HITL: ${rawLlmOutput.take(200)}", e)
                 }
-                ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse()
+                ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse(hitlHoldingMessage)
             }.let { response ->
                 if (ReasoningLeakSanitizer.isLeakedReasoningText(response.finalReplyText)) {
                     PersonaLogger.w(PersonaLogTags.LLM, "Reasoning leakage in parsed final_reply_text — routing to HITL guard")
                     Log.w(TAG, "Reasoning leakage in parsed final_reply_text — overriding with HITL guard.")
-                    ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse()
+                    ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse(hitlHoldingMessage)
                 } else {
                     response
                 }
@@ -536,10 +545,10 @@ class AutoReplyOrchestrator @Inject constructor(
                         val hitlReply = if (!agenticResponse.finalReplyText.isNullOrBlank()) {
                             agenticResponse.finalReplyText
                         } else {
-                            CANONICAL_HITL_MESSAGE
+                            hitlHoldingMessage
                         }
                         Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
-                        sendImmediateReply(processed, ReasoningLeakSanitizer.ensureHitlSuffix(hitlReply))
+                        sendImmediateReply(processed, ReasoningLeakSanitizer.ensureHitlSuffix(hitlReply, hitlHoldingMessage))
                         return
                     }
 
@@ -596,7 +605,7 @@ class AutoReplyOrchestrator @Inject constructor(
                             null
                         }
 
-                        val maxTokensPass2 = if (pass2ImageUrl != null) 7000 else 750
+                        val maxTokensPass2 = if (pass2ImageUrl != null) 1500 else 750
                         val finalOutput = replyGenerationRepository.generateFinalReply(
                             queryText = pass2QueryText,
                             chunks = mergedChunks,
@@ -605,7 +614,9 @@ class AutoReplyOrchestrator @Inject constructor(
                             activeOrders = activeOrders,
                             personalChunks = emptyList(),
                             maxTokens = maxTokensPass2,
-                            imageUrl = pass2ImageUrl
+                            imageUrl = pass2ImageUrl,
+                            lastOrder = latestOrder,
+                            orderStatusCounts = orderStatusCounts
                         )
 
                         if (finalOutput.isNullOrBlank()) {
@@ -615,12 +626,12 @@ class AutoReplyOrchestrator @Inject constructor(
                                 ReasoningLeakSanitizer.decodeAgenticResponseSafely(finalOutput)
                             } catch (e: Exception) {
                                 Log.w(TAG, "LLM final output is not valid JSON — degrading safely to HITL: ${finalOutput.take(200)}", e)
-                                ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse()
+                                ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse(hitlHoldingMessage)
                             }.let { response ->
                                 if (ReasoningLeakSanitizer.isLeakedReasoningText(response.finalReplyText)) {
                                     PersonaLogger.w(PersonaLogTags.LLM, "Reasoning leakage in final-pass final_reply_text — routing to HITL guard")
                                     Log.w(TAG, "Reasoning leakage in final-pass final_reply_text — overriding with HITL guard.")
-                                    ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse()
+                                    ReasoningLeakSanitizer.buildUnsafeOutputHitlResponse(hitlHoldingMessage)
                                 } else {
                                     response
                                 }
@@ -645,10 +656,10 @@ class AutoReplyOrchestrator @Inject constructor(
                                 val hitlReply = if (!finalParsed.finalReplyText.isNullOrBlank()) {
                                     finalParsed.finalReplyText
                                 } else {
-                                    CANONICAL_HITL_MESSAGE
+                                    hitlHoldingMessage
                                 }
                                 Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
-                                sendImmediateReply(processed, ReasoningLeakSanitizer.ensureHitlSuffix(hitlReply))
+                                sendImmediateReply(processed, ReasoningLeakSanitizer.ensureHitlSuffix(hitlReply, hitlHoldingMessage))
                                 return
                             }
 
@@ -665,7 +676,9 @@ class AutoReplyOrchestrator @Inject constructor(
             } else if (orderAction == null) {
                 val storeName = prefsRepository.getStoreNameSync()
                 PersonaLogger.w(TAG, "LLM returned blank final_reply_text for benign turn. Using persona fallback.")
-                "أنا معاك وسامعك كويس يا فندم، بس قولّي نقدر نجهزلك إيه النهارده من منتجاتنا في ${storeName}؟ 💙"
+                val template = runCatching { prefsRepository.getBlankReplyFallbackTemplateSync() }.getOrNull()
+                    ?: UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE
+                String.format(template, storeName)
             } else {
                 Log.d(TAG, "Agentic loop produced no reply — HITL fallback.")
                 hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
@@ -874,7 +887,9 @@ class AutoReplyOrchestrator @Inject constructor(
     }
 
     private suspend fun sendHitlHoldingReply(processed: ProcessedNotification) {
-        sendImmediateReply(processed, CANONICAL_HITL_MESSAGE)
+        val hitlMsg = runCatching { prefsRepository.getHitlHoldingMessageSync() }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: CANONICAL_HITL_MESSAGE
+        sendImmediateReply(processed, hitlMsg)
     }
 
     internal fun containsMediaIndicators(text: String): Boolean =

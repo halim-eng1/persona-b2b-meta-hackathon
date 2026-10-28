@@ -2,6 +2,7 @@ package com.example.persona.features.auto_reply.data.repository
 
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.core.database.entity.OrderEntity
+import com.example.persona.core.database.entity.OrderStatusCount
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.network.dto.AgenticLlmResponse
 import com.example.persona.core.network.dto.ChatMessage
@@ -162,9 +163,10 @@ $section3
 5. ORDER ACTIONS & EXTRACTION:
 - ORDER ACTION (`order_action`): Set when the customer's message changes order state; null otherwise.
   - "CREATE": Set ONLY when the customer is actively placing a NEW order AND has provided BOTH: (1) specific product name(s) or quantities, AND (2) delivery address/location. If either is missing, keep order_action as null, ask naturally for the missing piece, and do NOT set CREATE.
-  - "CANCEL": Set when the customer explicitly commands stopping or cancelling their active order ("إلغاء", "كنسل", "الغي الأوردر", "بطل الطلب"). Note: if they are merely venting or hesitating without a firm cancel command, keep order_action null and defuse with wit; if they explicitly ask to cancel, you MUST set "CANCEL" (you may pair the truthful cancellation confirmation with a light, good-natured parting quip). NEVER use it for general pricing questions.
+  - "CANCEL": Set ONLY when the customer explicitly and unambiguously commands cancelling the physical store purchase (e.g. 'الغي الأوردر', 'كنسل الطلب', 'مش عايز التيشيرت خلاص'). If the customer says 'متبعتش لحد' or 'متحولنيش لبشري' in response to a customer support transfer, this refers to support routing, NOT cancelling an order! Keep order_action as null. Note: if they are merely venting or hesitating without a firm cancel command, keep order_action null and defuse with wit; if they explicitly ask to cancel, you MUST set "CANCEL" (you may pair the truthful cancellation confirmation with a light, good-natured parting quip). NEVER use it for general pricing questions.
   - "UPDATE": Set when the customer supplies missing details (address/phone/notes/product names) for the active order, or confirms merging/editing on a duplicate-order check (e.g. "خلاص سجّل", "عدّل العنوان"). NEVER use it for bare acknowledgements ("تمام", "ماشي") after an unrelated answer.
   - null: for inquiries, haggling, small-talk, questions, or HITL hand-offs.
+- SMART ORDER REINSTATEMENT: If the customer asks to re-create, reinstate, or resume an order that was cancelled or closed (e.g., 'سجله تاني', 'لغيته ليه مكنش قصدي', 'ارجع في كلامي'), and an order exists in 'Last Inactive/Cancelled Order' or <chat_history>, DO NOT ask the customer for their details again! Immediately set 'order_action': 'CREATE', extract their product, delivery_address, name, and notes from the previous record, and confirm with a warm, natural Egyptian reassurance that the order has been re-registered.
 - EXTRACTION PURITY:
   * 'delivery_address' MUST be a genuine physical address provided by the customer (e.g. "مدينة نصر، الحي السابع، شارع الطيران", "الإسكندرية، سموحة").
   * NEVER extract assistant questions, prompts, or conversation statements as 'delivery_address' (e.g. NEVER extract "عايز تكمل بالعنوان؟" or "ممكن العنوان؟" or "تمام يا فندم"). If no physical address was explicitly provided by the customer, leave 'delivery_address' as null!
@@ -274,9 +276,10 @@ $section3
 5. ORDER ACTIONS & EXTRACTION:
 - ORDER ACTION (`order_action`): Set when the customer's message changes order state; null otherwise.
   - "CREATE": Set ONLY when the customer is actively placing a NEW order AND has provided BOTH: (1) specific product name(s) or quantities, AND (2) delivery address/location. If either is missing, keep order_action as null, ask naturally for the missing piece, and do NOT set CREATE.
-  - "CANCEL": Set when the customer explicitly commands stopping or cancelling their active order ("إلغاء", "كنسل", "الغي الأوردر", "بطل الطلب"). Note: if they are merely venting or hesitating without a firm cancel command, keep order_action null and defuse with wit; if they explicitly ask to cancel, you MUST set "CANCEL" (you may pair the truthful cancellation confirmation with a light, good-natured parting quip). NEVER use it for general pricing questions.
+  - "CANCEL": Set ONLY when the customer explicitly and unambiguously commands cancelling the physical store purchase (e.g. 'الغي الأوردر', 'كنسل الطلب', 'مش عايز التيشيرت خلاص'). If the customer says 'متبعتش لحد' or 'متحولنيش لبشري' in response to a customer support transfer, this refers to support routing, NOT cancelling an order! Keep order_action as null. Note: if they are merely venting or hesitating without a firm cancel command, keep order_action null and defuse with wit; if they explicitly ask to cancel, you MUST set "CANCEL" (you may pair the truthful cancellation confirmation with a light, good-natured parting quip). NEVER use it for general pricing questions.
   - "UPDATE": Set when the customer supplies missing details (address/phone/notes/product names) for the active order, or confirms merging/editing on a duplicate-order check (e.g. "خلاص سجّل", "عدّل العنوان"). NEVER use it for bare acknowledgements ("تمام", "ماشي") after an unrelated answer.
   - null: for inquiries, haggling, small-talk, questions, or HITL hand-offs.
+- SMART ORDER REINSTATEMENT: If the customer asks to re-create, reinstate, or resume an order that was cancelled or closed (e.g., 'سجله تاني', 'لغيته ليه مكنش قصدي', 'ارجع في كلامي'), and an order exists in 'Last Inactive/Cancelled Order' or <chat_history>, DO NOT ask the customer for their details again! Immediately set 'order_action': 'CREATE', extract their product, delivery_address, name, and notes from the previous record, and confirm with a warm, natural Egyptian reassurance that the order has been re-registered.
 - EXTRACTION PURITY:
   * 'delivery_address' MUST be a genuine physical address provided by the customer (e.g. "مدينة نصر، الحي السابع، شارع الطيران", "الإسكندرية، سموحة").
   * NEVER extract assistant questions, prompts, or conversation statements as 'delivery_address' (e.g. NEVER extract "عايز تكمل بالعنوان؟" or "ممكن العنوان؟" or "تمام يا فندم"). If no physical address was explicitly provided by the customer, leave 'delivery_address' as null!
@@ -345,15 +348,38 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             }
         }
 
-        fun formatCustomerOrderState(activeOrders: List<OrderEntity>): String {
-            val firstOrder = activeOrders.firstOrNull() ?: return "Active Order: None"
+        fun formatCustomerOrderState(
+            activeOrders: List<OrderEntity>,
+            lastOrder: OrderEntity? = null,
+            statusCounts: List<OrderStatusCount> = emptyList()
+        ): String {
+            val firstOrder = activeOrders.firstOrNull()
             return buildString {
-                append("Order Status: ${firstOrder.status}\n")
-                append("Order Details: ${firstOrder.orderDetails ?: "None"}\n")
-                append("Delivery Address: ${firstOrder.deliveryAddress ?: "None"}\n")
-                append("Custom Notes: ${firstOrder.customNotes ?: "None"}\n")
-                append("Merchant Notes: ${firstOrder.merchantNote ?: "None"}")
-            }
+                if (firstOrder != null) {
+                    append("Active Order: #${firstOrder.id} [${firstOrder.status}]\n")
+                    append("Order Status: ${firstOrder.status}\n")
+                    append("Order Details: ${firstOrder.orderDetails ?: "None"}\n")
+                    append("Delivery Address: ${firstOrder.deliveryAddress ?: "None"}\n")
+                    append("Custom Notes: ${firstOrder.customNotes ?: "None"}\n")
+                    append("Merchant Notes: ${firstOrder.merchantNote ?: "None"}\n")
+                } else {
+                    append("Active Order: None\n")
+                }
+
+                if (lastOrder != null && (firstOrder == null || lastOrder.id != firstOrder.id)) {
+                    append("Last Inactive/Cancelled Order: #${lastOrder.id} [${lastOrder.status}]\n")
+                    append("Last Order Details: ${lastOrder.orderDetails ?: "None"}\n")
+                    append("Last Order Address: ${lastOrder.deliveryAddress ?: "None"}\n")
+                    if (!lastOrder.customNotes.isNullOrBlank()) {
+                        append("Last Order Notes: ${lastOrder.customNotes}\n")
+                    }
+                }
+
+                if (statusCounts.isNotEmpty()) {
+                    val summary = statusCounts.joinToString(", ") { "${it.status}: ${it.count}" }
+                    append("Orders Summary: $summary\n")
+                }
+            }.trimEnd()
         }
 
         /**
@@ -386,10 +412,12 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             candidates: List<RetrievalCandidate>,
             activeOrders: List<OrderEntity>,
             storeTopics: List<String> = emptyList(),
-            storeWebsite: String? = null
+            storeWebsite: String? = null,
+            lastOrder: OrderEntity? = null,
+            statusCounts: List<OrderStatusCount> = emptyList()
         ): String {
             val knowledge = formatStoreKnowledge(candidates)
-            val orderState = formatCustomerOrderState(activeOrders)
+            val orderState = formatCustomerOrderState(activeOrders, lastOrder, statusCounts)
             val topicsBlock = formatStoreTopicsBlock(storeTopics)
             val websiteBlock = formatStoreWebsiteBlock(storeWebsite)
 
@@ -407,7 +435,7 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             }
         }
 
-        fun formatHistoricalAssistantTurn(rawText: String): String {
+        fun formatHistoricalAssistantTurn(rawText: String, customHoldingMessage: String? = null): String {
             val trimmed = rawText.trim()
             val firstBrace = trimmed.indexOf('{')
             val lastBrace = trimmed.lastIndexOf('}')
@@ -421,7 +449,7 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
                 }
             }
             val wrapped = AgenticLlmResponse(
-                action = "REPLY",
+                action = if (isCanonicalHitlMessage(trimmed, customHoldingMessage)) "HITL" else "REPLY",
                 refinedSearchKeyword = null,
                 orderAction = null,
                 finalReplyText = trimmed,
@@ -430,11 +458,12 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             return assistantJsonSerializer.encodeToString(AgenticLlmResponse.serializer(), wrapped)
         }
 
-        fun isCanonicalHitlMessage(text: String): Boolean {
+        fun isCanonicalHitlMessage(text: String, customHoldingMessage: String? = null): Boolean {
             val trimmed = text.trim()
             return trimmed.contains("ثواني وهيكون مع حضرتك ممثل خدمة العملاء") ||
                 trimmed.contains("جاري تحويلك لممثلي خدمة العملاء") ||
-                trimmed == CANONICAL_HITL_MESSAGE
+                trimmed == CANONICAL_HITL_MESSAGE ||
+                (customHoldingMessage != null && trimmed.contains(customHoldingMessage.trim()))
         }
 
         @Deprecated("Use buildSystemPromptWithContext instead")
@@ -499,24 +528,7 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             } else {
                 chatHistory.take(6)
             }
-            val chronological = recentTurns.reversed()
-
-            val indicesToDrop = mutableSetOf<Int>()
-            for (i in chronological.indices) {
-                val turn = chronological[i]
-                if (!turn.isFromUser && isCanonicalHitlMessage(turn.messageText)) {
-                    indicesToDrop.add(i)
-                    var prev = i - 1
-                    while (prev >= 0 && indicesToDrop.contains(prev)) {
-                        prev--
-                    }
-                    if (prev >= 0 && chronological[prev].isFromUser) {
-                        indicesToDrop.add(prev)
-                    }
-                }
-            }
-
-            return chronological.filterIndexed { index, _ -> !indicesToDrop.contains(index) }
+            return recentTurns.reversed()
         }
 
         fun formatRelativeTime(timestampMs: Long, nowMs: Long = System.currentTimeMillis()): String {

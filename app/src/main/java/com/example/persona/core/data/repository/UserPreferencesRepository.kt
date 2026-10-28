@@ -69,8 +69,20 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_AUTO_PAUSE_ON_HITL = booleanPreferencesKey("auto_pause_on_hitl")
         private val AUTO_PAUSE_ON_HITL_KEY = KEY_AUTO_PAUSE_ON_HITL
 
+        // ── System Fallback Messages ──────────────────────────────────────────
+        val KEY_HITL_HOLDING_MESSAGE = stringPreferencesKey("hitl_holding_message")
+        val KEY_MEDIA_FALLBACK_MESSAGE = stringPreferencesKey("media_fallback_message")
+        val KEY_BLANK_REPLY_FALLBACK_TEMPLATE = stringPreferencesKey("blank_reply_fallback_template")
+
         const val DEFAULT_BOT_NAME = "مساعد المبيعات"
         const val DEFAULT_STORE_NAME = "متجرنا"
+
+        const val DEFAULT_HITL_HOLDING_MESSAGE =
+            "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
+        const val DEFAULT_MEDIA_FALLBACK_MESSAGE =
+            "عفواً، لا يمكنني معالجة الوسائط. يرجى كتابة استفسارك في رسالة نصية."
+        const val DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE =
+            "أنا معاك وسامعك كويس يا فندم، بس قولّي نقدر نجهزلك إيه النهارده من منتجاتنا في %s؟ 💙"
     }
 
     // ── Flows ─────────────────────────────────────────────────────────────────
@@ -140,6 +152,18 @@ class UserPreferencesRepository @Inject constructor(
 
     val isAutoPauseOnHitlEnabledFlow: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[AUTO_PAUSE_ON_HITL_KEY] ?: false // Default is FALSE
+    }
+
+    val hitlHoldingMessageFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_HITL_HOLDING_MESSAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_HITL_HOLDING_MESSAGE
+    }
+
+    val mediaFallbackMessageFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_MEDIA_FALLBACK_MESSAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_MEDIA_FALLBACK_MESSAGE
+    }
+
+    val blankReplyFallbackTemplateFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() } ?: DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE
     }
 
     // ── Suspend setters ───────────────────────────────────────────────────────
@@ -283,6 +307,27 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun isAutoPauseOnHitlEnabledSync(): Boolean {
         return isAutoPauseOnHitlEnabledFlow.first()
     }
+
+    suspend fun setHitlHoldingMessage(message: String) {
+        dataStore.edit { prefs -> prefs[KEY_HITL_HOLDING_MESSAGE] = message }
+    }
+
+    suspend fun setMediaFallbackMessage(message: String) {
+        dataStore.edit { prefs -> prefs[KEY_MEDIA_FALLBACK_MESSAGE] = message }
+    }
+
+    suspend fun setBlankReplyFallbackTemplate(template: String) {
+        dataStore.edit { prefs -> prefs[KEY_BLANK_REPLY_FALLBACK_TEMPLATE] = template }
+    }
+
+    suspend fun getHitlHoldingMessageSync(): String =
+        dataStore.data.first()[KEY_HITL_HOLDING_MESSAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_HITL_HOLDING_MESSAGE
+
+    suspend fun getMediaFallbackMessageSync(): String =
+        dataStore.data.first()[KEY_MEDIA_FALLBACK_MESSAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_MEDIA_FALLBACK_MESSAGE
+
+    suspend fun getBlankReplyFallbackTemplateSync(): String =
+        dataStore.data.first()[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() } ?: DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE
 }
 
 /** Snapshot of app-routing preferences. Immutable value object. */

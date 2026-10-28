@@ -53,7 +53,8 @@ class AutoReplyOrchestratorRagTest {
         prefsRepository: UserPreferencesRepository = mockk(relaxed = true),
         processor: NotificationProcessorImpl = mockk(relaxed = true),
         embeddingEngine: EmbeddingEngine = mockk(relaxed = true),
-        stylePostProcessor: StylePostProcessor = StylePostProcessor()
+        stylePostProcessor: StylePostProcessor = StylePostProcessor(),
+        auditLogRepository: AuditLogRepository = mockk(relaxed = true)
     ): AutoReplyOrchestrator = AutoReplyOrchestrator(
         incomingMessageDispatcher = mockk(relaxed = true),
         processor = processor,
@@ -61,7 +62,7 @@ class AutoReplyOrchestratorRagTest {
         semanticRetrievalRepository = semanticRetrievalRepository,
         replyGenerationRepository = replyGenerationRepository,
         directReplyExecutionUseCase = directReplyExecutionUseCase,
-        auditLogRepository = mockk(relaxed = true),
+        auditLogRepository = auditLogRepository,
         prefsRepository = prefsRepository,
         stylePostProcessor = stylePostProcessor,
         normalizer = ArabicTextNormalizer(),
@@ -546,6 +547,9 @@ class AutoReplyOrchestratorRagTest {
         coEvery { chatHistoryDao.getRecentMessagesExcept(any(), any(), any()) } returns emptyList()
         coEvery { chatHistoryDao.getRecentMessagesExceptForSource(any(), any(), any(), any()) } returns emptyList()
         coEvery { orderDao.getActiveOrdersByContact(any()) } returns emptyList()
+        coEvery { orderDao.getLatestOrderByContact(any()) } returns null
+        coEvery { orderDao.getOrderStatusCounts(any()) } returns emptyList()
+        coEvery { semanticRepo.retrieveCandidates(any(), any(), any(), any()) } returns Pair(emptyList(), 0.0f)
 
         val embeddingEngine = mockk<EmbeddingEngine>()
         coEvery { embeddingEngine.embedForAutoReply(any()) } returns floatArrayOf(0.1f, 0.2f)
@@ -664,6 +668,8 @@ class AutoReplyOrchestratorRagTest {
         )
         coEvery { orderDao.getActiveOrdersByContact("عميل تحديث") } returns listOf(existingOrder)
         coEvery { orderDao.getActiveMatchingOrder("عميل تحديث") } returns existingOrder
+        coEvery { orderDao.getLatestOrderByContact(any()) } returns null
+        coEvery { orderDao.getOrderStatusCounts(any()) } returns emptyList()
 
         val embeddingEngine = mockk<EmbeddingEngine>()
         coEvery { embeddingEngine.embedForAutoReply(any()) } returns floatArrayOf(0.1f, 0.2f)
@@ -748,6 +754,124 @@ class AutoReplyOrchestratorRagTest {
             orderDao.appendCustomNotes(77L, match {
                 it.contains("التفاصيل: ساعة يد") && !it.contains("ملاحظات: قديمة") && !it.contains("العنوان: الزمالك")
             })
+        }
+    }
+
+    @Test
+    fun `conversational message with مشكلة or ضروري does NOT trigger safety alert filter`() = runBlocking {
+        val semanticRepo = mockk<SemanticRetrievalRepository>(relaxed = true)
+        val replyRepo = mockk<ReplyGenerationRepository>(relaxed = true)
+        val directReplyUseCase = mockk<DirectReplyExecutionUseCase>(relaxed = true)
+        val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
+        val orderDao = mockk<OrderDao>(relaxed = true)
+        val auditLogRepo = mockk<AuditLogRepository>(relaxed = true)
+        val prefsRepo = mockk<UserPreferencesRepository>(relaxed = true)
+        val processor = mockk<NotificationProcessorImpl>()
+
+        coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
+        coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0)
+        coEvery { orderDao.getActiveOrdersByContact(any()) } returns emptyList()
+        coEvery { orderDao.getLatestOrderByContact(any()) } returns null
+        coEvery { orderDao.getOrderStatusCounts(any()) } returns emptyList()
+        coEvery { semanticRepo.retrieveCandidates(any(), any(), any(), any()) } returns Pair(emptyList(), 0.0f)
+
+        val textWithProblem = "محتاج نبقا اصحاب ؟ ولا ف مشكلة ؟"
+        val processed = ProcessedNotification(
+            contactName = "صديق",
+            originalText = textWithProblem,
+            normalizedText = ArabicTextNormalizer().normalize(textWithProblem) ?: textWithProblem,
+            notificationKey = "key_problem",
+            postTime = System.currentTimeMillis(),
+            context = mockk(relaxed = true),
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+        coEvery { processor.process(any()) } returns processed
+        coEvery { chatHistoryDao.insert(any()) } returns 1L
+        coEvery { chatHistoryDao.claimForProcessing(any()) } returns 0
+
+        val embeddingEngine = mockk<EmbeddingEngine>()
+        coEvery { embeddingEngine.embedForAutoReply(any()) } returns floatArrayOf(0.1f, 0.2f)
+
+        coEvery {
+            replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns """{"action":"REPLY","refined_search_keyword":null,"order_action":null,"final_reply_text":"أحلى صحاب يا غالي، ومفيش أي مشكلة خالص! 💙 قولّي محتاج إيه؟","extracted_order":null}"""
+
+        val orchestrator = createTestOrchestrator(
+            orderDao = orderDao,
+            chatHistoryDao = chatHistoryDao,
+            semanticRetrievalRepository = semanticRepo,
+            replyGenerationRepository = replyRepo,
+            directReplyExecutionUseCase = directReplyUseCase,
+            auditLogRepository = auditLogRepo,
+            prefsRepository = prefsRepo,
+            processor = processor,
+            embeddingEngine = embeddingEngine
+        )
+
+        orchestrator.processNotificationSequentially(
+            WhatsAppNotification(
+                title = "صديق",
+                text = textWithProblem,
+                postTime = System.currentTimeMillis(),
+                notificationKey = "key_problem"
+            )
+        )
+
+        // Safety alert MUST NOT be queued
+        coVerify(exactly = 0) {
+            auditLogRepo.queuePendingReply(any(), match { it.contains("[Safety Alert]") })
+        }
+        // Must proceed to LLM reply generation
+        coVerify(exactly = 1) {
+            replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `high-acuity crisis words like مستشفى or كارثة trigger emergency safety alarm and queue`() = runBlocking {
+        val auditLogRepo = mockk<AuditLogRepository>(relaxed = true)
+        val replyRepo = mockk<ReplyGenerationRepository>(relaxed = true)
+        val prefsRepo = mockk<UserPreferencesRepository>(relaxed = true)
+        val processor = mockk<NotificationProcessorImpl>()
+
+        coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
+        coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0)
+
+        val emergencyText = "الحقني في مصيبة حصلت"
+        val processed = ProcessedNotification(
+            contactName = "طوارئ",
+            originalText = emergencyText,
+            normalizedText = ArabicTextNormalizer().normalize(emergencyText) ?: emergencyText,
+            notificationKey = "key_emergency",
+            postTime = System.currentTimeMillis(),
+            context = mockk(relaxed = true),
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+        coEvery { processor.process(any()) } returns processed
+
+        val orchestrator = createTestOrchestrator(
+            replyGenerationRepository = replyRepo,
+            auditLogRepository = auditLogRepo,
+            prefsRepository = prefsRepo,
+            processor = processor
+        )
+
+        orchestrator.processNotificationSequentially(
+            WhatsAppNotification(
+                title = "طوارئ",
+                text = emergencyText,
+                postTime = System.currentTimeMillis(),
+                notificationKey = "key_emergency"
+            )
+        )
+
+        // Safety alert MUST be queued
+        coVerify(atLeast = 1) {
+            auditLogRepo.queuePendingReply(any(), match { it.contains("[Safety Alert]") })
+        }
+        // LLM generation must NOT be called
+        coVerify(exactly = 0) {
+            replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any())
         }
     }
 }
