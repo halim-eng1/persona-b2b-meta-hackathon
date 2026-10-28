@@ -22,6 +22,7 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -306,5 +307,151 @@ class WhatsAppMediaExtractorTest {
         assertNotNull(thirdClaim)
         assertEquals(image2.absolutePath, thirdClaim!!.absolutePath)
         assertTrue(extractor.isDiskFileClaimed(image2.absolutePath))
+    }
+
+    @Test
+    fun `extractImage recovers bitmap immediately on Attempt 0 without polling delays`() = runTest {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        extractor.ioDispatcher = kotlinx.coroutines.Dispatchers.Unconfined
+
+        val mockBitmap = mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1080
+            every { compress(any(), any(), any()) } answers {
+                val outStream = thirdArg<java.io.OutputStream>()
+                outStream.write(byteArrayOf(1, 2, 3))
+                true
+            }
+        }
+
+        val extras = mockk<Bundle>(relaxed = true)
+        every { extras.keySet() } returns setOf(Notification.EXTRA_PICTURE)
+        every { extras.get(Notification.EXTRA_PICTURE) } returns (mockBitmap as Any)
+        every { extras.getParcelable<Bitmap>(Notification.EXTRA_PICTURE) } returns mockBitmap
+
+        val notification = mockk<Notification> {
+            this.extras = extras
+        }
+        val sbn = mockk<StatusBarNotification> {
+            every { key } returns "0|com.whatsapp.w4b|100|null|10822"
+            every { this@mockk.notification } returns notification
+            every { postTime } returns 1_000_000L
+        }
+
+        var providerCalls = 0
+        val file = extractor.extractImage(
+            sbn = sbn,
+            sourceClass = NotificationSourceClass.BUSINESS,
+            activeNotificationProvider = {
+                providerCalls++
+                null
+            }
+        )
+
+        assertNotNull(file)
+        assertTrue(file!!.exists())
+        assertEquals(0, providerCalls)
+        assertFalse(extractor.isDiskFileClaimed(file.absolutePath))
+    }
+
+    @Test
+    fun `extractImage succeeds on staged micro-polling retry attempt when URI arrives asynchronously`() = runTest {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        extractor.ioDispatcher = kotlinx.coroutines.Dispatchers.Unconfined
+
+        val emptyExtras = mockk<Bundle>(relaxed = true)
+        every { emptyExtras.keySet() } returns emptySet()
+        every { emptyExtras.get(any()) } returns null
+        every { emptyExtras.getParcelableArray(any()) } returns null
+
+        val initialNotification = mockk<Notification> {
+            this.extras = emptyExtras
+        }
+        val initialSbn = mockk<StatusBarNotification> {
+            every { key } returns "0|com.whatsapp.w4b|200|null|10822"
+            every { notification } returns initialNotification
+            every { postTime } returns 1_000_000L
+        }
+
+        val mockBitmap = mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1080
+            every { compress(any(), any(), any()) } answers {
+                val outStream = thirdArg<java.io.OutputStream>()
+                outStream.write(byteArrayOf(4, 5, 6))
+                true
+            }
+        }
+        val populatedExtras = mockk<Bundle>(relaxed = true)
+        every { populatedExtras.keySet() } returns setOf(Notification.EXTRA_PICTURE)
+        every { populatedExtras.get(Notification.EXTRA_PICTURE) } returns (mockBitmap as Any)
+        every { populatedExtras.getParcelable<Bitmap>(Notification.EXTRA_PICTURE) } returns mockBitmap
+
+        val populatedNotification = mockk<Notification> {
+            this.extras = populatedExtras
+        }
+        val populatedSbn = mockk<StatusBarNotification> {
+            every { key } returns "0|com.whatsapp.w4b|200|null|10822"
+            every { notification } returns populatedNotification
+            every { postTime } returns 1_000_000L
+        }
+
+        var pollAttempt = 0
+        val file = extractor.extractImage(
+            sbn = initialSbn,
+            sourceClass = NotificationSourceClass.BUSINESS,
+            activeNotificationProvider = { _ ->
+                pollAttempt++
+                if (pollAttempt >= 2) {
+                    populatedSbn
+                } else {
+                    initialSbn
+                }
+            }
+        )
+
+        assertNotNull(file)
+        assertTrue(file!!.exists())
+        assertEquals(2, pollAttempt)
+    }
+
+    @Test
+    fun `extractImage escalates to disk fallback when micro-polling times out`() = runTest {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        extractor.ioDispatcher = kotlinx.coroutines.Dispatchers.Unconfined
+
+        val imagesDir = tempFolder.newFolder("whatsapp_timeout_media")
+        extractor.imageDirectoriesOverride = listOf(imagesDir)
+
+        val diskImage = File(imagesDir, "IMG_20261028_WA9999.jpg").apply {
+            writeBytes(byteArrayOf(7, 8, 9))
+            setLastModified(1_000_000L)
+        }
+
+        val emptyExtras = mockk<Bundle>(relaxed = true)
+        every { emptyExtras.keySet() } returns emptySet()
+        every { emptyExtras.get(any()) } returns null
+        every { emptyExtras.getParcelableArray(any()) } returns null
+
+        val sbn = mockk<StatusBarNotification> {
+            every { key } returns "0|com.whatsapp.w4b|300|null|10822"
+            every { notification } returns mockk { this.extras = emptyExtras }
+            every { postTime } returns 1_000_000L
+        }
+
+        var pollCalls = 0
+        val file = extractor.extractImage(
+            sbn = sbn,
+            sourceClass = NotificationSourceClass.BUSINESS,
+            activeNotificationProvider = {
+                pollCalls++
+                null
+            }
+        )
+
+        assertNotNull(file)
+        assertEquals(diskImage.absolutePath, file!!.absolutePath)
+        assertEquals(3, pollCalls)
+        assertTrue(extractor.isDiskFileClaimed(diskImage.absolutePath))
     }
 }

@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.example.persona.BuildConfig
@@ -25,6 +26,10 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -40,6 +45,7 @@ class WhatsAppMediaExtractor @Inject constructor(
 ) {
     internal var groqPrimaryApiKeyOverride: String? = null
     internal var groqFallbackApiKeyOverride: String? = null
+    internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
     private val groqPrimaryApiKey: String
         get() = groqPrimaryApiKeyOverride ?: BuildConfig.GROQ_API_KEY
@@ -84,20 +90,75 @@ class WhatsAppMediaExtractor @Inject constructor(
 
     /**
      * Extracts an image from the status bar notification extras.
-     * If notification extras do not yield a bitmap, falls back to disk monitoring.
+     * Uses a non-blocking staged micro-retry loop (50ms -> 100ms -> 200ms) on [ioDispatcher]
+     * to allow asynchronous WhatsApp background services to populate the MessagingStyle Uri.
+     * If notification extras do not yield a bitmap after ~350ms, falls back to disk monitoring.
      * Saves the resulting bitmap to app cache as high-quality JPEG and returns the file.
      */
-    fun extractImage(sbn: StatusBarNotification, sourceClass: NotificationSourceClass): File? {
-        val bitmap = extractBitmapFromNotification(sbn)
-        if (bitmap != null) {
-            val logMsg = "📸 Successfully extracted image bitmap from notification extras! (Width: ${bitmap.width}, Height: ${bitmap.height})"
+    suspend fun extractImage(
+        sbn: StatusBarNotification,
+        sourceClass: NotificationSourceClass,
+        listenerService: NotificationListenerService? = null,
+        activeNotificationProvider: ((String) -> StatusBarNotification?)? = null
+    ): File? = withContext(ioDispatcher) {
+        // Attempt 0: Immediate direct extraction from notification extras
+        var currentSbn = sbn
+        val initialBitmap = extractBitmapFromNotification(currentSbn)
+        if (initialBitmap != null) {
+            val logMsg = "📸 Successfully extracted image bitmap from notification extras! (Width: ${initialBitmap.width}, Height: ${initialBitmap.height})"
             Log.i(TAG, logMsg)
             PersonaLogger.i(TAG, logMsg)
-            val cachedFile = saveBitmapToCache(bitmap)
-            if (cachedFile != null) return cachedFile
+            val cachedFile = saveBitmapToCache(initialBitmap)
+            if (cachedFile != null) return@withContext cachedFile
         }
 
+        // Attempt 1..3: Non-blocking staged micro-retry polling loop (50ms -> 100ms -> 200ms)
+        val getLatestSbn: (String) -> StatusBarNotification? = { key ->
+            activeNotificationProvider?.invoke(key)
+                ?: runCatching { listenerService?.activeNotifications?.firstOrNull { it.key == key } }.getOrNull()
+        }
+
+        val delays = listOf(50L, 100L, 200L)
+        val startPollTime = System.currentTimeMillis()
+        val startLog = "⏳ Media indicator detected without immediate URI. Starting staged polling (50ms, 100ms, 200ms)..."
+        Log.i(TAG, startLog)
+        PersonaLogger.i(TAG, startLog)
+
+        for ((index, delayMs) in delays.withIndex()) {
+            val attemptNumber = index + 1
+            delay(delayMs)
+
+            val updatedSbn = getLatestSbn(sbn.key)
+            if (updatedSbn != null) {
+                currentSbn = updatedSbn
+            }
+
+            val retryBitmap = extractBitmapFromNotification(currentSbn)
+            if (retryBitmap != null) {
+                val elapsed = System.currentTimeMillis() - startPollTime
+                val successLog = "📸 Successfully caught image URI on retry attempt #$attemptNumber (elapsed: ${elapsed} ms)!"
+                Log.i(TAG, successLog)
+                PersonaLogger.i(TAG, successLog)
+                val cachedFile = saveBitmapToCache(retryBitmap)
+                if (cachedFile != null) return@withContext cachedFile
+            }
+        }
+
+        val timeoutLog = "⚠️ Micro-polling exhausted after 350ms without URI. Escalating to disk fallback."
+        Log.w(TAG, timeoutLog)
+        PersonaLogger.w(TAG, timeoutLog)
+
         // Fallback: Query disk for the newly received image
+        return@withContext recoverImageFromDiskFallback(sbn, sourceClass)
+    }
+
+    /**
+     * Safe final tier fallback for recovering images from disk.
+     */
+    fun recoverImageFromDiskFallback(
+        sbn: StatusBarNotification,
+        sourceClass: NotificationSourceClass = NotificationSourceClass.UNKNOWN
+    ): File? {
         return findLatestImageOnDisk(sourceClass, sbn.postTime)
     }
 
@@ -278,7 +339,7 @@ class WhatsAppMediaExtractor @Inject constructor(
      */
     fun saveBitmapToCache(bitmap: Bitmap): File? {
         return try {
-            val file = File(context.cacheDir, "incoming_media_${System.currentTimeMillis()}.jpg")
+            val file = File(context.cacheDir, "incoming_media_${System.currentTimeMillis()}_${System.nanoTime()}.jpg")
             FileOutputStream(file).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
                 out.flush()
