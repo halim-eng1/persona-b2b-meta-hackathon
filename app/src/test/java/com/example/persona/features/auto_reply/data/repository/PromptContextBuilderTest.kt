@@ -155,6 +155,41 @@ class PromptContextBuilderTest {
         assertEquals(input, output)
     }
 
+    @Test
+    fun `formatStoreWebsiteBlock formats non-empty url and NONE placeholder correctly`() {
+        assertEquals(
+            "<store_website>\nhttps://velo.ordersapps.com/ar\n</store_website>",
+            PromptContextBuilder.formatStoreWebsiteBlock("https://velo.ordersapps.com/ar")
+        )
+        assertEquals(
+            "<store_website>NONE</store_website>",
+            PromptContextBuilder.formatStoreWebsiteBlock(null)
+        )
+        assertEquals(
+            "<store_website>NONE</store_website>",
+            PromptContextBuilder.formatStoreWebsiteBlock("")
+        )
+        assertEquals(
+            "<store_website>NONE</store_website>",
+            PromptContextBuilder.formatStoreWebsiteBlock("   ")
+        )
+    }
+
+    @Test
+    fun `both tones contain strict zero-price-guessing and authorized website redirection in both passes`() {
+        val wittyFirst = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val politeFirst = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
+        val wittyFinal = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val politeFinal = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
+
+        for (prompt in listOf(wittyFirst, politeFirst, wittyFinal, politeFinal)) {
+            assertTrue(prompt.contains("STRICT ZERO-PRICE-GUESSING:"))
+            assertTrue(prompt.contains("NEVER estimate, guess, or hallucinate prices (e.g., NEVER say 'سعره 450 جنيه تقريباً'"))
+            assertTrue(prompt.contains("AUTHORIZED WEBSITE REDIRECTION:"))
+            assertTrue(prompt.contains("If <store_website> is provided and not NONE, you are authorized and encouraged to provide this exact official website URL"))
+        }
+    }
+
     private fun extractSection(fullText: String, startHeader: String, endHeader: String): String {
         return fullText.substringAfter(startHeader).substringBefore(endHeader).trim()
     }

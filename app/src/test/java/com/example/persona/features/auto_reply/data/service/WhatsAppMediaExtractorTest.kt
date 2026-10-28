@@ -326,6 +326,7 @@ class WhatsAppMediaExtractorTest {
 
         val extras = mockk<Bundle>(relaxed = true)
         every { extras.keySet() } returns setOf(Notification.EXTRA_PICTURE)
+        every { extras.containsKey(Notification.EXTRA_PICTURE) } returns true
         every { extras.get(Notification.EXTRA_PICTURE) } returns (mockBitmap as Any)
         every { extras.getParcelable<Bitmap>(Notification.EXTRA_PICTURE) } returns mockBitmap
 
@@ -361,6 +362,7 @@ class WhatsAppMediaExtractorTest {
 
         val emptyExtras = mockk<Bundle>(relaxed = true)
         every { emptyExtras.keySet() } returns emptySet()
+        every { emptyExtras.getCharSequence(Notification.EXTRA_TEXT) } returns "📷"
         every { emptyExtras.get(any()) } returns null
         every { emptyExtras.getParcelableArray(any()) } returns null
 
@@ -384,6 +386,7 @@ class WhatsAppMediaExtractorTest {
         }
         val populatedExtras = mockk<Bundle>(relaxed = true)
         every { populatedExtras.keySet() } returns setOf(Notification.EXTRA_PICTURE)
+        every { populatedExtras.containsKey(Notification.EXTRA_PICTURE) } returns true
         every { populatedExtras.get(Notification.EXTRA_PICTURE) } returns (mockBitmap as Any)
         every { populatedExtras.getParcelable<Bitmap>(Notification.EXTRA_PICTURE) } returns mockBitmap
 
@@ -407,7 +410,8 @@ class WhatsAppMediaExtractorTest {
                 } else {
                     initialSbn
                 }
-            }
+            },
+            currentText = "📷"
         )
 
         assertNotNull(file)
@@ -430,6 +434,7 @@ class WhatsAppMediaExtractorTest {
 
         val emptyExtras = mockk<Bundle>(relaxed = true)
         every { emptyExtras.keySet() } returns emptySet()
+        every { emptyExtras.getCharSequence(Notification.EXTRA_TEXT) } returns "📷"
         every { emptyExtras.get(any()) } returns null
         every { emptyExtras.getParcelableArray(any()) } returns null
 
@@ -446,12 +451,62 @@ class WhatsAppMediaExtractorTest {
             activeNotificationProvider = {
                 pollCalls++
                 null
-            }
+            },
+            currentText = "📷"
         )
 
         assertNotNull(file)
         assertEquals(diskImage.absolutePath, file!!.absolutePath)
         assertEquals(3, pollCalls)
         assertTrue(extractor.isDiskFileClaimed(diskImage.absolutePath))
+    }
+
+    @Test
+    fun `pure text notification does not trigger micro-polling or disk fallback even if stale extras or disk images exist`() = runTest {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        extractor.ioDispatcher = kotlinx.coroutines.Dispatchers.Unconfined
+
+        val imagesDir = tempFolder.newFolder("whatsapp_stale_media")
+        extractor.imageDirectoriesOverride = listOf(imagesDir)
+
+        val diskImage = File(imagesDir, "IMG_20261028_WA0003.jpg").apply {
+            writeBytes(byteArrayOf(1, 2, 3))
+            setLastModified(1_000_000L)
+        }
+
+        // WhatsApp notification where user sends a text following a photo
+        val textBundle = mockk<Bundle>(relaxed = true) {
+            every { getCharSequence("text") } returns "يعني مش متاح ماج خالص؟"
+            every { getString("type") } returns null
+            every { getString("data_mime_type") } returns null
+        }
+
+        val extras = mockk<Bundle>(relaxed = true)
+        every { extras.getCharSequence(Notification.EXTRA_TEXT) } returns "يعني مش متاح ماج خالص؟"
+        every { extras.getParcelableArray(Notification.EXTRA_MESSAGES) } returns arrayOf(textBundle)
+        // Stale picture slots left over from a previous turn
+        every { extras.containsKey(Notification.EXTRA_PICTURE) } returns true
+
+        val sbn = mockk<StatusBarNotification> {
+            every { key } returns "0|com.whatsapp.w4b|400|null|10822"
+            every { notification } returns mockk { this.extras = extras }
+            every { postTime } returns 1_000_000L
+        }
+
+        var pollCalls = 0
+        val file = extractor.extractImage(
+            sbn = sbn,
+            sourceClass = NotificationSourceClass.BUSINESS,
+            activeNotificationProvider = {
+                pollCalls++
+                null
+            },
+            currentText = "يعني مش متاح ماج خالص؟"
+        )
+
+        // Must return null immediately without polling or disk fallback!
+        assertNull(file)
+        assertEquals(0, pollCalls)
+        assertFalse(extractor.isDiskFileClaimed(diskImage.absolutePath))
     }
 }

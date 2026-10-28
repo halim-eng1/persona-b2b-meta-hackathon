@@ -99,8 +99,14 @@ class WhatsAppMediaExtractor @Inject constructor(
         sbn: StatusBarNotification,
         sourceClass: NotificationSourceClass,
         listenerService: NotificationListenerService? = null,
-        activeNotificationProvider: ((String) -> StatusBarNotification?)? = null
+        activeNotificationProvider: ((String) -> StatusBarNotification?)? = null,
+        currentText: String? = null
     ): File? = withContext(ioDispatcher) {
+        // Prevent stale conversation notification extras from triggering staged polling on pure text messages
+        if (!hasNotificationImage(sbn, currentText)) {
+            return@withContext null
+        }
+
         // Attempt 0: Immediate direct extraction from notification extras
         var currentSbn = sbn
         val initialBitmap = extractBitmapFromNotification(currentSbn)
@@ -131,6 +137,11 @@ class WhatsAppMediaExtractor @Inject constructor(
             val updatedSbn = getLatestSbn(sbn.key)
             if (updatedSbn != null) {
                 currentSbn = updatedSbn
+            }
+
+            if (!hasNotificationImage(currentSbn, currentText)) {
+                Log.d(TAG, "Notification ${sbn.key} does not indicate an image turn on retry attempt #$attemptNumber; aborting.")
+                return@withContext null
             }
 
             val retryBitmap = extractBitmapFromNotification(currentSbn)
@@ -248,15 +259,17 @@ class WhatsAppMediaExtractor @Inject constructor(
                 ?: bundle.getCharSequence("type")?.toString()
                 ?: bundle.getCharSequence("data_mime_type")?.toString()
 
-            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                bundle.getParcelable("uri", Uri::class.java)
-                    ?: bundle.getParcelable("data_uri", Uri::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                (bundle.getParcelable<Uri>("uri") ?: bundle.getParcelable<Uri>("data_uri"))
-            } ?: (bundle.get("uri") as? Uri) ?: (bundle.get("data_uri") as? Uri)
+            val uri = runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    bundle.getParcelable("uri", Uri::class.java)
+                        ?: bundle.getParcelable("data_uri", Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    (bundle.getParcelable<Uri>("uri") ?: bundle.getParcelable<Uri>("data_uri"))
+                }
+            }.getOrNull() ?: (bundle.get("uri") as? Uri) ?: (bundle.get("data_uri") as? Uri)
               ?: bundle.getString("uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
-              ?: bundle.getString("data_uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
+              ?: bundle.getString("data_mime_type")?.let { runCatching { Uri.parse(it) }.getOrNull() }
 
             if (uri != null) {
                 val isImage = mimeType?.startsWith("image/", ignoreCase = true) == true ||
@@ -528,15 +541,58 @@ class WhatsAppMediaExtractor @Inject constructor(
                lower.contains("sent a photo")
     }
 
-    fun hasNotificationImage(sbn: StatusBarNotification): Boolean {
-        val extras = sbn.notification?.extras ?: return false
+    fun hasNotificationImage(sbn: StatusBarNotification, currentText: String? = null): Boolean {
+        val notification = sbn.notification ?: return false
+        val extras = notification.extras ?: return false
+
+        // 1. Check if the incoming message text has media indicators
+        val textToCheck = currentText
+            ?: extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+            ?: ""
+        if (isImageIndicator(textToCheck)) return true
+
+        // 2. In MessagingStyle notifications, check if the latest incoming message has an image URI/type
+        val messagesArray = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+        if (messagesArray != null && messagesArray.isNotEmpty()) {
+            val lastMsgBundle = messagesArray.lastOrNull() as? Bundle
+            if (lastMsgBundle != null) {
+                val mimeType = lastMsgBundle.getString("type")
+                    ?: lastMsgBundle.getString("data_mime_type")
+                    ?: lastMsgBundle.getCharSequence("type")?.toString()
+                    ?: lastMsgBundle.getCharSequence("data_mime_type")?.toString()
+
+                val uri = runCatching {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        lastMsgBundle.getParcelable("uri", Uri::class.java)
+                            ?: lastMsgBundle.getParcelable("data_uri", Uri::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        (lastMsgBundle.getParcelable<Uri>("uri") ?: lastMsgBundle.getParcelable<Uri>("data_uri"))
+                    }
+                }.getOrNull() ?: (lastMsgBundle.get("uri") as? Uri)
+                  ?: (lastMsgBundle.get("data_uri") as? Uri)
+                  ?: lastMsgBundle.getString("uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
+                  ?: lastMsgBundle.getString("data_mime_type")?.let { runCatching { Uri.parse(it) }.getOrNull() }
+
+                val lastMsgText = lastMsgBundle.getCharSequence("text")?.toString() ?: ""
+                if (isImageIndicator(lastMsgText)) return true
+
+                if (uri != null || mimeType?.startsWith("image/", ignoreCase = true) == true) {
+                    return true
+                }
+            }
+            // An active WhatsApp conversation thread retains historic notification extras.
+            // If the latest message in EXTRA_MESSAGES is pure text without indicators or URI,
+            // this turn is NOT an image!
+            return false
+        }
+
+        // 3. Fallback for non-MessagingStyle notifications: inspect direct picture slots
         return extras.containsKey(Notification.EXTRA_PICTURE) ||
                extras.containsKey(Notification.EXTRA_PICTURE_ICON) ||
                extras.containsKey("android.pictureIcon") ||
                extras.containsKey(Notification.EXTRA_LARGE_ICON_BIG) ||
-               extras.containsKey("android.largeIcon.big") ||
-               extras.containsKey(Notification.EXTRA_MESSAGES) ||
-               extras.containsKey(Notification.EXTRA_HISTORIC_MESSAGES)
+               extras.containsKey("android.largeIcon.big")
     }
 
     internal var imageDirectoriesOverride: List<File>? = null

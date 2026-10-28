@@ -135,6 +135,7 @@ class KnowledgeManagementViewModel @Inject constructor(
             _uiState.update { it.copy(isProcessing = true, errorMessage = null) }
             repository.clearAllKnowledge()
             userPreferencesRepository.clearStoreKnowledgeTopics()
+            userPreferencesRepository.clearStoreWebsite()
             _uiState.update {
                 it.copy(
                     entries = emptyList(),

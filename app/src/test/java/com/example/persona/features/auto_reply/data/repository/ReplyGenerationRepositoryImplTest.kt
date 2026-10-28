@@ -825,6 +825,42 @@ class ReplyGenerationRepositoryImplTest {
         val topicsIndex = systemPromptWithContext.lastIndexOf("<store_topics>")
         val knowledgeIndex = systemPromptWithContext.lastIndexOf("<store_knowledge>")
         assertTrue("store_topics must precede store_knowledge", topicsIndex in 0 until knowledgeIndex)
+        assertTrue(systemPromptWithContext.contains("<store_website>NONE</store_website>"))
+    }
+
+    @Test
+    fun `buildSystemPromptWithContext renders store_website block when website is provided`() {
+        val systemPromptWithContext = ReplyGenerationRepositoryImpl.buildSystemPromptWithContext(
+            staticSystemPrompt = ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS,
+            candidates = emptyList(),
+            activeOrders = emptyList(),
+            storeTopics = listOf("الهوديز", "الماجات"),
+            storeWebsite = "https://velo.ordersapps.com/ar"
+        )
+
+        assertTrue(systemPromptWithContext.contains("<store_website>\nhttps://velo.ordersapps.com/ar\n</store_website>"))
+        val topicsIndex = systemPromptWithContext.lastIndexOf("<store_topics>")
+        val websiteIndex = systemPromptWithContext.lastIndexOf("<store_website>")
+        val knowledgeIndex = systemPromptWithContext.lastIndexOf("<store_knowledge>")
+        assertTrue(topicsIndex < websiteIndex)
+        assertTrue(websiteIndex < knowledgeIndex)
+    }
+
+    @Test
+    fun `system prompts enforce zero price guessing rule and authorized website redirection in both passes`() {
+        val first = ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS
+        val final = ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS
+
+        listOf(first, final).forEach { prompt ->
+            assertTrue(
+                "Strict zero price guessing rule must be present",
+                prompt.contains("NEVER estimate, guess, or hallucinate prices (e.g., NEVER say 'سعره 450 جنيه تقريباً'")
+            )
+            assertTrue(
+                "Authorized website redirection rule must be present",
+                prompt.contains("If <store_website> is provided and not NONE, you are authorized and encouraged to provide this exact official website URL")
+            )
+        }
     }
 
     @Test

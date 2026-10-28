@@ -61,6 +61,10 @@ class UserPreferencesRepository @Inject constructor(
         /** Newline-joined list of Level-1 (`#`) headings extracted from the imported knowledge document. */
         private val STORE_KNOWLEDGE_TOPICS_KEY = stringPreferencesKey("store_knowledge_topics")
 
+        /** Canonical base URL / storefront of the merchant's official e-commerce store. */
+        val KEY_STORE_WEBSITE = stringPreferencesKey("store_website")
+        private val STORE_WEBSITE_KEY = KEY_STORE_WEBSITE
+
         // ── Human Takeover & Safety ───────────────────────────────────────────
         val KEY_AUTO_PAUSE_ON_HITL = booleanPreferencesKey("auto_pause_on_hitl")
         private val AUTO_PAUSE_ON_HITL_KEY = KEY_AUTO_PAUSE_ON_HITL
@@ -124,6 +128,14 @@ class UserPreferencesRepository @Inject constructor(
     val storeKnowledgeTopicsFlow: Flow<List<String>> = dataStore.data.map { preferences ->
         val raw = preferences[STORE_KNOWLEDGE_TOPICS_KEY] ?: ""
         if (raw.isBlank()) emptyList() else raw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
+    /**
+     * Primary official store website URL, exposed as a reactive flow.
+     * Injected into the system prompt as the `<store_website>` block.
+     */
+    val storeWebsiteFlow: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[STORE_WEBSITE_KEY]?.takeIf { it.isNotBlank() }
     }
 
     val isAutoPauseOnHitlEnabledFlow: Flow<Boolean> = dataStore.data.map { preferences ->
@@ -195,6 +207,26 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun clearStoreKnowledgeTopics() {
         dataStore.edit { preferences ->
             preferences.remove(STORE_KNOWLEDGE_TOPICS_KEY)
+        }
+    }
+
+    /**
+     * Persists the official store website URL extracted from imported knowledge.
+     */
+    suspend fun setStoreWebsite(website: String?) {
+        dataStore.edit { preferences ->
+            if (website.isNullOrBlank()) {
+                preferences.remove(STORE_WEBSITE_KEY)
+            } else {
+                preferences[STORE_WEBSITE_KEY] = website.trim()
+            }
+        }
+    }
+
+    /** Removes the persisted store website URL. */
+    suspend fun clearStoreWebsite() {
+        dataStore.edit { preferences ->
+            preferences.remove(STORE_WEBSITE_KEY)
         }
     }
 

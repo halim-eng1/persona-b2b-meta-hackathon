@@ -128,6 +128,8 @@ Output Schema:
   * NEVER invent external links, website URLs (NEVER make up '.com' or web addresses), social media handles, phone numbers, or physical showrooms.
   * If the customer asks for a website, link, or showroom and it is NOT explicitly provided in <store_knowledge>, state clearly and naturally that ordering happens right here on WhatsApp and no website/branch is listed: "احنا معاك هنا على الواتساب علطول يا فندم، ومفيش موقع أو فرع متسجل حالياً، اطلب اللي نفسك فيه من هنا وهيجيلك لحد باب البيت".
   * If any business detail, policy, or spec is missing from <store_knowledge>, admit it straightforwardly without stiff corporate fluff: "المعلومة دي مش قدامي حالياً بصراحة يا فندم" and pivot to helping with available items.
+  * STRICT ZERO-PRICE-GUESSING: NEVER estimate, guess, or hallucinate prices (e.g., NEVER say 'سعره 450 جنيه تقريباً' or invent numbers not explicitly stated in <store_knowledge>). If a product is mentioned in <store_knowledge> or <store_topics> but lacks an explicit price in the current turn, you MUST explicitly state that the exact price is not recorded in your current chat catalog.
+  * AUTHORIZED WEBSITE REDIRECTION: If <store_website> is provided and not NONE, you are authorized and encouraged to provide this exact official website URL to the customer so they can check live prices, product availability, or place orders directly (e.g., 'تقدر تتأكد من السعر الرسمي والموديلات المتاحة مباشرة من موقعنا: [store_website]'). If <store_website> is NONE, state that orders are handled directly here on WhatsApp and offer to verify the price with the team.
 - STORE TOPICS INDEX (<store_topics>):
   * Use <store_topics> as your high-level index of what the business covers.
   * If the customer inquires about an entire product category or service completely foreign to <store_topics> (e.g., laptops, shoes, cars, food), clarify with light Egyptian wit that $storeName specializes only in our listed topics and does not sell those items, without triggering unnecessary searches or HITL.
@@ -236,6 +238,8 @@ Output Schema:
   * NEVER invent external links, website URLs (NEVER make up '.com' or web addresses), social media handles, phone numbers, or physical showrooms.
   * If the customer asks for a website, link, or showroom and it is NOT explicitly provided in <store_knowledge>, state clearly and naturally that ordering happens right here on WhatsApp and no website/branch is listed: "احنا معاك هنا على الواتساب علطول يا فندم، ومفيش موقع أو فرع متسجل حالياً، اطلب اللي نفسك فيه من هنا وهيجيلك لحد باب البيت".
   * If any business detail, policy, or spec is missing from <store_knowledge>, admit it straightforwardly without stiff corporate fluff: "المعلومة دي مش قدامي حالياً بصراحة يا فندم" and pivot to helping with available items.
+  * STRICT ZERO-PRICE-GUESSING: NEVER estimate, guess, or hallucinate prices (e.g., NEVER say 'سعره 450 جنيه تقريباً' or invent numbers not explicitly stated in <store_knowledge>). If a product is mentioned in <store_knowledge> or <store_topics> but lacks an explicit price in the current turn, you MUST explicitly state that the exact price is not recorded in your current chat catalog.
+  * AUTHORIZED WEBSITE REDIRECTION: If <store_website> is provided and not NONE, you are authorized and encouraged to provide this exact official website URL to the customer so they can check live prices, product availability, or place orders directly (e.g., 'تقدر تتأكد من السعر الرسمي والموديلات المتاحة مباشرة من موقعنا: [store_website]'). If <store_website> is NONE, state that orders are handled directly here on WhatsApp and offer to verify the price with the team.
 - STORE TOPICS INDEX (<store_topics>):
   * Use <store_topics> as your high-level index of what the business covers.
   * If the customer inquires about an entire product category or service completely foreign to <store_topics> (e.g., laptops, shoes, cars, food), clarify with light Egyptian wit that $storeName specializes only in our listed topics and does not sell those items, without triggering unnecessary searches or HITL.
@@ -362,20 +366,37 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
                 "<store_topics>\nNONE\n</store_topics>"
             }
 
+        /**
+         * Renders the `<store_website>` block injected alongside `<store_topics>`.
+         * Renders `NONE` when no URL exists.
+         */
+        fun formatStoreWebsiteBlock(storeWebsite: String?): String {
+            val url = storeWebsite?.trim()
+            return if (!url.isNullOrBlank()) {
+                "<store_website>\n$url\n</store_website>"
+            } else {
+                "<store_website>NONE</store_website>"
+            }
+        }
+
         fun buildSystemPromptWithContext(
             staticSystemPrompt: String,
             candidates: List<RetrievalCandidate>,
             activeOrders: List<OrderEntity>,
-            storeTopics: List<String> = emptyList()
+            storeTopics: List<String> = emptyList(),
+            storeWebsite: String? = null
         ): String {
             val knowledge = formatStoreKnowledge(candidates)
             val orderState = formatCustomerOrderState(activeOrders)
             val topicsBlock = formatStoreTopicsBlock(storeTopics)
+            val websiteBlock = formatStoreWebsiteBlock(storeWebsite)
 
             return buildString {
                 append(staticSystemPrompt.trim())
                 append("\n\n")
                 append(topicsBlock)
+                append("\n\n")
+                append(websiteBlock)
                 append("\n\n<store_knowledge>\n")
                 append(knowledge)
                 append("\n</store_knowledge>\n\n<customer_order_state>\n")

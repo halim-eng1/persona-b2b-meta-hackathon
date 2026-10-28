@@ -149,8 +149,15 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             staticSystemPrompt: String,
             candidates: List<RetrievalCandidate>,
             activeOrders: List<OrderEntity>,
-            storeTopics: List<String> = emptyList()
-        ): String = PromptContextBuilder.buildSystemPromptWithContext(staticSystemPrompt, candidates, activeOrders, storeTopics)
+            storeTopics: List<String> = emptyList(),
+            storeWebsite: String? = null
+        ): String = PromptContextBuilder.buildSystemPromptWithContext(
+            staticSystemPrompt = staticSystemPrompt,
+            candidates = candidates,
+            activeOrders = activeOrders,
+            storeTopics = storeTopics,
+            storeWebsite = storeWebsite
+        )
 
         internal fun formatHistoricalAssistantTurn(rawText: String): String =
             PromptContextBuilder.formatHistoricalAssistantTurn(rawText)
@@ -230,6 +237,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         val isMultimodal = imageUri != null
         val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
+        val storeWebsite = userPreferencesRepository.storeWebsiteFlow.first()
         val tone = userPreferencesRepository.stylePreferences.first().personaTone
         val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
             botName = userPreferencesRepository.getBotNameSync(),
@@ -241,7 +249,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             staticSystemPrompt = baseSystemPrompt,
             candidates = candidates,
             activeOrders = activeOrders,
-            storeTopics = storeTopics
+            storeTopics = storeTopics,
+            storeWebsite = storeWebsite
         )
 
         val inboundText = if (imageUri != null && (notification.originalText.contains("Sent a photo", ignoreCase = true) || notification.originalText.trim() == "📷")) {
@@ -273,6 +282,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val imageUri = resolveImageUri(imageUrl)
         val isMultimodal = imageUri != null
         val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
+        val storeWebsite = userPreferencesRepository.storeWebsiteFlow.first()
         val tone = userPreferencesRepository.stylePreferences.first().personaTone
         val baseSystemPrompt = PromptContextBuilder.buildFinalPassSystemPrompt(
             botName = userPreferencesRepository.getBotNameSync(),
@@ -284,7 +294,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             staticSystemPrompt = baseSystemPrompt,
             candidates = chunks,
             activeOrders = activeOrders,
-            storeTopics = storeTopics
+            storeTopics = storeTopics,
+            storeWebsite = storeWebsite
         )
         val messages = PromptContextBuilder.buildOpenRouterMessages(
             systemPrompt = systemPromptWithContext,

@@ -234,8 +234,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
             try {
                 // Phase 1: Direct Image Extraction from Notification Extras
-                if (mediaExtractor.isImageIndicator(text) || mediaExtractor.hasNotificationImage(sbn)) {
-                    val imageFile = mediaExtractor.extractImage(sbn, sourceClass, this@WhatsAppNotificationListener)
+                if (mediaExtractor.hasNotificationImage(sbn, text)) {
+                    val imageFile = mediaExtractor.extractImage(sbn, sourceClass, this@WhatsAppNotificationListener, currentText = text)
                     if (imageFile != null) {
                         mediaFilePath = imageFile.absolutePath
                     }

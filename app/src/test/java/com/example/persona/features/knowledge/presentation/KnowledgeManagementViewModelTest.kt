@@ -170,6 +170,7 @@ class KnowledgeManagementViewModelTest {
     fun clearAllKnowledge_clearsRepositoryTopicsAndState() = runTest {
         coEvery { repository.clearAllKnowledge() } just Runs
         coEvery { userPreferencesRepository.clearStoreKnowledgeTopics() } just Runs
+        coEvery { userPreferencesRepository.clearStoreWebsite() } just Runs
 
         val viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
@@ -179,6 +180,7 @@ class KnowledgeManagementViewModelTest {
 
         coVerify(exactly = 1) { repository.clearAllKnowledge() }
         coVerify(exactly = 1) { userPreferencesRepository.clearStoreKnowledgeTopics() }
+        coVerify(exactly = 1) { userPreferencesRepository.clearStoreWebsite() }
         assertTrue(viewModel.uiState.value.entries.isEmpty())
         assertFalse(viewModel.uiState.value.isProcessing)
     }

@@ -29,6 +29,7 @@ import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
 import com.example.persona.features.chat_import.data.parser.KnowledgeChunk
 import com.example.persona.features.chat_import.data.parser.MarkdownChunker
 import com.example.persona.features.chat_import.data.parser.StoreTopicsExtractor
+import com.example.persona.features.chat_import.data.parser.StoreWebsiteExtractor
 import com.example.persona.features.chat_import.domain.model.ImportProgress
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -186,6 +187,15 @@ class ChatImportWorker @AssistedInject constructor(
                 if (e is CancellationException) throw e
                 // Topics are a prompt-enhancement only; never fail the import for them.
                 PersonaLogger.w(PersonaLogTags.IMPORT, "Failed to persist store knowledge topics: ${e.message}")
+            }
+
+            val extractedWebsite = StoreWebsiteExtractor.extract(rawText)
+            try {
+                userPreferencesRepository.setStoreWebsite(extractedWebsite)
+                PersonaLogger.i(PersonaLogTags.IMPORT, "Extracted and saved store website: $extractedWebsite")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                PersonaLogger.w(PersonaLogTags.IMPORT, "Failed to persist store website: ${e.message}")
             }
 
             // ── Phase 4: Load model + Embed ───────────────────────────────────
