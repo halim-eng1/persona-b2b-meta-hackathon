@@ -72,6 +72,16 @@ class WhatsAppMediaExtractor @Inject constructor(
     // Phase 1: Direct Image Extraction from Notification Extras
     // ──────────────────────────────────────────────────────────────────────────
 
+    private val claimedDiskFiles = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    fun clearClaimedDiskFiles() {
+        claimedDiskFiles.clear()
+    }
+
+    fun isDiskFileClaimed(path: String): Boolean {
+        return claimedDiskFiles.containsKey(path)
+    }
+
     /**
      * Extracts an image from the status bar notification extras.
      * If notification extras do not yield a bitmap, falls back to disk monitoring.
@@ -92,82 +102,142 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     /**
-     * Direct notification bundle inspection:
-     * 1. extras.get(Notification.EXTRA_PICTURE) as? Bitmap
-     * 2. extras.getParcelable<Bitmap>(Notification.EXTRA_PICTURE)
-     * 3. extras.get(Notification.EXTRA_PICTURE_ICON) / "android.pictureIcon" (Icon -> Bitmap)
-     * 4. MessagingStyle extras.getParcelableArray(Notification.EXTRA_MESSAGES) -> data_uri & data_mime_type
+     * Direct notification bundle inspection in order:
+     * 1. MessagingStyle message bundles ("uri" / "type" and "data_uri" / "data_mime_type" across EXTRA_MESSAGES and EXTRA_HISTORIC_MESSAGES)
+     * 2. Notification.EXTRA_PICTURE ("android.picture") as Bitmap or Icon
+     * 3. Notification.EXTRA_PICTURE_ICON ("android.pictureIcon")
+     * 4. Notification.EXTRA_LARGE_ICON_BIG ("android.largeIcon.big") as Bitmap or Icon
      */
     fun extractBitmapFromNotification(sbn: StatusBarNotification): Bitmap? {
         val notification = sbn.notification ?: return null
         val extras = notification.extras ?: return null
 
-        // 1. Direct Bitmap from EXTRA_PICTURE
-        val directBitmap = try {
-            (extras.get(Notification.EXTRA_PICTURE) as? Bitmap)
-                ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    extras.getParcelable(Notification.EXTRA_PICTURE, Bitmap::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    extras.getParcelable<Bitmap>(Notification.EXTRA_PICTURE)
-                }
-        } catch (_: Throwable) {
-            null
-        }
-        if (directBitmap != null) {
-            return directBitmap
-        }
+        logNotificationExtrasStructure(extras)
 
-        // 2. EXTRA_PICTURE_ICON on Android 11+ (API 30+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val pictureIcon = try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    extras.getParcelable(Notification.EXTRA_PICTURE_ICON, Icon::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    extras.getParcelable<Icon>("android.pictureIcon")
-                } ?: (extras.get("android.pictureIcon") as? Icon)
-            } catch (_: Throwable) {
-                null
-            }
-
-            if (pictureIcon != null) {
-                val iconBmp = iconToBitmap(pictureIcon)
-                if (iconBmp != null) return iconBmp
-            }
-        }
-
-        // 3. MessagingStyle EXTRA_MESSAGES data_uri
+        // 1. MessagingStyle message bundles ("uri" / "type" and "data_uri" / "data_mime_type")
         try {
-            val parcelableMessages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
-            if (parcelableMessages != null && parcelableMessages.isNotEmpty()) {
-                for (i in parcelableMessages.indices.reversed()) {
-                    val bundle = parcelableMessages[i] as? Bundle ?: continue
-                    val mimeType = bundle.getString("data_mime_type")
-                        ?: bundle.getCharSequence("data_mime_type")?.toString()
-                    if (mimeType?.startsWith("image/", ignoreCase = true) == true) {
-                        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            bundle.getParcelable("data_uri", Uri::class.java)
-                        } else {
-                            @Suppress("DEPRECATION")
-                            bundle.getParcelable<Uri>("data_uri")
-                        } ?: (bundle.get("data_uri") as? Uri)
+            val messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+            val bmp = extractBitmapFromMessagesBundle(messages)
+            if (bmp != null) return bmp
 
-                        if (uri != null) {
-                            val stream = context.contentResolver.openInputStream(uri)
-                            stream?.use {
-                                val decoded = BitmapFactory.decodeStream(it)
-                                if (decoded != null) return decoded
-                            }
-                        }
-                    }
-                }
+            val historicMessages = extras.getParcelableArray(Notification.EXTRA_HISTORIC_MESSAGES)
+            val historicBmp = extractBitmapFromMessagesBundle(historicMessages)
+            if (historicBmp != null) return historicBmp
+        } catch (e: Throwable) {
+            Log.w(TAG, "Error inspecting MessagingStyle messages: ${e.message}")
+        }
+
+        // 2. Notification.EXTRA_PICTURE ("android.picture") as Bitmap or Icon
+        try {
+            val picObj = extras.get(Notification.EXTRA_PICTURE)
+            if (picObj is Bitmap) return picObj
+            if (picObj is Icon) {
+                val bmp = iconToBitmap(picObj)
+                if (bmp != null) return bmp
+            }
+            val parcelableBmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                extras.getParcelable(Notification.EXTRA_PICTURE, Bitmap::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                extras.getParcelable<Bitmap>(Notification.EXTRA_PICTURE)
+            }
+            if (parcelableBmp != null) return parcelableBmp
+        } catch (e: Throwable) {
+            Log.w(TAG, "Error inspecting EXTRA_PICTURE: ${e.message}")
+        }
+
+        // 3. Notification.EXTRA_PICTURE_ICON ("android.pictureIcon") as Icon or Bitmap
+        try {
+            val picIconObj = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                extras.get(Notification.EXTRA_PICTURE_ICON) ?: extras.get("android.pictureIcon")
+            } else {
+                extras.get("android.pictureIcon")
+            }
+            if (picIconObj is Icon) {
+                val bmp = iconToBitmap(picIconObj)
+                if (bmp != null) return bmp
+            }
+            if (picIconObj is Bitmap) return picIconObj
+        } catch (e: Throwable) {
+            Log.w(TAG, "Error inspecting EXTRA_PICTURE_ICON: ${e.message}")
+        }
+
+        // 4. Notification.EXTRA_LARGE_ICON_BIG ("android.largeIcon.big") as Bitmap or Icon
+        try {
+            val largeBigObj = extras.get(Notification.EXTRA_LARGE_ICON_BIG)
+                ?: extras.get("android.largeIcon.big")
+            if (largeBigObj is Bitmap) return largeBigObj
+            if (largeBigObj is Icon) {
+                val bmp = iconToBitmap(largeBigObj)
+                if (bmp != null) return bmp
             }
         } catch (e: Throwable) {
-            Log.w(TAG, "Failed to decode image from MessagingStyle URI: ${e.message}")
+            Log.w(TAG, "Error inspecting EXTRA_LARGE_ICON_BIG: ${e.message}")
         }
 
         return null
+    }
+
+    internal fun extractBitmapFromMessagesBundle(messagesArray: Array<*>?): Bitmap? {
+        if (messagesArray == null || messagesArray.isEmpty()) return null
+        for (i in messagesArray.indices.reversed()) {
+            val bundle = messagesArray[i] as? Bundle ?: continue
+            val mimeType = bundle.getString("type")
+                ?: bundle.getString("data_mime_type")
+                ?: bundle.getCharSequence("type")?.toString()
+                ?: bundle.getCharSequence("data_mime_type")?.toString()
+
+            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                bundle.getParcelable("uri", Uri::class.java)
+                    ?: bundle.getParcelable("data_uri", Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                (bundle.getParcelable<Uri>("uri") ?: bundle.getParcelable<Uri>("data_uri"))
+            } ?: (bundle.get("uri") as? Uri) ?: (bundle.get("data_uri") as? Uri)
+              ?: bundle.getString("uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
+              ?: bundle.getString("data_uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
+
+            if (uri != null) {
+                val isImage = mimeType?.startsWith("image/", ignoreCase = true) == true ||
+                        uri.toString().contains("image", ignoreCase = true) ||
+                        mimeType == null
+                if (isImage) {
+                    try {
+                        val stream = context.contentResolver.openInputStream(uri)
+                        stream?.use {
+                            val decoded = BitmapFactory.decodeStream(it)
+                            if (decoded != null) {
+                                Log.i(TAG, "📸 Decoded image from MessagingStyle URI: $uri (mime: $mimeType)")
+                                return decoded
+                            }
+                        }
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "Failed to open/decode stream from MessagingStyle URI $uri: ${e.message}")
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Diagnostic logger that records all present keys and their runtime types in Logcat under [TAG].
+     */
+    fun logNotificationExtrasStructure(extras: Bundle) {
+        try {
+            val keys = extras.keySet()
+            val sb = StringBuilder("📋 Notification Extras Structure (${keys.size} keys):\n")
+            for (key in keys) {
+                val value = extras.get(key)
+                val typeName = value?.javaClass?.name ?: "null"
+                sb.append("  - $key -> $typeName\n")
+            }
+            val structureStr = sb.toString().trimEnd()
+            Log.d(TAG, structureStr)
+            PersonaLogger.d(TAG, structureStr)
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to log notification extras structure: ${e.message}")
+        }
     }
 
     /**
@@ -223,7 +293,7 @@ class WhatsAppMediaExtractor @Inject constructor(
     /**
      * Fallback for Images (Disk Monitoring):
      * Queries the latest modified image in WhatsApp media directory
-     * within 5-10 seconds of notification postTime.
+     * within 5-10 seconds of notification postTime, enforcing anti-collision claim.
      */
     fun findLatestImageOnDisk(
         sourceClass: NotificationSourceClass,
@@ -239,14 +309,25 @@ class WhatsAppMediaExtractor @Inject constructor(
             } ?: continue
 
             // Filter by last modified timestamp within 5-10 seconds of the notification
-            val matchedFile = files
-                .filter { Math.abs(it.lastModified() - now) <= 10_000L }
-                .maxByOrNull { it.lastModified() }
+            // and exclude files already claimed by concurrent turns
+            val candidates = files
+                .filter {
+                    val delta = Math.abs(it.lastModified() - now)
+                    delta <= 10_000L && !claimedDiskFiles.containsKey(it.absolutePath)
+                }
+                .sortedByDescending { it.lastModified() }
 
-            if (matchedFile != null) {
-                Log.i(TAG, "📸 Successfully recovered image from disk fallback: ${matchedFile.absolutePath}")
-                PersonaLogger.i(TAG, "📸 Successfully recovered image from disk fallback: ${matchedFile.absolutePath}")
-                return matchedFile
+            for (candidate in candidates) {
+                val delta = Math.abs(candidate.lastModified() - now)
+                val claimed = claimedDiskFiles.putIfAbsent(candidate.absolutePath, System.currentTimeMillis()) == null
+                if (claimed) {
+                    val logMsg = "📸 Successfully recovered image from disk fallback: ${candidate.absolutePath} (delta: ${delta}ms)"
+                    Log.i(TAG, logMsg)
+                    PersonaLogger.i(TAG, logMsg)
+                    return candidate
+                } else {
+                    Log.w(TAG, "Disk file collision avoided: ${candidate.absolutePath} was already claimed by another turn")
+                }
             }
         }
         return null
@@ -339,7 +420,7 @@ class WhatsAppMediaExtractor @Inject constructor(
                     append("language", "ar")
                     append("file", audioFile.readBytes(), Headers.build {
                         append(HttpHeaders.ContentType, "audio/ogg")
-                        append(HttpHeaders.ContentDisposition, "filename=\"${audioFile.name}\"")
+                        append(HttpHeaders.ContentDisposition, "form-data; name=\"file\"; filename=\"${audioFile.name}\"")
                     })
                 }
             ) {
@@ -389,12 +470,18 @@ class WhatsAppMediaExtractor @Inject constructor(
     fun hasNotificationImage(sbn: StatusBarNotification): Boolean {
         val extras = sbn.notification?.extras ?: return false
         return extras.containsKey(Notification.EXTRA_PICTURE) ||
+               extras.containsKey(Notification.EXTRA_PICTURE_ICON) ||
                extras.containsKey("android.pictureIcon") ||
-               (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && extras.containsKey(Notification.EXTRA_PICTURE_ICON)) ||
-               extras.containsKey(Notification.EXTRA_MESSAGES)
+               extras.containsKey(Notification.EXTRA_LARGE_ICON_BIG) ||
+               extras.containsKey("android.largeIcon.big") ||
+               extras.containsKey(Notification.EXTRA_MESSAGES) ||
+               extras.containsKey(Notification.EXTRA_HISTORIC_MESSAGES)
     }
 
+    internal var imageDirectoriesOverride: List<File>? = null
+
     private fun getWhatsAppImageDirectories(sourceClass: NotificationSourceClass): List<File> {
+        imageDirectoriesOverride?.let { return it }
         val dirs = mutableListOf<File>()
         val ext = Environment.getExternalStorageDirectory()
 

@@ -356,6 +356,19 @@ class ChatDetailViewModel @Inject constructor(
         viewModelScope.launch {
             val sinceTimestamp = calculateClearSinceTimestamp(range, currentTimeMs)
             chatHistoryDao.deleteMessagesSince(contactName, sourceClass, sinceTimestamp)
+
+            val latestRemaining = chatHistoryDao.getLatestMessageForSource(contactName, sourceClass)
+            if (latestRemaining == null) {
+                conversationMetadataDao.deleteConversation(contactName, sourceClass)
+            } else {
+                conversationMetadataDao.updateLastMessage(
+                    contactName = contactName,
+                    sourceClass = sourceClass,
+                    lastMessageText = latestRemaining.messageText,
+                    lastMessageTimestamp = latestRemaining.timestamp,
+                    lastMessageSenderType = latestRemaining.senderType
+                )
+            }
         }
     }
 

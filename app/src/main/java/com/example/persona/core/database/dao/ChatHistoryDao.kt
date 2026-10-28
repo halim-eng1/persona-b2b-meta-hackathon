@@ -240,4 +240,15 @@ interface ChatHistoryDao {
      */
     @Query("DELETE FROM chat_history WHERE contact_name = :contactName AND source_class = :sourceClass AND timestamp >= :sinceTimestamp")
     suspend fun deleteMessagesSince(contactName: String, sourceClass: String, sinceTimestamp: Long)
+
+    /**
+     * Returns the single latest message for a specific contact and source class, or null if no messages exist.
+     */
+    @Query("""
+        SELECT * FROM chat_history
+        WHERE contact_name = :contactName AND source_class = :sourceClass
+        ORDER BY timestamp DESC
+        LIMIT 1
+    """)
+    suspend fun getLatestMessageForSource(contactName: String, sourceClass: String): ChatHistoryEntity?
 }

@@ -88,6 +88,30 @@ interface ConversationMetadataDao {
     """)
     suspend fun getLatestConversationForContact(contactName: String): ConversationMetadataEntity?
 
+    /**
+     * Deletes the conversation metadata row for a specific contact and source class.
+     */
+    @Query("DELETE FROM conversation_metadata WHERE contact_name = :contactName AND source_class = :sourceClass")
+    suspend fun deleteConversation(contactName: String, sourceClass: String)
+
+    /**
+     * Updates the last message details in conversation metadata.
+     */
+    @Query("""
+        UPDATE conversation_metadata
+        SET last_message_text = :lastMessageText,
+            last_message_timestamp = :lastMessageTimestamp,
+            last_message_sender_type = :lastMessageSenderType
+        WHERE contact_name = :contactName AND source_class = :sourceClass
+    """)
+    suspend fun updateLastMessage(
+        contactName: String,
+        sourceClass: String,
+        lastMessageText: String,
+        lastMessageTimestamp: Long,
+        lastMessageSenderType: String
+    )
+
     @Transaction
     suspend fun recordMessageTurn(
         contactName: String,

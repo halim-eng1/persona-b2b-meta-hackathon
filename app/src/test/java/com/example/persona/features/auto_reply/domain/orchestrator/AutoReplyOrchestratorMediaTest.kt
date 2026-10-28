@@ -16,6 +16,7 @@ import com.example.persona.features.auto_reply.data.service.IncomingMessageDispa
 import com.example.persona.features.auto_reply.data.service.WhatsAppMediaExtractor
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
+import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import com.example.persona.features.auto_reply.domain.model.WhatsAppNotification
@@ -93,7 +94,6 @@ class AutoReplyOrchestratorMediaTest {
         coEvery { chatHistoryDao.getRecentMessagesExcept(any(), any(), any()) } returns emptyList()
         coEvery { chatHistoryDao.getRecentMessagesExceptForSource(any(), any(), any(), any()) } returns emptyList()
         coEvery { orderDao.getActiveOrdersByContact(any()) } returns emptyList()
-        coEvery { businessKnowledgeDao.getProductCatalogChunks(any()) } returns emptyList()
 
         orchestrator = AutoReplyOrchestrator(
             incomingMessageDispatcher = mockk(relaxed = true),
@@ -153,11 +153,11 @@ class AutoReplyOrchestratorMediaTest {
 
         orchestrator.processNotificationSequentially(notification)
 
-        // Verify that LLM was invoked with the notification containing mediaFilePath, 7000 token budget, and catalog candidates
+        // Verify that LLM was invoked with the notification containing mediaFilePath and 7000 token budget
         coVerify(atLeast = 1) {
             replyGenerationRepository.generateReply(
                 notification = match { it.mediaFilePath == imageFile.absolutePath },
-                candidates = match { it.isNotEmpty() },
+                candidates = any(),
                 isOngoingConversation = any(),
                 chatHistory = any(),
                 activeOrders = any(),
@@ -270,6 +270,178 @@ class AutoReplyOrchestratorMediaTest {
                 match { it.contains("لا يمكنني معالجة الوسائط") },
                 eq("Halim•"),
                 any()
+            )
+        }
+    }
+
+    @Test
+    fun `two-stage visual RE_QUERY combines visual description and search keyword, and omits heavy image in pass 2`() = runBlocking {
+        val imageFile = tempFolder.newFile("hoodie_sample.jpg").apply {
+            writeBytes(byteArrayOf(10, 20, 30))
+        }
+
+        val notification = WhatsAppNotification(
+            title = "أحمد مهندس",
+            text = "📷 بكام ده يا فندم؟",
+            postTime = 5000L,
+            notificationKey = "key_hoodie_999",
+            sourceClass = NotificationSourceClass.BUSINESS,
+            mediaFilePath = imageFile.absolutePath
+        )
+
+        // Pass 1: Vision model inspects image and returns RE_QUERY with visual_product_description
+        coEvery {
+            replyGenerationRepository.generateReply(
+                notification = match { it.mediaFilePath == imageFile.absolutePath },
+                candidates = any(),
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = any()
+            )
+        } returns """{
+            "action": "RE_QUERY",
+            "refined_search_keyword": "هودي أسود مطبوع",
+            "visual_product_description": "هودي أسود أوفر سايز مطبوع عليه عبارة أنا مش بني آدم أنا مهندس",
+            "order_action": null,
+            "final_reply_text": null,
+            "extracted_order": null
+        }"""
+
+        val mockChunk = RetrievalCandidate(
+            chunkId = "chunk_hoodie_eng",
+            headerContext = "كتالوج الهوديز",
+            chunkText = "هودي أنا مهندس أوفر سايز أسود سعره 750 جنيه ميلتون قطن 100%",
+            similarityScore = 0.94f,
+            baseSimilarityScore = 0.94f
+        )
+
+        coEvery {
+            semanticRetrievalRepository.retrieveCandidates(
+                queryEmbedding = any(),
+                minimumSimilarityThreshold = any(),
+                queryText = match { it.contains("هودي أسود مطبوع") && it.contains("أنا مهندس") },
+                recentReplyHashes = any()
+            )
+        } returns Pair(listOf(mockChunk), 0.94f)
+
+        // Pass 2: Final reply generation
+        coEvery {
+            replyGenerationRepository.generateFinalReply(
+                queryText = match {
+                    it.contains("بكام ده يا فندم") &&
+                    it.contains("[وصف الصورة المرفقة من العميل]: هودي أسود أوفر سايز مطبوع عليه عبارة أنا مش بني آدم أنا مهندس")
+                },
+                chunks = match { it.any { c -> c.chunkId == "chunk_hoodie_eng" } },
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = match { it <= 750 },
+                imageUrl = null // MUST be null because visualProductDescription is non-blank!
+            )
+        } returns """{
+            "action": "REPLY",
+            "refined_search_keyword": null,
+            "order_action": null,
+            "final_reply_text": "ده هودي 'أنا مهندس' أوفر سايز أسود قطن ميلتون 100%، سعره 750 جنيه ومتاح بجميع المقاسات! تحب نجهزلك أوردر بيه؟ 💙",
+            "extracted_order": null
+        }"""
+
+        orchestrator.processNotificationSequentially(notification)
+
+        // Verify Pass 2 was called with augmented queryText, the retrieved chunks, and imageUrl == null
+        coVerify(exactly = 1) {
+            replyGenerationRepository.generateFinalReply(
+                queryText = match {
+                    it.contains("بكام ده يا فندم") &&
+                    it.contains("[وصف الصورة المرفقة من العميل]: هودي أسود أوفر سايز مطبوع عليه عبارة أنا مش بني آدم أنا مهندس")
+                },
+                chunks = match { it.any { c -> c.chunkId == "chunk_hoodie_eng" } },
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = match { it <= 750 },
+                imageUrl = null
+            )
+        }
+
+        // Verify direct reply was dispatched
+        coVerify(atLeast = 1) {
+            directReplyExecutionUseCase.execute(
+                eq("key_hoodie_999"),
+                match { it.contains("750 جنيه") },
+                eq("أحمد مهندس"),
+                any()
+            )
+        }
+    }
+
+    @Test
+    fun `Pass 2 preserves transcribed voice note context during RE_QUERY`() = runBlocking {
+        val notification = WhatsAppNotification(
+            title = "سارة أحمد",
+            text = "[رسالة صوتية من العميل]: عايزة أعرف إيه الألوان المتاحة للهودي الأوفر سايز",
+            postTime = 6000L,
+            notificationKey = "key_voice_777",
+            sourceClass = NotificationSourceClass.BUSINESS,
+            mediaFilePath = null
+        )
+
+        // Pass 1 returns RE_QUERY
+        coEvery {
+            replyGenerationRepository.generateReply(
+                notification = match { it.originalText.contains("عايزة أعرف إيه الألوان") },
+                candidates = any(),
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = any()
+            )
+        } returns """{
+            "action": "RE_QUERY",
+            "refined_search_keyword": "ألوان هودي أوفر سايز",
+            "order_action": null,
+            "final_reply_text": null,
+            "extracted_order": null
+        }"""
+
+        // Pass 2 should receive effectiveProcessed.originalText containing the voice transcript!
+        coEvery {
+            replyGenerationRepository.generateFinalReply(
+                queryText = match { it.contains("[رسالة صوتية من العميل]: عايزة أعرف إيه الألوان المتاحة للهودي الأوفر سايز") },
+                chunks = any(),
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = any(),
+                imageUrl = any()
+            )
+        } returns """{
+            "action": "REPLY",
+            "refined_search_keyword": null,
+            "order_action": null,
+            "final_reply_text": "متاح منه أسود، رمادي، زيتي داكن، وأبيض يا فندم! 💙",
+            "extracted_order": null
+        }"""
+
+        orchestrator.processNotificationSequentially(notification)
+
+        // Verify Pass 2 retained the full voice note transcript in queryText
+        coVerify(exactly = 1) {
+            replyGenerationRepository.generateFinalReply(
+                queryText = match { it.contains("[رسالة صوتية من العميل]: عايزة أعرف إيه الألوان المتاحة للهودي الأوفر سايز") },
+                chunks = any(),
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = any(),
+                imageUrl = any()
             )
         }
     }

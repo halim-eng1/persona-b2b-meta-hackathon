@@ -104,39 +104,6 @@ class AutoReplyOrchestrator @Inject constructor(
             "ضروري", "مشكلة", "مستشفى", "الحقني", "مصيبة", "urgent", "help"
         )
 
-        val CORE_CATALOG_FALLBACK_CHUNKS = listOf(
-            RetrievalCandidate(
-                chunkId = "core_hoodies_catalog",
-                headerContext = "كتالوج المنتجات والأسعار الرسمية > تشكيلة الهوديز الشتوية",
-                chunkText = """
-                    - هوديز الجرافيك المطبوعة (Graphic Hoodies): السعر بعد الخصم 750 ج.م. ميلتون قطن 100% ثقيل 850 جم، مبطن من الداخل لدفء استثنائي، قصّة Oversized (أوفر سايز)، مقاسات S إلى 2XL، ألوان: أسود، أبيض. تصاميم شهيرة: TRUST ME I AM PROGRAMMER, أنا مبرمج, NO SYSTEM IS SAFE, SEMICOLON, أنا مهندس, JUST FINISHED PROJECT. طباعة حرارية DTF مقاومة للغسيل والبهتان.
-                    - هودي أوفر سايز بريميوم سادة (Plain Hoodie): السعر بعد الخصم 650 ج.م. ميلتون قطن 100% ثقيل 850 جم، 6 ألوان: أسود، أبيض، أزرق رويال، زيتي داكن، رمادي، بينك. مقاسات S إلى 2XL.
-                """.trimIndent(),
-                similarityScore = 0.95f,
-                baseSimilarityScore = 0.95f
-            ),
-            RetrievalCandidate(
-                chunkId = "core_tshirts_catalog",
-                headerContext = "كتالوج المنتجات والأسعار الرسمية > تشكيلة التيشيرتات",
-                chunkText = """
-                    - تيشيرتات الجرافيك المطبوعة (Graphic Tees): السعر بعد الخصم 460 ج.م. قطن ناعم معالج ضد الانكماش، Dual Fit (متاح قصّة أوفر سايز وقصّة ريجلر)، مقاسات S إلى 2XL، ألوان: أبيض وأسود، طباعة حرارية DTF مقاومة للبهتان والغسيل.
-                    - تيشيرت سادة ريجلر (Basic Sada T-Shirt): السعر بعد الخصم 390 ج.م. قطن ناعم معالج ضد الانكماش، قصّة ريجلر كلاسيكية (Regular Fit فقط)، مقاسات S إلى 2XL، ألوان: أبيض وأسود.
-                """.trimIndent(),
-                similarityScore = 0.95f,
-                baseSimilarityScore = 0.95f
-            ),
-            RetrievalCandidate(
-                chunkId = "core_mugs_pod_catalog",
-                headerContext = "كتالوج المنتجات والأسعار الرسمية > الإكسسوارات والماجات والطباعة المخصصة",
-                chunkText = """
-                    - ماج سيراميك بتصاميم مخصصة (Ceramic Mug): خامة سيراميك بتصاميم مطابقة لهوية المبرمجين والمهندسين.
-                    - خدمة التصاميم المخصصة (Print on Demand - POD): تيشيرت بتصميم مخصص = 460 ج.م، هودي أوفر سايز بتصميم مخصص = 750 ج.م. إمكانية طباعة فكرة العميل الخاصة أو كتابة اسم المهندس/المبرمج أو اللوجو على تيشيرت أو هودي.
-                """.trimIndent(),
-                similarityScore = 0.95f,
-                baseSimilarityScore = 0.95f
-            )
-        )
-
         internal fun isPivotStillOpen(latestPivotTimestamp: Long?, consumedPivotTimestamps: Set<Long>): Boolean =
             OrderIngestionManager.isPivotStillOpen(latestPivotTimestamp, consumedPivotTimestamps)
 
@@ -424,45 +391,7 @@ class AutoReplyOrchestrator @Inject constructor(
             }
 
             val isImagePresent = effectiveProcessed.mediaFilePath != null
-            val isGenericImageText = isImagePresent && (
-                effectiveProcessed.originalText.contains("Sent a photo", ignoreCase = true) ||
-                effectiveProcessed.originalText.trim() == "📷" ||
-                effectiveProcessed.originalText.contains("بكام", ignoreCase = true) ||
-                effectiveProcessed.originalText.contains("سعر", ignoreCase = true) ||
-                effectiveProcessed.originalText.contains("كام", ignoreCase = true) ||
-                effectiveProcessed.originalText.contains("ده", ignoreCase = true) ||
-                effectiveProcessed.originalText.length < 15
-            )
-
-            val finalCandidates = if (isImagePresent && (isGenericImageText || candidates.isEmpty())) {
-                val dbCatalog = try {
-                    businessKnowledgeDao.getProductCatalogChunks(limit = 10).map { proj ->
-                        RetrievalCandidate(
-                            chunkId = proj.chunkId,
-                            headerContext = proj.headerContext,
-                            chunkText = proj.chunkText,
-                            similarityScore = 0.95f,
-                            baseSimilarityScore = 0.95f
-                        )
-                    }
-                } catch (e: Exception) {
-                    emptyList()
-                }
-
-                if (dbCatalog.isNotEmpty()) {
-                    Log.i(TAG, "📸 Visual Catalog RAG Bypass: Injected ${dbCatalog.size} catalog chunks from DB")
-                    dbCatalog
-                } else {
-                    Log.i(TAG, "📸 Visual Catalog RAG Bypass: Injected ${CORE_CATALOG_FALLBACK_CHUNKS.size} core catalog chunks from fallback")
-                    CORE_CATALOG_FALLBACK_CHUNKS
-                }
-            } else {
-                candidates
-            }
-
-            if (isImagePresent && maxScore < 0.95f && finalCandidates.isNotEmpty()) {
-                maxScore = 0.95f
-            }
+            val finalCandidates = candidates
 
             // Context Assembly
             val contextStart = System.currentTimeMillis()
@@ -614,44 +543,21 @@ class AutoReplyOrchestrator @Inject constructor(
 
                     effectiveAction == "RE_QUERY" -> {
                         val refinedKeyword = agenticResponse.refinedSearchKeyword?.trim().orEmpty()
-                        Log.i(TAG, "LLM action=RE_QUERY. Refined keyword: '$refinedKeyword'")
-                        PersonaLogger.d(PersonaLogTags.LLM, "RE_QUERY loop triggered")
+                        val visualDesc = agenticResponse.visualProductDescription?.trim().orEmpty()
+                        Log.i(TAG, "LLM action=RE_QUERY. Refined keyword: '$refinedKeyword', Visual description: '$visualDesc'")
+                        PersonaLogger.d(PersonaLogTags.LLM, "RE_QUERY loop triggered with keyword='$refinedKeyword', visualDesc='$visualDesc'")
 
-                        val isProductCatalogQuery = refinedKeyword.contains("منتج") ||
-                            refinedKeyword.contains("المنتجات") ||
-                            refinedKeyword.contains("أسعار") ||
-                            refinedKeyword.contains("كتالوج") ||
-                            processed.originalText.contains("منتج") ||
-                            processed.originalText.contains("المنتجات") ||
-                            processed.originalText.contains("أسعار") ||
-                            processed.originalText.contains("كتالوج")
+                        val combinedSearchQuery = listOf(refinedKeyword, visualDesc)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" ")
 
-                        val catalogCandidates = if (isProductCatalogQuery) {
-                            try {
-                                businessKnowledgeDao.getProductCatalogChunks(limit = 5).map { proj ->
-                                    RetrievalCandidate(
-                                        chunkId = proj.chunkId,
-                                        headerContext = proj.headerContext,
-                                        chunkText = proj.chunkText,
-                                        similarityScore = 0.99f,
-                                        baseSimilarityScore = 0.99f
-                                    )
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Failed to load product catalog chunks", e)
-                                emptyList()
-                            }
-                        } else {
-                            emptyList()
-                        }
-
-                        val retrievedPass2: List<RetrievalCandidate> = if (refinedKeyword.isNotBlank()) {
-                            val refinedEmbedding = embeddingEngine.embedForAutoReply(refinedKeyword)
-                            if (refinedEmbedding != null) {
+                        val retrievedPass2: List<RetrievalCandidate> = if (combinedSearchQuery.isNotBlank()) {
+                            val pass2Embedding = embeddingEngine.embedForAutoReply(combinedSearchQuery)
+                            if (pass2Embedding != null) {
                                 val (retrieved, _) = semanticRetrievalRepository.retrieveCandidates(
-                                    queryEmbedding = refinedEmbedding,
+                                    queryEmbedding = pass2Embedding,
                                     minimumSimilarityThreshold = ragBaseThreshold,
-                                    queryText = refinedKeyword,
+                                    queryText = combinedSearchQuery,
                                     recentReplyHashes = activeHashes
                                 )
                                 retrieved
@@ -662,25 +568,37 @@ class AutoReplyOrchestrator @Inject constructor(
                             emptyList()
                         }
 
-                        val pass2Candidates = catalogCandidates + retrievedPass2
                         val mergedChunks = mergeCandidates(
                             pass1 = candidates,
-                            pass2 = pass2Candidates,
+                            pass2 = retrievedPass2,
                             limit = 8,
                             minScore = 0.38f
                         )
 
-                        Log.i(TAG, "RE_QUERY merged to ${mergedChunks.size} chunks (Pass1: ${candidates.size}, Pass2: ${pass2Candidates.size}). Executing final LLM pass.")
+                        Log.i(TAG, "RE_QUERY merged to ${mergedChunks.size} chunks (Pass1: ${candidates.size}, Pass2: ${retrievedPass2.size}). Executing final LLM pass.")
 
-                        val maxTokensPass2 = if (isImagePresent) 7000 else 750
+                        val pass2QueryText = if (visualDesc.isNotBlank()) {
+                            "${effectiveProcessed.originalText}\n[وصف الصورة المرفقة من العميل]: $visualDesc"
+                        } else {
+                            effectiveProcessed.originalText
+                        }
+
+                        val pass2ImageUrl = if (visualDesc.isBlank() && isImagePresent) {
+                            effectiveProcessed.mediaFilePath
+                        } else {
+                            null
+                        }
+
+                        val maxTokensPass2 = if (pass2ImageUrl != null) 7000 else 750
                         val finalOutput = replyGenerationRepository.generateFinalReply(
-                            queryText = processed.originalText,
+                            queryText = pass2QueryText,
                             chunks = mergedChunks,
                             isOngoingConversation = isOngoing,
                             chatHistory = chatHistory,
                             activeOrders = activeOrders,
                             personalChunks = emptyList(),
-                            maxTokens = maxTokensPass2
+                            maxTokens = maxTokensPass2,
+                            imageUrl = pass2ImageUrl
                         )
 
                         if (finalOutput.isNullOrBlank()) {

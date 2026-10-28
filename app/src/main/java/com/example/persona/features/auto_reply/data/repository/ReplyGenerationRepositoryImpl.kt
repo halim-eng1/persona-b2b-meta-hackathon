@@ -199,6 +199,24 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
     // ── Public API ─────────────────────────────────────────────────────────
 
+    internal fun resolveImageUri(filePathOrUri: String?): String? {
+        if (filePathOrUri.isNullOrBlank()) return null
+        if (filePathOrUri.startsWith("data:image/") || filePathOrUri.startsWith("http://") || filePathOrUri.startsWith("https://")) {
+            return filePathOrUri
+        }
+        return try {
+            val file = java.io.File(filePathOrUri)
+            if (file.exists() && file.length() > 0) {
+                val bytes = file.readBytes()
+                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                "data:image/jpeg;base64,$base64"
+            } else null
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to encode media image to Base64: ${e.message}")
+            null
+        }
+    }
+
     override suspend fun generateReply(
         notification: ProcessedNotification,
         candidates: List<RetrievalCandidate>,
@@ -208,19 +226,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         personalChunks: List<ChatHistoryEntity>,
         maxTokens: Int
     ): String? {
-        val imageUri = notification.mediaFilePath?.let { path ->
-            try {
-                val file = java.io.File(path)
-                if (file.exists() && file.length() > 0) {
-                    val bytes = file.readBytes()
-                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                    "data:image/jpeg;base64,$base64"
-                } else null
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to encode media image to Base64: ${e.message}")
-                null
-            }
-        }
+        val imageUri = resolveImageUri(notification.mediaFilePath)
 
         val isMultimodal = imageUri != null
         val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
@@ -264,7 +270,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         maxTokens: Int,
         imageUrl: String?
     ): String? {
-        val isMultimodal = !imageUrl.isNullOrBlank()
+        val imageUri = resolveImageUri(imageUrl)
+        val isMultimodal = imageUri != null
         val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
         val tone = userPreferencesRepository.stylePreferences.first().personaTone
         val baseSystemPrompt = PromptContextBuilder.buildFinalPassSystemPrompt(
@@ -283,7 +290,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             systemPrompt = systemPromptWithContext,
             chatHistory = chatHistory,
             currentInboundText = queryText,
-            imageUrl = imageUrl
+            imageUrl = imageUri
         )
         val effectiveMaxTokens = if (isMultimodal) 7000 else maxTokens
         return executeFailoverChain(messages, effectiveMaxTokens)
@@ -357,6 +364,16 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 else -> {
                     consecutive429Count = 0
                 }
+            }
+        }
+
+        if (hasImage) {
+            val hasVisualDescription = messages.any { it.content.contains("[وصف الصورة المرفقة من العميل]:") }
+            if (hasVisualDescription) {
+                PersonaLogger.w(TAG, "Dedicated Vision models exhausted. Falling back to text model chain using visual_product_description...")
+                Log.w(TAG, "Dedicated Vision models exhausted. Falling back to text model chain using visual_product_description...")
+                val strippedMessages = messages.map { it.copy(imageUrl = null) }
+                return executeFailoverChain(strippedMessages, maxTokens)
             }
         }
 

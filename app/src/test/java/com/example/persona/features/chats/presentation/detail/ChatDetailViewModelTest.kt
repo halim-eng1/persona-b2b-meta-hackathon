@@ -446,4 +446,66 @@ class ChatDetailViewModelTest {
             chatHistoryDao.deleteMessagesSince("أحمد مصطفى", "BUSINESS", expectedSince)
         }
     }
+
+    @Test
+    fun `clearChat when no messages remain deletes conversation metadata row`() = runTest(testDispatcher) {
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        advanceUntilIdle()
+
+        coEvery { chatHistoryDao.getLatestMessageForSource("أحمد مصطفى", "BUSINESS") } returns null
+
+        viewModel.clearChat(ClearChatTimeRange.ALL_TIME)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            chatHistoryDao.deleteMessagesSince("أحمد مصطفى", "BUSINESS", 0L)
+            conversationMetadataDao.deleteConversation("أحمد مصطفى", "BUSINESS")
+        }
+    }
+
+    @Test
+    fun `clearChat when earlier messages remain updates conversation metadata with latest remaining message`() = runTest(testDispatcher) {
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        advanceUntilIdle()
+
+        val remainingMessage = ChatHistoryEntity(
+            id = 42L,
+            contactName = "أحمد مصطفى",
+            sourceClass = "BUSINESS",
+            messageText = "رسالة سابقة متبقية",
+            isFromUser = true,
+            timestamp = 1_699_000_000_000L,
+            senderType = "CUSTOMER"
+        )
+        coEvery { chatHistoryDao.getLatestMessageForSource("أحمد مصطفى", "BUSINESS") } returns remainingMessage
+
+        val fixedNow = 1_700_000_000_000L
+        viewModel.clearChat(ClearChatTimeRange.LAST_HOUR, fixedNow)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            conversationMetadataDao.updateLastMessage(
+                contactName = "أحمد مصطفى",
+                sourceClass = "BUSINESS",
+                lastMessageText = "رسالة سابقة متبقية",
+                lastMessageTimestamp = 1_699_000_000_000L,
+                lastMessageSenderType = "CUSTOMER"
+            )
+        }
+        coVerify(exactly = 0) {
+            conversationMetadataDao.deleteConversation(any(), any())
+        }
+    }
 }

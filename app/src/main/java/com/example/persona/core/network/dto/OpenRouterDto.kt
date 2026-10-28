@@ -233,6 +233,8 @@ data class AgenticLlmResponse(
     @Serializable(with = LenientKeywordSerializer::class)
     @SerialName("refined_search_keyword")
     val refinedSearchKeyword: String? = null,
+    @SerialName("visual_product_description")
+    val visualProductDescription: String? = null,
     /**
      * Explicit agentic state-transition instruction emitted by the LLM:
      * "CREATE" (new order), "CANCEL" (stop the active order), "UPDATE"

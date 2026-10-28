@@ -3,6 +3,8 @@ package com.example.persona.features.auto_reply.data.service
 import android.app.Notification
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Bundle
 import android.service.notification.StatusBarNotification
 import com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceClass
@@ -10,12 +12,15 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.forms.MultiPartFormDataContent
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -191,5 +196,115 @@ class WhatsAppMediaExtractorTest {
         assertNotNull(result)
         assertEquals("السلام عليكم، هل متاح مقاس ميديوم؟", result)
         assertEquals(2, callCount)
+    }
+
+    @Test
+    fun `extractBitmapFromNotification extracts bitmap from MessagingStyle messages with uri and type`() {
+        mockkStatic(BitmapFactory::class)
+        try {
+            val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+            val mockBitmap = mockk<Bitmap>(relaxed = true)
+            val mockUri = mockk<Uri>()
+            val fakeStream = java.io.ByteArrayInputStream(byteArrayOf(1, 2, 3))
+
+            every { mockContext.contentResolver.openInputStream(mockUri) } returns fakeStream
+            every { BitmapFactory.decodeStream(any()) } returns mockBitmap
+
+            val messageBundle = mockk<Bundle>(relaxed = true) {
+                every { getString("type") } returns "image/jpeg"
+                every { getParcelable<Uri>("uri") } returns mockUri
+                every { getParcelable("uri", Uri::class.java) } returns mockUri
+                every { this@mockk.get("uri") } returns (mockUri as Any)
+            }
+
+            val extras = mockk<Bundle>(relaxed = true)
+            every { extras.keySet() } returns setOf(Notification.EXTRA_MESSAGES)
+            every { extras.getParcelableArray(Notification.EXTRA_MESSAGES) } returns arrayOf(messageBundle)
+            every { extras.get(Notification.EXTRA_MESSAGES) } returns arrayOf(messageBundle)
+
+            val notification = mockk<Notification> {
+                this.extras = extras
+            }
+            val sbn = mockk<StatusBarNotification> {
+                every { this@mockk.notification } returns notification
+                every { postTime } returns 1000L
+            }
+
+            val extracted = extractor.extractBitmapFromNotification(sbn)
+            assertNotNull(extracted)
+            assertEquals(mockBitmap, extracted)
+        } finally {
+            unmockkStatic(BitmapFactory::class)
+        }
+    }
+
+    @Test
+    fun `extractBitmapFromNotification returns bitmap from EXTRA_LARGE_ICON_BIG`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        val mockBitmap = mockk<Bitmap>(relaxed = true)
+
+        val extras = mockk<Bundle>(relaxed = true)
+        every { extras.keySet() } returns setOf("android.largeIcon.big")
+        every { extras.get(Notification.EXTRA_MESSAGES) } returns null
+        every { extras.getParcelableArray(Notification.EXTRA_MESSAGES) } returns null
+        every { extras.getParcelableArray(Notification.EXTRA_HISTORIC_MESSAGES) } returns null
+        every { extras.get(Notification.EXTRA_PICTURE) } returns null
+        every { extras.get("android.pictureIcon") } returns null
+        every { extras.get(Notification.EXTRA_LARGE_ICON_BIG) } returns mockBitmap
+
+        val notification = mockk<Notification> {
+            this.extras = extras
+        }
+        val sbn = mockk<StatusBarNotification> {
+            every { this@mockk.notification } returns notification
+            every { postTime } returns 1000L
+        }
+
+        val extracted = extractor.extractBitmapFromNotification(sbn)
+        assertNotNull(extracted)
+        assertEquals(mockBitmap, extracted)
+    }
+
+    @Test
+    fun `logNotificationExtrasStructure logs key and runtime types without exception`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        val extras = mockk<Bundle>(relaxed = true)
+        every { extras.keySet() } returns setOf("key1", "key2")
+        every { extras.get("key1") } returns "text value"
+        every { extras.get("key2") } returns 12345L
+
+        extractor.logNotificationExtrasStructure(extras)
+    }
+
+    @Test
+    fun `findLatestImageOnDisk anti-collision ensures claimed file is not re-claimed by concurrent turn`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        val imagesDir = tempFolder.newFolder("whatsapp_media")
+        extractor.imageDirectoriesOverride = listOf(imagesDir)
+
+        val image1 = File(imagesDir, "IMG_20261028_WA0001.jpg").apply {
+            writeBytes(byteArrayOf(1, 2, 3))
+            setLastModified(1_000_000L)
+        }
+
+        // First notification turn: claims image1
+        val firstClaim = extractor.findLatestImageOnDisk(NotificationSourceClass.BUSINESS, postTime = 1_000_000L)
+        assertNotNull(firstClaim)
+        assertEquals(image1.absolutePath, firstClaim!!.absolutePath)
+        assertTrue(extractor.isDiskFileClaimed(image1.absolutePath))
+
+        // Concurrent notification turn with same postTime: cannot claim image1 again!
+        val secondClaim = extractor.findLatestImageOnDisk(NotificationSourceClass.BUSINESS, postTime = 1_000_000L)
+        assertNull(secondClaim)
+
+        // When a new file arrives for the second turn:
+        val image2 = File(imagesDir, "IMG_20261028_WA0002.jpg").apply {
+            writeBytes(byteArrayOf(4, 5, 6))
+            setLastModified(1_001_000L)
+        }
+        val thirdClaim = extractor.findLatestImageOnDisk(NotificationSourceClass.BUSINESS, postTime = 1_001_000L)
+        assertNotNull(thirdClaim)
+        assertEquals(image2.absolutePath, thirdClaim!!.absolutePath)
+        assertTrue(extractor.isDiskFileClaimed(image2.absolutePath))
     }
 }

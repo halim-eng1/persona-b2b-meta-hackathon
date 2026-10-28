@@ -22,6 +22,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -996,5 +998,89 @@ class ReplyGenerationRepositoryImplTest {
         assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد من أوبن راوتر\"}", reply)
         assertTrue(capturedUrls.any { it.contains("groq.com") })
         assertTrue(capturedUrls.any { it.contains("openrouter.ai") })
+    }
+
+    @Test
+    fun `resolveImageUri correctly handles data uri, remote http, and local files`() {
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = HttpClient(MockEngine { respond("") }),
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "gsk_primary",
+            groqFallbackApiKey = "gsk_fallback"
+        )
+
+        assertNull(repo.resolveImageUri(null))
+        assertNull(repo.resolveImageUri(""))
+        assertNull(repo.resolveImageUri("   "))
+
+        assertEquals("data:image/jpeg;base64,abc123", repo.resolveImageUri("data:image/jpeg;base64,abc123"))
+        assertEquals("https://example.com/photo.jpg", repo.resolveImageUri("https://example.com/photo.jpg"))
+
+        val tempFile = java.io.File.createTempFile("test_resolve", ".jpg").apply {
+            writeBytes("IMAGE_DATA".toByteArray(Charsets.UTF_8))
+            deleteOnExit()
+        }
+        val resolved = repo.resolveImageUri(tempFile.absolutePath)
+        assertNotNull(resolved)
+        assertTrue(resolved!!.startsWith("data:image/jpeg;base64,"))
+    }
+
+    @Test
+    fun `when vision models fail, executeFailoverChain falls back to text models if visual description is present`() = runTest {
+        var visionTried = false
+        var textModelTried = false
+
+        val mockEngine = MockEngine { request ->
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            if (bodyText.contains("qwen/qwen3.8-27b") || bodyText.contains("nvidia/nemotron-3.5-super-vl:free")) {
+                visionTried = true
+                respond(
+                    content = """{"error": {"message": "Vision rate limited"}}""",
+                    status = HttpStatusCode.TooManyRequests,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                textModelTried = true
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"تم الرد بنجاح من نموذج النصوص\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "or-key",
+            fallbackApiKey = "or-key-2",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "gsk_primary",
+            groqFallbackApiKey = "gsk_fallback"
+        )
+
+        val messages = listOf(
+            ChatMessage(
+                role = "user",
+                content = "بكام ده؟\n[وصف الصورة المرفقة من العميل]: هودي أسود أوفر سايز",
+                imageUrl = "data:image/jpeg;base64,12345"
+            )
+        )
+
+        val result = repo.executeFailoverChain(messages, 500)
+
+        assertTrue(visionTried)
+        assertTrue(textModelTried)
+        assertNotNull(result)
+        assertTrue(result!!.contains("تم الرد بنجاح من نموذج النصوص"))
     }
 }
