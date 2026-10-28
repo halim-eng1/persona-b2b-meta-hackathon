@@ -301,6 +301,42 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
 - Absurd/Troll Requests: Play along deadpan for half a second to show quick wit, then remind them this is $storeName and invite a real order.$visionSection"""
         }
 
+        fun buildVisionExtractionSystemPrompt(
+            storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME,
+            storeTopics: List<String> = emptyList()
+        ): String {
+            val topicsBlock = if (storeTopics.isEmpty()) {
+                "<store_topics>\nNONE\n</store_topics>"
+            } else {
+                "<store_topics>\n" + storeTopics.joinToString("\n") { "- $it" } + "\n</store_topics>"
+            }
+
+            return """You are the AI Visual Extraction Assistant for $storeName.
+Your sole task is to visually inspect the attached product image, describe what you see in concise Arabic, transcribe all visible printed Arabic/English text and slogans accurately, and output targeted search keywords to retrieve the product's catalog details.
+
+$topicsBlock
+
+OUTPUT FORMAT:
+Respond with a single raw JSON object. Absolutely NO markdown code blocks (no ```json), NO conversational filler before or after the JSON, and NO thinking/reasoning text.
+Inside fields, NEVER use unescaped double quotes ("); use single quotes (') or brackets if quoting.
+Output Schema:
+{
+  "action": "RE_QUERY",
+  "refined_search_keyword": "2-4 Arabic keywords aligned with <store_topics> (e.g. 'هودي مطبوع اسود')",
+  "visual_product_description": "Concise 1-line Arabic visual description including item type, color, and exact printed slogan/text (e.g. 'هودي أبيض بجيب كنغر مطبوع عليه NO SYSTEM IS SAFE')",
+  "order_action": null,
+  "final_reply_text": null,
+  "extracted_order": null
+}
+
+RULES:
+1. Examine the image carefully. Identify item type (e.g. hoodie, t-shirt, mug), color, and any graphics or slogans printed on it.
+2. Transcribe any visible text or slogans exactly as written.
+3. Set "action" to "RE_QUERY".
+4. Set "refined_search_keyword" to 2-4 search terms aligned with <store_topics> to look up this product in the catalog.
+5. Set "visual_product_description" to a concise 1-line Arabic description of the product and its printed design/slogan."""
+        }
+
 
 /**
  * Static default prompt, derived from [buildFirstPassSystemPrompt] so the rule text
@@ -439,8 +475,19 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             }
         }
 
+        fun isMediaRefusalMessage(text: String): Boolean {
+            val trimmed = text.trim()
+            return trimmed.contains("لا يمكنني معالجة الوسائط") ||
+                trimmed.contains("معالجة الوسائط") ||
+                trimmed.contains("يرجى كتابة استفسارك في رسالة نصية") ||
+                trimmed.contains("عفواً، لا يمكنني معالجة")
+        }
+
         fun formatHistoricalAssistantTurn(rawText: String, customHoldingMessage: String? = null): String {
             val trimmed = rawText.trim()
+            if (isMediaRefusalMessage(trimmed)) {
+                return ""
+            }
             val firstBrace = trimmed.indexOf('{')
             val lastBrace = trimmed.lastIndexOf('}')
             if (firstBrace != -1 && lastBrace != -1 && lastBrace >= firstBrace) {
@@ -528,11 +575,15 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
             val twoHoursAgo = nowMs - TimeUnit.HOURS.toMillis(2)
             val maxTimestamp = chatHistory.maxOfOrNull { it.timestamp } ?: 0L
             val recentTurns = if (maxTimestamp > 100_000_000L) {
-                chatHistory.filter { it.timestamp >= twoHoursAgo }.take(6)
+                chatHistory.filter { it.timestamp >= twoHoursAgo }
             } else {
-                chatHistory.take(6)
+                chatHistory
             }
-            return recentTurns.reversed()
+            // Filter out media refusal messages from assistant history
+            val sanitized = recentTurns.filterNot { entity ->
+                !entity.isFromUser && isMediaRefusalMessage(entity.messageText)
+            }.take(6)
+            return sanitized.reversed()
         }
 
         fun formatRelativeTime(timestampMs: Long, nowMs: Long = System.currentTimeMillis()): String {
@@ -568,6 +619,7 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
                 val role = if (turn.isFromUser && !turn.senderType.equals("MERCHANT_MANUAL", ignoreCase = true)) "user" else "assistant"
                 val text = turn.messageText.trim()
                 if (text.isEmpty()) continue
+                if (role == "assistant" && isMediaRefusalMessage(text)) continue
 
                 val formattedContent = if (role == "assistant") {
                     formatHistoricalAssistantTurn(text)
@@ -575,6 +627,7 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
                     val relativeTime = formatRelativeTime(turn.timestamp, nowMs)
                     "[$relativeTime] $text"
                 }
+                if (formattedContent.isBlank()) continue
 
                 if (nativeHistory.isNotEmpty() && nativeHistory.last().role == role) {
                     val prev = nativeHistory.removeAt(nativeHistory.lastIndex)

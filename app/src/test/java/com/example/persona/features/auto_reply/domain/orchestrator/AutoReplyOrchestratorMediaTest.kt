@@ -160,14 +160,14 @@ class AutoReplyOrchestratorMediaTest {
 
         orchestrator.processNotificationSequentially(notification)
 
-        // Verify that LLM was invoked with the notification containing mediaFilePath and 500 token budget
+        // Verify Pass 1 invoked with 500 maxTokens and diet context
         coVerify(atLeast = 1) {
             replyGenerationRepository.generateReply(
                 notification = match { it.mediaFilePath == imageFile.absolutePath },
-                candidates = any(),
+                candidates = eq(emptyList()),
                 isOngoingConversation = any(),
-                chatHistory = any(),
-                activeOrders = any(),
+                chatHistory = eq(emptyList()),
+                activeOrders = eq(emptyList()),
                 personalChunks = any(),
                 maxTokens = 500
             )
@@ -475,6 +475,56 @@ class AutoReplyOrchestratorMediaTest {
                 match { it.contains("750 جنيه") },
                 eq("أحمد مهندس"),
                 any()
+            )
+        }
+    }
+
+    @Test
+    fun `Pass 1 multimodal vision request strictly isolates payload without chat history or candidates`() = runBlocking {
+        val imageFile = tempFolder.newFile("sample_img_diet.jpg").apply {
+            writeBytes(byteArrayOf(1, 2, 3))
+        }
+
+        val notification = WhatsAppNotification(
+            title = "عميل الصورة",
+            text = "📷 بكام ده",
+            postTime = 1000L,
+            notificationKey = "key_img_diet",
+            sourceClass = NotificationSourceClass.BUSINESS,
+            mediaFilePath = imageFile.absolutePath
+        )
+
+        val dummyHistory = listOf(
+            ChatHistoryEntity(id = 1L, contactName = "عميل الصورة", messageText = "سلام عليكم", isFromUser = true, timestamp = 100L),
+            ChatHistoryEntity(id = 2L, contactName = "عميل الصورة", messageText = "أهلاً بك", isFromUser = false, timestamp = 200L)
+        )
+        coEvery { chatHistoryDao.getRecentMessagesExceptForSource(any(), any(), any(), any()) } returns dummyHistory
+
+        coEvery {
+            replyGenerationRepository.generateReply(
+                notification = any(),
+                candidates = any(),
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = any()
+            )
+        } returns """{"action":"REPLY","final_reply_text":"تمام يا فندم"}"""
+
+        orchestrator.processNotificationSequentially(notification)
+
+        coVerify(exactly = 1) {
+            replyGenerationRepository.generateReply(
+                notification = match { it.mediaFilePath == imageFile.absolutePath },
+                candidates = eq(emptyList()),
+                isOngoingConversation = any(),
+                chatHistory = eq(emptyList()),
+                activeOrders = eq(emptyList()),
+                personalChunks = any(),
+                maxTokens = 500,
+                lastOrder = isNull(),
+                orderStatusCounts = eq(emptyList())
             )
         }
     }

@@ -451,14 +451,14 @@ class AutoReplyOrchestrator @Inject constructor(
 
             val rawLlmOutput = replyGenerationRepository.generateReply(
                 notification = effectiveProcessed,
-                candidates = finalCandidates,
+                candidates = if (isImagePresent) emptyList() else finalCandidates,
                 isOngoingConversation = isOngoing,
-                chatHistory = chatHistory,
-                activeOrders = activeOrders,
+                chatHistory = if (isImagePresent) emptyList() else chatHistory,
+                activeOrders = if (isImagePresent) emptyList() else activeOrders,
                 personalChunks = emptyList(),
                 maxTokens = maxTokensForGeneration,
-                lastOrder = latestOrder,
-                orderStatusCounts = orderStatusCounts
+                lastOrder = if (isImagePresent) null else latestOrder,
+                orderStatusCounts = if (isImagePresent) emptyList() else orderStatusCounts
             )
             if (rawLlmOutput.isNullOrBlank()) {
                 Log.d(TAG, "LLM returned null/blank — all models failed. HITL fallback.")
@@ -554,10 +554,10 @@ class AutoReplyOrchestrator @Inject constructor(
                 "UPDATE", "CREATE" -> "REPLY"
                 else -> rawAction
             }
-            val effectiveAction = if (normalizedAction == "RE_QUERY" && agenticResponse.refinedSearchKeyword.isNullOrBlank() && !agenticResponse.finalReplyText.isNullOrBlank()) {
-                "REPLY"
-            } else {
-                normalizedAction
+            val effectiveAction = when {
+                isImagePresent && !agenticResponse.visualProductDescription.isNullOrBlank() -> "RE_QUERY"
+                normalizedAction == "RE_QUERY" && agenticResponse.refinedSearchKeyword.isNullOrBlank() && !agenticResponse.finalReplyText.isNullOrBlank() -> "REPLY"
+                else -> normalizedAction
             }
 
             val rawReplyText: String? = if (overriddenReplyText != null) {

@@ -20,6 +20,13 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideHttpClient(): HttpClient = HttpClient(OkHttp) {
+        engine {
+            config {
+                connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            }
+        }
         install(ContentNegotiation) {
             json(Json {
                 ignoreUnknownKeys = true

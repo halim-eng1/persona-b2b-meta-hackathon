@@ -1535,6 +1535,126 @@ class ReplyGenerationRepositoryImplTest {
     }
 
     @Test
+    fun `generateReply uses lightweight isolated vision extraction prompt without chat history or candidates when image present`() = runTest {
+        var requestedMaxTokens: Int? = null
+        var sentMessages: List<com.example.persona.core.network.dto.OpenRouterChatMessage>? = null
+
+        val mockEngine = MockEngine { request ->
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            val parsedGroq = runCatching { Json { ignoreUnknownKeys = true }.decodeFromString<GroqRequest>(bodyText) }.getOrNull()
+            requestedMaxTokens = parsedGroq?.maxCompletionTokens
+            sentMessages = parsedGroq?.messages
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"RE_QUERY\",\"visual_product_description\":\"هودي أسود\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+
+        val mockPrefs = mockk<UserPreferencesRepository>(relaxed = true) {
+            every { storeKnowledgeTopicsFlow } returns kotlinx.coroutines.flow.flowOf(listOf("الهوديز"))
+            coEvery { getStoreNameSync() } returns "Velo Store"
+        }
+
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "or-key",
+            fallbackApiKey = "or-key-2",
+            userPreferencesRepository = mockPrefs,
+            groqPrimaryApiKey = "gsk_primary",
+            groqFallbackApiKey = "gsk_fallback"
+        )
+
+        val tempFile = java.io.File.createTempFile("vision_diet", ".jpg").apply {
+            writeBytes("DUMMY_IMAGE".toByteArray())
+            deleteOnExit()
+        }
+
+        val notification = com.example.persona.features.auto_reply.domain.model.ProcessedNotification(
+            notificationKey = "key_img",
+            contactName = "Test Contact",
+            originalText = "📷 Sent a photo",
+            normalizedText = "📷 Sent a photo",
+            context = com.example.persona.features.chat_import.domain.model.ConversationContext(
+                intent = com.example.persona.features.chat_import.domain.model.IntentType.QUESTION,
+                topic = com.example.persona.features.chat_import.domain.model.TopicType.MEDIA,
+                sentiment = com.example.persona.features.chat_import.domain.model.SentimentType.NEUTRAL,
+                confidence = 1.0f
+            ),
+            postTime = System.currentTimeMillis(),
+            sourceClass = com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceClass.BUSINESS,
+            mediaFilePath = tempFile.absolutePath
+        )
+
+        val dummyHistory = listOf(
+            ChatHistoryEntity(id = 1L, contactName = "c", messageText = "سلام عليكم", isFromUser = true, timestamp = 100L)
+        )
+        val dummyCandidate = listOf(
+            RetrievalCandidate(chunkId = "c1", headerContext = "h", chunkText = "heavy store knowledge text", similarityScore = 0.9f, baseSimilarityScore = 0.9f)
+        )
+
+        val reply = repo.generateReply(
+            notification = notification,
+            candidates = dummyCandidate,
+            isOngoingConversation = true,
+            chatHistory = dummyHistory,
+            activeOrders = emptyList(),
+            personalChunks = emptyList(),
+            maxTokens = 7000
+        )
+
+        assertNotNull(reply)
+        assertEquals(500, requestedMaxTokens)
+        assertNotNull(sentMessages)
+        assertEquals(2, sentMessages!!.size) // strictly system + single user turn with image
+        val systemMsg = sentMessages!![0].content
+        assertTrue(systemMsg.contains("AI Visual Extraction Assistant for Velo Store"))
+        assertTrue(systemMsg.contains("<store_topics>\n- الهوديز\n</store_topics>"))
+        assertFalse(systemMsg.contains("heavy store knowledge text"))
+        assertFalse(systemMsg.contains("<customer_order_state>"))
+        val userMsg = sentMessages!![1]
+        assertNotNull(userMsg.imageUrl)
+    }
+
+    @Test
+    fun `vision requests utilize 25-second timeout window while text requests use 10 seconds`() {
+        assertEquals(25_000L, ReplyGenerationRepositoryImpl.VISION_MODEL_TIMEOUT_MS)
+        assertEquals(10_000L, ReplyGenerationRepositoryImpl.MODEL_TIMEOUT_MS)
+    }
+
+    @Test
+    fun `filterAndPairChatHistory purges past media refusal messages when assembling prompt history`() {
+        val now = 10_000_000L
+        val historyWithRefusal = listOf(
+            ChatHistoryEntity(id = 3L, contactName = "c", messageText = "عفواً، لا يمكنني معالجة الوسائط. يرجى كتابة استفسارك في رسالة نصية.", isFromUser = false, timestamp = now - 500L),
+            ChatHistoryEntity(id = 2L, contactName = "c", messageText = "بكام ده؟", isFromUser = true, timestamp = now - 1000L),
+            ChatHistoryEntity(id = 1L, contactName = "c", messageText = "السلام عليكم", isFromUser = true, timestamp = now - 2000L)
+        )
+
+        val filtered = PromptContextBuilder.filterAndPairChatHistory(historyWithRefusal, now)
+
+        assertEquals(2, filtered.size)
+        assertFalse("Media refusal turn must be purged from history", filtered.any { it.messageText.contains("لا يمكنني معالجة الوسائط") })
+        assertEquals("السلام عليكم", filtered[0].messageText)
+        assertEquals("بكام ده؟", filtered[1].messageText)
+    }
+
+    @Test
+    fun `formatHistoricalAssistantTurn returns empty string for media refusal message`() {
+        val refusal = "عفواً، لا يمكنني معالجة الوسائط. يرجى كتابة استفسارك في رسالة نصية."
+        val formatted = PromptContextBuilder.formatHistoricalAssistantTurn(refusal)
+        assertEquals("", formatted)
+        assertTrue(PromptContextBuilder.isMediaRefusalMessage(refusal))
+    }
+
+    @Test
     fun `compressAndScaleImage scales down large images and compresses to JPEG`() {
         val repo = ReplyGenerationRepositoryImpl(
             httpClient = mockk(relaxed = true),

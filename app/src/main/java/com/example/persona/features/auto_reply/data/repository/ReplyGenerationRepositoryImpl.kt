@@ -97,7 +97,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         private val AUDIO_EXTENSIONS = setOf("opus", "ogg", "mp3", "m4a", "wav", "aac", "m4p", "amr")
         private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
 
-        private const val MODEL_TIMEOUT_MS = 25000L
+        const val MODEL_TIMEOUT_MS = 10_000L
+        const val VISION_MODEL_TIMEOUT_MS = 25_000L
         private const val ABSOLUTE_FAILOVER_CEILING = 8000
 
         private val jsonParser = Json {
@@ -124,10 +125,10 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         /** Tier 1: NVIDIA NIM (Primary Fast Text - Top 4 Benchmarked) */
         val NVIDIA_TEXT_MODELS = listOf(
-            "nvidia/nemotron-3.5-bolt-e4b",         // 304ms TTFT / 1.6s Champion
-            "nvidia/nemotron-3.5-lightning-30b-a3b", // 30B fast reasoning fallback
             "nvidia/nemotron-3-ultra-550b-a55b",     // Deep analytical reasoner
-            "meta/llama-3.2-11b-vision-instruct",  // Reliable fallback
+            "nvidia/nemotron-3.5-bolt-e4b",         // 304ms TTFT / 1.6s Champion
+            "meta/llama-3.2-11b-vision-instruct",
+            "nvidia/nemotron-3.5-lightning-30b-a3b", // 30B fast reasoning fallback
             "openai/gpt-oss-20b"                     // Reliable fallback
         )
 
@@ -142,8 +143,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             "nvidia/nemotron-3-ultra-550b-a55b:free",
             "liquid/lfm-2.5-2.6b:free",
             "cohere/north-mini-code:free",
-            "openrouter/free",
-            "nvidia/nemotron-3.5-super-vl:free"
+            "openrouter/free"
         )
 
         val FAILOVER_MODELS = OPENROUTER_FAILOVER_MODELS
@@ -192,6 +192,14 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         internal fun formatHistoricalAssistantTurn(rawText: String): String =
             PromptContextBuilder.formatHistoricalAssistantTurn(rawText)
+
+        internal fun isMediaRefusalMessage(text: String): Boolean =
+            PromptContextBuilder.isMediaRefusalMessage(text)
+
+        fun buildVisionExtractionSystemPrompt(
+            storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME,
+            storeTopics: List<String> = emptyList()
+        ): String = PromptContextBuilder.buildVisionExtractionSystemPrompt(storeName, storeTopics)
 
         internal fun isCanonicalHitlMessage(text: String): Boolean =
             PromptContextBuilder.isCanonicalHitlMessage(text)
@@ -341,16 +349,35 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         orderStatusCounts: List<OrderStatusCount>
     ): String? {
         val imageUri = resolveImageUri(notification.mediaFilePath)
-
         val isMultimodal = imageUri != null
         val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
+
+        if (isMultimodal) {
+            val storeName = userPreferencesRepository.getStoreNameSync()
+            val visionSystemPrompt = PromptContextBuilder.buildVisionExtractionSystemPrompt(
+                storeName = storeName,
+                storeTopics = storeTopics
+            )
+            val inboundText = if (notification.originalText.contains("Sent a photo", ignoreCase = true) || notification.originalText.trim() == "📷" || notification.originalText.isBlank()) {
+                "العميل أرسل هذه الصورة لمنتج. تفحص الصورة وتعرف على مواصفات ونوع المنتج المعروض فيها واستخرج وصف دقيق للبحث في الكتالوج."
+            } else {
+                notification.originalText
+            }
+
+            val messages = listOf(
+                ChatMessage(role = "system", content = visionSystemPrompt),
+                ChatMessage(role = "user", content = inboundText, imageUrl = imageUri)
+            )
+            return executeFailoverChain(messages, 500)
+        }
+
         val storeWebsite = userPreferencesRepository.storeWebsiteFlow.first()
         val tone = userPreferencesRepository.stylePreferences.first().personaTone
         val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
             botName = userPreferencesRepository.getBotNameSync(),
             storeName = userPreferencesRepository.getStoreNameSync(),
             tone = tone,
-            isMultimodal = isMultimodal
+            isMultimodal = false
         )
         val systemPromptWithContext = PromptContextBuilder.buildSystemPromptWithContext(
             staticSystemPrompt = baseSystemPrompt,
@@ -362,20 +389,13 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             statusCounts = orderStatusCounts
         )
 
-        val inboundText = if (imageUri != null && (notification.originalText.contains("Sent a photo", ignoreCase = true) || notification.originalText.trim() == "📷")) {
-            "العميل أرسل هذه الصورة لمنتج. تفحص الصورة وتعرف على مواصفات ونوع المنتج المعروض فيها، وقدم له تفاصيل المنتج وسعره المتاح من واقع بيانات المتجر واعرض عليه إتمام الطلب."
-        } else {
-            notification.originalText
-        }
-
         val messages = PromptContextBuilder.buildOpenRouterMessages(
             systemPrompt = systemPromptWithContext,
             chatHistory = chatHistory,
-            currentInboundText = inboundText,
-            imageUrl = imageUri
+            currentInboundText = notification.originalText,
+            imageUrl = null
         )
-        val effectiveMaxTokens = if (isMultimodal) 500 else maxTokens
-        return executeFailoverChain(messages, effectiveMaxTokens)
+        return executeFailoverChain(messages, maxTokens)
     }
 
     override suspend fun generateFinalReply(
@@ -577,12 +597,15 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         }
 
         val keyMasked = maskKey(apiKey)
+        val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
+        val isVision = model in VISION_NVIDIA_MODELS || hasImage
+        val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
         val effectiveMaxTokens = if (model.contains("super-vl")) maxOf(maxTokens, 1500) else maxTokens
-        PersonaLogger.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens)")
-        Log.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens)")
+        PersonaLogger.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
+        Log.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
 
         try {
-            withTimeout(MODEL_TIMEOUT_MS) {
+            withTimeout(timeoutMs) {
                 val response = httpClient.post(BuildConfig.NVIDIA_BASE_URL) {
                     contentType(ContentType.Application.Json)
                     bearerAuth(apiKey)
@@ -634,7 +657,10 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 }
             }
         } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "Timeout (${MODEL_TIMEOUT_MS}ms) on [NVIDIA NIM] model $model (key $keyMasked)")
+            Log.w(TAG, "Timeout (${timeoutMs}ms) on [NVIDIA NIM] model $model (key $keyMasked)")
+            CallResult.Timeout
+        } catch (e: io.ktor.client.network.sockets.SocketTimeoutException) {
+            Log.w(TAG, "Socket timeout on [NVIDIA NIM] model $model (key $keyMasked): ${e.message}")
             CallResult.Timeout
         } catch (e: Exception) {
             Log.e(TAG, "Network error on [NVIDIA NIM] model $model (key $keyMasked)", e)
@@ -727,10 +753,11 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val keyMasked = maskKey(apiKey)
         val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
         val isVision = model in VISION_GROQ_MODELS || hasImage
+        val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
         val reasoningEffort = if (isVision) null else "low"
 
         return try {
-            withTimeout(MODEL_TIMEOUT_MS) {
+            withTimeout(timeoutMs) {
                 var response = httpClient.post(BuildConfig.GROQ_BASE_URL) {
                     contentType(ContentType.Application.Json)
                     bearerAuth(apiKey)
@@ -798,7 +825,10 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 }
             }
         } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "Timeout (${MODEL_TIMEOUT_MS}ms) on [Groq] model $model (key $keyMasked)")
+            Log.w(TAG, "Timeout (${timeoutMs}ms) on [Groq] model $model (key $keyMasked)")
+            CallResult.Timeout
+        } catch (e: io.ktor.client.network.sockets.SocketTimeoutException) {
+            Log.w(TAG, "Socket timeout on [Groq] model $model (key $keyMasked): ${e.message}")
             CallResult.Timeout
         } catch (e: Exception) {
             Log.e(TAG, "Network error on [Groq] model $model (key $keyMasked)", e)
@@ -887,10 +917,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         val keyMasked = maskKey(apiKey)
         val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
+        val isVision = model in VISION_OPENROUTER_MODELS || hasImage
+        val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
         val effectiveMaxTokens = if (model.contains("super-vl")) maxOf(maxTokens, 1500) else maxTokens
 
         return try {
-            withTimeout(MODEL_TIMEOUT_MS) {
+            withTimeout(timeoutMs) {
                 val reasoning = if (model in REASONING_MODELS && !hasImage) ReasoningConfig(effort = "low") else null
                 var response = httpClient.post(BuildConfig.OPENROUTER_BASE_URL) {
                     contentType(ContentType.Application.Json)
@@ -953,7 +985,10 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 }
             }
         } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "Timeout (${MODEL_TIMEOUT_MS}ms) on model $model (key $keyMasked)")
+            Log.w(TAG, "Timeout (${timeoutMs}ms) on model $model (key $keyMasked)")
+            CallResult.Timeout
+        } catch (e: io.ktor.client.network.sockets.SocketTimeoutException) {
+            Log.w(TAG, "Socket timeout on model $model (key $keyMasked): ${e.message}")
             CallResult.Timeout
         } catch (e: Exception) {
             Log.e(TAG, "Network error on model $model (key $keyMasked)", e)
