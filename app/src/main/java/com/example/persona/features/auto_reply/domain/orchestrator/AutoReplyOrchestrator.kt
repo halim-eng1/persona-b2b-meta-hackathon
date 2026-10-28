@@ -325,6 +325,13 @@ class AutoReplyOrchestrator @Inject constructor(
         var currentMediaFilePath = processed.mediaFilePath
         var effectiveProcessed = processed
 
+        val rawText = processed.originalText
+        val hasImage = mediaExtractor?.isImageIndicator(rawText) ?: com.example.persona.features.auto_reply.data.repository.NotificationProcessorImpl.isImageIndicator(rawText)
+        val hasAudio = mediaExtractor?.isVoiceMessageIndicator(rawText) ?: com.example.persona.features.auto_reply.data.repository.NotificationProcessorImpl.isVoiceMessageIndicator(rawText)
+        if (hasImage || hasAudio || containsMediaIndicators(rawText)) {
+            Log.d("PersonaMedia", "📥 Inbound media turn detected: text='$rawText', hasImageIndicator=$hasImage, hasAudioIndicator=$hasAudio")
+        }
+
         if (!isTranscribedVoice && containsMediaIndicators(processed.originalText)) {
             if (mediaExtractor != null) {
                 if (mediaExtractor.isVoiceMessageIndicator(processed.originalText)) {
@@ -410,7 +417,7 @@ class AutoReplyOrchestrator @Inject constructor(
             val lastSessionReplyTime = lastReplyTimestamps[effectiveProcessed.contactName] ?: 0L
             val isOngoing = (System.currentTimeMillis() - lastSessionReplyTime) < 300_000L
 
-            val maxTokensForGeneration = if (isImagePresent) 7000 else 600
+            val maxTokensForGeneration = if (isImagePresent) 500 else 600
 
             val rawLlmOutput = replyGenerationRepository.generateReply(
                 notification = effectiveProcessed,
@@ -870,17 +877,8 @@ class AutoReplyOrchestrator @Inject constructor(
         sendImmediateReply(processed, CANONICAL_HITL_MESSAGE)
     }
 
-    internal fun containsMediaIndicators(text: String): Boolean {
-        if (text.startsWith("[رسالة صوتية من العميل]:")) return false
-        val mediaEmojis = listOf("📷", "🎵", "🎤", "📹", "🎥", "📄", "📸", "🎬", "🎙️")
-        if (mediaEmojis.any { text.contains(it) }) return true
-        val lower = text.lowercase()
-        val mediaKeywords = listOf(
-            "photo", "video", "audio", "document", "voice note", "voice message",
-            "صورة", "فيديو", "رسالة صوتية", "ملف", "مستند"
-        )
-        return mediaKeywords.any { lower.contains(it) }
-    }
+    internal fun containsMediaIndicators(text: String): Boolean =
+        com.example.persona.features.auto_reply.data.repository.NotificationProcessorImpl.containsMediaIndicators(text)
 
     // Delegated helpers for backward compatibility with existing tests
     internal suspend fun handleOrderCreation(

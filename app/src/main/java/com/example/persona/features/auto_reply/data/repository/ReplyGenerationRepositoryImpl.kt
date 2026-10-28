@@ -206,15 +206,77 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
     // ── Public API ─────────────────────────────────────────────────────────
 
+    internal fun compressAndScaleImage(
+        filePath: String,
+        maxDimension: Int = 1024,
+        quality: Int = 80
+    ): ByteArray? {
+        val file = java.io.File(filePath)
+        if (!file.exists() || file.length() == 0L) return null
+
+        return try {
+            val boundsOptions = android.graphics.BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            android.graphics.BitmapFactory.decodeFile(file.absolutePath, boundsOptions)
+            val origWidth = boundsOptions.outWidth
+            val origHeight = boundsOptions.outHeight
+
+            if (origWidth > 0 && origHeight > 0) {
+                var sampleSize = 1
+                val maxDim = maxOf(origWidth, origHeight)
+                while ((maxDim / (sampleSize * 2)) >= maxDimension) {
+                    sampleSize *= 2
+                }
+                val decodeOptions = android.graphics.BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                }
+                val decoded = android.graphics.BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
+                if (decoded != null) {
+                    val w = decoded.width
+                    val h = decoded.height
+                    val finalBitmap = if (w > maxDimension || h > maxDimension) {
+                        val ratio = minOf(maxDimension.toFloat() / w, maxDimension.toFloat() / h)
+                        val targetW = (w * ratio).toInt().coerceAtLeast(1)
+                        val targetH = (h * ratio).toInt().coerceAtLeast(1)
+                        val scaled = android.graphics.Bitmap.createScaledBitmap(decoded, targetW, targetH, true)
+                        if (scaled != decoded) {
+                            decoded.recycle()
+                        }
+                        scaled
+                    } else {
+                        decoded
+                    }
+
+                    try {
+                        val stream = java.io.ByteArrayOutputStream()
+                        finalBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, stream)
+                        val compressed = stream.toByteArray()
+                        Log.d(TAG, "Image scaled and compressed to ${compressed.size} bytes (target quality=$quality)")
+                        compressed
+                    } finally {
+                        finalBitmap.recycle()
+                    }
+                } else {
+                    file.readBytes()
+                }
+            } else {
+                file.readBytes()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Image decoding/scaling failed for $filePath, falling back to raw file: ${e.message}")
+            try { file.readBytes() } catch (_: Exception) { null }
+        }
+    }
+
     internal fun resolveImageUri(filePathOrUri: String?): String? {
         if (filePathOrUri.isNullOrBlank()) return null
         if (filePathOrUri.startsWith("data:image/") || filePathOrUri.startsWith("http://") || filePathOrUri.startsWith("https://")) {
             return filePathOrUri
         }
         return try {
-            val file = java.io.File(filePathOrUri)
-            if (file.exists() && file.length() > 0) {
-                val bytes = file.readBytes()
+            val bytes = compressAndScaleImage(filePathOrUri, maxDimension = 1024, quality = 80)
+            if (bytes != null && bytes.isNotEmpty()) {
                 val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                 "data:image/jpeg;base64,$base64"
             } else null
@@ -265,7 +327,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             currentInboundText = inboundText,
             imageUrl = imageUri
         )
-        val effectiveMaxTokens = if (isMultimodal) 7000 else maxTokens
+        val effectiveMaxTokens = if (isMultimodal) 500 else maxTokens
         return executeFailoverChain(messages, effectiveMaxTokens)
     }
 
@@ -303,7 +365,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             currentInboundText = queryText,
             imageUrl = imageUri
         )
-        val effectiveMaxTokens = if (isMultimodal) 7000 else maxTokens
+        val effectiveMaxTokens = if (isMultimodal) 1500 else maxTokens
         return executeFailoverChain(messages, effectiveMaxTokens)
     }
 
@@ -320,7 +382,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
     internal suspend fun executeFailoverChain(messages: List<ChatMessage>, maxTokens: Int): String? {
         val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
-        val targetMaxTokens = if (hasImage) 7000 else minOf(maxTokens, ABSOLUTE_FAILOVER_CEILING)
+        val targetMaxTokens = if (hasImage) 500 else minOf(maxTokens, ABSOLUTE_FAILOVER_CEILING)
 
         val groqModelsToTry = if (hasImage) VISION_GROQ_MODELS else GROQ_MODELS
         val openRouterModelsToTry = if (hasImage) VISION_OPENROUTER_MODELS else OPENROUTER_FAILOVER_MODELS

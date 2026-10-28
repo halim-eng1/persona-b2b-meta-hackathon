@@ -153,7 +153,7 @@ class AutoReplyOrchestratorMediaTest {
 
         orchestrator.processNotificationSequentially(notification)
 
-        // Verify that LLM was invoked with the notification containing mediaFilePath and 7000 token budget
+        // Verify that LLM was invoked with the notification containing mediaFilePath and 500 token budget
         coVerify(atLeast = 1) {
             replyGenerationRepository.generateReply(
                 notification = match { it.mediaFilePath == imageFile.absolutePath },
@@ -162,7 +162,7 @@ class AutoReplyOrchestratorMediaTest {
                 chatHistory = any(),
                 activeOrders = any(),
                 personalChunks = any(),
-                maxTokens = 7000
+                maxTokens = 500
             )
         }
 

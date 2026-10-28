@@ -524,20 +524,28 @@ class WhatsAppMediaExtractor @Inject constructor(
     fun isVoiceMessageIndicator(text: String): Boolean {
         val voiceEmojis = listOf("🎤", "🎙️", "🎵")
         if (voiceEmojis.any { text.contains(it) }) return true
-        val lower = text.lowercase()
-        return lower.contains("voice message") ||
-               lower.contains("voice note") ||
-               lower.contains("رسالة صوتية") ||
-               lower.contains("مقطع صوتي") ||
-               lower.contains("audio")
+        val trimmed = text.trim()
+        val lower = trimmed.lowercase()
+        return lower == "voice message" ||
+               lower.startsWith("voice message") ||
+               lower == "voice note" ||
+               lower.startsWith("voice note") ||
+               lower == "رسالة صوتية" ||
+               lower.startsWith("رسالة صوتية") ||
+               lower == "مقطع صوتي" ||
+               lower.startsWith("مقطع صوتي") ||
+               lower == "audio" ||
+               lower.startsWith("audio")
     }
 
     fun isImageIndicator(text: String): Boolean {
         val imageEmojis = listOf("📷", "📸")
         if (imageEmojis.any { text.contains(it) }) return true
-        val lower = text.lowercase()
-        return lower.contains("photo") ||
-               lower.contains("صورة") ||
+        val trimmed = text.trim()
+        val lower = trimmed.lowercase()
+        return lower == "photo" ||
+               lower == "صورة" ||
+               lower.startsWith("sent a photo") ||
                lower.contains("sent a photo")
     }
 

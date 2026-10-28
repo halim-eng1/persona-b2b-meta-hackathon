@@ -72,8 +72,12 @@ class WhatsAppMediaExtractorTest {
         assertTrue(extractor.isImageIndicator("📷 Sent a photo"))
         assertTrue(extractor.isImageIndicator("📷 بكام ده"))
         assertTrue(extractor.isImageIndicator("📸 صورة المنتج"))
-        assertTrue(extractor.isImageIndicator("Please check this photo"))
+        assertTrue(extractor.isImageIndicator("Photo"))
+        assertTrue(extractor.isImageIndicator("صورة"))
+        assertTrue(extractor.isImageIndicator("Sent a photo"))
 
+        assertFalse(extractor.isImageIndicator("Please check this photo"))
+        assertFalse(extractor.isImageIndicator("بس انا كنت قصدي ب الصورة اني بحبك انت 😂🫣🤩"))
         assertFalse(extractor.isImageIndicator("عايز اعرف الأسعار"))
     }
 

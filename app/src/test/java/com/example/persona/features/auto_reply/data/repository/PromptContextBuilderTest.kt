@@ -176,7 +176,7 @@ class PromptContextBuilderTest {
     }
 
     @Test
-    fun `both tones contain strict zero-price-guessing and authorized website redirection in both passes`() {
+    fun `both tones contain strict zero-price-guessing and store website ordering channels in both passes`() {
         val wittyFirst = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
         val politeFirst = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
         val wittyFinal = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
@@ -185,8 +185,10 @@ class PromptContextBuilderTest {
         for (prompt in listOf(wittyFirst, politeFirst, wittyFinal, politeFinal)) {
             assertTrue(prompt.contains("STRICT ZERO-PRICE-GUESSING:"))
             assertTrue(prompt.contains("NEVER estimate, guess, or hallucinate prices (e.g., NEVER say 'سعره 450 جنيه تقريباً'"))
-            assertTrue(prompt.contains("AUTHORIZED WEBSITE REDIRECTION:"))
-            assertTrue(prompt.contains("If <store_website> is provided and not NONE, you are authorized and encouraged to provide this exact official website URL"))
+            assertTrue(prompt.contains("STORE WEBSITE & ORDERING CHANNELS:"))
+            assertTrue(prompt.contains("If <store_website> is provided and not NONE, this is the store's verified official online website."))
+            assertTrue(prompt.contains("If <store_website> is NONE, state clearly and naturally that orders and inquiries are handled directly right here on WhatsApp."))
+            assertFalse(prompt.contains("مفيش موقع أو فرع متسجل حالياً"))
         }
     }
 

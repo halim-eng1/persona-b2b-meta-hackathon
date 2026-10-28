@@ -7,6 +7,7 @@ import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.database.entity.OrderStatus
 import com.example.persona.core.network.dto.AgenticLlmResponse
 import com.example.persona.core.network.dto.ChatMessage
+import com.example.persona.core.network.dto.GroqRequest
 import com.example.persona.core.network.dto.OpenRouterRequest
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import io.ktor.client.HttpClient
@@ -17,6 +18,8 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
+import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -858,7 +861,11 @@ class ReplyGenerationRepositoryImplTest {
             )
             assertTrue(
                 "Authorized website redirection rule must be present",
-                prompt.contains("If <store_website> is provided and not NONE, you are authorized and encouraged to provide this exact official website URL")
+                prompt.contains("If <store_website> is provided and not NONE, this is the store's verified official online website.")
+            )
+            assertTrue(
+                "Store website ordering channels header must be present",
+                prompt.contains("STORE WEBSITE & ORDERING CHANNELS:")
             )
         }
     }
@@ -1118,5 +1125,103 @@ class ReplyGenerationRepositoryImplTest {
         assertTrue(textModelTried)
         assertNotNull(result)
         assertTrue(result!!.contains("تم الرد بنجاح من نموذج النصوص"))
+    }
+
+    @Test
+    fun `generateReply caps max_tokens to 500 for multimodal vision requests`() = runTest {
+        var requestedMaxTokens: Int? = null
+
+        val mockEngine = MockEngine { request ->
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            val parsedGroq = runCatching { Json { ignoreUnknownKeys = true }.decodeFromString<GroqRequest>(bodyText) }.getOrNull()
+            val parsedOr = runCatching { Json { ignoreUnknownKeys = true }.decodeFromString<OpenRouterRequest>(bodyText) }.getOrNull()
+            requestedMaxTokens = parsedGroq?.maxCompletionTokens ?: parsedOr?.maxTokens
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"تمام يا فندم\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+
+        val mockPrefs = mockk<UserPreferencesRepository>(relaxed = true) {
+            every { storeKnowledgeTopicsFlow } returns kotlinx.coroutines.flow.flowOf(listOf("هوديز"))
+            every { storeWebsiteFlow } returns kotlinx.coroutines.flow.flowOf("https://example.com")
+            every { stylePreferences } returns kotlinx.coroutines.flow.flowOf(
+                com.example.persona.features.auto_reply.domain.model.StylePreferences()
+            )
+            coEvery { getBotNameSync() } returns "Persona"
+            coEvery { getStoreNameSync() } returns "Velo"
+        }
+
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "or-key",
+            fallbackApiKey = "or-key-2",
+            userPreferencesRepository = mockPrefs,
+            groqPrimaryApiKey = "gsk_primary",
+            groqFallbackApiKey = "gsk_fallback"
+        )
+
+        val tempFile = java.io.File.createTempFile("vision_cap", ".jpg").apply {
+            writeBytes("DUMMY_IMAGE".toByteArray())
+            deleteOnExit()
+        }
+
+        val notification = com.example.persona.features.auto_reply.domain.model.ProcessedNotification(
+            notificationKey = "key_img",
+            contactName = "Test Contact",
+            originalText = "📷 Sent a photo",
+            normalizedText = "📷 Sent a photo",
+            context = com.example.persona.features.chat_import.domain.model.ConversationContext(
+                intent = com.example.persona.features.chat_import.domain.model.IntentType.QUESTION,
+                topic = com.example.persona.features.chat_import.domain.model.TopicType.MEDIA,
+                sentiment = com.example.persona.features.chat_import.domain.model.SentimentType.NEUTRAL,
+                confidence = 1.0f
+            ),
+            postTime = System.currentTimeMillis(),
+            sourceClass = com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceClass.BUSINESS,
+            mediaFilePath = tempFile.absolutePath
+        )
+
+        val reply = repo.generateReply(
+            notification = notification,
+            candidates = emptyList(),
+            isOngoingConversation = false,
+            chatHistory = emptyList(),
+            activeOrders = emptyList(),
+            personalChunks = emptyList(),
+            maxTokens = 7000
+        )
+
+        assertNotNull(reply)
+        assertEquals(500, requestedMaxTokens)
+    }
+
+    @Test
+    fun `compressAndScaleImage scales down large images and compresses to JPEG`() {
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = mockk(relaxed = true),
+            context = mockk(relaxed = true),
+            primaryApiKey = "k1",
+            fallbackApiKey = "k2",
+            userPreferencesRepository = mockk(relaxed = true)
+        )
+
+        assertNull(repo.compressAndScaleImage("non_existent_file.jpg"))
+
+        val tempFile = java.io.File.createTempFile("raw_test", ".jpg").apply {
+            writeBytes("SAMPLE_PIXELS".toByteArray())
+            deleteOnExit()
+        }
+        val resultBytes = repo.compressAndScaleImage(tempFile.absolutePath, maxDimension = 1024, quality = 80)
+        assertNotNull(resultBytes)
+        assertTrue(resultBytes!!.isNotEmpty())
     }
 }
