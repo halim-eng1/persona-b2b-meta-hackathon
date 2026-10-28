@@ -234,4 +234,10 @@ interface ChatHistoryDao {
         sourceClass: String,
         sinceTimestamp: Long
     ): List<ChatHistoryEntity>
+
+    /**
+     * Deletes all messages for a specific contact and source package since [sinceTimestamp].
+     */
+    @Query("DELETE FROM chat_history WHERE contact_name = :contactName AND source_class = :sourceClass AND timestamp >= :sinceTimestamp")
+    suspend fun deleteMessagesSince(contactName: String, sourceClass: String, sinceTimestamp: Long)
 }

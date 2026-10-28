@@ -364,4 +364,86 @@ class ChatDetailViewModelTest {
         assertTrue(receivedExport!!.contains("مساعد المبيعات (AI): وعليكم السلام يا فندم! 📷 صورة المنتج"))
         assertTrue(receivedExport!!.contains("التاجر (Manual): تم يا فندم شرفتنا."))
     }
+
+    @Test
+    fun `clearChat with ALL_TIME calls deleteMessagesSince with timestamp 0`() = runTest(testDispatcher) {
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        advanceUntilIdle()
+
+        viewModel.clearChat(ClearChatTimeRange.ALL_TIME)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            chatHistoryDao.deleteMessagesSince("أحمد مصطفى", "BUSINESS", 0L)
+        }
+    }
+
+    @Test
+    fun `clearChat with LAST_HOUR calls deleteMessagesSince with timestamp 1 hour ago`() = runTest(testDispatcher) {
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        advanceUntilIdle()
+
+        val fixedNow = 1_700_000_000_000L
+        viewModel.clearChat(ClearChatTimeRange.LAST_HOUR, fixedNow)
+        advanceUntilIdle()
+
+        val expectedSince = fixedNow - (1 * 60 * 60 * 1000L)
+        coVerify(exactly = 1) {
+            chatHistoryDao.deleteMessagesSince("أحمد مصطفى", "BUSINESS", expectedSince)
+        }
+    }
+
+    @Test
+    fun `clearChat with LAST_TWO_HOURS calls deleteMessagesSince with timestamp 2 hours ago`() = runTest(testDispatcher) {
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        advanceUntilIdle()
+
+        val fixedNow = 1_700_000_000_000L
+        viewModel.clearChat(ClearChatTimeRange.LAST_TWO_HOURS, fixedNow)
+        advanceUntilIdle()
+
+        val expectedSince = fixedNow - (2 * 60 * 60 * 1000L)
+        coVerify(exactly = 1) {
+            chatHistoryDao.deleteMessagesSince("أحمد مصطفى", "BUSINESS", expectedSince)
+        }
+    }
+
+    @Test
+    fun `clearChat with TODAY calls deleteMessagesSince with start of day timestamp`() = runTest(testDispatcher) {
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        advanceUntilIdle()
+
+        val fixedNow = 1_700_000_000_000L
+        viewModel.clearChat(ClearChatTimeRange.TODAY, fixedNow)
+        advanceUntilIdle()
+
+        val expectedSince = viewModel.calculateClearSinceTimestamp(ClearChatTimeRange.TODAY, fixedNow)
+        coVerify(exactly = 1) {
+            chatHistoryDao.deleteMessagesSince("أحمد مصطفى", "BUSINESS", expectedSince)
+        }
+    }
 }

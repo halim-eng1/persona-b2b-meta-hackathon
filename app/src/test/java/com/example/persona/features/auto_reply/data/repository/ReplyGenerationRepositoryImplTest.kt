@@ -707,6 +707,24 @@ class ReplyGenerationRepositoryImplTest {
     }
 
     @Test
+    fun `vision models are verified and deprecated slugs are purged`() {
+        assertEquals(listOf("qwen/qwen3.8-27b"), ReplyGenerationRepositoryImpl.VISION_GROQ_MODELS)
+        assertEquals(listOf("nvidia/nemotron-3.5-super-vl:free"), ReplyGenerationRepositoryImpl.VISION_OPENROUTER_MODELS)
+        assertFalse(ReplyGenerationRepositoryImpl.VISION_GROQ_MODELS.contains("llama-3.2-11b-vision-preview"))
+        assertFalse(ReplyGenerationRepositoryImpl.VISION_OPENROUTER_MODELS.contains("meta-llama/llama-3.2-11b-vision-instruct:free"))
+    }
+
+    @Test
+    fun `explicit vision directive is included in system prompt when isMultimodal is true`() {
+        val multimodalPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(isMultimodal = true)
+        assertTrue(multimodalPrompt.contains("VISION CAPABILITIES ENABLED"))
+        assertTrue(multimodalPrompt.contains("Analyze and inspect the attached image directly"))
+
+        val textOnlyPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(isMultimodal = false)
+        assertFalse(textOnlyPrompt.contains("VISION CAPABILITIES ENABLED"))
+    }
+
+    @Test
     fun `system prompt constants derive from single-source builders with default identities`() {
         val first = PromptContextBuilder.buildFirstPassSystemPrompt()
         val final = PromptContextBuilder.buildFinalPassSystemPrompt()

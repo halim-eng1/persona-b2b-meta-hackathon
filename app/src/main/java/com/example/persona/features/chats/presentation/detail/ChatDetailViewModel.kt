@@ -345,6 +345,41 @@ class ChatDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Clears messages for this contact in the chosen [range].
+     * Executes delete on [ChatHistoryDao] so messages disappear immediately from the screen.
+     */
+    fun clearChat(
+        range: ClearChatTimeRange,
+        currentTimeMs: Long = System.currentTimeMillis()
+    ) {
+        viewModelScope.launch {
+            val sinceTimestamp = calculateClearSinceTimestamp(range, currentTimeMs)
+            chatHistoryDao.deleteMessagesSince(contactName, sourceClass, sinceTimestamp)
+        }
+    }
+
+    internal fun calculateClearSinceTimestamp(
+        range: ClearChatTimeRange,
+        currentTimeMs: Long = System.currentTimeMillis()
+    ): Long {
+        return when (range) {
+            ClearChatTimeRange.ALL_TIME -> 0L
+            ClearChatTimeRange.LAST_HOUR -> currentTimeMs - (1 * 60 * 60 * 1000L)
+            ClearChatTimeRange.LAST_TWO_HOURS -> currentTimeMs - (2 * 60 * 60 * 1000L)
+            ClearChatTimeRange.TODAY -> {
+                val cal = Calendar.getInstance().apply {
+                    timeInMillis = currentTimeMs
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                cal.timeInMillis
+            }
+        }
+    }
+
     internal fun calculateSinceTimestamp(
         range: ExportTimeRange,
         currentTimeMs: Long = System.currentTimeMillis()

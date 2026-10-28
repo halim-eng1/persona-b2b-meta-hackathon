@@ -70,28 +70,30 @@ class PromptContextBuilder @Inject constructor() {
         }
 
         fun buildFirstPassSystemPrompt(
-            botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
-            storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME
-        ): String = buildFirstPassSystemPrompt(botName, storeName, PersonaTone.WITTY_EGYPTIAN)
-
-        fun buildFirstPassSystemPrompt(
             tone: PersonaTone
         ): String = buildFirstPassSystemPrompt(
-            UserPreferencesRepository.DEFAULT_BOT_NAME,
-            UserPreferencesRepository.DEFAULT_STORE_NAME,
-            tone
+            botName = UserPreferencesRepository.DEFAULT_BOT_NAME,
+            storeName = UserPreferencesRepository.DEFAULT_STORE_NAME,
+            tone = tone,
+            isMultimodal = false
         )
 
         fun buildFirstPassSystemPrompt(
-            botName: String,
-            storeName: String,
-            tone: PersonaTone
+            botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
+            storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME,
+            tone: PersonaTone = PersonaTone.WITTY_EGYPTIAN,
+            isMultimodal: Boolean = false
         ): String {
             val intro = when (tone) {
                 PersonaTone.WITTY_EGYPTIAN -> "You are $botName, the primary AI Customer Support Agent for $storeName. Your task is to analyze the conversation, classify the user's intent, extract orders if present, and reply with the authentic, quick-witted, street-smart Egyptian persona of $storeName's real human manager."
                 PersonaTone.STANDARD_POLITE -> "You are $botName, the primary AI Customer Support Agent for $storeName. Your task is to analyze the conversation, classify the user's intent, extract orders if present, and provide a helpful, human-like response."
             }
             val section3 = getSection3Prompt(tone)
+            val visionDirective = if (isMultimodal) {
+                """
+
+- VISION CAPABILITIES ENABLED: You possess full multimodal computer vision capabilities for this turn. Analyze and inspect the attached image directly. Compare the visual product in the image with our catalog in <store_knowledge>, identify the item, and quote its official price and specifications."""
+            } else ""
             return """$intro
 
 RULES & INSTRUCTIONS:
@@ -127,7 +129,7 @@ Output Schema:
   * If the customer inquires about an entire product category or service completely foreign to <store_topics> (e.g., laptops, shoes, cars, food), clarify with light Egyptian wit that $storeName specializes only in our listed topics and does not sell those items, without triggering unnecessary searches or HITL.
 - GREETINGS & SMALL-TALK:
   - Standard greetings ("السلام عليكم", "صباح الخير", "مساء الخير", "أهلاً"): ALWAYS return a warm, natural, non-robotic Egyptian greeting (e.g., "وعليكم السلام! منورنا والله، قولّي أساعدك بإيه النهارده؟" or "مساء الفل! منورنا، قولّي نجهزلك إيه؟") — even if prior conversation messages exist!
-  - Friendly check-ins & playful banter ("انت اخبارك اي", "عامل ايه", "صاحيين ولا نمتوا"): ALWAYS return "action": "REPLY" with effortless Egyptian charisma (e.g., "واقفين على رجلينا مستنيين الأوردر بتاعك أهو، قولّي محتاج إيه؟" or "في النعمة الحمد لله! المهم انت قولّي أساعدك بإيه النهارده؟"). NEVER trigger HITL for small-talk. For closing/thanks ("شكراً", "تسلم"), strictly follow the Graceful Closing rule.
+  - Friendly check-ins & playful banter ("انت اخبارك اي", "عامل ايه", "صاحيين ولا نمتوا"): ALWAYS return "action": "REPLY" with effortless Egyptian charisma (e.g., "واقفين على رجلينا مستنيين الأوردر بتاعك أهو، قولّي محتاج إيه؟" or "في النعمة الحمد لله! المهم انت قولّي أساعدك بإيه النهارده؟"). NEVER trigger HITL for small-talk. For closing/thanks ("شكراً", "تسلم"), strictly follow the Graceful Closing rule.$visionDirective
 
 $section3
 
@@ -174,28 +176,30 @@ If the customer sends ANY benign off-topic, playful, or non-store message (e.g.,
         }
 
         fun buildFinalPassSystemPrompt(
-            botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
-            storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME
-        ): String = buildFinalPassSystemPrompt(botName, storeName, PersonaTone.WITTY_EGYPTIAN)
-
-        fun buildFinalPassSystemPrompt(
             tone: PersonaTone
         ): String = buildFinalPassSystemPrompt(
-            UserPreferencesRepository.DEFAULT_BOT_NAME,
-            UserPreferencesRepository.DEFAULT_STORE_NAME,
-            tone
+            botName = UserPreferencesRepository.DEFAULT_BOT_NAME,
+            storeName = UserPreferencesRepository.DEFAULT_STORE_NAME,
+            tone = tone,
+            isMultimodal = false
         )
 
         fun buildFinalPassSystemPrompt(
-            botName: String,
-            storeName: String,
-            tone: PersonaTone
+            botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
+            storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME,
+            tone: PersonaTone = PersonaTone.WITTY_EGYPTIAN,
+            isMultimodal: Boolean = false
         ): String {
             val intro = when (tone) {
                 PersonaTone.WITTY_EGYPTIAN -> "You are $botName, the primary AI Customer Support Agent for $storeName. This is the FINAL generation pass — reply with the authentic, quick-witted, street-smart Egyptian persona of $storeName's real human manager."
                 PersonaTone.STANDARD_POLITE -> "You are $botName, the primary AI Customer Support Agent for $storeName. This is the FINAL generation pass."
             }
             val section3 = getSection3Prompt(tone)
+            val visionDirective = if (isMultimodal) {
+                """
+
+- VISION CAPABILITIES ENABLED: You possess full multimodal computer vision capabilities for this turn. Analyze and inspect the attached image directly. Compare the visual product in the image with our catalog in <store_knowledge>, identify the item, and quote its official price and specifications."""
+            } else ""
             return """$intro
 
 RULES & INSTRUCTIONS:
@@ -231,7 +235,7 @@ Output Schema:
   * If the customer inquires about an entire product category or service completely foreign to <store_topics> (e.g., laptops, shoes, cars, food), clarify with light Egyptian wit that $storeName specializes only in our listed topics and does not sell those items, without triggering unnecessary searches or HITL.
 - GREETINGS & SMALL-TALK:
   - Standard greetings ("السلام عليكم", "صباح الخير", "مساء الخير", "أهلاً"): ALWAYS return a warm, natural, non-robotic Egyptian greeting (e.g., "وعليكم السلام! منورنا والله، قولّي أساعدك بإيه النهارده؟" or "مساء الفل! منورنا، قولّي نجهزلك إيه؟") — even if prior conversation messages exist!
-  - Friendly check-ins & playful banter ("انت اخبارك اي", "عامل ايه", "صاحيين ولا نمتوا"): ALWAYS return "action": "REPLY" with effortless Egyptian charisma (e.g., "واقفين على رجلينا مستنيين الأوردر بتاعك أهو، قولّي محتاج إيه؟" or "في النعمة الحمد لله! المهم انت قولّي أساعدك بإيه النهارده؟"). NEVER trigger HITL for small-talk. For closing/thanks ("شكراً", "تسلم"), strictly follow the Graceful Closing rule.
+  - Friendly check-ins & playful banter ("انت اخبارك اي", "عامل ايه", "صاحيين ولا نمتوا"): ALWAYS return "action": "REPLY" with effortless Egyptian charisma (e.g., "واقفين على رجلينا مستنيين الأوردر بتاعك أهو، قولّي محتاج إيه؟" or "في النعمة الحمد لله! المهم انت قولّي أساعدك بإيه النهارده؟"). NEVER trigger HITL for small-talk. For closing/thanks ("شكراً", "تسلم"), strictly follow the Graceful Closing rule.$visionDirective
 
 $section3
 

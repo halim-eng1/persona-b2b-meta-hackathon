@@ -34,6 +34,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.persona.features.chats.presentation.detail.components.AiThinkingIndicatorBubble
 import com.example.persona.features.chats.presentation.detail.components.ChatComposerBar
+import com.example.persona.features.chats.presentation.detail.components.ClearChatDialog
 import com.example.persona.features.chats.presentation.detail.components.CompactChatTopBar
 import com.example.persona.features.chats.presentation.detail.components.DateHeaderChip
 import com.example.persona.features.chats.presentation.detail.components.ExportChatDialog
@@ -63,6 +64,17 @@ fun ChatDetailScreen(
     var previousMessageCount by remember(state.contactName) { mutableIntStateOf(0) }
     var unreadCountBelow by remember(state.contactName) { mutableIntStateOf(0) }
     var showExportDialog by remember { mutableStateOf(false) }
+    var showClearChatDialog by remember { mutableStateOf(false) }
+
+    if (showClearChatDialog) {
+        ClearChatDialog(
+            onDismissRequest = { showClearChatDialog = false },
+            onConfirmClear = { range ->
+                showClearChatDialog = false
+                viewModel.clearChat(range)
+            }
+        )
+    }
 
     if (showExportDialog) {
         ExportChatDialog(
@@ -167,7 +179,8 @@ fun ChatDetailScreen(
             isAiGenerating = state.isAiGenerating,
             onNavigateBack = onNavigateBack,
             onToggleAi = { viewModel.toggleAiPaused() },
-            onExportChat = { showExportDialog = true }
+            onExportChat = { showExportDialog = true },
+            onClearChat = { showClearChatDialog = true }
         )
 
         // In-chat banner when AI is paused. Interactive: carries a button role, a tap

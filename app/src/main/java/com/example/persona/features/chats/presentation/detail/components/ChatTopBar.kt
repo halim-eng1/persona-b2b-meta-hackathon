@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -42,6 +43,7 @@ fun CompactChatTopBar(
     onNavigateBack: () -> Unit,
     onToggleAi: () -> Unit,
     onExportChat: () -> Unit = {},
+    onClearChat: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val chatColors = MaterialTheme.chatColors
@@ -269,6 +271,26 @@ fun CompactChatTopBar(
                             onClick = {
                                 menuExpanded = false
                                 onExportChat()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = "مسح المحادثة (Clear Chat)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onClearChat()
                             }
                         )
                     }

@@ -104,6 +104,39 @@ class AutoReplyOrchestrator @Inject constructor(
             "ضروري", "مشكلة", "مستشفى", "الحقني", "مصيبة", "urgent", "help"
         )
 
+        val CORE_CATALOG_FALLBACK_CHUNKS = listOf(
+            RetrievalCandidate(
+                chunkId = "core_hoodies_catalog",
+                headerContext = "كتالوج المنتجات والأسعار الرسمية > تشكيلة الهوديز الشتوية",
+                chunkText = """
+                    - هوديز الجرافيك المطبوعة (Graphic Hoodies): السعر بعد الخصم 750 ج.م. ميلتون قطن 100% ثقيل 850 جم، مبطن من الداخل لدفء استثنائي، قصّة Oversized (أوفر سايز)، مقاسات S إلى 2XL، ألوان: أسود، أبيض. تصاميم شهيرة: TRUST ME I AM PROGRAMMER, أنا مبرمج, NO SYSTEM IS SAFE, SEMICOLON, أنا مهندس, JUST FINISHED PROJECT. طباعة حرارية DTF مقاومة للغسيل والبهتان.
+                    - هودي أوفر سايز بريميوم سادة (Plain Hoodie): السعر بعد الخصم 650 ج.م. ميلتون قطن 100% ثقيل 850 جم، 6 ألوان: أسود، أبيض، أزرق رويال، زيتي داكن، رمادي، بينك. مقاسات S إلى 2XL.
+                """.trimIndent(),
+                similarityScore = 0.95f,
+                baseSimilarityScore = 0.95f
+            ),
+            RetrievalCandidate(
+                chunkId = "core_tshirts_catalog",
+                headerContext = "كتالوج المنتجات والأسعار الرسمية > تشكيلة التيشيرتات",
+                chunkText = """
+                    - تيشيرتات الجرافيك المطبوعة (Graphic Tees): السعر بعد الخصم 460 ج.م. قطن ناعم معالج ضد الانكماش، Dual Fit (متاح قصّة أوفر سايز وقصّة ريجلر)، مقاسات S إلى 2XL، ألوان: أبيض وأسود، طباعة حرارية DTF مقاومة للبهتان والغسيل.
+                    - تيشيرت سادة ريجلر (Basic Sada T-Shirt): السعر بعد الخصم 390 ج.م. قطن ناعم معالج ضد الانكماش، قصّة ريجلر كلاسيكية (Regular Fit فقط)، مقاسات S إلى 2XL، ألوان: أبيض وأسود.
+                """.trimIndent(),
+                similarityScore = 0.95f,
+                baseSimilarityScore = 0.95f
+            ),
+            RetrievalCandidate(
+                chunkId = "core_mugs_pod_catalog",
+                headerContext = "كتالوج المنتجات والأسعار الرسمية > الإكسسوارات والماجات والطباعة المخصصة",
+                chunkText = """
+                    - ماج سيراميك بتصاميم مخصصة (Ceramic Mug): خامة سيراميك بتصاميم مطابقة لهوية المبرمجين والمهندسين.
+                    - خدمة التصاميم المخصصة (Print on Demand - POD): تيشيرت بتصميم مخصص = 460 ج.م، هودي أوفر سايز بتصميم مخصص = 750 ج.م. إمكانية طباعة فكرة العميل الخاصة أو كتابة اسم المهندس/المبرمج أو اللوجو على تيشيرت أو هودي.
+                """.trimIndent(),
+                similarityScore = 0.95f,
+                baseSimilarityScore = 0.95f
+            )
+        )
+
         internal fun isPivotStillOpen(latestPivotTimestamp: Long?, consumedPivotTimestamps: Set<Long>): Boolean =
             OrderIngestionManager.isPivotStillOpen(latestPivotTimestamp, consumedPivotTimestamps)
 
@@ -390,12 +423,20 @@ class AutoReplyOrchestrator @Inject constructor(
                 maxScore = bestScore
             }
 
-            val isImageWithGenericText = effectiveProcessed.mediaFilePath != null &&
-                (effectiveProcessed.originalText.contains("Sent a photo", ignoreCase = true) || effectiveProcessed.originalText.trim() == "📷" || candidates.isEmpty())
+            val isImagePresent = effectiveProcessed.mediaFilePath != null
+            val isGenericImageText = isImagePresent && (
+                effectiveProcessed.originalText.contains("Sent a photo", ignoreCase = true) ||
+                effectiveProcessed.originalText.trim() == "📷" ||
+                effectiveProcessed.originalText.contains("بكام", ignoreCase = true) ||
+                effectiveProcessed.originalText.contains("سعر", ignoreCase = true) ||
+                effectiveProcessed.originalText.contains("كام", ignoreCase = true) ||
+                effectiveProcessed.originalText.contains("ده", ignoreCase = true) ||
+                effectiveProcessed.originalText.length < 15
+            )
 
-            val finalCandidates = if (isImageWithGenericText && candidates.isEmpty()) {
-                try {
-                    businessKnowledgeDao.getProductCatalogChunks(limit = 5).map { proj ->
+            val finalCandidates = if (isImagePresent && (isGenericImageText || candidates.isEmpty())) {
+                val dbCatalog = try {
+                    businessKnowledgeDao.getProductCatalogChunks(limit = 10).map { proj ->
                         RetrievalCandidate(
                             chunkId = proj.chunkId,
                             headerContext = proj.headerContext,
@@ -405,10 +446,22 @@ class AutoReplyOrchestrator @Inject constructor(
                         )
                     }
                 } catch (e: Exception) {
-                    candidates
+                    emptyList()
+                }
+
+                if (dbCatalog.isNotEmpty()) {
+                    Log.i(TAG, "📸 Visual Catalog RAG Bypass: Injected ${dbCatalog.size} catalog chunks from DB")
+                    dbCatalog
+                } else {
+                    Log.i(TAG, "📸 Visual Catalog RAG Bypass: Injected ${CORE_CATALOG_FALLBACK_CHUNKS.size} core catalog chunks from fallback")
+                    CORE_CATALOG_FALLBACK_CHUNKS
                 }
             } else {
                 candidates
+            }
+
+            if (isImagePresent && maxScore < 0.95f && finalCandidates.isNotEmpty()) {
+                maxScore = 0.95f
             }
 
             // Context Assembly
@@ -428,6 +481,8 @@ class AutoReplyOrchestrator @Inject constructor(
             val lastSessionReplyTime = lastReplyTimestamps[effectiveProcessed.contactName] ?: 0L
             val isOngoing = (System.currentTimeMillis() - lastSessionReplyTime) < 300_000L
 
+            val maxTokensForGeneration = if (isImagePresent) 7000 else 600
+
             val rawLlmOutput = replyGenerationRepository.generateReply(
                 notification = effectiveProcessed,
                 candidates = finalCandidates,
@@ -435,7 +490,7 @@ class AutoReplyOrchestrator @Inject constructor(
                 chatHistory = chatHistory,
                 activeOrders = activeOrders,
                 personalChunks = emptyList(),
-                maxTokens = 600
+                maxTokens = maxTokensForGeneration
             )
             if (rawLlmOutput.isNullOrBlank()) {
                 Log.d(TAG, "LLM returned null/blank — all models failed. HITL fallback.")
@@ -617,6 +672,7 @@ class AutoReplyOrchestrator @Inject constructor(
 
                         Log.i(TAG, "RE_QUERY merged to ${mergedChunks.size} chunks (Pass1: ${candidates.size}, Pass2: ${pass2Candidates.size}). Executing final LLM pass.")
 
+                        val maxTokensPass2 = if (isImagePresent) 7000 else 750
                         val finalOutput = replyGenerationRepository.generateFinalReply(
                             queryText = processed.originalText,
                             chunks = mergedChunks,
@@ -624,7 +680,7 @@ class AutoReplyOrchestrator @Inject constructor(
                             chatHistory = chatHistory,
                             activeOrders = activeOrders,
                             personalChunks = emptyList(),
-                            maxTokens = 750
+                            maxTokens = maxTokensPass2
                         )
 
                         if (finalOutput.isNullOrBlank()) {

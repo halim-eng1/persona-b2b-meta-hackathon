@@ -115,13 +115,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         /** Multimodal Vision models for Groq */
         val VISION_GROQ_MODELS = listOf(
-            "llama-3.2-11b-vision-preview"
+            "qwen/qwen3.8-27b" // Verified Vision model on Groq console
         )
 
         /** Multimodal Vision models for OpenRouter */
         val VISION_OPENROUTER_MODELS = listOf(
-            "nvidia/nemotron-3.5-super-vl:free",
-            "meta-llama/llama-3.2-11b-vision-instruct:free"
+            "nvidia/nemotron-3.5-super-vl:free" // 1.0M context multimodal
         )
 
         val FAILOVER_MODELS = OPENROUTER_FAILOVER_MODELS
@@ -209,20 +208,6 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         personalChunks: List<ChatHistoryEntity>,
         maxTokens: Int
     ): String? {
-        val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
-        val tone = userPreferencesRepository.stylePreferences.first().personaTone
-        val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
-            botName = userPreferencesRepository.getBotNameSync(),
-            storeName = userPreferencesRepository.getStoreNameSync(),
-            tone = tone
-        )
-        val systemPromptWithContext = PromptContextBuilder.buildSystemPromptWithContext(
-            staticSystemPrompt = baseSystemPrompt,
-            candidates = candidates,
-            activeOrders = activeOrders,
-            storeTopics = storeTopics
-        )
-
         val imageUri = notification.mediaFilePath?.let { path ->
             try {
                 val file = java.io.File(path)
@@ -237,6 +222,22 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             }
         }
 
+        val isMultimodal = imageUri != null
+        val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
+        val tone = userPreferencesRepository.stylePreferences.first().personaTone
+        val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
+            botName = userPreferencesRepository.getBotNameSync(),
+            storeName = userPreferencesRepository.getStoreNameSync(),
+            tone = tone,
+            isMultimodal = isMultimodal
+        )
+        val systemPromptWithContext = PromptContextBuilder.buildSystemPromptWithContext(
+            staticSystemPrompt = baseSystemPrompt,
+            candidates = candidates,
+            activeOrders = activeOrders,
+            storeTopics = storeTopics
+        )
+
         val inboundText = if (imageUri != null && (notification.originalText.contains("Sent a photo", ignoreCase = true) || notification.originalText.trim() == "📷")) {
             "العميل أرسل هذه الصورة لمنتج. تفحص الصورة وتعرف على مواصفات ونوع المنتج المعروض فيها، وقدم له تفاصيل المنتج وسعره المتاح من واقع بيانات المتجر واعرض عليه إتمام الطلب."
         } else {
@@ -249,7 +250,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             currentInboundText = inboundText,
             imageUrl = imageUri
         )
-        return executeFailoverChain(messages, maxTokens)
+        val effectiveMaxTokens = if (isMultimodal) 7000 else maxTokens
+        return executeFailoverChain(messages, effectiveMaxTokens)
     }
 
     override suspend fun generateFinalReply(
@@ -262,12 +264,14 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         maxTokens: Int,
         imageUrl: String?
     ): String? {
+        val isMultimodal = !imageUrl.isNullOrBlank()
         val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
         val tone = userPreferencesRepository.stylePreferences.first().personaTone
         val baseSystemPrompt = PromptContextBuilder.buildFinalPassSystemPrompt(
             botName = userPreferencesRepository.getBotNameSync(),
             storeName = userPreferencesRepository.getStoreNameSync(),
-            tone = tone
+            tone = tone,
+            isMultimodal = isMultimodal
         )
         val systemPromptWithContext = PromptContextBuilder.buildSystemPromptWithContext(
             staticSystemPrompt = baseSystemPrompt,
@@ -281,7 +285,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             currentInboundText = queryText,
             imageUrl = imageUrl
         )
-        return executeFailoverChain(messages, maxTokens)
+        val effectiveMaxTokens = if (isMultimodal) 7000 else maxTokens
+        return executeFailoverChain(messages, effectiveMaxTokens)
     }
 
     // ── Internal / Private Implementation ───────────────────────────────
@@ -296,15 +301,15 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     }
 
     internal suspend fun executeFailoverChain(messages: List<ChatMessage>, maxTokens: Int): String? {
-        val targetMaxTokens = minOf(maxTokens, ABSOLUTE_FAILOVER_CEILING)
         val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
+        val targetMaxTokens = if (hasImage) 7000 else minOf(maxTokens, ABSOLUTE_FAILOVER_CEILING)
 
         val groqModelsToTry = if (hasImage) VISION_GROQ_MODELS else GROQ_MODELS
         val openRouterModelsToTry = if (hasImage) VISION_OPENROUTER_MODELS else OPENROUTER_FAILOVER_MODELS
 
         if (hasImage) {
-            PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision-capable models...")
-            Log.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision-capable models...")
+            PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision-capable models with targetMaxTokens=$targetMaxTokens...")
+            Log.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision-capable models with targetMaxTokens=$targetMaxTokens...")
         }
 
         // ── Tier 1: Groq Cloud (Primary Engine) ──────────────────────────
@@ -443,6 +448,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         }
 
         val keyMasked = maskKey(apiKey)
+        val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
+        val isVision = model in VISION_GROQ_MODELS || hasImage
+        val reasoningEffort = if (isVision) null else "low"
 
         return try {
             withTimeout(MODEL_TIMEOUT_MS) {
@@ -454,12 +462,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                             model = model,
                             messages = messages,
                             maxCompletionTokens = maxTokens,
-                            reasoningEffort = "low"
+                            reasoningEffort = reasoningEffort
                         )
                     )
                 }
 
-                if (response.status.value == 400) {
+                if (response.status.value == 400 && !isVision) {
                     Log.w(TAG, "HTTP 400 on [Groq] $model with reasoning_effort. Retrying without reasoning payload.")
                     response = httpClient.post(BuildConfig.GROQ_BASE_URL) {
                         contentType(ContentType.Application.Json)
@@ -601,10 +609,11 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         }
 
         val keyMasked = maskKey(apiKey)
+        val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
 
         return try {
             withTimeout(MODEL_TIMEOUT_MS) {
-                val reasoning = if (model in REASONING_MODELS) ReasoningConfig(effort = "low") else null
+                val reasoning = if (model in REASONING_MODELS && !hasImage) ReasoningConfig(effort = "low") else null
                 var response = httpClient.post(BuildConfig.OPENROUTER_BASE_URL) {
                     contentType(ContentType.Application.Json)
                     bearerAuth(apiKey)
