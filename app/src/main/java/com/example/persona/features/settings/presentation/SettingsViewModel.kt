@@ -51,6 +51,9 @@ data class SettingsUiState(
     val farewellTemplate: String = "",
     val botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
     val storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME,
+    val hitlHoldingMessage: String = UserPreferencesRepository.DEFAULT_HITL_HOLDING_MESSAGE,
+    val mediaFallbackMessage: String = UserPreferencesRepository.DEFAULT_MEDIA_FALLBACK_MESSAGE,
+    val blankReplyFallbackTemplate: String = UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE,
     val isAutoPauseOnHitl: Boolean = false,
     val isStorageAccessGranted: Boolean = false,
     val isLoading: Boolean = true
@@ -128,6 +131,21 @@ class SettingsViewModel @Inject constructor(
             launch {
                 userPreferencesRepository.isAutoPauseOnHitlEnabledFlow.collect { value ->
                     _uiState.update { it.copy(isAutoPauseOnHitl = value, isLoading = false) }
+                }
+            }
+            launch {
+                userPreferencesRepository.hitlHoldingMessageFlow.collect { value ->
+                    _uiState.update { it.copy(hitlHoldingMessage = value, isLoading = false) }
+                }
+            }
+            launch {
+                userPreferencesRepository.mediaFallbackMessageFlow.collect { value ->
+                    _uiState.update { it.copy(mediaFallbackMessage = value, isLoading = false) }
+                }
+            }
+            launch {
+                userPreferencesRepository.blankReplyFallbackTemplateFlow.collect { value ->
+                    _uiState.update { it.copy(blankReplyFallbackTemplate = value, isLoading = false) }
                 }
             }
         }
@@ -237,6 +255,27 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(isAutoPauseOnHitl = enabled) }
         viewModelScope.launch {
             userPreferencesRepository.setAutoPauseOnHitl(enabled)
+        }
+    }
+
+    fun setHitlHoldingMessage(text: String) {
+        _uiState.update { it.copy(hitlHoldingMessage = text) }
+        viewModelScope.launch {
+            userPreferencesRepository.setHitlHoldingMessage(text)
+        }
+    }
+
+    fun setMediaFallbackMessage(text: String) {
+        _uiState.update { it.copy(mediaFallbackMessage = text) }
+        viewModelScope.launch {
+            userPreferencesRepository.setMediaFallbackMessage(text)
+        }
+    }
+
+    fun setBlankReplyFallbackTemplate(template: String) {
+        _uiState.update { it.copy(blankReplyFallbackTemplate = template) }
+        viewModelScope.launch {
+            userPreferencesRepository.setBlankReplyFallbackTemplate(template)
         }
     }
 

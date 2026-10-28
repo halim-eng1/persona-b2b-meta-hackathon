@@ -45,6 +45,9 @@ class SettingsViewModelTest {
         every { userPreferencesRepository.botName } returns flowOf("مساعد المبيعات")
         every { userPreferencesRepository.storeName } returns flowOf("متجرنا")
         every { userPreferencesRepository.isAutoPauseOnHitlEnabledFlow } returns autoPauseFlow
+        every { userPreferencesRepository.hitlHoldingMessageFlow } returns flowOf(UserPreferencesRepository.DEFAULT_HITL_HOLDING_MESSAGE)
+        every { userPreferencesRepository.mediaFallbackMessageFlow } returns flowOf(UserPreferencesRepository.DEFAULT_MEDIA_FALLBACK_MESSAGE)
+        every { userPreferencesRepository.blankReplyFallbackTemplateFlow } returns flowOf(UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE)
     }
 
     @After
@@ -114,5 +117,30 @@ class SettingsViewModelTest {
                 it.personaTone == PersonaTone.STANDARD_POLITE
             })
         }
+    }
+
+    @Test
+    fun `fallback messages have default values in uiState and can be updated`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository)
+        advanceUntilIdle()
+
+        assertEquals(UserPreferencesRepository.DEFAULT_HITL_HOLDING_MESSAGE, viewModel.uiState.value.hitlHoldingMessage)
+        assertEquals(UserPreferencesRepository.DEFAULT_MEDIA_FALLBACK_MESSAGE, viewModel.uiState.value.mediaFallbackMessage)
+        assertEquals(UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE, viewModel.uiState.value.blankReplyFallbackTemplate)
+
+        viewModel.setHitlHoldingMessage("تحويل لممثل خدمة العملاء")
+        advanceUntilIdle()
+        assertEquals("تحويل لممثل خدمة العملاء", viewModel.uiState.value.hitlHoldingMessage)
+        coVerify(exactly = 1) { userPreferencesRepository.setHitlHoldingMessage("تحويل لممثل خدمة العملاء") }
+
+        viewModel.setMediaFallbackMessage("لا يمكن معالجة الملف")
+        advanceUntilIdle()
+        assertEquals("لا يمكن معالجة الملف", viewModel.uiState.value.mediaFallbackMessage)
+        coVerify(exactly = 1) { userPreferencesRepository.setMediaFallbackMessage("لا يمكن معالجة الملف") }
+
+        viewModel.setBlankReplyFallbackTemplate("أهلاً بك في %s")
+        advanceUntilIdle()
+        assertEquals("أهلاً بك في %s", viewModel.uiState.value.blankReplyFallbackTemplate)
+        coVerify(exactly = 1) { userPreferencesRepository.setBlankReplyFallbackTemplate("أهلاً بك في %s") }
     }
 }

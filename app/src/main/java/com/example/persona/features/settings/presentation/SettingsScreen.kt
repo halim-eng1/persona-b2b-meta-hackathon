@@ -45,6 +45,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import com.example.persona.features.settings.presentation.components.CooldownOption
@@ -316,6 +317,44 @@ fun SettingsScreen(
                                 value = state.farewellTemplate,
                                 onValueChange = { viewModel.setFarewellTemplate(it) },
                                 label = { Text("Farewell / Closing Template") },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 2
+                            )
+                        }
+                    }
+
+                    // ── System Fallback & Holding Messages ────────────────────
+                    SettingsSection(
+                        title = "SYSTEM FALLBACK & HOLDING MESSAGES",
+                        subtitle = "Customize automated messages for support hand-offs (HITL), media failures, and blank AI fallbacks."
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = state.hitlHoldingMessage,
+                                onValueChange = { viewModel.setHitlHoldingMessage(it) },
+                                label = { Text("Human Support Holding Message (HITL)") },
+                                placeholder = { Text(UserPreferencesRepository.DEFAULT_HITL_HOLDING_MESSAGE) },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 2
+                            )
+                            OutlinedTextField(
+                                value = state.mediaFallbackMessage,
+                                onValueChange = { viewModel.setMediaFallbackMessage(it) },
+                                label = { Text("Media Fallback Message") },
+                                placeholder = { Text(UserPreferencesRepository.DEFAULT_MEDIA_FALLBACK_MESSAGE) },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 2
+                            )
+                            OutlinedTextField(
+                                value = state.blankReplyFallbackTemplate,
+                                onValueChange = { viewModel.setBlankReplyFallbackTemplate(it) },
+                                label = { Text("Blank Reply Fallback Template (%s = Store Name)") },
+                                placeholder = { Text(UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE) },
                                 modifier = Modifier.fillMaxWidth(),
                                 minLines = 2
                             )
