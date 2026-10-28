@@ -101,6 +101,19 @@ android {
             "GROQ_BASE_URL",
             "\"${resolveSecret("GROQ_BASE_URL") ?: "https://api.groq.com/openai/v1/chat/completions"}\""
         )
+
+        // NVIDIA NIM credentials — resolved from environment or secrets properties
+        val resolvedNvidiaKey = resolveSecret("NVIDIA_API_KEY") ?: resolveSecret("NIVIDIA_API_KEY") ?: ""
+        buildConfigField(
+            "String",
+            "NVIDIA_API_KEY",
+            "\"$resolvedNvidiaKey\""
+        )
+        buildConfigField(
+            "String",
+            "NVIDIA_BASE_URL",
+            "\"${resolveSecret("NVIDIA_BASE_URL") ?: "https://integrate.api.nvidia.com/v1/chat/completions"}\""
+        )
     }
 
     buildTypes {

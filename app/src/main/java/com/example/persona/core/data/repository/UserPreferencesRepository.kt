@@ -74,6 +74,9 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_MEDIA_FALLBACK_MESSAGE = stringPreferencesKey("media_fallback_message")
         val KEY_BLANK_REPLY_FALLBACK_TEMPLATE = stringPreferencesKey("blank_reply_fallback_template")
 
+        // ── LLM Credentials Overrides ─────────────────────────────────────────
+        val KEY_NVIDIA_API_KEY = stringPreferencesKey("nvidia_api_key")
+
         const val DEFAULT_BOT_NAME = "مساعد المبيعات"
         const val DEFAULT_STORE_NAME = "متجرنا"
 
@@ -164,6 +167,10 @@ class UserPreferencesRepository @Inject constructor(
 
     val blankReplyFallbackTemplateFlow: Flow<String> = dataStore.data.map { prefs ->
         prefs[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() } ?: DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE
+    }
+
+    val nvidiaApiKeyFlow: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[KEY_NVIDIA_API_KEY]?.takeIf { it.isNotBlank() }
     }
 
     // ── Suspend setters ───────────────────────────────────────────────────────
@@ -325,6 +332,19 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun getMediaFallbackMessageSync(): String =
         dataStore.data.first()[KEY_MEDIA_FALLBACK_MESSAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_MEDIA_FALLBACK_MESSAGE
+
+    suspend fun setNvidiaApiKey(key: String?) {
+        dataStore.edit { prefs ->
+            if (key.isNullOrBlank()) {
+                prefs.remove(KEY_NVIDIA_API_KEY)
+            } else {
+                prefs[KEY_NVIDIA_API_KEY] = key.trim()
+            }
+        }
+    }
+
+    suspend fun getNvidiaApiKeySync(): String =
+        dataStore.data.first()[KEY_NVIDIA_API_KEY]?.takeIf { it.isNotBlank() } ?: ""
 
     suspend fun getBlankReplyFallbackTemplateSync(): String =
         dataStore.data.first()[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() } ?: DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE

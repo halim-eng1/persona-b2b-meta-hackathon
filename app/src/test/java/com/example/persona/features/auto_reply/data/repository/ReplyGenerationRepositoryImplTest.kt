@@ -8,6 +8,7 @@ import com.example.persona.core.database.entity.OrderStatus
 import com.example.persona.core.network.dto.AgenticLlmResponse
 import com.example.persona.core.network.dto.ChatMessage
 import com.example.persona.core.network.dto.GroqRequest
+import com.example.persona.core.network.dto.NvidiaRequest
 import com.example.persona.core.network.dto.OpenRouterRequest
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import io.ktor.client.HttpClient
@@ -714,9 +715,39 @@ class ReplyGenerationRepositoryImplTest {
     @Test
     fun `vision models are verified and deprecated slugs are purged`() {
         assertEquals(listOf("qwen/qwen3.8-27b"), ReplyGenerationRepositoryImpl.VISION_GROQ_MODELS)
+        assertEquals(
+            listOf("meta/llama-3.2-11b-vision-instruct", "nvidia/nemotron-3.5-super-vl-120b-a12b"),
+            ReplyGenerationRepositoryImpl.VISION_NVIDIA_MODELS
+        )
         assertEquals(listOf("nvidia/nemotron-3.5-super-vl:free"), ReplyGenerationRepositoryImpl.VISION_OPENROUTER_MODELS)
         assertFalse(ReplyGenerationRepositoryImpl.VISION_GROQ_MODELS.contains("llama-3.2-11b-vision-preview"))
         assertFalse(ReplyGenerationRepositoryImpl.VISION_OPENROUTER_MODELS.contains("meta-llama/llama-3.2-11b-vision-instruct:free"))
+    }
+
+    @Test
+    fun `model tier lists prioritize benchmark winning models`() {
+        assertEquals(
+            listOf(
+                "nvidia/nemotron-3.5-bolt-e4b",
+                "nvidia/nemotron-3.5-lightning-30b-a3b",
+                "nvidia/nemotron-3-ultra-550b-a55b",
+                "openai/gpt-oss-20b"
+            ),
+            ReplyGenerationRepositoryImpl.NVIDIA_TEXT_MODELS
+        )
+        assertEquals(
+            listOf("openai/gpt-oss-120b", "openai/gpt-oss-20b"),
+            ReplyGenerationRepositoryImpl.GROQ_MODELS
+        )
+        assertEquals(
+            listOf(
+                "nvidia/nemotron-3-ultra-550b-a55b:free",
+                "liquid/lfm-2.5-2.6b:free",
+                "cohere/north-mini-code:free",
+                "openrouter/free"
+            ),
+            ReplyGenerationRepositoryImpl.OPENROUTER_FAILOVER_MODELS
+        )
     }
 
     @Test
@@ -963,7 +994,210 @@ class ReplyGenerationRepositoryImplTest {
     }
 
     @Test
-    fun `executeFailoverChain executes Groq Tier 1 first and returns immediately without touching OpenRouter`() = runTest {
+    fun `callNvidiaNim returns success when NVIDIA NIM succeeds on nemotron-3-5-bolt-e4b`() = runTest {
+        val capturedAuthHeaders = mutableListOf<String>()
+        var capturedModel: String? = null
+        var capturedMaxTokens: Int? = null
+        val mockEngine = MockEngine { request ->
+            capturedAuthHeaders.add(request.headers[HttpHeaders.Authorization] ?: "")
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            val parsed = Json { ignoreUnknownKeys = true }.decodeFromString<NvidiaRequest>(bodyText)
+            capturedModel = parsed.model
+            capturedMaxTokens = parsed.maxTokens
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"منور المتجر يا غالي\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-or-key",
+            fallbackApiKey = "fallback-or-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "gsk_primary",
+            groqFallbackApiKey = "gsk_fallback",
+            nvidiaApiKey = "nvapi-test-key-1"
+        )
+
+        val result = repo.callNvidiaNim(
+            model = "nvidia/nemotron-3.5-bolt-e4b",
+            messages = listOf(ChatMessage(role = "user", content = "سلام عليكم")),
+            maxTokens = 1000
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"منور المتجر يا غالي\"}", (result as ReplyGenerationRepositoryImpl.CallResult.Success).content)
+        assertEquals(1, capturedAuthHeaders.size)
+        assertEquals("Bearer nvapi-test-key-1", capturedAuthHeaders[0])
+        assertEquals("nvidia/nemotron-3.5-bolt-e4b", capturedModel)
+        assertEquals(1000, capturedMaxTokens)
+    }
+
+    @Test
+    fun `callNvidiaNim enforces minimum 1500 max_tokens on super-vl model`() = runTest {
+        var capturedMaxTokens: Int? = null
+        val mockEngine = MockEngine { request ->
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            val parsed = Json { ignoreUnknownKeys = true }.decodeFromString<NvidiaRequest>(bodyText)
+            capturedMaxTokens = parsed.maxTokens
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"شايف الهودي تمام\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-or-key",
+            fallbackApiKey = "fallback-or-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "gsk_primary",
+            groqFallbackApiKey = "gsk_fallback",
+            nvidiaApiKey = "nvapi-test-key-1"
+        )
+
+        val result = repo.callNvidiaNim(
+            model = "nvidia/nemotron-3.5-super-vl-120b-a12b",
+            messages = listOf(ChatMessage(role = "user", content = "بكام ده؟", imageUrl = "data:image/jpeg;base64,123")),
+            maxTokens = 500
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals(1500, capturedMaxTokens)
+    }
+
+    @Test
+    fun `callNvidiaNim handles 429 rate limit and server errors correctly`() = runTest {
+        var statusCode = HttpStatusCode.TooManyRequests
+        val mockEngine = MockEngine { _ ->
+            respond(
+                content = """{"error":{"message":"Rate limit exceeded"}}""",
+                status = statusCode,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-or-key",
+            fallbackApiKey = "fallback-or-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            nvidiaApiKey = "nvapi-test-key"
+        )
+
+        val result429 = repo.callNvidiaNim("nvidia/nemotron-3.5-bolt-e4b", listOf(ChatMessage(role = "user", content = "hi")), 100)
+        assertTrue(result429 is ReplyGenerationRepositoryImpl.CallResult.RateLimited)
+
+        statusCode = HttpStatusCode.ServiceUnavailable
+        val result503 = repo.callNvidiaNim("nvidia/nemotron-3.5-bolt-e4b", listOf(ChatMessage(role = "user", content = "hi")), 100)
+        assertTrue(result503 is ReplyGenerationRepositoryImpl.CallResult.ServerError)
+        assertEquals(503, (result503 as ReplyGenerationRepositoryImpl.CallResult.ServerError).code)
+    }
+
+    @Test
+    fun `executeFailoverChain executes NVIDIA NIM Tier 1 first and returns immediately without touching Groq or OpenRouter`() = runTest {
+        val capturedUrls = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            capturedUrls.add(request.url.toString())
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد من إنفيديا\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-or-key",
+            fallbackApiKey = "fallback-or-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "gsk_primary_123456",
+            groqFallbackApiKey = "gsk_fallback_789012",
+            nvidiaApiKey = "nvapi-primary-123456"
+        )
+
+        val reply = repo.executeFailoverChain(
+            messages = listOf(ChatMessage(role = "user", content = "hi")),
+            maxTokens = 100
+        )
+
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد من إنفيديا\"}", reply)
+        assertEquals(1, capturedUrls.size)
+        assertTrue(capturedUrls[0].contains("integrate.api.nvidia.com"))
+    }
+
+    @Test
+    fun `executeFailoverChain cascades to Groq Tier 2 when NVIDIA NIM fails`() = runTest {
+        val capturedUrls = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val url = request.url.toString()
+            capturedUrls.add(url)
+            if (url.contains("nvidia.com")) {
+                respond(
+                    content = """{"error":{"message":"Internal server error"}}""",
+                    status = HttpStatusCode.InternalServerError,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد من جروك بعد فشل إنفيديا\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-or-key",
+            fallbackApiKey = "fallback-or-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "gsk_primary_123456",
+            groqFallbackApiKey = "gsk_fallback_789012",
+            nvidiaApiKey = "nvapi-primary-123456"
+        )
+
+        val reply = repo.executeFailoverChain(
+            messages = listOf(ChatMessage(role = "user", content = "hi")),
+            maxTokens = 100
+        )
+
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد من جروك بعد فشل إنفيديا\"}", reply)
+        assertTrue(capturedUrls.any { it.contains("nvidia.com") })
+        assertTrue(capturedUrls.any { it.contains("groq.com") })
+        assertFalse(capturedUrls.any { it.contains("openrouter.ai") })
+    }
+
+    @Test
+    fun `executeFailoverChain executes Groq Tier when NVIDIA key is absent and returns immediately without touching OpenRouter`() = runTest {
         val capturedUrls = mutableListOf<String>()
         val mockEngine = MockEngine { request ->
             capturedUrls.add(request.url.toString())
@@ -999,12 +1233,12 @@ class ReplyGenerationRepositoryImplTest {
     }
 
     @Test
-    fun `executeFailoverChain cascades to Tier 2 OpenRouter when both Groq models and keys fail`() = runTest {
+    fun `executeFailoverChain cascades to Tier 3 OpenRouter when both NVIDIA and Groq fail`() = runTest {
         val capturedUrls = mutableListOf<String>()
         val mockEngine = MockEngine { request ->
             val url = request.url.toString()
             capturedUrls.add(url)
-            if (url.contains("groq.com")) {
+            if (url.contains("nvidia.com") || url.contains("groq.com")) {
                 respond(
                     content = """{"error":{"message":"Internal server error"}}""",
                     status = HttpStatusCode.InternalServerError,
@@ -1030,7 +1264,8 @@ class ReplyGenerationRepositoryImplTest {
             fallbackApiKey = "fallback-or-key",
             userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
             groqPrimaryApiKey = "gsk_primary_123456",
-            groqFallbackApiKey = "gsk_fallback_789012"
+            groqFallbackApiKey = "gsk_fallback_789012",
+            nvidiaApiKey = "nvapi-primary-123456"
         )
 
         val reply = repo.executeFailoverChain(
@@ -1039,8 +1274,68 @@ class ReplyGenerationRepositoryImplTest {
         )
 
         assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد من أوبن راوتر\"}", reply)
+        assertTrue(capturedUrls.any { it.contains("nvidia.com") })
         assertTrue(capturedUrls.any { it.contains("groq.com") })
         assertTrue(capturedUrls.any { it.contains("openrouter.ai") })
+    }
+
+    @Test
+    fun `executeFailoverChain with image executes Vision Groq first, then cascades to Vision NVIDIA NIM`() = runTest {
+        val capturedUrls = mutableListOf<String>()
+        val capturedModels = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val url = request.url.toString()
+            capturedUrls.add(url)
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            if (url.contains("groq.com")) {
+                val parsed = runCatching { Json { ignoreUnknownKeys = true }.decodeFromString<GroqRequest>(bodyText) }.getOrNull()
+                parsed?.model?.let { capturedModels.add(it) }
+                respond(
+                    content = """{"error":{"message":"Rate limit"}}""",
+                    status = HttpStatusCode.TooManyRequests,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else if (url.contains("nvidia.com")) {
+                val parsed = runCatching { Json { ignoreUnknownKeys = true }.decodeFromString<NvidiaRequest>(bodyText) }.getOrNull()
+                parsed?.model?.let { capturedModels.add(it) }
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"هودي أسود مقاس لارج\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"من أوبن راوتر\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-or-key",
+            fallbackApiKey = "fallback-or-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "gsk_primary_123456",
+            groqFallbackApiKey = "gsk_fallback_789012",
+            nvidiaApiKey = "nvapi-primary-123456"
+        )
+
+        val reply = repo.executeFailoverChain(
+            messages = listOf(ChatMessage(role = "user", content = "بكام؟", imageUrl = "data:image/jpeg;base64,12345")),
+            maxTokens = 500
+        )
+
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"هودي أسود مقاس لارج\"}", reply)
+        assertTrue(capturedUrls.any { it.contains("groq.com") })
+        assertTrue(capturedUrls.any { it.contains("nvidia.com") })
+        assertEquals(listOf("qwen/qwen3.8-27b", "meta/llama-3.2-11b-vision-instruct"), capturedModels.distinct())
     }
 
     @Test

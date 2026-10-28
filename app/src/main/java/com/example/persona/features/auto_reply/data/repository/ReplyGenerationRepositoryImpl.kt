@@ -12,6 +12,8 @@ import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.core.network.dto.ChatMessage
 import com.example.persona.core.network.dto.GroqRequest
 import com.example.persona.core.network.dto.GroqResponse
+import com.example.persona.core.network.dto.NvidiaRequest
+import com.example.persona.core.network.dto.NvidiaResponse
 import com.example.persona.core.network.dto.OpenRouterRequest
 import com.example.persona.core.network.dto.OpenRouterResponse
 import com.example.persona.core.network.dto.ReasoningConfig
@@ -59,18 +61,21 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         promptContextBuilder: PromptContextBuilder = PromptContextBuilder(),
         userPreferencesRepository: UserPreferencesRepository,
         groqPrimaryApiKey: String? = "",
-        groqFallbackApiKey: String? = ""
+        groqFallbackApiKey: String? = "",
+        nvidiaApiKey: String? = ""
     ) : this(httpClient, promptContextBuilder, context, userPreferencesRepository) {
         this.primaryApiKeyOverride = primaryApiKey
         this.fallbackApiKeyOverride = fallbackApiKey
         this.groqPrimaryApiKeyOverride = groqPrimaryApiKey
         this.groqFallbackApiKeyOverride = groqFallbackApiKey
+        this.nvidiaApiKeyOverride = nvidiaApiKey
     }
 
     private var primaryApiKeyOverride: String? = null
     private var fallbackApiKeyOverride: String? = null
     private var groqPrimaryApiKeyOverride: String? = null
     private var groqFallbackApiKeyOverride: String? = null
+    private var nvidiaApiKeyOverride: String? = null
 
     internal val primaryApiKey: String
         get() = primaryApiKeyOverride ?: BuildConfig.OPENROUTER_API_KEY
@@ -83,6 +88,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
     internal val groqFallbackApiKey: String
         get() = groqFallbackApiKeyOverride ?: BuildConfig.GROQ_API_KEY_V2
+
+    internal val nvidiaApiKey: String
+        get() = nvidiaApiKeyOverride ?: BuildConfig.NVIDIA_API_KEY
 
     companion object {
         private const val TAG = PersonaLogTags.LLM
@@ -102,28 +110,40 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         val CANONICAL_HITL_MESSAGE = PromptContextBuilder.CANONICAL_HITL_MESSAGE
 
-        /** Tier 1: Groq Cloud models */
-        val GROQ_MODELS = listOf(
-            "openai/gpt-oss-120b", // Primary Champion: high intelligence, witty Egyptian persona
-            "openai/gpt-oss-20b"    // Lightning Secondary: sub-second fallback
+        /** Vision Primary & Failover Tiers */
+        val VISION_GROQ_MODELS = listOf(
+            "qwen/qwen3.8-27b" // 1.2s Champion on apparel graphic OCR
+        )
+        val VISION_NVIDIA_MODELS = listOf(
+            "meta/llama-3.2-11b-vision-instruct",
+            "nvidia/nemotron-3.5-super-vl-120b-a12b" // max_tokens >= 1500
+        )
+        val VISION_OPENROUTER_MODELS = listOf(
+            "nvidia/nemotron-3.5-super-vl:free"
         )
 
-        /** Tier 2: OpenRouter Failover chain */
+        /** Tier 1: NVIDIA NIM (Primary Fast Text - Top 4 Benchmarked) */
+        val NVIDIA_TEXT_MODELS = listOf(
+            "nvidia/nemotron-3.5-bolt-e4b",         // 304ms TTFT / 1.6s Champion
+            "nvidia/nemotron-3.5-lightning-30b-a3b", // 30B fast reasoning fallback
+            "nvidia/nemotron-3-ultra-550b-a55b",     // Deep analytical reasoner
+            "meta/llama-3.2-11b-vision-instruct",  // Reliable fallback
+            "openai/gpt-oss-20b"                     // Reliable fallback
+        )
+
+        /** Tier 2: Groq Cloud (Fast Text Secondary) */
+        val GROQ_MODELS = listOf(
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b"
+        )
+
+        /** Tier 3: OpenRouter Failover (Pure Text First, Multimodal Last) */
         val OPENROUTER_FAILOVER_MODELS = listOf(
             "nvidia/nemotron-3-ultra-550b-a55b:free",
             "liquid/lfm-2.5-2.6b:free",
             "cohere/north-mini-code:free",
-            "openrouter/free"
-        )
-
-        /** Multimodal Vision models for Groq */
-        val VISION_GROQ_MODELS = listOf(
-            "qwen/qwen3.8-27b" // Verified Vision model on Groq console
-        )
-
-        /** Multimodal Vision models for OpenRouter */
-        val VISION_OPENROUTER_MODELS = listOf(
-            "nvidia/nemotron-3.5-super-vl:free" // 1.0M context multimodal
+            "openrouter/free",
+            "nvidia/nemotron-3.5-super-vl:free"
         )
 
         val FAILOVER_MODELS = OPENROUTER_FAILOVER_MODELS
@@ -415,37 +435,108 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
         val targetMaxTokens = if (hasImage) 500 else minOf(maxTokens, ABSOLUTE_FAILOVER_CEILING)
 
-        val groqModelsToTry = if (hasImage) VISION_GROQ_MODELS else GROQ_MODELS
-        val openRouterModelsToTry = if (hasImage) VISION_OPENROUTER_MODELS else OPENROUTER_FAILOVER_MODELS
-
         if (hasImage) {
-            PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision-capable models with targetMaxTokens=$targetMaxTokens...")
-            Log.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision-capable models with targetMaxTokens=$targetMaxTokens...")
-        }
+            PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade (Groq -> NVIDIA -> OpenRouter)...")
+            Log.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade (Groq -> NVIDIA -> OpenRouter)...")
 
-        // ── Tier 1: Groq Cloud (Primary Engine) ──────────────────────────
-        val groqStartTime = System.currentTimeMillis()
-        val hasGroqKeys = groqPrimaryApiKey.isNotBlank() || groqFallbackApiKey.isNotBlank()
+            // ── Vision Tier 1: Groq Cloud (Champion) ───────────────────
+            val groqStartTime = System.currentTimeMillis()
+            val hasGroqKeys = groqPrimaryApiKey.isNotBlank() || groqFallbackApiKey.isNotBlank()
+            if (hasGroqKeys) {
+                for (model in VISION_GROQ_MODELS) {
+                    val result = callGroq(model, messages, targetMaxTokens)
+                    if (result is CallResult.Success) {
+                        val durationMs = System.currentTimeMillis() - groqStartTime
+                        PersonaLogger.i(TAG, "Vision Tier 1 (Groq) succeeded with $model in ${durationMs}ms!")
+                        Log.i(TAG, "Vision Tier 1 (Groq) succeeded with $model in ${durationMs}ms")
+                        return result.content
+                    }
+                }
+                PersonaLogger.w(TAG, "Vision Tier 1 (Groq) exhausted. Cascading to Vision Tier 2 (NVIDIA NIM)...")
+                Log.w(TAG, "Vision Tier 1 (Groq) exhausted. Cascading to Vision Tier 2 (NVIDIA NIM)...")
+            }
 
-        if (hasGroqKeys) {
-            for (model in groqModelsToTry) {
-                val result = callGroq(model, messages, targetMaxTokens)
+            // ── Vision Tier 2: NVIDIA NIM ──────────────────────────
+            val nvidiaStartTime = System.currentTimeMillis()
+            val nvidiaKey = nvidiaApiKey.ifBlank { userPreferencesRepository.getNvidiaApiKeySync() }.trim()
+            if (nvidiaKey.isNotBlank()) {
+                for (model in VISION_NVIDIA_MODELS) {
+                    val result = callNvidiaNim(model, messages, targetMaxTokens)
+                    if (result is CallResult.Success) {
+                        val durationMs = System.currentTimeMillis() - nvidiaStartTime
+                        PersonaLogger.i(TAG, "Vision Tier 2 (NVIDIA NIM) succeeded with $model in ${durationMs}ms!")
+                        Log.i(TAG, "Vision Tier 2 (NVIDIA NIM) succeeded with $model in ${durationMs}ms")
+                        return result.content
+                    }
+                }
+                PersonaLogger.w(TAG, "Vision Tier 2 (NVIDIA NIM) exhausted. Cascading to Vision Tier 3 (OpenRouter)...")
+                Log.w(TAG, "Vision Tier 2 (NVIDIA NIM) exhausted. Cascading to Vision Tier 3 (OpenRouter)...")
+            }
+
+            // ── Vision Tier 3: OpenRouter Fallback ──────────────────
+            for (model in VISION_OPENROUTER_MODELS) {
+                val result = callOpenRouter(model, messages, targetMaxTokens)
                 if (result is CallResult.Success) {
-                    val durationMs = System.currentTimeMillis() - groqStartTime
-                    PersonaLogger.i(TAG, "Groq Tier succeeded in ${durationMs}ms!")
-                    Log.i(TAG, "Groq Tier succeeded with model $model in ${durationMs}ms")
+                    PersonaLogger.i(TAG, "Vision Tier 3 (OpenRouter) succeeded with $model")
+                    Log.i(TAG, "Vision Tier 3 (OpenRouter) succeeded with $model")
                     return result.content
                 }
             }
-            PersonaLogger.w(TAG, "Groq Tier exhausted. Cascading to Tier 2 (OpenRouter)...")
-            Log.w(TAG, "Groq Tier exhausted. Cascading to Tier 2 (OpenRouter)...")
+
+            // Fallback to text chain if visual description is available
+            val hasVisualDescription = messages.any { it.content.contains("[وصف الصورة المرفقة من العميل]:") }
+            if (hasVisualDescription) {
+                PersonaLogger.w(TAG, "Dedicated Vision models exhausted. Falling back to text model chain using visual_product_description...")
+                Log.w(TAG, "Dedicated Vision models exhausted. Falling back to text model chain using visual_product_description...")
+                val strippedMessages = messages.map { it.copy(imageUrl = null) }
+                return executeFailoverChain(strippedMessages, maxTokens)
+            }
+
+            Log.w(TAG, "All Vision models failed across Groq, NVIDIA, and OpenRouter tiers. Returning HITL fallback JSON.")
+            PersonaLogger.d(TAG, "All Vision models failed — HITL fallback")
+            return HITL_FALLBACK_JSON
         }
 
-        // ── Tier 2: OpenRouter Failover (Emergency Safety Net) ───────────
-        var consecutive429Count = 0
+        // ── Pure Text / Transcribed Voice Request ─────────────────────
 
-        for ((index, model) in openRouterModelsToTry.withIndex()) {
-            Log.d(TAG, "Attempting [OpenRouter] model ${index + 1}/${openRouterModelsToTry.size}: $model with max_tokens=$targetMaxTokens")
+        // ── Tier 1: NVIDIA NIM (Primary Fast Text) ─────────────────────
+        val nvidiaStartTime = System.currentTimeMillis()
+        val nvidiaKey = nvidiaApiKey.ifBlank { userPreferencesRepository.getNvidiaApiKeySync() }.trim()
+        if (nvidiaKey.isNotBlank()) {
+            for (model in NVIDIA_TEXT_MODELS) {
+                val result = callNvidiaNim(model, messages, targetMaxTokens)
+                if (result is CallResult.Success) {
+                    val durationMs = System.currentTimeMillis() - nvidiaStartTime
+                    PersonaLogger.i(TAG, "NVIDIA Tier 1 succeeded with model $model in ${durationMs}ms!")
+                    Log.i(TAG, "NVIDIA Tier 1 succeeded with model $model in ${durationMs}ms")
+                    return result.content
+                }
+            }
+            PersonaLogger.w(TAG, "NVIDIA Tier 1 exhausted. Cascading to Tier 2 (Groq)...")
+            Log.w(TAG, "NVIDIA Tier 1 exhausted. Cascading to Tier 2 (Groq)...")
+        }
+
+        // ── Tier 2: Groq Cloud (Secondary Fast Text) ───────────────────
+        val groqStartTime = System.currentTimeMillis()
+        val hasGroqKeys = groqPrimaryApiKey.isNotBlank() || groqFallbackApiKey.isNotBlank()
+        if (hasGroqKeys) {
+            for (model in GROQ_MODELS) {
+                val result = callGroq(model, messages, targetMaxTokens)
+                if (result is CallResult.Success) {
+                    val durationMs = System.currentTimeMillis() - groqStartTime
+                    PersonaLogger.i(TAG, "Groq Tier 2 succeeded with model $model in ${durationMs}ms!")
+                    Log.i(TAG, "Groq Tier 2 succeeded with model $model in ${durationMs}ms")
+                    return result.content
+                }
+            }
+            PersonaLogger.w(TAG, "Groq Tier 2 exhausted. Cascading to Tier 3 (OpenRouter)...")
+            Log.w(TAG, "Groq Tier 2 exhausted. Cascading to Tier 3 (OpenRouter)...")
+        }
+
+        // ── Tier 3: OpenRouter Failover (Emergency Safety Net) ───────────
+        var consecutive429Count = 0
+        for ((index, model) in OPENROUTER_FAILOVER_MODELS.withIndex()) {
+            Log.d(TAG, "Attempting [OpenRouter] model ${index + 1}/${OPENROUTER_FAILOVER_MODELS.size}: $model with max_tokens=$targetMaxTokens")
             PersonaLogger.d(TAG, "Trying OpenRouter model: $model")
 
             when (val result = callOpenRouter(model, messages, targetMaxTokens)) {
@@ -456,13 +547,11 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 }
                 is CallResult.RateLimited -> {
                     consecutive429Count++
-
                     if (consecutive429Count >= 3) {
                         Log.w(TAG, "3 consecutive OpenRouter models returned 429 (account quota / RPM limit). Breaking early to HITL fallback.")
                         PersonaLogger.d(TAG, "OpenRouter account quota exhausted (consecutive 429s) — early HITL fallback")
                         return HITL_FALLBACK_JSON
                     }
-
                     delay(1200L)
                 }
                 else -> {
@@ -471,19 +560,86 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             }
         }
 
-        if (hasImage) {
-            val hasVisualDescription = messages.any { it.content.contains("[وصف الصورة المرفقة من العميل]:") }
-            if (hasVisualDescription) {
-                PersonaLogger.w(TAG, "Dedicated Vision models exhausted. Falling back to text model chain using visual_product_description...")
-                Log.w(TAG, "Dedicated Vision models exhausted. Falling back to text model chain using visual_product_description...")
-                val strippedMessages = messages.map { it.copy(imageUrl = null) }
-                return executeFailoverChain(strippedMessages, maxTokens)
-            }
-        }
-
-        Log.w(TAG, "All models failed across Groq and OpenRouter tiers. Returning HITL fallback JSON.")
+        Log.w(TAG, "All models failed across NVIDIA, Groq, and OpenRouter tiers. Returning HITL fallback JSON.")
         PersonaLogger.d(TAG, "All models failed — HITL fallback")
         return HITL_FALLBACK_JSON
+    }
+
+    internal suspend fun callNvidiaNim(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int
+    ): CallResult = withContext(Dispatchers.IO) {
+        val apiKey = nvidiaApiKey.ifBlank { userPreferencesRepository.getNvidiaApiKeySync() }.trim()
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "NVIDIA API key is blank; skipping request for model $model")
+            return@withContext CallResult.Failed
+        }
+
+        val keyMasked = maskKey(apiKey)
+        val effectiveMaxTokens = if (model.contains("super-vl")) maxOf(maxTokens, 1500) else maxTokens
+        PersonaLogger.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens)")
+        Log.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens)")
+
+        try {
+            withTimeout(MODEL_TIMEOUT_MS) {
+                val response = httpClient.post(BuildConfig.NVIDIA_BASE_URL) {
+                    contentType(ContentType.Application.Json)
+                    bearerAuth(apiKey)
+                    setBody(
+                        NvidiaRequest(
+                            model = model,
+                            messages = messages,
+                            temperature = 0.5f,
+                            maxTokens = effectiveMaxTokens
+                        )
+                    )
+                }
+
+                when {
+                    response.status.value == 429 -> {
+                        Log.w(TAG, "Rate limited (429) on [NVIDIA NIM] model $model (key $keyMasked)")
+                        CallResult.RateLimited
+                    }
+                    response.status.value in listOf(401, 402, 403) -> {
+                        Log.w(TAG, "Auth/quota error (${response.status.value}) on [NVIDIA NIM] model $model (key $keyMasked)")
+                        CallResult.AuthOrQuotaError(response.status.value)
+                    }
+                    response.status.value in 500..599 -> {
+                        Log.w(TAG, "Server error (${response.status.value}) on [NVIDIA NIM] model $model (key $keyMasked)")
+                        CallResult.ServerError(response.status.value)
+                    }
+                    response.status.isSuccess() -> {
+                        val responseBody = response.body<String>()
+                        PersonaLogger.d(PersonaLogTags.LLM, "📥 Raw LLM Output from [NVIDIA NIM] $model: $responseBody")
+                        val body = jsonParser.decodeFromString<NvidiaResponse>(responseBody)
+                        val content = body.choices?.firstOrNull()?.message?.content
+                        if (content.isNullOrBlank()) {
+                            Log.w(TAG, "Empty content in successful response from [NVIDIA NIM] $model (key $keyMasked)")
+                            CallResult.Failed
+                        } else {
+                            try {
+                                ReasoningLeakSanitizer.decodeAgenticResponseSafely(content)
+                                CallResult.Success(content)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Invalid JSON content in response from [NVIDIA NIM] $model (key $keyMasked): $content", e)
+                                CallResult.Failed
+                            }
+                        }
+                    }
+                    else -> {
+                        Log.w(TAG, "HTTP ${response.status.value} error from [NVIDIA NIM] $model (key $keyMasked)")
+                        CallResult.Failed
+                    }
+                }
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.w(TAG, "Timeout (${MODEL_TIMEOUT_MS}ms) on [NVIDIA NIM] model $model (key $keyMasked)")
+            CallResult.Timeout
+        } catch (e: Exception) {
+            Log.e(TAG, "Network error on [NVIDIA NIM] model $model (key $keyMasked)", e)
+            CallResult.Failed
+        }
     }
 
     internal suspend fun callGroq(
@@ -731,6 +887,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         val keyMasked = maskKey(apiKey)
         val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
+        val effectiveMaxTokens = if (model.contains("super-vl")) maxOf(maxTokens, 1500) else maxTokens
 
         return try {
             withTimeout(MODEL_TIMEOUT_MS) {
@@ -742,7 +899,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                         OpenRouterRequest(
                             model = model,
                             messages = messages,
-                            maxTokens = maxTokens,
+                            maxTokens = effectiveMaxTokens,
                             reasoning = reasoning
                         )
                     )
@@ -757,7 +914,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                             OpenRouterRequest(
                                 model = model,
                                 messages = messages,
-                                maxTokens = maxTokens,
+                                maxTokens = effectiveMaxTokens,
                                 reasoning = null
                             )
                         )
