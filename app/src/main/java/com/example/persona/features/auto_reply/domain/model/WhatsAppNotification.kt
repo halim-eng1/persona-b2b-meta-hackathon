@@ -25,5 +25,6 @@ data class WhatsAppNotification(
     val notificationKey: String,
     val extraMessages: List<ExtraMessage> = emptyList(),
     val sourceClass: NotificationSourceClass = NotificationSourceClass.UNKNOWN,
-    val mediaFilePath: String? = null
+    val mediaFilePath: String? = null,
+    val isVoiceTranscriptionFailed: Boolean = false
 )

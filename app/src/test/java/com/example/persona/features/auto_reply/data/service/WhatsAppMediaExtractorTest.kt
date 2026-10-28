@@ -66,6 +66,23 @@ class WhatsAppMediaExtractorTest {
     }
 
     @Test
+    fun `hasNotificationImage returns false and hasAudioIndicator returns true for voice notifications`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        val extras = Bundle().apply {
+            putCharSequence(Notification.EXTRA_TEXT, "🎤 Voice message (0:04)")
+        }
+        val notification = mockk<Notification> {
+            this.extras = extras
+        }
+        val sbn = mockk<StatusBarNotification> {
+            every { this@mockk.notification } returns notification
+        }
+
+        assertTrue(extractor.hasAudioIndicator(sbn, "🎤 Voice message (0:04)"))
+        assertFalse(extractor.hasNotificationImage(sbn, "🎤 Voice message (0:04)"))
+    }
+
+    @Test
     fun `isImageIndicator detects images and photos`() {
         val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
 
@@ -150,7 +167,7 @@ class WhatsAppMediaExtractorTest {
         )
 
         val tempAudio = tempFolder.newFile("sample.opus").apply {
-            writeBytes(byteArrayOf(1, 2, 3, 4, 5))
+            writeBytes(ByteArray(1024) { 1 })
         }
 
         val result = extractor.transcribeVoiceNote(tempAudio)
@@ -194,7 +211,7 @@ class WhatsAppMediaExtractorTest {
         )
 
         val tempAudio = tempFolder.newFile("voice.opus").apply {
-            writeBytes(byteArrayOf(9, 8, 7))
+            writeBytes(ByteArray(1024) { 2 })
         }
 
         val result = extractor.transcribeVoiceNote(tempAudio)
@@ -512,5 +529,228 @@ class WhatsAppMediaExtractorTest {
         assertNull(file)
         assertEquals(0, pollCalls)
         assertFalse(extractor.isDiskFileClaimed(diskImage.absolutePath))
+    }
+
+    @Test
+    fun `extractDurationSeconds normalizes Eastern Arabic numerals and parses duration`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+
+        assertEquals(4, extractor.extractDurationSeconds("🎤 Voice message (0:04)"))
+        assertEquals(4, extractor.extractDurationSeconds("🎤 رسالة صوتية (٠:٠٤)"))
+        assertEquals(72, extractor.extractDurationSeconds("رسالة صوتية (١:١٢)"))
+        assertEquals(75, extractor.extractDurationSeconds("Voice message (1:15)"))
+        assertEquals(9, extractor.extractDurationSeconds("مقطع صوتي (00:09)"))
+        assertEquals(150, extractor.extractDurationSeconds("audio (2:30)"))
+        assertNull(extractor.extractDurationSeconds("رسالة صوتية بدون مدة"))
+        assertNull(extractor.extractDurationSeconds("السلام عليكم"))
+    }
+
+    @Test
+    fun `extractAudioFromNotification extracts ogg file directly from MessagingStyle uri and bypasses disk scan`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        val mockUri = mockk<Uri>()
+        val dummyAudioBytes = ByteArray(1024) { 42 }
+        val fakeStream = java.io.ByteArrayInputStream(dummyAudioBytes)
+
+        every { mockContext.contentResolver.openInputStream(mockUri) } returns fakeStream
+
+        val messageBundle = mockk<Bundle>(relaxed = true) {
+            every { getString("type") } returns "audio/ogg; codecs=opus"
+            every { getParcelable<Uri>("uri") } returns mockUri
+            every { getParcelable("uri", Uri::class.java) } returns mockUri
+            every { this@mockk.get("uri") } returns (mockUri as Any)
+        }
+
+        val extras = mockk<Bundle>(relaxed = true)
+        every { extras.getParcelableArray(Notification.EXTRA_MESSAGES) } returns arrayOf(messageBundle)
+
+        val sbn = mockk<StatusBarNotification> {
+            every { notification } returns mockk { this@mockk.extras = extras }
+        }
+
+        val audioFile = extractor.extractAudioFromNotification(sbn)
+        assertNotNull(audioFile)
+        assertTrue(audioFile!!.exists())
+        assertTrue(audioFile.name.endsWith(".ogg"))
+        assertEquals(1024L, audioFile.length())
+        assertEquals(42.toByte(), audioFile.readBytes()[0])
+    }
+
+    @Test
+    fun `captureLatestVoiceNote matches duration within 1000ms and breaks ties by proximity to postTime`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        val voiceDir = tempFolder.newFolder("whatsapp_voice_notes")
+        extractor.voiceNoteDirectoriesOverride = listOf(voiceDir)
+
+        val now = 1_000_000L
+
+        // File 1: 4 seconds (4000ms), modified 5000ms ago
+        val file4s = File(voiceDir, "PTT-001.opus").apply {
+            writeBytes(ByteArray(1024))
+            setLastModified(now - 5000L)
+        }
+
+        // File 2: 12 seconds (12000ms), modified 2000ms ago
+        val file12s = File(voiceDir, "PTT-002.opus").apply {
+            writeBytes(ByteArray(1024))
+            setLastModified(now - 2000L)
+        }
+
+        // File 3: 4 seconds (4000ms), modified 1000ms ago (closer to postTime)
+        val file4sCloser = File(voiceDir, "PTT-003.opus").apply {
+            writeBytes(ByteArray(1024))
+            setLastModified(now - 1000L)
+        }
+
+        extractor.audioDurationProvider = { file ->
+            when (file.name) {
+                "PTT-001.opus" -> 4050L // ~4s
+                "PTT-002.opus" -> 12100L // ~12s
+                "PTT-003.opus" -> 3980L // ~4s
+                else -> null
+            }
+        }
+
+        // First customer: 4s voice note. Candidates matching: PTT-001 (5s ago) and PTT-003 (1s ago).
+        // Tie-breaker should pick PTT-003 (closest to now).
+        val capturedCustomer1 = extractor.captureLatestVoiceNote(
+            sourceClass = NotificationSourceClass.BUSINESS,
+            postTime = now,
+            expectedDurationSeconds = 4
+        )
+        assertNotNull(capturedCustomer1)
+        assertEquals(file4sCloser.absolutePath, capturedCustomer1!!.absolutePath)
+        assertTrue(extractor.isVoiceFileClaimed(file4sCloser.absolutePath))
+
+        // Second customer: 12s voice note. Should pick PTT-002.
+        val capturedCustomer2 = extractor.captureLatestVoiceNote(
+            sourceClass = NotificationSourceClass.BUSINESS,
+            postTime = now,
+            expectedDurationSeconds = 12
+        )
+        assertNotNull(capturedCustomer2)
+        assertEquals(file12s.absolutePath, capturedCustomer2!!.absolutePath)
+        assertTrue(extractor.isVoiceFileClaimed(file12s.absolutePath))
+
+        // Third customer: 4s voice note. PTT-003 is already claimed!
+        // Should pick the remaining matching file: PTT-001.
+        val capturedCustomer3 = extractor.captureLatestVoiceNote(
+            sourceClass = NotificationSourceClass.BUSINESS,
+            postTime = now,
+            expectedDurationSeconds = 4
+        )
+        assertNotNull(capturedCustomer3)
+        assertEquals(file4s.absolutePath, capturedCustomer3!!.absolutePath)
+        assertTrue(extractor.isVoiceFileClaimed(file4s.absolutePath))
+
+        // Fourth customer: No unclaimed 4s files remain!
+        val capturedCustomer4 = extractor.captureLatestVoiceNote(
+            sourceClass = NotificationSourceClass.BUSINESS,
+            postTime = now,
+            expectedDurationSeconds = 4
+        )
+        assertNull(capturedCustomer4)
+    }
+
+    @Test
+    fun `captureLatestVoiceNote evicts claimed files older than 10 minutes`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        val voiceDir = tempFolder.newFolder("whatsapp_voice_evict")
+        extractor.voiceNoteDirectoriesOverride = listOf(voiceDir)
+
+        val file = File(voiceDir, "PTT-OLD.opus").apply {
+            writeBytes(ByteArray(1024))
+            setLastModified(1_000_000L)
+        }
+
+        // Claim file at timestamp 1_000_000L
+        extractor.captureLatestVoiceNote(NotificationSourceClass.BUSINESS, postTime = 1_000_000L)
+        assertTrue(extractor.isVoiceFileClaimed(file.absolutePath))
+
+        // 11 minutes later (1_000_000 + 660_000):
+        val later = 1_000_000L + 11 * 60 * 1000L
+        file.setLastModified(later)
+        val reClaimed = extractor.captureLatestVoiceNote(NotificationSourceClass.BUSINESS, postTime = later)
+        assertNotNull(reClaimed)
+        assertEquals(file.absolutePath, reClaimed!!.absolutePath)
+    }
+
+    @Test
+    fun `transcribeVoiceNote sends ogg filename extension and valid multipart payload without duplicate form-data headers`() = runBlocking {
+        var wireBodyText = ""
+        val mockEngine = MockEngine { request ->
+            assertEquals("https://api.groq.com/openai/v1/audio/transcriptions", request.url.toString())
+            assertEquals("Bearer test_groq_key", request.headers[HttpHeaders.Authorization])
+
+            val body = request.body
+            assertTrue(body is MultiPartFormDataContent)
+            val channel = io.ktor.utils.io.ByteChannel(autoFlush = true)
+            runBlocking {
+                (body as io.ktor.http.content.OutgoingContent.WriteChannelContent).writeTo(channel)
+                channel.close(null)
+                val readBytes = java.io.ByteArrayOutputStream()
+                val buffer = java.nio.ByteBuffer.allocate(1024)
+                while (!channel.isClosedForRead) {
+                    buffer.clear()
+                    val count = channel.readAvailable(buffer)
+                    if (count > 0) {
+                        readBytes.write(buffer.array(), 0, count)
+                    } else if (count == -1) {
+                        break
+                    }
+                }
+                wireBodyText = readBytes.toString("UTF-8")
+            }
+
+            respond(
+                content = """{"text": "عايز اعرف اسعار الهوديز"}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+
+        val client = HttpClient(mockEngine)
+
+        val extractor = WhatsAppMediaExtractor(
+            context = mockContext,
+            httpClient = client,
+            groqPrimaryApiKey = "test_groq_key",
+            groqFallbackApiKey = "fallback_key"
+        )
+
+        // WhatsApp file named with .opus extension
+        val tempAudio = tempFolder.newFile("PTT-20261028-WA0009.opus").apply {
+            writeBytes(ByteArray(1024) { 7 })
+        }
+
+        val result = extractor.transcribeVoiceNote(tempAudio)
+        assertNotNull(result)
+        assertEquals("عايز اعرف اسعار الهوديز", result)
+
+        // Verify wire format invariants:
+        assertTrue(wireBodyText.contains("filename=\"PTT-20261028-WA0009.ogg\""))
+        assertFalse(wireBodyText.contains("PTT-20261028-WA0009.opus"))
+        assertTrue(wireBodyText.contains("Content-Type: audio/ogg"))
+        assertTrue(wireBodyText.contains("name=model") || wireBodyText.contains("name=\"model\""))
+        assertTrue(wireBodyText.contains("whisper-large-v3-turbo"))
+        assertTrue(wireBodyText.contains("name=response_format") || wireBodyText.contains("name=\"response_format\""))
+        assertTrue(wireBodyText.contains("json"))
+        assertTrue(wireBodyText.contains("name=language") || wireBodyText.contains("name=\"language\""))
+        assertTrue(wireBodyText.contains("ar"))
+        assertFalse(wireBodyText.contains("form-data; name=\"file\"; form-data; name=\"file\""))
+        assertFalse(wireBodyText.contains("form-data; name=file; form-data; name=file"))
+    }
+
+    @Test
+    fun `transcribeVoiceNote delays 150ms and checks readiness when audio file is initially small`() = runTest {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        extractor.ioDispatcher = kotlinx.coroutines.Dispatchers.Unconfined
+
+        val emptyAudio = tempFolder.newFile("empty.opus").apply {
+            writeBytes(ByteArray(100)) // <= 500 bytes
+        }
+
+        val result = extractor.transcribeVoiceNote(emptyAudio)
+        assertNull(result)
     }
 }

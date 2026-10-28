@@ -254,6 +254,59 @@ class AutoReplyOrchestratorMediaTest {
     }
 
     @Test
+    fun `transcribed voice note with audio mediaFilePath forces mediaFilePath to null and executes as pure text turn`() = runBlocking {
+        val audioFile = tempFolder.newFile("voice_note.opus").apply {
+            writeBytes(byteArrayOf(1, 2, 3, 4, 5))
+        }
+
+        val notification = WhatsAppNotification(
+            title = "Customer Voice",
+            text = "[رسالة صوتية من العميل]: هو المفروض في حد موجود هنا دلوقتي ولا ايه",
+            postTime = 3000L,
+            notificationKey = "key_voice_audio_path",
+            sourceClass = NotificationSourceClass.BUSINESS,
+            mediaFilePath = audioFile.absolutePath
+        )
+
+        coEvery {
+            replyGenerationRepository.generateReply(
+                notification = match { it.mediaFilePath == null && it.originalText.contains("هو المفروض في حد موجود") },
+                candidates = any(),
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = 600
+            )
+        } returns """{"action":"REPLY","refined_search_keyword":null,"order_action":null,"final_reply_text":"أهلاً بك! نعم أنا متواجد لمساعدتك، اتفضل تحت أمرك 💙","extracted_order":null}"""
+
+        orchestrator.processNotificationSequentially(notification)
+
+        // Verify LLM was invoked with mediaFilePath == null and maxTokens == 600 (not multimodal 500)
+        coVerify(atLeast = 1) {
+            replyGenerationRepository.generateReply(
+                notification = match { it.mediaFilePath == null },
+                candidates = any(),
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = 600
+            )
+        }
+
+        // Verify reply dispatched
+        coVerify(atLeast = 1) {
+            directReplyExecutionUseCase.execute(
+                eq("key_voice_audio_path"),
+                match { it.contains("أهلاً بك! نعم أنا متواجد لمساعدتك") },
+                eq("Customer Voice"),
+                any()
+            )
+        }
+    }
+
+    @Test
     fun `when both bitmap extraction and disk fallback genuinely fail, sends media fallback message`() = runBlocking {
         every { mediaExtractor.isImageIndicator("📷 Sent a photo") } returns true
         every { mediaExtractor.findLatestImageOnDisk(any(), any()) } returns null
@@ -274,6 +327,46 @@ class AutoReplyOrchestratorMediaTest {
         coVerify(atLeast = 1) {
             directReplyExecutionUseCase.execute(
                 eq("key_fail_789"),
+                match { it.contains("لا يمكنني معالجة الوسائط") },
+                eq("Halim•"),
+                any()
+            )
+        }
+    }
+
+    @Test
+    fun `when voice note transcription failed at listener stage, orchestrator aborts execution and dispatches media fallback immediately without scanning disk`() = runBlocking {
+        val notification = WhatsAppNotification(
+            title = "Halim•",
+            text = "🎤 Voice message (0:04)",
+            postTime = 4000L,
+            notificationKey = "key_voice_fail_123",
+            sourceClass = NotificationSourceClass.BUSINESS,
+            mediaFilePath = null,
+            isVoiceTranscriptionFailed = true
+        )
+
+        orchestrator.processNotificationSequentially(notification)
+
+        // Verify that mediaExtractor disk scanning and transcription were NEVER re-attempted
+        coVerify(exactly = 0) {
+            mediaExtractor.captureLatestVoiceNote(any(), any(), any())
+        }
+        coVerify(exactly = 0) {
+            mediaExtractor.transcribeVoiceNote(any())
+        }
+
+        // Verify LLM reply was NEVER invoked
+        coVerify(exactly = 0) {
+            replyGenerationRepository.generateReply(
+                any(), any(), any(), any(), any(), any(), any()
+            )
+        }
+
+        // Verify that media fallback template was immediately dispatched
+        coVerify(atLeast = 1) {
+            directReplyExecutionUseCase.execute(
+                eq("key_voice_fail_123"),
                 match { it.contains("لا يمكنني معالجة الوسائط") },
                 eq("Halim•"),
                 any()

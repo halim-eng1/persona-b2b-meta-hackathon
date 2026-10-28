@@ -321,9 +321,23 @@ class AutoReplyOrchestrator @Inject constructor(
         }
 
         // 10. Multimodal Media Processing & Fallback handling
+        // Fast path: Voice transcription already attempted and failed at listener stage
+        if (processed.isVoiceTranscriptionFailed) {
+            Log.i(TAG, "Voice transcription failed at listener stage for ${processed.contactName}. Immediately dispatching media fallback.")
+            Log.i("PersonaMetrics", "metric=notification_drop_rate value=1 contact=${processed.contactName.hashCode()}")
+            val fallbackMsg = runCatching { prefsRepository.getMediaFallbackMessageSync() }.getOrNull()?.takeIf { it.isNotBlank() }
+                ?: context.getString(R.string.media_fallback_message)
+            sendImmediateReply(processed, fallbackMsg)
+            return
+        }
+
         val isTranscribedVoice = processed.originalText.startsWith("[رسالة صوتية من العميل]:")
-        var currentMediaFilePath = processed.mediaFilePath
-        var effectiveProcessed = processed
+        var currentMediaFilePath = if (isTranscribedVoice) null else processed.mediaFilePath
+        var effectiveProcessed = if (isTranscribedVoice) {
+            processed.copy(mediaFilePath = null)
+        } else {
+            processed
+        }
 
         val rawText = processed.originalText
         val hasImage = mediaExtractor?.isImageIndicator(rawText) ?: com.example.persona.features.auto_reply.data.repository.NotificationProcessorImpl.isImageIndicator(rawText)
@@ -335,15 +349,18 @@ class AutoReplyOrchestrator @Inject constructor(
         if (!isTranscribedVoice && containsMediaIndicators(processed.originalText)) {
             if (mediaExtractor != null) {
                 if (mediaExtractor.isVoiceMessageIndicator(processed.originalText)) {
-                    val voiceFile = mediaExtractor.captureLatestVoiceNote(processed.sourceClass, processed.postTime)
+                    val durationSeconds = mediaExtractor.extractDurationSeconds(processed.originalText)
+                    val voiceFile = mediaExtractor.captureLatestVoiceNote(processed.sourceClass, processed.postTime, durationSeconds)
                     if (voiceFile != null) {
                         val transcribed = mediaExtractor.transcribeVoiceNote(voiceFile)
                         if (!transcribed.isNullOrBlank()) {
                             val updatedText = "[رسالة صوتية من العميل]: $transcribed"
                             effectiveProcessed = processed.copy(
                                 originalText = updatedText,
-                                normalizedText = normalizer.normalize(updatedText) ?: updatedText
+                                normalizedText = normalizer.normalize(updatedText) ?: updatedText,
+                                mediaFilePath = null
                             )
+                            currentMediaFilePath = null
                             Log.i(TAG, "🎙️ Successfully captured voice note and transcribed: '$updatedText'")
                         }
                     }
@@ -359,8 +376,17 @@ class AutoReplyOrchestrator @Inject constructor(
         }
 
         val isVoiceTranscribedNow = effectiveProcessed.originalText.startsWith("[رسالة صوتية من العميل]:")
+        val isVoiceIndicator = mediaExtractor?.isVoiceMessageIndicator(effectiveProcessed.originalText)
+            ?: com.example.persona.features.auto_reply.data.repository.NotificationProcessorImpl.isVoiceMessageIndicator(effectiveProcessed.originalText)
+
         // ONLY send media fallback if media indicator is present AND media extraction genuinely failed
-        if (!isVoiceTranscribedNow && currentMediaFilePath == null && containsMediaIndicators(effectiveProcessed.originalText)) {
+        val shouldSendFallback = if (isVoiceIndicator && !isVoiceTranscribedNow) {
+            true
+        } else {
+            !isVoiceTranscribedNow && currentMediaFilePath == null && containsMediaIndicators(effectiveProcessed.originalText)
+        }
+
+        if (shouldSendFallback) {
             Log.i(TAG, "Media indicator detected but extraction failed for ${effectiveProcessed.contactName}. Sending media fallback.")
             Log.i("PersonaMetrics", "metric=notification_drop_rate value=1 contact=${effectiveProcessed.contactName.hashCode()}")
             val fallbackMsg = runCatching { prefsRepository.getMediaFallbackMessageSync() }.getOrNull()?.takeIf { it.isNotBlank() }
@@ -369,7 +395,7 @@ class AutoReplyOrchestrator @Inject constructor(
             return
         }
 
-        if (currentMediaFilePath != null && effectiveProcessed.mediaFilePath == null) {
+        if (!isVoiceTranscribedNow && currentMediaFilePath != null && effectiveProcessed.mediaFilePath == null) {
             effectiveProcessed = effectiveProcessed.copy(mediaFilePath = currentMediaFilePath)
         }
 
@@ -399,7 +425,7 @@ class AutoReplyOrchestrator @Inject constructor(
                 maxScore = bestScore
             }
 
-            val isImagePresent = effectiveProcessed.mediaFilePath != null
+            val isImagePresent = !isTranscribedVoice && !isVoiceTranscribedNow && effectiveProcessed.mediaFilePath != null
             val finalCandidates = candidates
 
             // Context Assembly

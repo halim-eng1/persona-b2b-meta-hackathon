@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Icon
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -19,7 +20,7 @@ import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceClass
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
-import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.header
 import io.ktor.client.request.forms.formData
 import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.client.statement.bodyAsText
@@ -35,6 +36,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -78,7 +80,7 @@ class WhatsAppMediaExtractor @Inject constructor(
     // Phase 1: Direct Image Extraction from Notification Extras
     // ──────────────────────────────────────────────────────────────────────────
 
-    private val claimedDiskFiles = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val claimedDiskFiles = ConcurrentHashMap<String, Long>()
 
     fun clearClaimedDiskFiles() {
         claimedDiskFiles.clear()
@@ -86,6 +88,21 @@ class WhatsAppMediaExtractor @Inject constructor(
 
     fun isDiskFileClaimed(path: String): Boolean {
         return claimedDiskFiles.containsKey(path)
+    }
+
+    private val claimedVoiceFiles = ConcurrentHashMap<String, Long>()
+
+    fun clearClaimedVoiceFiles() {
+        claimedVoiceFiles.clear()
+    }
+
+    fun isVoiceFileClaimed(path: String): Boolean {
+        return claimedVoiceFiles.containsKey(path)
+    }
+
+    private fun evictStaleClaimedVoiceFiles(now: Long = System.currentTimeMillis()) {
+        val tenMinutesMs = 10 * 60 * 1000L
+        claimedVoiceFiles.entries.removeIf { now - it.value > tenMinutesMs }
     }
 
     /**
@@ -408,19 +425,116 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Phase 2: Voice Note (.opus) Interception & Whisper Transcription
+    // Phase 2: Voice Note (.opus / .ogg) Interception & Whisper Transcription
     // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * Captures the most recently written .opus audio file in WhatsApp Voice Notes directory.
-     * WhatsApp partitions voice notes into dated subfolders (e.g. 202643/).
+     * Inspects notification extras for direct audio streams in MessagingStyle messages.
+     * If an audio URI is present, opens the stream directly, copies to a cached .ogg file,
+     * and returns the file, completely bypassing disk scanning.
+     */
+    fun extractAudioFromNotification(sbn: StatusBarNotification): File? {
+        val notification = sbn.notification ?: return null
+        val extras = notification.extras ?: return null
+
+        try {
+            val messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+            val audioFile = extractAudioFromMessagesBundle(messages)
+            if (audioFile != null) return audioFile
+
+            val historicMessages = extras.getParcelableArray(Notification.EXTRA_HISTORIC_MESSAGES)
+            val historicAudioFile = extractAudioFromMessagesBundle(historicMessages)
+            if (historicAudioFile != null) return historicAudioFile
+        } catch (e: Throwable) {
+            Log.w(TAG, "Error inspecting MessagingStyle audio messages: ${e.message}")
+        }
+        return null
+    }
+
+    internal fun extractAudioFromMessagesBundle(messagesArray: Array<*>?): File? {
+        if (messagesArray == null || messagesArray.isEmpty()) return null
+        for (i in messagesArray.indices.reversed()) {
+            val bundle = messagesArray[i] as? Bundle ?: continue
+            val mimeType = bundle.getString("type")
+                ?: bundle.getString("data_mime_type")
+                ?: bundle.getCharSequence("type")?.toString()
+                ?: bundle.getCharSequence("data_mime_type")?.toString()
+
+            val uri = runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    bundle.getParcelable("uri", Uri::class.java)
+                        ?: bundle.getParcelable("data_uri", Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    (bundle.getParcelable<Uri>("uri") ?: bundle.getParcelable<Uri>("data_uri"))
+                }
+            }.getOrNull() ?: (bundle.get("uri") as? Uri) ?: (bundle.get("data_uri") as? Uri)
+              ?: bundle.getString("uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
+              ?: bundle.getString("data_uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
+
+            if (uri != null) {
+                val isAudio = mimeType?.startsWith("audio/", ignoreCase = true) == true ||
+                        mimeType?.contains("ogg", ignoreCase = true) == true ||
+                        mimeType?.contains("opus", ignoreCase = true) == true ||
+                        mimeType?.contains("audio", ignoreCase = true) == true ||
+                        uri.toString().contains("audio", ignoreCase = true) ||
+                        uri.toString().contains("opus", ignoreCase = true) ||
+                        uri.toString().contains("voice", ignoreCase = true)
+
+                if (isAudio) {
+                    try {
+                        val stream = context.contentResolver.openInputStream(uri)
+                        stream?.use { input ->
+                            // Crucial Filename Extension Invariant: always cache with .ogg extension
+                            val cachedFile = File(context.cacheDir, "incoming_voice_${System.currentTimeMillis()}_${System.nanoTime()}.ogg")
+                            FileOutputStream(cachedFile).use { out ->
+                                input.copyTo(out)
+                                out.flush()
+                            }
+                            if (cachedFile.exists() && cachedFile.length() > 0L) {
+                                val logMsg = "🎙️ Successfully extracted audio file from MessagingStyle URI: $uri (size: ${cachedFile.length()} bytes)"
+                                Log.i(TAG, logMsg)
+                                PersonaLogger.i(TAG, logMsg)
+                                return cachedFile
+                            }
+                        }
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "Failed to open/copy stream from MessagingStyle audio URI $uri: ${e.message}")
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    internal fun extractAudioDurationMs(file: File): Long? {
+        return runCatching {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(file.absolutePath)
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+            } finally {
+                retriever.release()
+            }
+        }.getOrNull()
+    }
+
+    internal var audioDurationProvider: (File) -> Long? = { extractAudioDurationMs(it) }
+
+    /**
+     * Captures the most recently written .opus or .ogg audio file in WhatsApp Voice Notes directory.
+     * Enforces Duration-Aware Proximity Anti-Collision against concurrent customer turns.
      */
     fun captureLatestVoiceNote(
         sourceClass: NotificationSourceClass,
-        postTime: Long = System.currentTimeMillis()
+        postTime: Long = System.currentTimeMillis(),
+        expectedDurationSeconds: Int? = null
     ): File? {
         val baseDirs = getWhatsAppVoiceNoteDirectories(sourceClass)
         val now = if (postTime > 0) postTime else System.currentTimeMillis()
+        evictStaleClaimedVoiceFiles(now)
+
+        val expectedDurationMs = expectedDurationSeconds?.let { it * 1000L }
 
         for (baseDir in baseDirs) {
             if (!baseDir.exists() || !baseDir.isDirectory) continue
@@ -433,19 +547,54 @@ class WhatsAppMediaExtractor @Inject constructor(
 
             for (dir in allSearchDirs) {
                 val opusFiles = dir.listFiles { f ->
-                    f.isFile && f.extension.equals("opus", ignoreCase = true)
+                    f.isFile && (f.extension.equals("opus", ignoreCase = true) || f.extension.equals("ogg", ignoreCase = true))
                 } ?: continue
 
-                // Grab the most recently written .opus file (modified within 10-15 seconds)
-                val candidate = opusFiles
-                    .filter { Math.abs(it.lastModified() - now) <= 15_000L }
-                    .maxByOrNull { it.lastModified() }
+                // Grab candidates modified within 15 seconds of postTime and not yet claimed
+                val candidates = opusFiles
+                    .filter {
+                        val delta = Math.abs(it.lastModified() - now)
+                        delta <= 15_000L && !claimedVoiceFiles.containsKey(it.absolutePath)
+                    }
 
-                if (candidate != null) {
-                    val logMsg = "🎙️ Successfully captured voice note opus file: ${candidate.absolutePath}, transcribing..."
-                    Log.i(TAG, logMsg)
-                    PersonaLogger.i(TAG, logMsg)
-                    return candidate
+                if (candidates.isEmpty()) continue
+
+                // Duration + Proximity Anti-Collision:
+                var targetCandidate: File? = null
+
+                if (expectedDurationMs != null) {
+                    val matchingCandidates = candidates.filter { candidate ->
+                        val durationMs = audioDurationProvider(candidate)
+                        durationMs != null && Math.abs(durationMs - expectedDurationMs) <= 1000L
+                    }
+
+                    if (matchingCandidates.isNotEmpty()) {
+                        // Break ties by selecting file closest to postTime
+                        targetCandidate = matchingCandidates.minByOrNull { Math.abs(it.lastModified() - now) }
+                        if (targetCandidate != null) {
+                            val durationMs = audioDurationProvider(targetCandidate)
+                            val logMsg = "🎯 Duration match found for voice note: ${targetCandidate.absolutePath} (expected: ${expectedDurationMs}ms, actual: ${durationMs}ms, delta: ${Math.abs(targetCandidate.lastModified() - now)}ms)"
+                            Log.i(TAG, logMsg)
+                            PersonaLogger.i(TAG, logMsg)
+                        }
+                    }
+                }
+
+                // If duration matching didn't yield a match or duration was not provided, fallback to the file closest to postTime
+                if (targetCandidate == null) {
+                    targetCandidate = candidates.minByOrNull { Math.abs(it.lastModified() - now) }
+                }
+
+                if (targetCandidate != null) {
+                    val claimed = claimedVoiceFiles.putIfAbsent(targetCandidate.absolutePath, now) == null
+                    if (claimed) {
+                        val logMsg = "🎙️ Successfully captured voice note file: ${targetCandidate.absolutePath}, transcribing..."
+                        Log.i(TAG, logMsg)
+                        PersonaLogger.i(TAG, logMsg)
+                        return targetCandidate
+                    } else {
+                        Log.w(TAG, "Voice note file collision avoided: ${targetCandidate.absolutePath} was already claimed by another turn")
+                    }
                 }
             }
         }
@@ -453,8 +602,8 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     /**
-     * Transcribes an .opus voice note via Groq Audio API using `whisper-large-v3-turbo`.
-     * Request: Multipart POST with the .opus file and `language: "ar"`.
+     * Transcribes an audio voice note via Groq Audio API using `whisper-large-v3-turbo`.
+     * Request: Multipart POST with the audio file (.ogg upload format) and `language: "ar"`.
      */
     suspend fun transcribeVoiceNote(audioFile: File): String? {
         val primaryKey = groqPrimaryApiKey.trim()
@@ -487,18 +636,29 @@ class WhatsAppMediaExtractor @Inject constructor(
 
     private suspend fun callGroqWhisper(audioFile: File, apiKey: String): String? {
         return try {
+            if (!audioFile.exists() || audioFile.length() <= 500L) {
+                delay(150L)
+            }
+            if (!audioFile.exists() || audioFile.length() <= 500L) {
+                Log.w(TAG, "Audio file does not exist or has insufficient bytes (< 500B): ${audioFile.absolutePath} (${if (audioFile.exists()) audioFile.length() else 0} bytes)")
+                return null
+            }
+            val audioBytes = audioFile.readBytes()
+            val uploadFileName = "${audioFile.nameWithoutExtension}.ogg"
+
             val response = httpClient.submitFormWithBinaryData(
                 url = "https://api.groq.com/openai/v1/audio/transcriptions",
                 formData = formData {
                     append("model", "whisper-large-v3-turbo")
+                    append("response_format", "json")
                     append("language", "ar")
-                    append("file", audioFile.readBytes(), Headers.build {
+                    append("file", audioBytes, Headers.build {
                         append(HttpHeaders.ContentType, "audio/ogg")
-                        append(HttpHeaders.ContentDisposition, "form-data; name=\"file\"; filename=\"${audioFile.name}\"")
+                        append(HttpHeaders.ContentDisposition, "filename=\"$uploadFileName\"")
                     })
                 }
             ) {
-                bearerAuth(apiKey)
+                header(HttpHeaders.Authorization, "Bearer $apiKey")
             }
 
             if (response.status.isSuccess()) {
@@ -520,6 +680,30 @@ class WhatsAppMediaExtractor @Inject constructor(
     // ──────────────────────────────────────────────────────────────────────────
     // Helpers & Indicator Detection
     // ──────────────────────────────────────────────────────────────────────────
+
+    fun normalizeEasternArabicNumerals(input: String): String {
+        val eastern = "٠١٢٣٤٥٦٧٨٩"
+        val western = "0123456789"
+        val sb = StringBuilder(input.length)
+        for (ch in input) {
+            val idx = eastern.indexOf(ch)
+            if (idx >= 0) {
+                sb.append(western[idx])
+            } else {
+                sb.append(ch)
+            }
+        }
+        return sb.toString()
+    }
+
+    fun extractDurationSeconds(text: String): Int? {
+        val normalized = normalizeEasternArabicNumerals(text)
+        val regex = Regex("""\((\d+):(\d{1,2})\)""")
+        val match = regex.find(normalized) ?: return null
+        val minutes = match.groupValues[1].toIntOrNull() ?: return null
+        val seconds = match.groupValues[2].toIntOrNull() ?: return null
+        return minutes * 60 + seconds
+    }
 
     fun isVoiceMessageIndicator(text: String): Boolean {
         val voiceEmojis = listOf("🎤", "🎙️", "🎵")
@@ -549,6 +733,48 @@ class WhatsAppMediaExtractor @Inject constructor(
                lower.contains("sent a photo")
     }
 
+    fun hasAudioIndicator(sbn: StatusBarNotification, currentText: String? = null): Boolean {
+        val textToCheck = currentText
+            ?: sbn.notification?.extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+            ?: ""
+        if (isVoiceMessageIndicator(textToCheck)) return true
+
+        val messagesArray = sbn.notification?.extras?.getParcelableArray(Notification.EXTRA_MESSAGES)
+        if (messagesArray != null && messagesArray.isNotEmpty()) {
+            val lastMsgBundle = messagesArray.lastOrNull() as? Bundle
+            if (lastMsgBundle != null) {
+                val mimeType = lastMsgBundle.getString("type")
+                    ?: lastMsgBundle.getString("data_mime_type")
+                    ?: lastMsgBundle.getCharSequence("type")?.toString()
+                    ?: lastMsgBundle.getCharSequence("data_mime_type")?.toString()
+
+                val uri = runCatching {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        lastMsgBundle.getParcelable("uri", Uri::class.java)
+                            ?: lastMsgBundle.getParcelable("data_uri", Uri::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        (lastMsgBundle.getParcelable<Uri>("uri") ?: lastMsgBundle.getParcelable<Uri>("data_uri"))
+                    }
+                }.getOrNull() ?: (lastMsgBundle.get("uri") as? Uri)
+                  ?: (lastMsgBundle.get("data_uri") as? Uri)
+                  ?: lastMsgBundle.getString("uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
+                  ?: lastMsgBundle.getString("data_uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
+
+                if (mimeType?.startsWith("audio/", ignoreCase = true) == true ||
+                    mimeType?.contains("ogg", ignoreCase = true) == true ||
+                    mimeType?.contains("opus", ignoreCase = true) == true ||
+                    mimeType?.contains("audio", ignoreCase = true) == true ||
+                    uri?.toString()?.contains("audio", ignoreCase = true) == true ||
+                    uri?.toString()?.contains("opus", ignoreCase = true) == true ||
+                    uri?.toString()?.contains("voice", ignoreCase = true) == true) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
     fun hasNotificationImage(sbn: StatusBarNotification, currentText: String? = null): Boolean {
         val notification = sbn.notification ?: return false
         val extras = notification.extras ?: return false
@@ -557,6 +783,12 @@ class WhatsAppMediaExtractor @Inject constructor(
         val textToCheck = currentText
             ?: extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
             ?: ""
+
+        // If this notification is a voice message, it is strictly NOT an image!
+        if (isVoiceMessageIndicator(textToCheck) || hasAudioIndicator(sbn, textToCheck)) {
+            return false
+        }
+
         if (isImageIndicator(textToCheck)) return true
 
         // 2. In MessagingStyle notifications, check if the latest incoming message has an image URI/type
@@ -604,6 +836,7 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     internal var imageDirectoriesOverride: List<File>? = null
+    internal var voiceNoteDirectoriesOverride: List<File>? = null
 
     private fun getWhatsAppImageDirectories(sourceClass: NotificationSourceClass): List<File> {
         imageDirectoriesOverride?.let { return it }
@@ -634,6 +867,7 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     private fun getWhatsAppVoiceNoteDirectories(sourceClass: NotificationSourceClass): List<File> {
+        voiceNoteDirectoriesOverride?.let { return it }
         val dirs = mutableListOf<File>()
         val ext = Environment.getExternalStorageDirectory()
 

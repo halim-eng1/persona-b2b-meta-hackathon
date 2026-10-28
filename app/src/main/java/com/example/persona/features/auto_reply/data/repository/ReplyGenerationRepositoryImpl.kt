@@ -86,6 +86,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
     companion object {
         private const val TAG = PersonaLogTags.LLM
+        private val AUDIO_EXTENSIONS = setOf("opus", "ogg", "mp3", "m4a", "wav", "aac", "m4p", "amr")
+        private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
 
         private const val MODEL_TIMEOUT_MS = 25000L
         private const val ABSOLUTE_FAILOVER_CEILING = 8000
@@ -223,6 +225,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val file = java.io.File(filePath)
         if (!file.exists() || file.length() == 0L) return null
 
+        val ext = file.extension.lowercase()
+        if (AUDIO_EXTENSIONS.contains(ext) || !IMAGE_EXTENSIONS.contains(ext)) {
+            Log.d(TAG, "compressAndScaleImage: Skipping non-image file with extension .$ext ($filePath)")
+            return null
+        }
+
         return try {
             val boundsOptions = android.graphics.BitmapFactory.Options().apply {
                 inJustDecodeBounds = true
@@ -282,6 +290,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         if (filePathOrUri.isNullOrBlank()) return null
         if (filePathOrUri.startsWith("data:image/") || filePathOrUri.startsWith("http://") || filePathOrUri.startsWith("https://")) {
             return filePathOrUri
+        }
+        val file = java.io.File(filePathOrUri)
+        val ext = file.extension.lowercase()
+        if (AUDIO_EXTENSIONS.contains(ext) || !IMAGE_EXTENSIONS.contains(ext)) {
+            Log.d(TAG, "resolveImageUri: Ignoring non-image media file path: $filePathOrUri")
+            return null
         }
         return try {
             val bytes = compressAndScaleImage(filePathOrUri, maxDimension = 1024, quality = 80)

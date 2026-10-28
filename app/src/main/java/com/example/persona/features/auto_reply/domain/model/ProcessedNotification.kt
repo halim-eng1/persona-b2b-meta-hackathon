@@ -11,5 +11,6 @@ data class ProcessedNotification(
     val context: ConversationContext,
     val postTime: Long,
     val sourceClass: NotificationSourceClass = NotificationSourceClass.UNKNOWN,
-    val mediaFilePath: String? = null
+    val mediaFilePath: String? = null,
+    val isVoiceTranscriptionFailed: Boolean = false
 )

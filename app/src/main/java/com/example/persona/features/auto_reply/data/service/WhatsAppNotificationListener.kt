@@ -231,29 +231,48 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         serviceScope.launch(Dispatchers.IO) {
             var effectiveText = text
             var mediaFilePath: String? = null
+            var isVoiceFailed = false
 
             try {
-                // Phase 1: Direct Image Extraction from Notification Extras
-                if (mediaExtractor.hasNotificationImage(sbn, text)) {
+                val isVoice = mediaExtractor.hasAudioIndicator(sbn, text)
+
+                // Phase 1: Direct Image Extraction from Notification Extras (only if NOT voice)
+                if (!isVoice && mediaExtractor.hasNotificationImage(sbn, text)) {
                     val imageFile = mediaExtractor.extractImage(sbn, sourceClass, this@WhatsAppNotificationListener, currentText = text)
                     if (imageFile != null) {
                         mediaFilePath = imageFile.absolutePath
                     }
                 }
 
-                // Phase 2: Voice Note (.opus) Interception & Whisper Transcription
-                if (mediaExtractor.isVoiceMessageIndicator(text)) {
-                    val audioFile = mediaExtractor.captureLatestVoiceNote(sourceClass, sbn.postTime)
+                // Phase 2: Voice Note (.opus / .ogg) Interception & Whisper Transcription
+                if (isVoice) {
+                    // 1. Direct MessagingStyle Audio Extraction
+                    val directAudioFile = mediaExtractor.extractAudioFromNotification(sbn)
+                    val durationSeconds = mediaExtractor.extractDurationSeconds(text)
+                    val audioFile = directAudioFile ?: mediaExtractor.captureLatestVoiceNote(
+                        sourceClass = sourceClass,
+                        postTime = sbn.postTime,
+                        expectedDurationSeconds = durationSeconds
+                    )
+
                     if (audioFile != null) {
                         val transcribed = mediaExtractor.transcribeVoiceNote(audioFile)
                         if (!transcribed.isNullOrBlank()) {
                             effectiveText = "[رسالة صوتية من العميل]: $transcribed"
-                            Log.i("PersonaMedia", "Voice message converted to text turn: '$effectiveText'")
+                            mediaFilePath = null // CRITICAL: Transcribed voice is a pure text turn; never an image attachment!
+                            Log.i("PersonaMedia", "Voice message converted to pure text turn: '$effectiveText'")
+                        } else {
+                            isVoiceFailed = true
                         }
+                    } else {
+                        isVoiceFailed = true
                     }
                 }
             } catch (e: Exception) {
                 Log.e("PersonaMedia", "Error during media extraction or transcription: ${e.message}", e)
+                if (mediaExtractor.hasAudioIndicator(sbn, text)) {
+                    isVoiceFailed = true
+                }
             }
 
             val whatsappNotification = WhatsAppNotification(
@@ -263,7 +282,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 notificationKey = sbn.key,
                 extraMessages = extraMessagesList,
                 sourceClass = sourceClass,
-                mediaFilePath = mediaFilePath
+                mediaFilePath = mediaFilePath,
+                isVoiceTranscriptionFailed = isVoiceFailed
             )
 
             messageDispatcher.dispatch(whatsappNotification)

@@ -1072,6 +1072,41 @@ class ReplyGenerationRepositoryImplTest {
     }
 
     @Test
+    fun `resolveImageUri strictly returns null for audio file paths and non-image extensions`() {
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = HttpClient(MockEngine { respond("") }),
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true)
+        )
+
+        val opusFile = java.io.File.createTempFile("voice", ".opus").apply {
+            writeBytes(ByteArray(256) { 1 })
+            deleteOnExit()
+        }
+        val oggFile = java.io.File.createTempFile("voice", ".ogg").apply {
+            writeBytes(ByteArray(256) { 2 })
+            deleteOnExit()
+        }
+        val mp3File = java.io.File.createTempFile("audio", ".mp3").apply {
+            writeBytes(ByteArray(256) { 3 })
+            deleteOnExit()
+        }
+        val txtFile = java.io.File.createTempFile("doc", ".txt").apply {
+            writeBytes("text content".toByteArray())
+            deleteOnExit()
+        }
+
+        assertNull(repo.resolveImageUri(opusFile.absolutePath))
+        assertNull(repo.resolveImageUri(oggFile.absolutePath))
+        assertNull(repo.resolveImageUri(mp3File.absolutePath))
+        assertNull(repo.resolveImageUri(txtFile.absolutePath))
+        assertNull(repo.compressAndScaleImage(opusFile.absolutePath))
+        assertNull(repo.compressAndScaleImage(oggFile.absolutePath))
+    }
+
+    @Test
     fun `when vision models fail, executeFailoverChain falls back to text models if visual description is present`() = runTest {
         var visionTried = false
         var textModelTried = false
