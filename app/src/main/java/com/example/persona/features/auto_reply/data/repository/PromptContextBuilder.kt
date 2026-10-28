@@ -475,17 +475,22 @@ RULES:
             }
         }
 
-        fun isMediaRefusalMessage(text: String): Boolean {
+        fun isMediaRefusalMessage(text: String, customFallbackMessage: String? = null): Boolean {
             val trimmed = text.trim()
             return trimmed.contains("لا يمكنني معالجة الوسائط") ||
                 trimmed.contains("معالجة الوسائط") ||
                 trimmed.contains("يرجى كتابة استفسارك في رسالة نصية") ||
-                trimmed.contains("عفواً، لا يمكنني معالجة")
+                trimmed.contains("عفواً، لا يمكنني معالجة") ||
+                (!customFallbackMessage.isNullOrBlank() && trimmed.contains(customFallbackMessage.trim()))
         }
 
-        fun formatHistoricalAssistantTurn(rawText: String, customHoldingMessage: String? = null): String {
+        fun formatHistoricalAssistantTurn(
+            rawText: String,
+            customHoldingMessage: String? = null,
+            customMediaFallbackMessage: String? = null
+        ): String {
             val trimmed = rawText.trim()
-            if (isMediaRefusalMessage(trimmed)) {
+            if (isMediaRefusalMessage(trimmed, customMediaFallbackMessage)) {
                 return ""
             }
             val firstBrace = trimmed.indexOf('{')
@@ -570,7 +575,8 @@ RULES:
 
         fun filterAndPairChatHistory(
             chatHistory: List<ChatHistoryEntity>,
-            nowMs: Long = System.currentTimeMillis()
+            nowMs: Long = System.currentTimeMillis(),
+            customMediaFallbackMessage: String? = null
         ): List<ChatHistoryEntity> {
             val twoHoursAgo = nowMs - TimeUnit.HOURS.toMillis(2)
             val maxTimestamp = chatHistory.maxOfOrNull { it.timestamp } ?: 0L
@@ -581,7 +587,7 @@ RULES:
             }
             // Filter out media refusal messages from assistant history
             val sanitized = recentTurns.filterNot { entity ->
-                !entity.isFromUser && isMediaRefusalMessage(entity.messageText)
+                !entity.isFromUser && isMediaRefusalMessage(entity.messageText, customMediaFallbackMessage)
             }.take(6)
             return sanitized.reversed()
         }
@@ -607,22 +613,23 @@ RULES:
             chatHistory: List<ChatHistoryEntity>,
             currentInboundText: String,
             nowMs: Long = System.currentTimeMillis(),
-            imageUrl: String? = null
+            imageUrl: String? = null,
+            customMediaFallbackMessage: String? = null
         ): List<ChatMessage> {
             val messages = mutableListOf<ChatMessage>()
             messages.add(ChatMessage(role = "system", content = systemPrompt))
 
-            val filteredTurns = filterAndPairChatHistory(chatHistory, nowMs)
+            val filteredTurns = filterAndPairChatHistory(chatHistory, nowMs, customMediaFallbackMessage)
             val nativeHistory = mutableListOf<ChatMessage>()
 
             for (turn in filteredTurns) {
                 val role = if (turn.isFromUser && !turn.senderType.equals("MERCHANT_MANUAL", ignoreCase = true)) "user" else "assistant"
                 val text = turn.messageText.trim()
                 if (text.isEmpty()) continue
-                if (role == "assistant" && isMediaRefusalMessage(text)) continue
+                if (role == "assistant" && isMediaRefusalMessage(text, customMediaFallbackMessage)) continue
 
                 val formattedContent = if (role == "assistant") {
-                    formatHistoricalAssistantTurn(text)
+                    formatHistoricalAssistantTurn(text, customMediaFallbackMessage = customMediaFallbackMessage)
                 } else {
                     val relativeTime = formatRelativeTime(turn.timestamp, nowMs)
                     "[$relativeTime] $text"

@@ -1655,6 +1655,161 @@ class ReplyGenerationRepositoryImplTest {
     }
 
     @Test
+    fun `isMediaRefusalMessage and filterAndPairChatHistory strip custom media fallback message`() {
+        val customFallback = "نعتذر، المتجر لا يستقبل صوراً حالياً. فضلاً اكتب طلبك."
+        assertTrue(PromptContextBuilder.isMediaRefusalMessage(customFallback, customFallback))
+
+        val now = 10_000_000L
+        val historyWithCustomRefusal = listOf(
+            ChatHistoryEntity(id = 2L, contactName = "c", messageText = customFallback, isFromUser = false, timestamp = now - 500L),
+            ChatHistoryEntity(id = 1L, contactName = "c", messageText = "السلام عليكم", isFromUser = true, timestamp = now - 1000L)
+        )
+        val filtered = PromptContextBuilder.filterAndPairChatHistory(historyWithCustomRefusal, now, customFallback)
+        assertEquals(1, filtered.size)
+        assertEquals("السلام عليكم", filtered[0].messageText)
+    }
+
+    @Test
+    fun `generateReply recognizes Arabic photo indicator and applies visual extraction prompt`() = runTest {
+        var capturedPrompt: String? = null
+        val mockEngine = MockEngine { request ->
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            val parsedGroq = Json { ignoreUnknownKeys = true }.decodeFromString<GroqRequest>(bodyText)
+            capturedPrompt = parsedGroq.messages.find { it.role == "user" }?.content
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"RE_QUERY\",\"visual_product_description\":\"هودي\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+
+        val mockPrefs = mockk<UserPreferencesRepository>(relaxed = true) {
+            every { storeKnowledgeTopicsFlow } returns kotlinx.coroutines.flow.flowOf(listOf("الهوديز"))
+            every { storeWebsiteFlow } returns kotlinx.coroutines.flow.flowOf("https://velo.eg")
+            every { stylePreferences } returns kotlinx.coroutines.flow.flowOf(
+                com.example.persona.features.auto_reply.domain.model.StylePreferences(
+                    personaTone = com.example.persona.features.auto_reply.domain.model.PersonaTone.WITTY_EGYPTIAN
+                )
+            )
+            coEvery { getStoreNameSync() } returns "Velo Store"
+            coEvery { getBotNameSync() } returns "فيلو"
+            coEvery { getMediaFallbackMessageSync() } returns "عفواً، لا يمكنني معالجة الوسائط."
+        }
+
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "or-key",
+            fallbackApiKey = "or-key-2",
+            userPreferencesRepository = mockPrefs,
+            groqPrimaryApiKey = "gsk_primary",
+            groqFallbackApiKey = "gsk_fallback"
+        )
+
+        val tempFile = java.io.File.createTempFile("vision_ar", ".jpg").apply {
+            writeBytes("DUMMY".toByteArray())
+            deleteOnExit()
+        }
+
+        val notification = com.example.persona.features.auto_reply.domain.model.ProcessedNotification(
+            notificationKey = "key_img_ar",
+            contactName = "Test Contact",
+            originalText = "📷 صورة",
+            normalizedText = "📷 صورة",
+            context = com.example.persona.features.chat_import.domain.model.ConversationContext(
+                intent = com.example.persona.features.chat_import.domain.model.IntentType.QUESTION,
+                topic = com.example.persona.features.chat_import.domain.model.TopicType.MEDIA,
+                sentiment = com.example.persona.features.chat_import.domain.model.SentimentType.NEUTRAL,
+                confidence = 1.0f
+            ),
+            postTime = System.currentTimeMillis(),
+            sourceClass = com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceClass.BUSINESS,
+            mediaFilePath = tempFile.absolutePath
+        )
+
+        repo.generateReply(
+            notification = notification,
+            candidates = emptyList(),
+            isOngoingConversation = false,
+            chatHistory = emptyList(),
+            activeOrders = emptyList(),
+            personalChunks = emptyList(),
+            maxTokens = 500
+        )
+
+        assertNotNull(capturedPrompt)
+        assertTrue(capturedPrompt!!.contains("العميل أرسل هذه الصورة لمنتج"))
+    }
+
+    @Test
+    fun `generateFinalReply allows 1500 tokens when image is present`() = runTest {
+        var requestedMaxTokens: Int? = null
+        val mockEngine = MockEngine { request ->
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            val parsedGroq = Json { ignoreUnknownKeys = true }.decodeFromString<GroqRequest>(bodyText)
+            requestedMaxTokens = parsedGroq.maxCompletionTokens
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"تمام\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+
+        val mockPrefs = mockk<UserPreferencesRepository>(relaxed = true) {
+            every { storeKnowledgeTopicsFlow } returns kotlinx.coroutines.flow.flowOf(listOf("الهوديز"))
+            every { storeWebsiteFlow } returns kotlinx.coroutines.flow.flowOf("https://velo.eg")
+            every { stylePreferences } returns kotlinx.coroutines.flow.flowOf(
+                com.example.persona.features.auto_reply.domain.model.StylePreferences(
+                    personaTone = com.example.persona.features.auto_reply.domain.model.PersonaTone.WITTY_EGYPTIAN
+                )
+            )
+            coEvery { getStoreNameSync() } returns "Velo Store"
+            coEvery { getBotNameSync() } returns "فيلو"
+            coEvery { getMediaFallbackMessageSync() } returns "عفواً، لا يمكنني معالجة الوسائط."
+        }
+
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "or-key",
+            fallbackApiKey = "or-key-2",
+            userPreferencesRepository = mockPrefs,
+            groqPrimaryApiKey = "gsk_primary",
+            groqFallbackApiKey = "gsk_fallback"
+        )
+
+        val tempFile = java.io.File.createTempFile("pass2_img", ".jpg").apply {
+            writeBytes("DUMMY".toByteArray())
+            deleteOnExit()
+        }
+
+        repo.generateFinalReply(
+            queryText = "بكام ده؟",
+            chunks = emptyList(),
+            isOngoingConversation = false,
+            chatHistory = emptyList(),
+            activeOrders = emptyList(),
+            personalChunks = emptyList(),
+            maxTokens = 1500,
+            imageUrl = tempFile.absolutePath
+        )
+
+        assertEquals(1500, requestedMaxTokens)
+    }
+
+    @Test
     fun `compressAndScaleImage scales down large images and compresses to JPEG`() {
         val repo = ReplyGenerationRepositoryImpl(
             httpClient = mockk(relaxed = true),

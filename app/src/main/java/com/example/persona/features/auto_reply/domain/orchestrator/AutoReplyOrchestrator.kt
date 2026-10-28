@@ -555,7 +555,8 @@ class AutoReplyOrchestrator @Inject constructor(
                 else -> rawAction
             }
             val effectiveAction = when {
-                isImagePresent && !agenticResponse.visualProductDescription.isNullOrBlank() -> "RE_QUERY"
+                normalizedAction == "HITL" -> "HITL"
+                isImagePresent -> "RE_QUERY"
                 normalizedAction == "RE_QUERY" && agenticResponse.refinedSearchKeyword.isNullOrBlank() && !agenticResponse.finalReplyText.isNullOrBlank() -> "REPLY"
                 else -> normalizedAction
             }

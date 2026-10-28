@@ -125,11 +125,10 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         /** Tier 1: NVIDIA NIM (Primary Fast Text - Top 4 Benchmarked) */
         val NVIDIA_TEXT_MODELS = listOf(
-            "nvidia/nemotron-3-ultra-550b-a55b",     // Deep analytical reasoner
-            "nvidia/nemotron-3.5-bolt-e4b",         // 304ms TTFT / 1.6s Champion
-            "meta/llama-3.2-11b-vision-instruct",
-            "nvidia/nemotron-3.5-lightning-30b-a3b", // 30B fast reasoning fallback
-            "openai/gpt-oss-20b"                     // Reliable fallback
+            "nvidia/nemotron-3.5-bolt-e4b",          // Primary 1.5s engine
+            "nvidia/nemotron-3.5-lightning-30b-a3b",  // Fast MoE fallback
+            "nvidia/nemotron-3-ultra-550b-a55b",      // Deep reasoner (Tier 3 fallback)
+            "openai/gpt-oss-20b"
         )
 
         /** Tier 2: Groq Cloud (Fast Text Secondary) */
@@ -190,11 +189,15 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             statusCounts = statusCounts
         )
 
-        internal fun formatHistoricalAssistantTurn(rawText: String): String =
-            PromptContextBuilder.formatHistoricalAssistantTurn(rawText)
+        internal fun formatHistoricalAssistantTurn(
+            rawText: String,
+            customHoldingMessage: String? = null,
+            customMediaFallbackMessage: String? = null
+        ): String =
+            PromptContextBuilder.formatHistoricalAssistantTurn(rawText, customHoldingMessage, customMediaFallbackMessage)
 
-        internal fun isMediaRefusalMessage(text: String): Boolean =
-            PromptContextBuilder.isMediaRefusalMessage(text)
+        internal fun isMediaRefusalMessage(text: String, customFallbackMessage: String? = null): Boolean =
+            PromptContextBuilder.isMediaRefusalMessage(text, customFallbackMessage)
 
         fun buildVisionExtractionSystemPrompt(
             storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME,
@@ -214,16 +217,18 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         internal fun filterAndPairChatHistory(
             chatHistory: List<ChatHistoryEntity>,
-            nowMs: Long = System.currentTimeMillis()
-        ): List<ChatHistoryEntity> = PromptContextBuilder.filterAndPairChatHistory(chatHistory, nowMs)
+            nowMs: Long = System.currentTimeMillis(),
+            customMediaFallbackMessage: String? = null
+        ): List<ChatHistoryEntity> = PromptContextBuilder.filterAndPairChatHistory(chatHistory, nowMs, customMediaFallbackMessage)
 
         internal fun buildOpenRouterMessages(
             systemPrompt: String,
             chatHistory: List<ChatHistoryEntity>,
             currentInboundText: String,
             nowMs: Long = System.currentTimeMillis(),
-            imageUrl: String? = null
-        ): List<ChatMessage> = PromptContextBuilder.buildOpenRouterMessages(systemPrompt, chatHistory, currentInboundText, nowMs, imageUrl)
+            imageUrl: String? = null,
+            customMediaFallbackMessage: String? = null
+        ): List<ChatMessage> = PromptContextBuilder.buildOpenRouterMessages(systemPrompt, chatHistory, currentInboundText, nowMs, imageUrl, customMediaFallbackMessage)
 
         internal fun formatRelativeTime(
             timestampMs: Long,
@@ -358,7 +363,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 storeName = storeName,
                 storeTopics = storeTopics
             )
-            val inboundText = if (notification.originalText.contains("Sent a photo", ignoreCase = true) || notification.originalText.trim() == "📷" || notification.originalText.isBlank()) {
+            val cleanText = notification.originalText.replace(Regex("[📷📸]"), "").trim().lowercase()
+            val isBareImageNotification = cleanText.isEmpty() ||
+                cleanText == "photo" ||
+                cleanText == "صورة" ||
+                cleanText.contains("sent a photo")
+            val inboundText = if (isBareImageNotification) {
                 "العميل أرسل هذه الصورة لمنتج. تفحص الصورة وتعرف على مواصفات ونوع المنتج المعروض فيها واستخرج وصف دقيق للبحث في الكتالوج."
             } else {
                 notification.originalText
@@ -389,11 +399,13 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             statusCounts = orderStatusCounts
         )
 
+        val customMediaFallback = runCatching { userPreferencesRepository.getMediaFallbackMessageSync() }.getOrNull()
         val messages = PromptContextBuilder.buildOpenRouterMessages(
             systemPrompt = systemPromptWithContext,
             chatHistory = chatHistory,
             currentInboundText = notification.originalText,
-            imageUrl = null
+            imageUrl = null,
+            customMediaFallbackMessage = customMediaFallback
         )
         return executeFailoverChain(messages, maxTokens)
     }
@@ -430,11 +442,13 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             lastOrder = lastOrder,
             statusCounts = orderStatusCounts
         )
+        val customMediaFallback = runCatching { userPreferencesRepository.getMediaFallbackMessageSync() }.getOrNull()
         val messages = PromptContextBuilder.buildOpenRouterMessages(
             systemPrompt = systemPromptWithContext,
             chatHistory = chatHistory,
             currentInboundText = queryText,
-            imageUrl = imageUri
+            imageUrl = imageUri,
+            customMediaFallbackMessage = customMediaFallback
         )
         val effectiveMaxTokens = if (isMultimodal) 1500 else maxTokens
         return executeFailoverChain(messages, effectiveMaxTokens)
@@ -453,7 +467,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
     internal suspend fun executeFailoverChain(messages: List<ChatMessage>, maxTokens: Int): String? {
         val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
-        val targetMaxTokens = if (hasImage) 500 else minOf(maxTokens, ABSOLUTE_FAILOVER_CEILING)
+        val targetMaxTokens = minOf(maxTokens, ABSOLUTE_FAILOVER_CEILING)
 
         if (hasImage) {
             PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade (Groq -> NVIDIA -> OpenRouter)...")
@@ -659,12 +673,18 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         } catch (e: TimeoutCancellationException) {
             Log.w(TAG, "Timeout (${timeoutMs}ms) on [NVIDIA NIM] model $model (key $keyMasked)")
             CallResult.Timeout
-        } catch (e: io.ktor.client.network.sockets.SocketTimeoutException) {
-            Log.w(TAG, "Socket timeout on [NVIDIA NIM] model $model (key $keyMasked): ${e.message}")
-            CallResult.Timeout
         } catch (e: Exception) {
-            Log.e(TAG, "Network error on [NVIDIA NIM] model $model (key $keyMasked)", e)
-            CallResult.Failed
+            when (e) {
+                is java.net.SocketTimeoutException,
+                is io.ktor.client.network.sockets.SocketTimeoutException -> {
+                    Log.w(TAG, "Socket timeout on [NVIDIA NIM] model $model (key $keyMasked): ${e.message}")
+                    CallResult.Timeout
+                }
+                else -> {
+                    Log.e(TAG, "Network error on [NVIDIA NIM] model $model (key $keyMasked)", e)
+                    CallResult.Failed
+                }
+            }
         }
     }
 
@@ -827,12 +847,18 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         } catch (e: TimeoutCancellationException) {
             Log.w(TAG, "Timeout (${timeoutMs}ms) on [Groq] model $model (key $keyMasked)")
             CallResult.Timeout
-        } catch (e: io.ktor.client.network.sockets.SocketTimeoutException) {
-            Log.w(TAG, "Socket timeout on [Groq] model $model (key $keyMasked): ${e.message}")
-            CallResult.Timeout
         } catch (e: Exception) {
-            Log.e(TAG, "Network error on [Groq] model $model (key $keyMasked)", e)
-            CallResult.Failed
+            when (e) {
+                is java.net.SocketTimeoutException,
+                is io.ktor.client.network.sockets.SocketTimeoutException -> {
+                    Log.w(TAG, "Socket timeout on [Groq] model $model (key $keyMasked): ${e.message}")
+                    CallResult.Timeout
+                }
+                else -> {
+                    Log.e(TAG, "Network error on [Groq] model $model (key $keyMasked)", e)
+                    CallResult.Failed
+                }
+            }
         }
     }
 
@@ -987,12 +1013,18 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         } catch (e: TimeoutCancellationException) {
             Log.w(TAG, "Timeout (${timeoutMs}ms) on model $model (key $keyMasked)")
             CallResult.Timeout
-        } catch (e: io.ktor.client.network.sockets.SocketTimeoutException) {
-            Log.w(TAG, "Socket timeout on model $model (key $keyMasked): ${e.message}")
-            CallResult.Timeout
         } catch (e: Exception) {
-            Log.e(TAG, "Network error on model $model (key $keyMasked)", e)
-            CallResult.Failed
+            when (e) {
+                is java.net.SocketTimeoutException,
+                is io.ktor.client.network.sockets.SocketTimeoutException -> {
+                    Log.w(TAG, "Socket timeout on model $model (key $keyMasked): ${e.message}")
+                    CallResult.Timeout
+                }
+                else -> {
+                    Log.e(TAG, "Network error on model $model (key $keyMasked)", e)
+                    CallResult.Failed
+                }
+            }
         }
     }
 }

@@ -156,7 +156,13 @@ class AutoReplyOrchestratorMediaTest {
                 personalChunks = any(),
                 maxTokens = any()
             )
-        } returns """{"action":"REPLY","refined_search_keyword":null,"order_action":null,"final_reply_text":"ده التيشيرت القطن الجديد، سعره 350 جنيه ومتاح منه كل المقاسات 💙","extracted_order":null}"""
+        } returns """{"action":"RE_QUERY","refined_search_keyword":"تيشيرت قطن","visual_product_description":"تيشيرت قطن جديد","order_action":null,"final_reply_text":null,"extracted_order":null}"""
+
+        coEvery {
+            replyGenerationRepository.generateFinalReply(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+            )
+        } returns """{"action":"REPLY","final_reply_text":"ده التيشيرت القطن الجديد، سعره 350 جنيه ومتاح منه كل المقاسات 💙"}"""
 
         orchestrator.processNotificationSequentially(notification)
 
@@ -509,6 +515,12 @@ class AutoReplyOrchestratorMediaTest {
                 activeOrders = any(),
                 personalChunks = any(),
                 maxTokens = any()
+            )
+        } returns """{"action":"RE_QUERY","visual_product_description":"هودي أسود"}"""
+
+        coEvery {
+            replyGenerationRepository.generateFinalReply(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
             )
         } returns """{"action":"REPLY","final_reply_text":"تمام يا فندم"}"""
 
