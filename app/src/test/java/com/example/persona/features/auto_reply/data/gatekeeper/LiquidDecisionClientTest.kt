@@ -208,7 +208,7 @@ class LiquidDecisionClientTest {
     }
 
     @Test
-    fun `decide fails over model to d1 latest if d1 fails with 500 error`() = runTest {
+    fun `decide fails over model to d1 if d1 latest fails with 500 error`() = runTest {
         val capturedModels = mutableListOf<String>()
         val successJson = """
             {
@@ -309,7 +309,7 @@ class LiquidDecisionClientTest {
 
         assertNotNull(capturedPayload)
         val root = json.parseToJsonElement(capturedPayload!!).jsonObject
-        assertEquals("d1", root["model"]?.jsonPrimitive?.content)
+        assertEquals(LiquidDecisionClient.PRIMARY_MODEL, root["model"]?.jsonPrimitive?.content)
         assertEquals("ازيك يا باشا", root["state"]?.jsonPrimitive?.content)
 
         val questions = root["questions"]?.jsonObject

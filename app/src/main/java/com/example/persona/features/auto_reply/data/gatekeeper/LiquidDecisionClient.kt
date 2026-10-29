@@ -51,8 +51,8 @@ class LiquidDecisionClient @Inject constructor(
     companion object {
         private const val TAG = "LiquidDecisionClient"
         private const val DEFAULT_BASE_URL = "https://api.liquid.ai/decisions/v1/systemone"
-        const val PRIMARY_MODEL = "d1"
-        const val FAILOVER_MODEL = "d1:latest"
+        const val PRIMARY_MODEL = "d1:latest"
+        const val FAILOVER_MODEL = "d1"
 
         val CATEGORY_CRITERIA: Map<String, String> = linkedMapOf(
             "GREETING" to "Hello, welcome, peace, good morning/evening",
@@ -113,7 +113,7 @@ class LiquidDecisionClient @Inject constructor(
                 currentKey = key2
             }
 
-            // Failover model: If primary model d1 failed across available keys, failover to d1:latest
+            // Failover model: If primary model d1:latest failed across available keys, failover to d1
             Log.w(TAG, "Primary model $PRIMARY_MODEL failed. Attempting failover model $FAILOVER_MODEL")
             val failoverOutcome = executeCall(currentKey, FAILOVER_MODEL, text)
             failoverOutcome.intent
