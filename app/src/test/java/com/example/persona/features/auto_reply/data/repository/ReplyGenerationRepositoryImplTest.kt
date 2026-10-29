@@ -1887,11 +1887,13 @@ class ReplyGenerationRepositoryImplTest {
     fun `callQwenCloud returns success on deepseek-v4-1-flash with valid JSON`() = runTest {
         val capturedAuthHeaders = mutableListOf<String>()
         var capturedModel: String? = null
+        var capturedRequest: QwenChatRequest? = null
         val mockEngine = MockEngine { request ->
             capturedAuthHeaders.add(request.headers[HttpHeaders.Authorization] ?: "")
             val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
             val parsed = Json { ignoreUnknownKeys = true }.decodeFromString<QwenChatRequest>(bodyText)
             capturedModel = parsed.model
+            capturedRequest = parsed
             respond(
                 content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"منور المتجر يا غالي من كوين\"}"}}]}""",
                 status = HttpStatusCode.OK,
@@ -1922,6 +1924,45 @@ class ReplyGenerationRepositoryImplTest {
         assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"منور المتجر يا غالي من كوين\"}", (result as ReplyGenerationRepositoryImpl.CallResult.Success).content)
         assertEquals("Bearer qwen-test-key-123", capturedAuthHeaders[0])
         assertEquals("deepseek-v4.1-flash", capturedModel)
+        assertEquals(false, capturedRequest?.enableThinking)
+        assertEquals(1200, capturedRequest?.maxTokens)
+    }
+
+    @Test
+    fun `callQwenCloud leaves enableThinking null for standard non-reasoning models and floors maxTokens`() = runTest {
+        var capturedRequest: QwenChatRequest? = null
+        val mockEngine = MockEngine { request ->
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            capturedRequest = Json { ignoreUnknownKeys = true }.decodeFromString<QwenChatRequest>(bodyText)
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد قياسي\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            qwenApiKey = "qwen-test-key-123"
+        )
+
+        val result = repo.callQwenCloud(
+            model = "qwen3.7-flash",
+            messages = listOf(ChatMessage(role = "user", content = "مرحبا")),
+            maxTokens = 800
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals(null, capturedRequest?.enableThinking)
+        assertEquals(1200, capturedRequest?.maxTokens)
     }
 
     @Test

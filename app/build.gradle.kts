@@ -146,6 +146,12 @@ android {
         buildConfigField("String", "LIQUID_API_KEY", "\"$resolvedLiquidKey\"")
         buildConfigField("String", "LIQUID_API_KEY_2", "\"$resolvedLiquidKey2\"")
         buildConfigField("String", "LIQUID_BASE_URL", "\"${resolveSecret("LIQUID_BASE_URL") ?: "https://api.liquid.ai/decisions/v1/systemone"}\"")
+
+        // Cloudflare Clef credentials — resolved from environment or secrets properties
+        val resolvedCfAccountId = resolveSecret("CLOUDFLARE_ACCOUNT_ID") ?: resolveSecret("CloudFlare_ACCOUNT_ID") ?: ""
+        val resolvedCfApiToken = resolveSecret("CLOUDFLARE_API_TOKEN") ?: resolveSecret("CloudFlare_API_TOKEN") ?: ""
+        buildConfigField("String", "CLOUDFLARE_ACCOUNT_ID", "\"$resolvedCfAccountId\"")
+        buildConfigField("String", "CLOUDFLARE_API_TOKEN", "\"$resolvedCfApiToken\"")
     }
 
     buildTypes {

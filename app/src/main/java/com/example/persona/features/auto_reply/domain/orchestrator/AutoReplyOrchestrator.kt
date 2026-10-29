@@ -32,6 +32,7 @@ import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormalizer
 import com.example.persona.core.network.dto.AgenticLlmResponse
 import com.example.persona.core.network.dto.ExtractedOrder
+import com.example.persona.features.auto_reply.data.gatekeeper.CloudflareClefClient
 import com.example.persona.features.auto_reply.data.gatekeeper.LiquidDecisionClient
 import com.example.persona.features.auto_reply.domain.gatekeeper.DecisionResult
 import com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent
@@ -73,8 +74,9 @@ class AutoReplyOrchestrator @Inject constructor(
     private val hitlNotificationHandler: HitlNotificationHandler = HitlNotificationHandler(context, conversationMetadataDao, prefsRepository),
     private val antiEchoGuard: AntiEchoGuard = AntiEchoGuard(),
     private val reasoningLeakSanitizer: ReasoningLeakSanitizer = ReasoningLeakSanitizer(),
-    private val localDecisionClassifier: LocalDecisionClassifier = LocalDecisionClassifier(),
-    private val liquidDecisionClient: LiquidDecisionClient = LiquidDecisionClient()
+    private val cloudflareClefClient: CloudflareClefClient = CloudflareClefClient(),
+    private val liquidDecisionClient: LiquidDecisionClient = LiquidDecisionClient(),
+    private val localDecisionClassifier: LocalDecisionClassifier = LocalDecisionClassifier()
 ) {
     companion object {
         private const val TAG = "AutoReplyOrchestrator"
@@ -421,19 +423,49 @@ class AutoReplyOrchestrator @Inject constructor(
 
             val isImagePresent = !isTranscribedVoice && !isVoiceTranscribedNow && effectiveProcessed.mediaFilePath != null
 
-            // Intent classification via Cloud Decision Engine (Liquid AI d1) with local fallback
-            val liquidIntent = runCatching {
-                liquidDecisionClient.decide(queryTextForEmbedding, timeoutMs = 800L)
+            // 3-Tier Multi-Cloud Gatekeeper Cascade:
+            // Tier 1: Cloudflare Clef (clef-flash / clef-omni) [800ms SLA]
+            // Tier 2: Liquid AI (d1 / d1:latest) [800ms SLA fallback]
+            // Tier 3: LocalDecisionClassifier (On-Device Emergency Fallback, <0.2ms)
+            val tGatekeeper = System.currentTimeMillis()
+
+            val cfIntent = runCatching {
+                cloudflareClefClient.decide(queryTextForEmbedding, timeoutMs = 800L)
+            }.onFailure { e ->
+                Log.w(TAG, "Gatekeeper Tier 1 (Cloudflare Clef) threw exception: ${e.message}")
             }.getOrNull()
 
-            val decision = if (liquidIntent != null) {
-                DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = 0L)
+            val (decision, resolvedTier) = if (cfIntent != null) {
+                val latency = System.currentTimeMillis() - tGatekeeper
+                DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Tier 1: Cloudflare Clef"
             } else {
-                localDecisionClassifier.classify(queryTextForEmbedding, queryEmbedding)
+                val liquidIntent = runCatching {
+                    liquidDecisionClient.decide(queryTextForEmbedding, timeoutMs = 800L)
+                }.onFailure { e ->
+                    Log.w(TAG, "Gatekeeper Tier 2 (Liquid AI) threw exception: ${e.message}")
+                }.getOrNull()
+
+                if (liquidIntent != null) {
+                    val latency = System.currentTimeMillis() - tGatekeeper
+                    DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Tier 2: Liquid AI"
+                } else {
+                    val localDecision = runCatching {
+                        localDecisionClassifier.classify(queryTextForEmbedding, queryEmbedding)
+                    }.getOrElse { e ->
+                        Log.e(TAG, "Gatekeeper Tier 3 (Local Decision) failed: ${e.message}", e)
+                        DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 0.5f, latencyMs = 0L)
+                    }
+                    localDecision to "Tier 3: LocalDecisionClassifier (On-Device)"
+                }
             }
 
+            PersonaLogger.d(
+                PersonaLogTags.ORCHESTRATOR,
+                "⚡ Gatekeeper resolved via $resolvedTier -> intent=${decision.intent} (conf=${decision.confidence}, latency=${decision.latencyMs}ms)"
+            )
+
             val inboundIntent = if (isImagePresent) InboundIntent.CATALOG_INQUIRY else decision.intent
-            Log.i(TAG, "🎯 Gatekeeper decision: intent=$inboundIntent (conf=${decision.confidence}, latency=${decision.latencyMs}ms)")
+            Log.i(TAG, "🎯 Gatekeeper decision: intent=$inboundIntent via $resolvedTier (conf=${decision.confidence}, latency=${decision.latencyMs}ms)")
 
             // Only retrieve RAG candidates if intent is CATALOG_INQUIRY
             if (inboundIntent == InboundIntent.CATALOG_INQUIRY && queryEmbedding != null) {

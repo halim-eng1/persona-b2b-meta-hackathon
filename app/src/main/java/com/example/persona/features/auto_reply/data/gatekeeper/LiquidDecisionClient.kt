@@ -20,6 +20,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
@@ -64,6 +65,11 @@ class LiquidDecisionClient @Inject constructor(
             "ORDER_UPDATE" to "Changing address, size, or notes on existing order",
             "ORDER_CANCEL" to "Cancelling active order",
             "GENUINE_COMPLAINT_HITL" to "Severe anger, damaged item, fraud accusation, demanding human manager"
+        )
+
+        val URGENT_COMPLAINT_CRITERIA: Map<String, String> = mapOf(
+            "urgent" to "Urgent complaint or anger",
+            "normal" to "Standard query"
         )
 
         private fun createDefaultHttpClient(): HttpClient = HttpClient {
@@ -139,8 +145,9 @@ class LiquidDecisionClient @Inject constructor(
                         criteria = CATEGORY_CRITERIA
                     ),
                     "is_urgent_complaint" to SystemOneQuestion(
-                        type = "bool",
-                        instructions = "Is the user expressing severe anger, fraud accusations, or an urgent damaged package issue?"
+                        type = "choice",
+                        instructions = "Is the user expressing severe anger, fraud accusations, or an urgent damaged package issue?",
+                        criteria = URGENT_COMPLAINT_CRITERIA
                     )
                 )
             )
@@ -192,6 +199,7 @@ class LiquidDecisionClient @Inject constructor(
             "BANTER", "PRESENCE_CHECK" -> InboundIntent.BANTER
             "ORDER_CREATE", "ORDER_UPDATE", "ORDER_CANCEL" -> InboundIntent.ORDER_STATUS
             "CATALOG_INQUIRY" -> InboundIntent.CATALOG_INQUIRY
+            "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
             else -> InboundIntent.CATALOG_INQUIRY
         }
     }
@@ -199,30 +207,30 @@ class LiquidDecisionClient @Inject constructor(
 
 @Serializable
 internal data class SystemOneDecisionRequest(
-    val model: String,
-    val state: String,
-    val questions: Map<String, SystemOneQuestion>
+    @SerialName("model") val model: String,
+    @SerialName("state") val state: String,
+    @SerialName("questions") val questions: Map<String, SystemOneQuestion>
 )
 
 @Serializable
 internal data class SystemOneQuestion(
-    val type: String,
-    val instructions: String? = null,
-    val criteria: Map<String, String>? = null
+    @SerialName("type") val type: String,
+    @SerialName("instructions") val instructions: String? = null,
+    @SerialName("criteria") val criteria: Map<String, String>? = null
 )
 
 @Serializable
 internal data class SystemOneDecisionResponse(
-    val id: String? = null,
-    val model: String? = null,
-    val answers: Map<String, SystemOneAnswer> = emptyMap()
+    @SerialName("id") val id: String? = null,
+    @SerialName("model") val model: String? = null,
+    @SerialName("answers") val answers: Map<String, SystemOneAnswer> = emptyMap()
 )
 
 @Serializable
 internal data class SystemOneAnswer(
-    val type: String? = null,
-    val choice: String? = null,
-    val confidence: Float? = null,
-    val number: Double? = null,
-    val bool: Boolean? = null
+    @SerialName("type") val type: String? = null,
+    @SerialName("choice") val choice: String? = null,
+    @SerialName("confidence") val confidence: Float? = null,
+    @SerialName("number") val number: Double? = null,
+    @SerialName("bool") val bool: Boolean? = null
 )

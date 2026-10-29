@@ -14,7 +14,11 @@ data class QwenChatRequest(
     val temperature: Float = 0.7f,
     @SerialName("max_tokens")
     val maxTokens: Int = 1000,
-    val stream: Boolean = false
+    val stream: Boolean = false,
+    @SerialName("enable_thinking")
+    val enableThinking: Boolean? = null,
+    @SerialName("reasoning_effort")
+    val reasoningEffort: String? = null
 )
 
 /**

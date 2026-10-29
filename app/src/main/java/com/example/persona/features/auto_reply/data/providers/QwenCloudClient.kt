@@ -51,6 +51,13 @@ class QwenCloudClient @Inject constructor(
             "qwen3.8-flash"
         )
 
+        val REASONING_QWEN_MODELS = listOf(
+            "deepseek-v4.1-flash",
+            "deepseek-v4-pro-0813",
+            "qwen3.8-flash",
+            "qwen3.8-max"
+        )
+
         val QWEN_TEXT_MODELS = listOf(
             "deepseek-v4.1-flash",
             "qwen3.8-max",
@@ -86,9 +93,14 @@ class QwenCloudClient @Inject constructor(
         val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
         val isVision = model in VISION_QWEN_MODELS || hasImage
         val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
-        val effectiveMaxTokens = if (isVision) maxOf(maxTokens, 1500) else maxTokens
+        val effectiveMaxTokens = if (isVision) maxOf(maxTokens, 1500) else maxOf(maxTokens, 1200)
         PersonaLogger.i(TAG, "Attempting [QwenCloud] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
         Log.i(TAG, "Attempting [QwenCloud] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
+
+        val isReasoningModel = model in REASONING_QWEN_MODELS ||
+            model.contains("deepseek", ignoreCase = true) ||
+            model.contains("qwen3.8", ignoreCase = true) ||
+            model.contains("reason", ignoreCase = true)
 
         try {
             withTimeout(timeoutMs) {
@@ -101,7 +113,8 @@ class QwenCloudClient @Inject constructor(
                             messages = messages,
                             temperature = 0.5f,
                             maxTokens = effectiveMaxTokens,
-                            stream = false
+                            stream = false,
+                            enableThinking = if (isReasoningModel) false else null
                         )
                     )
                 }

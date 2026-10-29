@@ -56,8 +56,8 @@ class LiquidDecisionClientTest {
                   "probabilities": { "GREETING": 0.98, "CATALOG_INQUIRY": 0.02 }
                 },
                 "is_urgent_complaint": {
-                  "type": "bool",
-                  "bool": false
+                  "type": "choice",
+                  "choice": "normal"
                 }
               }
             }
@@ -334,6 +334,10 @@ class LiquidDecisionClientTest {
 
         val urgentQ = questions["is_urgent_complaint"]?.jsonObject
         assertNotNull(urgentQ)
-        assertEquals("bool", urgentQ!!["type"]?.jsonPrimitive?.content)
+        assertEquals("choice", urgentQ!!["type"]?.jsonPrimitive?.content)
+        val urgentCriteria = urgentQ["criteria"]?.jsonObject
+        assertNotNull(urgentCriteria)
+        assertTrue(urgentCriteria!!.containsKey("urgent"))
+        assertTrue(urgentCriteria.containsKey("normal"))
     }
 }
