@@ -750,6 +750,7 @@ class AutoReplyOrchestratorRagTest {
 
         coVerify(exactly = 1) { orderDao.updateCustomerName(77L, "أحمد الجديد") }
         coVerify(exactly = 1) { orderDao.updateDeliveryAddress(77L, "الزمالك") }
+        coVerify(exactly = 1) { orderDao.updateOrderDetails(77L, "ساعة يد") }
         coVerify(exactly = 1) {
             orderDao.appendCustomNotes(77L, match {
                 it.contains("التفاصيل: ساعة يد") && !it.contains("ملاحظات: قديمة") && !it.contains("العنوان: الزمالك")

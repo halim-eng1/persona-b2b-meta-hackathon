@@ -167,6 +167,12 @@ interface OrderDao {
     suspend fun updateDeliveryAddress(id: Long, address: String)
 
     /**
+     * Updates the [orderDetails] field for a specific order row.
+     */
+    @Query("UPDATE orders_table SET order_details = :details WHERE id = :id")
+    suspend fun updateOrderDetails(id: Long, details: String)
+
+    /**
      * Updates the [customerNameFromLlm] field for a specific order row.
      */
     @Query("UPDATE orders_table SET customer_name_from_llm = :name WHERE id = :id")

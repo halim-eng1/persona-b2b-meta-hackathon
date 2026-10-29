@@ -42,8 +42,15 @@ class OrderIngestionManager @Inject constructor(
             return value?.trim()?.replace(Regex("\\s+"), " ")
         }
 
-        fun isPivotStillOpen(latestPivotTimestamp: Long?, consumedPivotTimestamps: Set<Long>): Boolean =
-            latestPivotTimestamp != null && !consumedPivotTimestamps.contains(latestPivotTimestamp)
+        fun isPivotStillOpen(
+            latestPivotTimestamp: Long?,
+            consumedPivotTimestamps: Set<Long>,
+            nowMs: Long = System.currentTimeMillis()
+        ): Boolean {
+            if (latestPivotTimestamp == null) return false
+            val isExpired = latestPivotTimestamp > 100_000_000L && (nowMs - latestPivotTimestamp > 3600_000L)
+            return !isExpired && !consumedPivotTimestamps.contains(latestPivotTimestamp)
+        }
 
         fun filterDuplicateNoteLines(
             existingNotes: String?,
@@ -116,6 +123,12 @@ class OrderIngestionManager @Inject constructor(
         if (!normalizedDeliveryAddress.isNullOrBlank() && normalizedDeliveryAddress != existingOrder.deliveryAddress) {
             orderDao.updateDeliveryAddress(existingOrder.id, normalizedDeliveryAddress)
             Log.i(TAG, "Updated delivery address for order ${existingOrder.id}: $normalizedDeliveryAddress")
+        }
+
+        val normalizedOrderDetails = normalizeField(extracted.orderDetails)?.removePrefix("التفاصيل:")?.trim()
+        if (!normalizedOrderDetails.isNullOrBlank() && normalizedOrderDetails != existingOrder.orderDetails) {
+            orderDao.updateOrderDetails(existingOrder.id, normalizedOrderDetails)
+            Log.i(TAG, "Updated order details for order ${existingOrder.id}: $normalizedOrderDetails")
         }
 
         val rawNewNotes = buildNotesFromExtractedOrder(extracted)

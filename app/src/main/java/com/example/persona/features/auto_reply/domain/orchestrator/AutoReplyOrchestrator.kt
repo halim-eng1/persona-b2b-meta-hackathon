@@ -104,8 +104,11 @@ class AutoReplyOrchestrator @Inject constructor(
             "مستشفى", "الحقني", "مصيبة", "كارثة", "نجدة", "emergency", "suicide", "police"
         )
 
-        internal fun isPivotStillOpen(latestPivotTimestamp: Long?, consumedPivotTimestamps: Set<Long>): Boolean =
-            OrderIngestionManager.isPivotStillOpen(latestPivotTimestamp, consumedPivotTimestamps)
+        internal fun isPivotStillOpen(
+            latestPivotTimestamp: Long?,
+            consumedPivotTimestamps: Set<Long>,
+            nowMs: Long = System.currentTimeMillis()
+        ): Boolean = OrderIngestionManager.isPivotStillOpen(latestPivotTimestamp, consumedPivotTimestamps, nowMs)
 
         internal val agenticJson = ReasoningLeakSanitizer.agenticJson
 
@@ -241,34 +244,7 @@ class AutoReplyOrchestrator @Inject constructor(
             incrementUnread = true
         )
 
-        // 4. Launch background embedding generation coroutine
-        scope.launch(Dispatchers.Default) {
-            val claimSuccess = chatHistoryDao.claimForProcessing(insertedId)
-            if (claimSuccess > 0) {
-                try {
-                    val startTime = System.currentTimeMillis()
-                    val embedding = embeddingEngine.embedForAutoReply(processed.normalizedText)
-                    val latency = System.currentTimeMillis() - startTime
-                    Log.i("PersonaMetrics", "metric=embedding_latency_ms value=$latency contact=${processed.contactName.hashCode()}")
-                    if (embedding != null) {
-                        val embeddingBlob = Converters().fromFloatArray(embedding)
-                        if (embeddingBlob != null) {
-                            chatHistoryDao.updateEmbeddingRaw(insertedId, embeddingBlob)
-                            Log.d(TAG, "Background embedding completed and saved for chatHistory id=$insertedId")
-                        } else {
-                            chatHistoryDao.updateEmbeddingState(insertedId, "FAILED")
-                        }
-                    } else {
-                        chatHistoryDao.updateEmbeddingState(insertedId, "FAILED")
-                        Log.w(TAG, "Embedding returned null for chatHistory id=$insertedId")
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Embedding generation failed for chatHistory id=$insertedId", e)
-                    chatHistoryDao.updateEmbeddingState(insertedId, "FAILED")
-                }
-            }
-        }
-        Log.d(TAG, "⚡ Background embedding job launched for chatHistory id=$insertedId, state=PROCESSING")
+        // 4. Sequential single-embedding pipeline is executed at Step 11 to prevent ONNX lock contention.
 
         // 5. Global switch gate
         if (!prefsRepository.isAutoReplyEnabledSync()) {
@@ -413,8 +389,26 @@ class AutoReplyOrchestrator @Inject constructor(
                 effectiveProcessed.normalizedText
             }
 
-            val queryEmbedding = embeddingEngine.embedForAutoReply(queryTextForEmbedding)
+            val queryEmbedding = try {
+                val startTime = System.currentTimeMillis()
+                val emb = embeddingEngine.embedForAutoReply(queryTextForEmbedding)
+                val latency = System.currentTimeMillis() - startTime
+                Log.i("PersonaMetrics", "metric=embedding_latency_ms value=$latency contact=${processed.contactName.hashCode()}")
+                emb
+            } catch (e: Exception) {
+                Log.w(TAG, "Embedding generation failed for chatHistory id=$insertedId", e)
+                chatHistoryDao.updateEmbeddingState(insertedId, "FAILED")
+                null
+            }
+
             if (queryEmbedding != null) {
+                val embeddingBlob = Converters().fromFloatArray(queryEmbedding)
+                if (embeddingBlob != null) {
+                    chatHistoryDao.updateEmbeddingRaw(insertedId, embeddingBlob)
+                    Log.d(TAG, "Sequential embedding completed and saved for chatHistory id=$insertedId")
+                } else {
+                    chatHistoryDao.updateEmbeddingState(insertedId, "FAILED")
+                }
                 val (retrievedCandidates, bestScore) = semanticRetrievalRepository.retrieveCandidates(
                     queryEmbedding = queryEmbedding,
                     minimumSimilarityThreshold = ragBaseThreshold,
@@ -423,6 +417,8 @@ class AutoReplyOrchestrator @Inject constructor(
                 )
                 candidates = retrievedCandidates.filter { it.similarityScore >= 0.38f }
                 maxScore = bestScore
+            } else {
+                chatHistoryDao.updateEmbeddingState(insertedId, "FAILED")
             }
 
             val isImagePresent = !isTranscribedVoice && !isVoiceTranscribedNow && effectiveProcessed.mediaFilePath != null
@@ -491,64 +487,6 @@ class AutoReplyOrchestrator @Inject constructor(
                 }
             }
 
-            // Agentic Order Actions & Ingestion Routing
-            var overriddenReplyText: String? = null
-            val orderAction = agenticResponse.orderAction?.trim()?.uppercase()
-                ?.takeIf { it == "CREATE" || it == "CANCEL" || it == "UPDATE" }
-
-            Log.i("PersonaMetrics", "metric=order_extraction_rate value=${if (agenticResponse.extractedOrder != null) 1 else 0} contact=${processed.contactName.hashCode()}")
-            Log.i("PersonaMetrics", "metric=order_action_usage value=${orderAction ?: if (agenticResponse.orderAction != null) "UNKNOWN" else "NONE"} contact=${processed.contactName.hashCode()}")
-
-            if (agenticResponse.extractedOrder != null) {
-                val extracted = agenticResponse.extractedOrder
-                val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
-
-                when {
-                    orderAction == "CANCEL" -> {
-                        if (!orderIngestionManager.executeCancelOrderAction(processed)) {
-                            overriddenReplyText = NO_ACTIVE_ORDER_REPLY
-                        }
-                    }
-                    orderAction == "UPDATE" && existingOrder != null -> {
-                        orderIngestionManager.applyOrderUpdates(existingOrder, extracted)
-                        if (existingOrder.status == OrderStatus.PENDING.name) {
-                            orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
-                            Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirm/update")
-                        }
-                    }
-                    else -> {
-                        val result = orderIngestionManager.handleOrderCreation(
-                            extractedOrder = agenticResponse.extractedOrder,
-                            contactName = processed.contactName,
-                            customerText = processed.originalText,
-                            orderAction = orderAction ?: "",
-                            sourceClass = sourceClassStr
-                        )
-                        if (result is OrderIngestionResult.DuplicatePivot) {
-                            overriddenReplyText = result.pivotReplyText
-                        }
-                    }
-                }
-            } else {
-                when (orderAction) {
-                    "CANCEL" -> {
-                        if (!orderIngestionManager.executeCancelOrderAction(processed)) {
-                            overriddenReplyText = NO_ACTIVE_ORDER_REPLY
-                        }
-                    }
-                    "UPDATE" -> {
-                        val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
-                        if (existingOrder == null) {
-                            Log.i(TAG, "order_action=UPDATE but no active order for ${processed.contactName} — nothing to update")
-                        } else if (existingOrder.status == OrderStatus.PENDING.name) {
-                            orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
-                            Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirmation")
-                        }
-                    }
-                    else -> Unit
-                }
-            }
-
             val rawAction = agenticResponse.action.trim().uppercase()
             val normalizedAction = when (rawAction) {
                 "UPDATE", "CREATE" -> "REPLY"
@@ -559,6 +497,67 @@ class AutoReplyOrchestrator @Inject constructor(
                 isImagePresent -> "RE_QUERY"
                 normalizedAction == "RE_QUERY" && agenticResponse.refinedSearchKeyword.isNullOrBlank() && !agenticResponse.finalReplyText.isNullOrBlank() -> "REPLY"
                 else -> normalizedAction
+            }
+
+            // Agentic Order Actions & Ingestion Routing
+            var overriddenReplyText: String? = null
+            val orderAction = agenticResponse.orderAction?.trim()?.uppercase()
+                ?.takeIf { it == "CREATE" || it == "CANCEL" || it == "UPDATE" }
+
+            Log.i("PersonaMetrics", "metric=order_extraction_rate value=${if (agenticResponse.extractedOrder != null) 1 else 0} contact=${processed.contactName.hashCode()}")
+            Log.i("PersonaMetrics", "metric=order_action_usage value=${orderAction ?: if (agenticResponse.orderAction != null) "UNKNOWN" else "NONE"} contact=${processed.contactName.hashCode()}")
+
+            // Defer order ingestion mutations on intermediate turns (RE_QUERY or image turns)
+            if (effectiveAction == "REPLY" && !isImagePresent) {
+                if (agenticResponse.extractedOrder != null) {
+                    val extracted = agenticResponse.extractedOrder
+                    val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
+
+                    when {
+                        orderAction == "CANCEL" -> {
+                            if (!orderIngestionManager.executeCancelOrderAction(processed)) {
+                                overriddenReplyText = NO_ACTIVE_ORDER_REPLY
+                            }
+                        }
+                        orderAction == "UPDATE" && existingOrder != null -> {
+                            orderIngestionManager.applyOrderUpdates(existingOrder, extracted)
+                            if (existingOrder.status == OrderStatus.PENDING.name) {
+                                orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
+                                Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirm/update")
+                            }
+                        }
+                        else -> {
+                            val result = orderIngestionManager.handleOrderCreation(
+                                extractedOrder = agenticResponse.extractedOrder,
+                                contactName = processed.contactName,
+                                customerText = processed.originalText,
+                                orderAction = orderAction ?: "",
+                                sourceClass = sourceClassStr
+                            )
+                            if (result is OrderIngestionResult.DuplicatePivot) {
+                                overriddenReplyText = result.pivotReplyText
+                            }
+                        }
+                    }
+                } else {
+                    when (orderAction) {
+                        "CANCEL" -> {
+                            if (!orderIngestionManager.executeCancelOrderAction(processed)) {
+                                overriddenReplyText = NO_ACTIVE_ORDER_REPLY
+                            }
+                        }
+                        "UPDATE" -> {
+                            val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
+                            if (existingOrder == null) {
+                                Log.i(TAG, "order_action=UPDATE but no active order for ${processed.contactName} — nothing to update")
+                            } else if (existingOrder.status == OrderStatus.PENDING.name) {
+                                orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
+                                Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirmation")
+                            }
+                        }
+                        else -> Unit
+                    }
+                }
             }
 
             val rawReplyText: String? = if (overriddenReplyText != null) {

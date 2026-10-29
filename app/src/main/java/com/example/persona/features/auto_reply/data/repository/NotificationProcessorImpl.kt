@@ -64,6 +64,12 @@ class NotificationProcessorImpl @Inject constructor(
             if (voiceEmojis.any { text.contains(it) }) return true
             val trimmed = text.trim()
             val lower = trimmed.lowercase()
+                .removePrefix("محولة:")
+                .removePrefix("محوله:")
+                .removePrefix("forwarded:")
+                .removePrefix("forwarded")
+                .trim()
+
             return lower == "voice message" ||
                    lower.startsWith("voice message") ||
                    lower == "voice note" ||
@@ -72,8 +78,15 @@ class NotificationProcessorImpl @Inject constructor(
                    lower.startsWith("رسالة صوتية") ||
                    lower == "مقطع صوتي" ||
                    lower.startsWith("مقطع صوتي") ||
+                   lower == "تسجيل صوتي" ||
+                   lower.startsWith("تسجيل صوتي") ||
                    lower == "audio" ||
-                   lower.startsWith("audio")
+                   lower.startsWith("audio") ||
+                   lower.contains("voice message") ||
+                   lower.contains("voice note") ||
+                   lower.contains("رسالة صوتية") ||
+                   lower.contains("مقطع صوتي") ||
+                   lower.contains("تسجيل صوتي")
         }
 
         fun containsMediaIndicators(text: String): Boolean {

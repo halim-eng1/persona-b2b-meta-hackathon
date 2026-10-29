@@ -753,4 +753,128 @@ class WhatsAppMediaExtractorTest {
         val result = extractor.transcribeVoiceNote(emptyAudio)
         assertNull(result)
     }
+
+    @Test
+    fun `isVoiceMessageIndicator detects forwarded voice notes and audio`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+
+        assertTrue(extractor.isVoiceMessageIndicator("محولة: رسالة صوتية (0:15)"))
+        assertTrue(extractor.isVoiceMessageIndicator("محولة: مقطع صوتي"))
+        assertTrue(extractor.isVoiceMessageIndicator("Forwarded: Voice message (0:30)"))
+        assertTrue(extractor.isVoiceMessageIndicator("Forwarded: Audio"))
+    }
+
+    @Test
+    fun `extractDurationSeconds matches unparenthesized durations`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+
+        assertEquals(15, extractor.extractDurationSeconds("Voice message 0:15"))
+        assertEquals(90, extractor.extractDurationSeconds("رسالة صوتية 1:30"))
+        assertEquals(4, extractor.extractDurationSeconds("مقطع صوتي 0:04"))
+    }
+
+    @Test
+    fun `purgeStaleMediaCache removes stale voice and image files older than max age`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+
+        val oldVoiceFile = File(cacheDir, "incoming_voice_old.ogg").apply {
+            writeText("old_voice")
+            setLastModified(System.currentTimeMillis() - 7200_000L) // 2 hours old
+        }
+        val freshVoiceFile = File(cacheDir, "incoming_voice_fresh.ogg").apply {
+            writeText("fresh_voice")
+            setLastModified(System.currentTimeMillis() - 100_000L) // 100s old
+        }
+        val oldMediaFile = File(cacheDir, "incoming_media_old.jpg").apply {
+            writeText("old_media")
+            setLastModified(System.currentTimeMillis() - 7200_000L) // 2 hours old
+        }
+
+        extractor.purgeStaleMediaCache(maxAgeMs = 3600_000L) // 1 hour TTL
+
+        assertFalse(oldVoiceFile.exists())
+        assertFalse(oldMediaFile.exists())
+        assertTrue(freshVoiceFile.exists())
+    }
+
+    @Test
+    fun `evictStaleClaimedDiskFiles evicts claims older than 10 minutes`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        val diskImage = tempFolder.newFile("test_disk_img.jpg")
+        val now = 1_000_000L
+
+        extractor.imageDirectoriesOverride = listOf(tempFolder.root)
+        diskImage.setLastModified(now)
+
+        val recovered = extractor.findLatestImageOnDisk(NotificationSourceClass.BUSINESS, postTime = now)
+        assertNotNull(recovered)
+        assertTrue(extractor.isDiskFileClaimed(diskImage.absolutePath))
+
+        // 11 minutes later:
+        val later = now + 11 * 60 * 1000L
+        extractor.evictStaleClaimedDiskFiles(now = later)
+        assertFalse(extractor.isDiskFileClaimed(diskImage.absolutePath))
+    }
+
+    @Test
+    fun `transcribeVoiceNote deletes temporary incoming_voice ogg cache file in finally`() = runBlocking {
+        val mockEngine = MockEngine { request ->
+            respond(
+                content = """{"text": "مرحباً"}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine)
+        val extractor = WhatsAppMediaExtractor(
+            context = mockContext,
+            httpClient = client,
+            groqPrimaryApiKey = "test_groq_key",
+            groqFallbackApiKey = "fallback_key"
+        )
+
+        val tempVoiceCacheFile = File(cacheDir, "incoming_voice_12345.ogg").apply {
+            writeBytes(ByteArray(1024) { 9 })
+        }
+        assertTrue(tempVoiceCacheFile.exists())
+
+        val result = extractor.transcribeVoiceNote(tempVoiceCacheFile)
+        assertEquals("مرحباً", result)
+        assertFalse("Temporary incoming_voice_*.ogg cache file should be deleted in finally block", tempVoiceCacheFile.exists())
+    }
+
+    @Test
+    fun `extractAudioFromNotification only inspects last message bundle and ignores historical turns`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        val oldUri = mockk<Uri>()
+        val latestUri = mockk<Uri>()
+        val latestAudioBytes = ByteArray(1024) { 99 }
+
+        every { mockContext.contentResolver.openInputStream(latestUri) } returns java.io.ByteArrayInputStream(latestAudioBytes)
+
+        val oldBundle = mockk<Bundle>(relaxed = true) {
+            every { getString("type") } returns "audio/ogg"
+            every { getParcelable<Uri>("uri") } returns oldUri
+            every { getParcelable("uri", Uri::class.java) } returns oldUri
+            every { this@mockk.get("uri") } returns (oldUri as Any)
+        }
+
+        val latestBundle = mockk<Bundle>(relaxed = true) {
+            every { getString("type") } returns "audio/ogg"
+            every { getParcelable<Uri>("uri") } returns latestUri
+            every { getParcelable("uri", Uri::class.java) } returns latestUri
+            every { this@mockk.get("uri") } returns (latestUri as Any)
+        }
+
+        val extras = mockk<Bundle>(relaxed = true)
+        every { extras.getParcelableArray(Notification.EXTRA_MESSAGES) } returns arrayOf(oldBundle, latestBundle)
+
+        val sbn = mockk<StatusBarNotification> {
+            every { notification } returns mockk { this@mockk.extras = extras }
+        }
+
+        val audioFile = extractor.extractAudioFromNotification(sbn)
+        assertNotNull(audioFile)
+        assertEquals(99.toByte(), audioFile!!.readBytes()[0])
+    }
 }

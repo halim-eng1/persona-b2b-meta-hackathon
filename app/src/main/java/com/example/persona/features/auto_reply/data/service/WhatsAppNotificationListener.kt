@@ -100,6 +100,11 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
     private val recentKeys = ConcurrentHashMap<String, Long>(64)
 
+    override fun onCreate() {
+        super.onCreate()
+        mediaExtractor.purgeStaleMediaCache()
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         // ── 1. Package filter & Ongoing filter ─────────────────────────────────
         if (sbn.packageName !in WHATSAPP_PACKAGES) return
@@ -246,8 +251,12 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
                 // Phase 2: Voice Note (.opus / .ogg) Interception & Whisper Transcription
                 if (isVoice) {
-                    // 1. Direct MessagingStyle Audio Extraction
-                    val directAudioFile = mediaExtractor.extractAudioFromNotification(sbn)
+                    // 1. Direct MessagingStyle Audio Extraction with 2-stage micro-polling
+                    val directAudioFile = mediaExtractor.extractAudioWithMicroPolling(
+                        sbn = sbn,
+                        listenerService = this@WhatsAppNotificationListener
+                    ) ?: mediaExtractor.extractAudioFromNotification(sbn)
+
                     val durationSeconds = mediaExtractor.extractDurationSeconds(text)
                     val audioFile = directAudioFile ?: mediaExtractor.captureLatestVoiceNote(
                         sourceClass = sourceClass,
@@ -255,17 +264,24 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         expectedDurationSeconds = durationSeconds
                     )
 
-                    if (audioFile != null) {
-                        val transcribed = mediaExtractor.transcribeVoiceNote(audioFile)
-                        if (!transcribed.isNullOrBlank()) {
-                            effectiveText = "[رسالة صوتية من العميل]: $transcribed"
-                            mediaFilePath = null // CRITICAL: Transcribed voice is a pure text turn; never an image attachment!
-                            Log.i("PersonaMedia", "Voice message converted to pure text turn: '$effectiveText'")
+                    val isTempCache = audioFile != null && audioFile.name.startsWith("incoming_voice_")
+                    try {
+                        if (audioFile != null) {
+                            val transcribed = mediaExtractor.transcribeVoiceNote(audioFile)
+                            if (!transcribed.isNullOrBlank()) {
+                                effectiveText = "[رسالة صوتية من العميل]: $transcribed"
+                                mediaFilePath = null // CRITICAL: Transcribed voice is a pure text turn; never an image attachment!
+                                Log.i("PersonaMedia", "Voice message converted to pure text turn: '$effectiveText'")
+                            } else {
+                                isVoiceFailed = true
+                            }
                         } else {
                             isVoiceFailed = true
                         }
-                    } else {
-                        isVoiceFailed = true
+                    } finally {
+                        if (isTempCache && audioFile?.exists() == true) {
+                            audioFile.delete()
+                        }
                     }
                 }
             } catch (e: Exception) {

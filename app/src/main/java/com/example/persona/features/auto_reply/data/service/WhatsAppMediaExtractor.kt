@@ -90,6 +90,27 @@ class WhatsAppMediaExtractor @Inject constructor(
         return claimedDiskFiles.containsKey(path)
     }
 
+    fun evictStaleClaimedDiskFiles(now: Long = System.currentTimeMillis()) {
+        val tenMinutesMs = 10 * 60 * 1000L
+        claimedDiskFiles.entries.removeIf { now - it.value > tenMinutesMs }
+    }
+
+    fun purgeStaleMediaCache(maxAgeMs: Long = 60 * 60 * 1000L) {
+        try {
+            val cacheFiles = context.cacheDir.listFiles { f ->
+                f.isFile && (f.name.startsWith("incoming_voice_") || f.name.startsWith("incoming_media_"))
+            } ?: return
+            val now = System.currentTimeMillis()
+            for (f in cacheFiles) {
+                if (now - f.lastModified() > maxAgeMs) {
+                    f.delete()
+                }
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to purge stale media cache: ${e.message}")
+        }
+    }
+
     private val claimedVoiceFiles = ConcurrentHashMap<String, Long>()
 
     fun clearClaimedVoiceFiles() {
@@ -392,6 +413,7 @@ class WhatsAppMediaExtractor @Inject constructor(
     ): File? {
         val dirs = getWhatsAppImageDirectories(sourceClass)
         val now = if (postTime > 0) postTime else System.currentTimeMillis()
+        evictStaleClaimedDiskFiles(now)
 
         for (dir in dirs) {
             if (!dir.exists() || !dir.isDirectory) continue
@@ -410,7 +432,7 @@ class WhatsAppMediaExtractor @Inject constructor(
 
             for (candidate in candidates) {
                 val delta = Math.abs(candidate.lastModified() - now)
-                val claimed = claimedDiskFiles.putIfAbsent(candidate.absolutePath, System.currentTimeMillis()) == null
+                val claimed = claimedDiskFiles.putIfAbsent(candidate.absolutePath, now) == null
                 if (claimed) {
                     val logMsg = "📸 Successfully recovered image from disk fallback: ${candidate.absolutePath} (delta: ${delta}ms)"
                     Log.i(TAG, logMsg)
@@ -433,74 +455,101 @@ class WhatsAppMediaExtractor @Inject constructor(
      * If an audio URI is present, opens the stream directly, copies to a cached .ogg file,
      * and returns the file, completely bypassing disk scanning.
      */
+    /**
+     * Inspects notification extras for direct audio streams in MessagingStyle messages.
+     * Only inspects the latest message bundle and ignores historical messages.
+     */
     fun extractAudioFromNotification(sbn: StatusBarNotification): File? {
         val notification = sbn.notification ?: return null
         val extras = notification.extras ?: return null
 
         try {
             val messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
-            val audioFile = extractAudioFromMessagesBundle(messages)
-            if (audioFile != null) return audioFile
-
-            val historicMessages = extras.getParcelableArray(Notification.EXTRA_HISTORIC_MESSAGES)
-            val historicAudioFile = extractAudioFromMessagesBundle(historicMessages)
-            if (historicAudioFile != null) return historicAudioFile
+            return extractAudioFromMessagesBundle(messages)
         } catch (e: Throwable) {
             Log.w(TAG, "Error inspecting MessagingStyle audio messages: ${e.message}")
         }
         return null
     }
 
+    /**
+     * 2-stage micro-polling (75ms, 150ms) to allow WhatsApp background service
+     * to populate and attach the audio URI before escalating to disk fallback.
+     */
+    suspend fun extractAudioWithMicroPolling(
+        sbn: StatusBarNotification,
+        listenerService: NotificationListenerService? = null,
+        activeNotificationProvider: ((String) -> StatusBarNotification?)? = null
+    ): File? = withContext(ioDispatcher) {
+        var currentSbn = sbn
+        val immediateFile = extractAudioFromNotification(currentSbn)
+        if (immediateFile != null) return@withContext immediateFile
+
+        val delays = listOf(75L, 150L)
+        for (delayMs in delays) {
+            delay(delayMs)
+            val refreshedSbn = activeNotificationProvider?.invoke(sbn.key)
+                ?: runCatching { listenerService?.activeNotifications?.firstOrNull { it.key == sbn.key } }.getOrNull()
+            if (refreshedSbn != null) {
+                currentSbn = refreshedSbn
+            }
+            val retryFile = extractAudioFromNotification(currentSbn)
+            if (retryFile != null) {
+                Log.i(TAG, "🎙️ Audio URI caught on micro-retry delay ($delayMs ms)")
+                return@withContext retryFile
+            }
+        }
+        return@withContext null
+    }
+
     internal fun extractAudioFromMessagesBundle(messagesArray: Array<*>?): File? {
         if (messagesArray == null || messagesArray.isEmpty()) return null
-        for (i in messagesArray.indices.reversed()) {
-            val bundle = messagesArray[i] as? Bundle ?: continue
-            val mimeType = bundle.getString("type")
-                ?: bundle.getString("data_mime_type")
-                ?: bundle.getCharSequence("type")?.toString()
-                ?: bundle.getCharSequence("data_mime_type")?.toString()
+        val bundle = messagesArray.lastOrNull() as? Bundle ?: return null
+        val mimeType = bundle.getString("type")
+            ?: bundle.getString("data_mime_type")
+            ?: bundle.getCharSequence("type")?.toString()
+            ?: bundle.getCharSequence("data_mime_type")?.toString()
 
-            val uri = runCatching {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    bundle.getParcelable("uri", Uri::class.java)
-                        ?: bundle.getParcelable("data_uri", Uri::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    (bundle.getParcelable<Uri>("uri") ?: bundle.getParcelable<Uri>("data_uri"))
-                }
-            }.getOrNull() ?: (bundle.get("uri") as? Uri) ?: (bundle.get("data_uri") as? Uri)
-              ?: bundle.getString("uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
-              ?: bundle.getString("data_uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
+        val uri = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                bundle.getParcelable("uri", Uri::class.java)
+                    ?: bundle.getParcelable("data_uri", Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                (bundle.getParcelable<Uri>("uri") ?: bundle.getParcelable<Uri>("data_uri"))
+            }
+        }.getOrNull() ?: (bundle.get("uri") as? Uri) ?: (bundle.get("data_uri") as? Uri)
+          ?: bundle.getString("uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
+          ?: bundle.getString("data_uri")?.let { runCatching { Uri.parse(it) }.getOrNull() }
 
-            if (uri != null) {
-                val isAudio = mimeType?.startsWith("audio/", ignoreCase = true) == true ||
-                        mimeType?.contains("ogg", ignoreCase = true) == true ||
-                        mimeType?.contains("opus", ignoreCase = true) == true ||
-                        mimeType?.contains("audio", ignoreCase = true) == true ||
-                        uri.toString().contains("audio", ignoreCase = true) ||
-                        uri.toString().contains("opus", ignoreCase = true) ||
-                        uri.toString().contains("voice", ignoreCase = true)
+        if (uri != null) {
+            val isAudio = mimeType?.startsWith("audio/", ignoreCase = true) == true ||
+                    mimeType?.contains("ogg", ignoreCase = true) == true ||
+                    mimeType?.contains("opus", ignoreCase = true) == true ||
+                    mimeType?.contains("audio", ignoreCase = true) == true ||
+                    uri.toString().contains("audio", ignoreCase = true) ||
+                    uri.toString().contains("opus", ignoreCase = true) ||
+                    uri.toString().contains("voice", ignoreCase = true)
 
-                if (isAudio) {
-                    try {
-                        val stream = context.contentResolver.openInputStream(uri)
-                        stream?.use { input ->
-                            // Crucial Filename Extension Invariant: always cache with .ogg extension
-                            val cachedFile = File(context.cacheDir, "incoming_voice_${System.currentTimeMillis()}_${System.nanoTime()}.ogg")
-                            FileOutputStream(cachedFile).use { out ->
-                                input.copyTo(out)
-                                out.flush()
-                            }
-                            if (cachedFile.exists() && cachedFile.length() > 0L) {
-                                val logMsg = "🎙️ Successfully extracted audio file from MessagingStyle URI: $uri (size: ${cachedFile.length()} bytes)"
-                                Log.i(TAG, logMsg)
-                                PersonaLogger.i(TAG, logMsg)
-                                return cachedFile
-                            }
+            if (isAudio) {
+                try {
+                    val stream = context.contentResolver.openInputStream(uri)
+                    stream?.use { input ->
+                        // Crucial Filename Extension Invariant: always cache with .ogg extension
+                        val cachedFile = File(context.cacheDir, "incoming_voice_${System.currentTimeMillis()}_${System.nanoTime()}.ogg")
+                        FileOutputStream(cachedFile).use { out ->
+                            input.copyTo(out)
+                            out.flush()
                         }
-                    } catch (e: Throwable) {
-                        Log.w(TAG, "Failed to open/copy stream from MessagingStyle audio URI $uri: ${e.message}")
+                        if (cachedFile.exists() && cachedFile.length() > 0L) {
+                            val logMsg = "🎙️ Successfully extracted audio file from MessagingStyle URI: $uri (size: ${cachedFile.length()} bytes)"
+                            Log.i(TAG, logMsg)
+                            PersonaLogger.i(TAG, logMsg)
+                            return cachedFile
+                        }
                     }
+                } catch (e: Throwable) {
+                    Log.w(TAG, "Failed to open/copy stream from MessagingStyle audio URI $uri: ${e.message}")
                 }
             }
         }
@@ -547,7 +596,12 @@ class WhatsAppMediaExtractor @Inject constructor(
 
             for (dir in allSearchDirs) {
                 val opusFiles = dir.listFiles { f ->
-                    f.isFile && (f.extension.equals("opus", ignoreCase = true) || f.extension.equals("ogg", ignoreCase = true))
+                    f.isFile && (
+                        f.extension.equals("opus", ignoreCase = true) ||
+                        f.extension.equals("ogg", ignoreCase = true) ||
+                        f.extension.equals("m4a", ignoreCase = true) ||
+                        f.extension.equals("mp3", ignoreCase = true)
+                    )
                 } ?: continue
 
                 // Grab candidates modified within 15 seconds of postTime and not yet claimed
@@ -606,32 +660,42 @@ class WhatsAppMediaExtractor @Inject constructor(
      * Request: Multipart POST with the audio file (.ogg upload format) and `language: "ar"`.
      */
     suspend fun transcribeVoiceNote(audioFile: File): String? {
-        val primaryKey = groqPrimaryApiKey.trim()
-        val fallbackKey = groqFallbackApiKey.trim()
+        try {
+            val primaryKey = groqPrimaryApiKey.trim()
+            val fallbackKey = groqFallbackApiKey.trim()
 
-        if (primaryKey.isNotBlank()) {
-            val result = callGroqWhisper(audioFile, primaryKey)
-            if (!result.isNullOrBlank()) {
-                val logMsg = "🎙️ Whisper transcription completed: '$result'"
-                Log.i(TAG, logMsg)
-                PersonaLogger.i(TAG, logMsg)
-                return result
+            if (primaryKey.isNotBlank()) {
+                val result = callGroqWhisper(audioFile, primaryKey)
+                if (!result.isNullOrBlank()) {
+                    val logMsg = "🎙️ Whisper transcription completed: '$result'"
+                    Log.i(TAG, logMsg)
+                    PersonaLogger.i(TAG, logMsg)
+                    return result
+                }
+            }
+
+            if (fallbackKey.isNotBlank() && fallbackKey != primaryKey) {
+                Log.w(TAG, "Primary Groq key failed for Whisper. Falling back to GROQ_API_KEY_V2...")
+                val fallbackResult = callGroqWhisper(audioFile, fallbackKey)
+                if (!fallbackResult.isNullOrBlank()) {
+                    val logMsg = "🎙️ Whisper transcription completed via fallback: '$fallbackResult'"
+                    Log.i(TAG, logMsg)
+                    PersonaLogger.i(TAG, logMsg)
+                    return fallbackResult
+                }
+            }
+
+            Log.w(TAG, "Groq Whisper transcription failed on all keys for ${audioFile.name}")
+            return null
+        } finally {
+            if (audioFile.name.startsWith("incoming_voice_") && audioFile.name.endsWith(".ogg")) {
+                runCatching {
+                    if (audioFile.exists()) {
+                        audioFile.delete()
+                    }
+                }
             }
         }
-
-        if (fallbackKey.isNotBlank() && fallbackKey != primaryKey) {
-            Log.w(TAG, "Primary Groq key failed for Whisper. Falling back to GROQ_API_KEY_V2...")
-            val fallbackResult = callGroqWhisper(audioFile, fallbackKey)
-            if (!fallbackResult.isNullOrBlank()) {
-                val logMsg = "🎙️ Whisper transcription completed via fallback: '$fallbackResult'"
-                Log.i(TAG, logMsg)
-                PersonaLogger.i(TAG, logMsg)
-                return fallbackResult
-            }
-        }
-
-        Log.w(TAG, "Groq Whisper transcription failed on all keys for ${audioFile.name}")
-        return null
     }
 
     private suspend fun callGroqWhisper(audioFile: File, apiKey: String): String? {
@@ -698,7 +762,7 @@ class WhatsAppMediaExtractor @Inject constructor(
 
     fun extractDurationSeconds(text: String): Int? {
         val normalized = normalizeEasternArabicNumerals(text)
-        val regex = Regex("""\((\d+):(\d{1,2})\)""")
+        val regex = Regex("""(?:\(|\b)(\d{1,2}):(\d{2})(?:\)|\b)""")
         val match = regex.find(normalized) ?: return null
         val minutes = match.groupValues[1].toIntOrNull() ?: return null
         val seconds = match.groupValues[2].toIntOrNull() ?: return null
@@ -710,6 +774,12 @@ class WhatsAppMediaExtractor @Inject constructor(
         if (voiceEmojis.any { text.contains(it) }) return true
         val trimmed = text.trim()
         val lower = trimmed.lowercase()
+            .removePrefix("محولة:")
+            .removePrefix("محوله:")
+            .removePrefix("forwarded:")
+            .removePrefix("forwarded")
+            .trim()
+
         return lower == "voice message" ||
                lower.startsWith("voice message") ||
                lower == "voice note" ||
@@ -718,8 +788,15 @@ class WhatsAppMediaExtractor @Inject constructor(
                lower.startsWith("رسالة صوتية") ||
                lower == "مقطع صوتي" ||
                lower.startsWith("مقطع صوتي") ||
+               lower == "تسجيل صوتي" ||
+               lower.startsWith("تسجيل صوتي") ||
                lower == "audio" ||
-               lower.startsWith("audio")
+               lower.startsWith("audio") ||
+               lower.contains("voice message") ||
+               lower.contains("voice note") ||
+               lower.contains("رسالة صوتية") ||
+               lower.contains("مقطع صوتي") ||
+               lower.contains("تسجيل صوتي")
     }
 
     fun isImageIndicator(text: String): Boolean {
@@ -875,20 +952,32 @@ class WhatsAppMediaExtractor @Inject constructor(
             NotificationSourceClass.BUSINESS -> {
                 dirs.add(File("/storage/emulated/0/Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Voice Notes"))
                 dirs.add(File(ext, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Voice Notes"))
+                dirs.add(File("/storage/emulated/0/Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Audio"))
+                dirs.add(File(ext, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Audio"))
                 dirs.add(File(ext, "WhatsApp Business/Media/WhatsApp Business Voice Notes"))
+                dirs.add(File(ext, "WhatsApp Business/Media/WhatsApp Business Audio"))
             }
             NotificationSourceClass.MAIN_APP -> {
                 dirs.add(File("/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Voice Notes"))
                 dirs.add(File(ext, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Voice Notes"))
+                dirs.add(File("/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio"))
+                dirs.add(File(ext, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio"))
                 dirs.add(File(ext, "WhatsApp/Media/WhatsApp Voice Notes"))
+                dirs.add(File(ext, "WhatsApp/Media/WhatsApp Audio"))
             }
             else -> {
                 dirs.add(File("/storage/emulated/0/Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Voice Notes"))
                 dirs.add(File(ext, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Voice Notes"))
+                dirs.add(File("/storage/emulated/0/Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Audio"))
+                dirs.add(File(ext, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Audio"))
                 dirs.add(File("/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Voice Notes"))
                 dirs.add(File(ext, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Voice Notes"))
+                dirs.add(File("/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio"))
+                dirs.add(File(ext, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio"))
                 dirs.add(File(ext, "WhatsApp Business/Media/WhatsApp Business Voice Notes"))
+                dirs.add(File(ext, "WhatsApp Business/Media/WhatsApp Business Audio"))
                 dirs.add(File(ext, "WhatsApp/Media/WhatsApp Voice Notes"))
+                dirs.add(File(ext, "WhatsApp/Media/WhatsApp Audio"))
             }
         }
         return dirs

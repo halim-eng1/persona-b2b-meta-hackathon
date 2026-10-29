@@ -2,6 +2,7 @@ package com.example.persona.features.auto_reply.data.repository
 
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.entity.ChatHistoryEntity
+import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
@@ -206,6 +207,40 @@ class PromptContextBuilderTest {
         assertEquals(1, filtered.size)
         assertEquals(1L, filtered[0].id)
         assertEquals("بكام التيشيرت؟", filtered[0].messageText)
+    }
+
+    @Test
+    fun `localizeOrderStatus maps database enums to authentic Egyptian Arabic`() {
+        assertEquals("قيد المراجعة", PromptContextBuilder.localizeOrderStatus("PENDING"))
+        assertEquals("قيد التجهيز", PromptContextBuilder.localizeOrderStatus("IN_PREPARATION"))
+        assertEquals("في الطريق مع المندوب", PromptContextBuilder.localizeOrderStatus("SHIPPING_IN_PROGRESS"))
+        assertEquals("تم التوصيل", PromptContextBuilder.localizeOrderStatus("SHIPPED"))
+        assertEquals("ملغي", PromptContextBuilder.localizeOrderStatus("CANCELLED"))
+        assertEquals("مرتجع", PromptContextBuilder.localizeOrderStatus("RETURNED"))
+        // Case-insensitive
+        assertEquals("قيد التجهيز", PromptContextBuilder.localizeOrderStatus("in_preparation"))
+        // Unknown & null fallbacks
+        assertEquals("", PromptContextBuilder.localizeOrderStatus(null))
+        assertEquals("CUSTOM_STATE", PromptContextBuilder.localizeOrderStatus("CUSTOM_STATE"))
+    }
+
+    @Test
+    fun `formatCustomerOrderState localizes raw order status enums and never leaks English enum`() {
+        val activeOrder = OrderEntity(
+            id = 101L,
+            contactName = "أحمد",
+            status = "IN_PREPARATION",
+            orderDetails = "هودي أسود مقاس XL",
+            deliveryAddress = "مدينة نصر",
+            customNotes = "اتصال بعد 2 الضهر",
+            timestamp = 10_000_000L
+        )
+
+        val formatted = PromptContextBuilder.formatCustomerOrderState(listOf(activeOrder))
+
+        assertTrue(formatted.contains("Active Order: #101 [قيد التجهيز]"))
+        assertTrue(formatted.contains("Order Status: قيد التجهيز"))
+        assertFalse(formatted.contains("IN_PREPARATION"))
     }
 
     private fun extractSection(fullText: String, startHeader: String, endHeader: String): String {

@@ -83,7 +83,7 @@ class ReplyGenerationRepositoryImplTest {
             personalChunks = listOf(personalChunk)
         )
 
-        assertTrue(dynamicBlock.contains("Order Status: IN_PREPARATION"))
+        assertTrue(dynamicBlock.contains("Order Status: قيد التجهيز"))
         assertTrue(dynamicBlock.contains("Order Details: حذاء جلدي مقاس 43"))
         assertTrue(dynamicBlock.contains("Delivery Address: المعادي، القاهرة"))
         assertTrue(dynamicBlock.contains("Custom Notes: التسليم بعد الساعة 5"))

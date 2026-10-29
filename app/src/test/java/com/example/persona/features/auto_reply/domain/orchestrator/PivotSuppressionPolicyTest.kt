@@ -46,4 +46,25 @@ class PivotSuppressionPolicyTest {
         assertFalse(AutoReplyOrchestrator.isPivotStillOpen(latestPivotTimestamp = null, consumedPivotTimestamps = emptySet()))
         assertFalse(AutoReplyOrchestrator.isPivotStillOpen(latestPivotTimestamp = null, consumedPivotTimestamps = setOf(1000L)))
     }
+
+    @Test
+    fun `stale pivot older than 1 hour TTL is expired and closed`() {
+        val now = 1_700_000_000_000L
+        val staleTimestamp = now - 3600_001L // 1 hour + 1 ms ago
+        val recentTimestamp = now - 1800_000L // 30 minutes ago
+        assertFalse(
+            AutoReplyOrchestrator.isPivotStillOpen(
+                latestPivotTimestamp = staleTimestamp,
+                consumedPivotTimestamps = emptySet(),
+                nowMs = now
+            )
+        )
+        assertTrue(
+            AutoReplyOrchestrator.isPivotStillOpen(
+                latestPivotTimestamp = recentTimestamp,
+                consumedPivotTimestamps = emptySet(),
+                nowMs = now
+            )
+        )
+    }
 }
