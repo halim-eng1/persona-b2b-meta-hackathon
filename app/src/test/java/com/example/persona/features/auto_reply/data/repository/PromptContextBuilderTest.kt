@@ -1,6 +1,7 @@
 package com.example.persona.features.auto_reply.data.repository
 
 import com.example.persona.core.data.repository.UserPreferencesRepository
+import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
