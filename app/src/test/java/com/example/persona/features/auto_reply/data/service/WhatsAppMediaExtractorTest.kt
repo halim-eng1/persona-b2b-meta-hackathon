@@ -24,6 +24,9 @@ import io.mockk.unmockkStatic
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -903,5 +906,300 @@ class WhatsAppMediaExtractorTest {
 
         assertNull(extractor.parseQwenAsrResponse(emptySse))
         assertNull(extractor.parseQwenAsrResponse(malformedSse))
+    }
+
+    @Test
+    fun `callGeminiAudioTranscription sends valid inlineData payload and extracts transcribed text`() = runBlocking {
+        var interceptedUrl = ""
+        var interceptedContentType = ""
+        var interceptedBody = ""
+
+        val mockEngine = MockEngine { request ->
+            interceptedUrl = request.url.toString()
+            interceptedContentType = request.body.contentType?.toString()
+                ?: request.headers[HttpHeaders.ContentType]
+                ?: ""
+            interceptedBody = (request.body as? io.ktor.http.content.TextContent)?.text
+                ?: (request.body as? io.ktor.http.content.ByteArrayContent)?.let { String(it.bytes(), Charsets.UTF_8) }
+                ?: ""
+
+            respond(
+                content = """
+                    {
+                      "candidates": [
+                        {
+                          "content": {
+                            "parts": [
+                              {
+                                "text": "عايز اعرف اسعار التيشيرتات"
+                              }
+                            ],
+                            "role": "model"
+                          },
+                          "finishReason": "STOP"
+                        }
+                      ]
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+
+        val client = HttpClient(mockEngine)
+        val extractor = WhatsAppMediaExtractor(
+            context = mockContext,
+            httpClient = client
+        )
+
+        val sampleAudioBytes = byteArrayOf(10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
+        val tempAudio = tempFolder.newFile("sample_voice.ogg").apply {
+            writeBytes(sampleAudioBytes + ByteArray(500) { 1 })
+        }
+
+        val result = extractor.callGeminiAudioTranscription(tempAudio, "test_gemini_key_123")
+        assertNotNull(result)
+        assertEquals("عايز اعرف اسعار التيشيرتات", result)
+
+        // Verify URL & Query param
+        assertTrue(interceptedUrl.startsWith("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent"))
+        assertTrue(interceptedUrl.contains("key=test_gemini_key_123"))
+        assertTrue(interceptedContentType.contains("application/json"))
+
+        // Verify payload JSON structure
+        val root = Json.parseToJsonElement(interceptedBody).jsonObject
+        val contents = root["contents"] as JsonArray
+        assertEquals(1, contents.size)
+        val parts = contents[0].jsonObject["parts"] as JsonArray
+        assertEquals(2, parts.size)
+
+        // Part 0: inlineData
+        val inlineData = parts[0].jsonObject["inlineData"]!!.jsonObject
+        assertEquals("audio/ogg", inlineData["mimeType"]!!.jsonPrimitive.content)
+        assertTrue(inlineData["data"]!!.jsonPrimitive.content.isNotBlank())
+
+        // Part 1: text prompt
+        val promptText = parts[1].jsonObject["text"]!!.jsonPrimitive.content
+        assertEquals(
+            "Transcribe this colloquial Egyptian Arabic voice note verbatim into plain text. Output ONLY the plain transcription without any commentary, markdown, or formatting.",
+            promptText
+        )
+    }
+
+    @Test
+    fun `transcribeVoiceNote falls back to Gemini Audio when Qwen FunASR fails`() = runBlocking {
+        var qwenCalled = false
+        var geminiCalled = false
+        var groqCalled = false
+
+        val mockEngine = MockEngine { request ->
+            val url = request.url.toString()
+            when {
+                url.contains("qwencloudapi") -> {
+                    qwenCalled = true
+                    respond(
+                        content = """{"error": "Internal server error"}""",
+                        status = HttpStatusCode.InternalServerError,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                }
+                url.contains("generativelanguage.googleapis.com") -> {
+                    geminiCalled = true
+                    respond(
+                        content = """
+                            {
+                              "candidates": [
+                                {
+                                  "content": {
+                                    "parts": [
+                                      {
+                                        "text": "هو الاوردر هيوصل امتى لو سمحت؟"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                        """.trimIndent(),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                }
+                url.contains("groq.com") -> {
+                    groqCalled = true
+                    respond(
+                        content = """{"text": "groq fallback"}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                }
+                else -> respond("", HttpStatusCode.NotFound)
+            }
+        }
+
+        val client = HttpClient(mockEngine)
+        val extractor = WhatsAppMediaExtractor(
+            context = mockContext,
+            httpClient = client,
+            groqPrimaryApiKey = "groq_key",
+            groqFallbackApiKey = "groq_fallback",
+            qwenApiKey = "qwen_key",
+            geminiApiKey = "gemini_key"
+        )
+
+        val tempAudio = tempFolder.newFile("test_voice_cascade.opus").apply {
+            writeBytes(ByteArray(1024) { 5 })
+        }
+
+        val result = extractor.transcribeVoiceNote(tempAudio)
+        assertNotNull(result)
+        assertEquals("هو الاوردر هيوصل امتى لو سمحت؟", result)
+        assertTrue("Qwen should have been called first", qwenCalled)
+        assertTrue("Gemini should have been called after Qwen failed", geminiCalled)
+        assertFalse("Groq should NOT have been called since Gemini succeeded", groqCalled)
+    }
+
+    @Test
+    fun `transcribeVoiceNote falls back to Gemini Audio when Qwen FunASR is absent`() = runBlocking {
+        var geminiCalled = false
+        var groqCalled = false
+
+        val mockEngine = MockEngine { request ->
+            val url = request.url.toString()
+            when {
+                url.contains("generativelanguage.googleapis.com") -> {
+                    geminiCalled = true
+                    respond(
+                        content = """
+                            {
+                              "candidates": [
+                                {
+                                  "content": {
+                                    "parts": [
+                                      {
+                                        "text": "بكام الشحن لإسكندرية؟"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                        """.trimIndent(),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                }
+                url.contains("groq.com") -> {
+                    groqCalled = true
+                    respond(
+                        content = """{"text": "groq"}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                }
+                else -> respond("", HttpStatusCode.NotFound)
+            }
+        }
+
+        val client = HttpClient(mockEngine)
+        val extractor = WhatsAppMediaExtractor(
+            context = mockContext,
+            httpClient = client,
+            groqPrimaryApiKey = "groq_key",
+            groqFallbackApiKey = "groq_fallback",
+            qwenApiKey = "",
+            geminiApiKey = "gemini_key"
+        )
+
+        val tempAudio = tempFolder.newFile("test_voice_no_qwen.opus").apply {
+            writeBytes(ByteArray(1024) { 6 })
+        }
+
+        val result = extractor.transcribeVoiceNote(tempAudio)
+        assertNotNull(result)
+        assertEquals("بكام الشحن لإسكندرية؟", result)
+        assertTrue("Gemini should have been called", geminiCalled)
+        assertFalse("Groq should NOT have been called", groqCalled)
+    }
+
+    @Test
+    fun `callGeminiAudioTranscription falls back to secondary model on 404 or error`() = runBlocking {
+        val invokedModels = mutableListOf<String>()
+
+        val mockEngine = MockEngine { request ->
+            val url = request.url.toString()
+            when {
+                url.contains("models/gemini-3.5-flash-lite:generateContent") -> {
+                    invokedModels.add("gemini-3.5-flash-lite")
+                    respond(
+                        content = """{"error": {"code": 404, "message": "Model not found"}}""",
+                        status = HttpStatusCode.NotFound,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                }
+                url.contains("models/gemini-2.5-flash-lite:generateContent") -> {
+                    invokedModels.add("gemini-2.5-flash-lite")
+                    respond(
+                        content = """
+                            {
+                              "candidates": [
+                                {
+                                  "content": {
+                                    "parts": [
+                                      {
+                                        "text": "مقاس 2XL متاح؟"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                        """.trimIndent(),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                }
+                else -> respond("", HttpStatusCode.NotFound)
+            }
+        }
+
+        val client = HttpClient(mockEngine)
+        val extractor = WhatsAppMediaExtractor(
+            context = mockContext,
+            httpClient = client
+        )
+
+        val tempAudio = tempFolder.newFile("test_gemini_fallback.opus").apply {
+            writeBytes(ByteArray(1024) { 7 })
+        }
+
+        val result = extractor.callGeminiAudioTranscription(tempAudio, "test_api_key")
+        assertNotNull(result)
+        assertEquals("مقاس 2XL متاح؟", result)
+        assertEquals(listOf("gemini-3.5-flash-lite", "gemini-2.5-flash-lite"), invokedModels)
+    }
+
+    @Test
+    fun `parseGeminiAudioResponse strips quotes and preambles cleanly`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+
+        val responseWithPreamble = """
+            {
+              "candidates": [
+                {
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "Transcription: \"عايز هودي مقاس لارج لو سمحت\""
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val parsed = extractor.parseGeminiAudioResponse(responseWithPreamble)
+        assertEquals("عايز هودي مقاس لارج لو سمحت", parsed)
     }
 }

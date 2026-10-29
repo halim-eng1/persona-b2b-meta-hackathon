@@ -132,6 +132,20 @@ android {
             "QWEN_ASR_BASE_URL",
             "\"${resolveSecret("QWEN_ASR_BASE_URL") ?: "https://ap-southeast-1.maas.qwencloudapi.com/api/v1/services/aigc/multimodal-generation/generation"}\""
         )
+
+        // Google Gemini credentials — resolved from environment or secrets properties
+        val resolvedGeminiKey = resolveSecret("GEMINI_API_KEY") ?: resolveSecret("GOOGLE_API_KEY") ?: ""
+        val resolvedGeminiKey2 = resolveSecret("GEMINI_API_KEY_2") ?: resolveSecret("GEMINI_API_KEY_V2") ?: "gemini_placeholder_key_2"
+        buildConfigField("String", "GEMINI_API_KEY", "\"$resolvedGeminiKey\"")
+        buildConfigField("String", "GEMINI_API_KEY_2", "\"$resolvedGeminiKey2\"")
+        buildConfigField("String", "GEMINI_BASE_URL", "\"${resolveSecret("GEMINI_BASE_URL") ?: "https://generativelanguage.googleapis.com/v1beta"}\"")
+
+        // Liquid API credentials — resolved from environment or secrets properties
+        val resolvedLiquidKey = resolveSecret("LIQUID_API_KEY") ?: resolveSecret("LIQUD_API_KEY") ?: ""
+        val resolvedLiquidKey2 = resolveSecret("LIQUID_API_KEY_2") ?: resolveSecret("LIQUD_API_KEY_V2") ?: "liquid_placeholder_key_2"
+        buildConfigField("String", "LIQUID_API_KEY", "\"$resolvedLiquidKey\"")
+        buildConfigField("String", "LIQUID_API_KEY_2", "\"$resolvedLiquidKey2\"")
+        buildConfigField("String", "LIQUID_BASE_URL", "\"${resolveSecret("LIQUID_BASE_URL") ?: "https://api.liquid.ai/decisions/v1/systemone"}\"")
     }
 
     buildTypes {

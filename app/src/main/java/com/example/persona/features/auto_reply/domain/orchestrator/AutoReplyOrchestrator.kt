@@ -32,6 +32,8 @@ import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormalizer
 import com.example.persona.core.network.dto.AgenticLlmResponse
 import com.example.persona.core.network.dto.ExtractedOrder
+import com.example.persona.features.auto_reply.data.gatekeeper.LiquidDecisionClient
+import com.example.persona.features.auto_reply.domain.gatekeeper.DecisionResult
 import com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent
 import com.example.persona.features.auto_reply.domain.gatekeeper.LocalDecisionClassifier
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -71,7 +73,8 @@ class AutoReplyOrchestrator @Inject constructor(
     private val hitlNotificationHandler: HitlNotificationHandler = HitlNotificationHandler(context, conversationMetadataDao, prefsRepository),
     private val antiEchoGuard: AntiEchoGuard = AntiEchoGuard(),
     private val reasoningLeakSanitizer: ReasoningLeakSanitizer = ReasoningLeakSanitizer(),
-    private val localDecisionClassifier: LocalDecisionClassifier = LocalDecisionClassifier()
+    private val localDecisionClassifier: LocalDecisionClassifier = LocalDecisionClassifier(),
+    private val liquidDecisionClient: LiquidDecisionClient = LiquidDecisionClient()
 ) {
     companion object {
         private const val TAG = "AutoReplyOrchestrator"
@@ -418,8 +421,17 @@ class AutoReplyOrchestrator @Inject constructor(
 
             val isImagePresent = !isTranscribedVoice && !isVoiceTranscribedNow && effectiveProcessed.mediaFilePath != null
 
-            // Intent classification via on-device gatekeeper
-            val decision = localDecisionClassifier.classify(queryTextForEmbedding, queryEmbedding)
+            // Intent classification via Cloud Decision Engine (Liquid AI d1) with local fallback
+            val liquidIntent = runCatching {
+                liquidDecisionClient.decide(queryTextForEmbedding, timeoutMs = 800L)
+            }.getOrNull()
+
+            val decision = if (liquidIntent != null) {
+                DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = 0L)
+            } else {
+                localDecisionClassifier.classify(queryTextForEmbedding, queryEmbedding)
+            }
+
             val inboundIntent = if (isImagePresent) InboundIntent.CATALOG_INQUIRY else decision.intent
             Log.i(TAG, "🎯 Gatekeeper decision: intent=$inboundIntent (conf=${decision.confidence}, latency=${decision.latencyMs}ms)")
 

@@ -26,14 +26,17 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.forms.formData
 import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -55,6 +58,7 @@ class WhatsAppMediaExtractor @Inject constructor(
     internal var groqPrimaryApiKeyOverride: String? = null
     internal var groqFallbackApiKeyOverride: String? = null
     internal var qwenApiKeyOverride: String? = null
+    internal var geminiApiKeyOverride: String? = null
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
     private val groqPrimaryApiKey: String
@@ -65,6 +69,9 @@ class WhatsAppMediaExtractor @Inject constructor(
 
     private val qwenApiKey: String
         get() = qwenApiKeyOverride ?: BuildConfig.QWEN_API_KEY
+
+    private val geminiApiKey: String
+        get() = geminiApiKeyOverride ?: (runCatching { BuildConfig.GEMINI_API_KEY }.getOrNull() ?: "")
 
     companion object {
         private const val TAG = "PersonaMedia"
@@ -82,11 +89,13 @@ class WhatsAppMediaExtractor @Inject constructor(
         httpClient: HttpClient,
         groqPrimaryApiKey: String?,
         groqFallbackApiKey: String?,
-        qwenApiKey: String? = ""
+        qwenApiKey: String? = "",
+        geminiApiKey: String? = ""
     ) : this(context, httpClient) {
         this.groqPrimaryApiKeyOverride = groqPrimaryApiKey
         this.groqFallbackApiKeyOverride = groqFallbackApiKey
         this.qwenApiKeyOverride = qwenApiKey
+        this.geminiApiKeyOverride = geminiApiKey
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -669,10 +678,11 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     /**
-     * Transcribes an audio voice note via Qwen FunASR (Primary) or Groq Whisper (Fallback).
+     * Transcribes an audio voice note via Qwen FunASR (Primary), Gemini Audio (Tier 1.5), or Groq Whisper (Fallback).
      */
     suspend fun transcribeVoiceNote(audioFile: File): String? {
         try {
+            // Tier 1: Qwen fun-asr-flash-2026-06-15 (~2.5s)
             val qKey = qwenApiKey.trim()
             if (qKey.isNotBlank()) {
                 val qwenResult = callQwenFunAsr(audioFile, qKey)
@@ -682,9 +692,23 @@ class WhatsAppMediaExtractor @Inject constructor(
                     PersonaLogger.i(TAG, logMsg)
                     return qwenResult
                 }
-                Log.w(TAG, "Qwen FunASR returned null or blank. Falling back to Groq Whisper...")
+                Log.w(TAG, "Qwen FunASR returned null or blank. Falling back to Gemini Audio...")
             }
 
+            // Tier 1.5: Gemini Audio gemini-3.5-flash-lite (~1.4s)
+            val gKey = geminiApiKey.trim()
+            if (gKey.isNotBlank()) {
+                val geminiResult = callGeminiAudioTranscription(audioFile, gKey)
+                if (!geminiResult.isNullOrBlank()) {
+                    val logMsg = "🎙️ Gemini Audio transcription completed: '$geminiResult'"
+                    Log.i(TAG, logMsg)
+                    PersonaLogger.i(TAG, logMsg)
+                    return geminiResult
+                }
+                Log.w(TAG, "Gemini Audio returned null or blank. Falling back to Groq Whisper...")
+            }
+
+            // Tier 2: Groq Whisper Large V3 (Fallback)
             val primaryKey = groqPrimaryApiKey.trim()
             val fallbackKey = groqFallbackApiKey.trim()
 
@@ -709,7 +733,7 @@ class WhatsAppMediaExtractor @Inject constructor(
                 }
             }
 
-            Log.w(TAG, "ASR transcription failed across Qwen FunASR and Groq Whisper for ${audioFile.name}")
+            Log.w(TAG, "ASR transcription failed across Qwen FunASR, Gemini Audio, and Groq Whisper for ${audioFile.name}")
             return null
         } finally {
             if (audioFile.name.startsWith("incoming_voice_") && audioFile.name.endsWith(".ogg")) {
@@ -803,6 +827,118 @@ class WhatsAppMediaExtractor @Inject constructor(
             }
         }
         return lastExtractedText
+    }
+
+    internal suspend fun callGeminiAudioTranscription(audioFile: File, apiKey: String): String? {
+        return try {
+            if (!audioFile.exists() || audioFile.length() <= 100L) {
+                delay(150L)
+            }
+            if (!audioFile.exists() || audioFile.length() <= 100L) {
+                Log.w(TAG, "Audio file does not exist or has insufficient bytes (< 100B): ${audioFile.absolutePath} (${if (audioFile.exists()) audioFile.length() else 0} bytes)")
+                return null
+            }
+
+            val audioBytes = audioFile.readBytes()
+            val base64Audio = runCatching {
+                android.util.Base64.encodeToString(audioBytes, android.util.Base64.NO_WRAP)
+            }.getOrElse {
+                java.util.Base64.getEncoder().encodeToString(audioBytes)
+            }
+
+            val payloadJson = buildJsonObject {
+                putJsonArray("contents") {
+                    addJsonObject {
+                        putJsonArray("parts") {
+                            addJsonObject {
+                                putJsonObject("inlineData") {
+                                    put("mimeType", "audio/ogg")
+                                    put("data", base64Audio)
+                                }
+                            }
+                            addJsonObject {
+                                put("text", "Transcribe this colloquial Egyptian Arabic voice note verbatim into plain text. Output ONLY the plain transcription without any commentary, markdown, or formatting.")
+                            }
+                        }
+                    }
+                }
+            }.toString()
+
+            val models = listOf("gemini-3.5-flash-lite", "gemini-2.5-flash-lite", "gemini-1.5-flash")
+            for (model in models) {
+                try {
+                    val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
+                    val response = httpClient.post(url) {
+                        contentType(ContentType.Application.Json)
+                        header(HttpHeaders.ContentType, "application/json")
+                        setBody(payloadJson)
+                    }
+
+                    if (response.status.isSuccess()) {
+                        val responseText = response.bodyAsText()
+                        val parsed = parseGeminiAudioResponse(responseText)
+                        if (!parsed.isNullOrBlank()) {
+                            return parsed
+                        }
+                    } else {
+                        val status = response.status.value
+                        val errorBody = response.bodyAsText()
+                        Log.w(TAG, "Gemini Audio API returned error code $status for model $model: $errorBody. Attempting fallback...")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Exception during Gemini Audio API call for model $model: ${e.message}. Attempting fallback...")
+                }
+            }
+            Log.w(TAG, "Gemini Audio transcription failed across all fallback models for ${audioFile.name}")
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception during Gemini Audio transcription: ${e.message}", e)
+            null
+        }
+    }
+
+    internal fun parseGeminiAudioResponse(responseText: String): String? {
+        return runCatching {
+            val root = jsonParser.parseToJsonElement(responseText).jsonObject
+            val candidates = root["candidates"] as? JsonArray ?: return null
+            if (candidates.isEmpty()) return null
+            val firstCandidate = candidates[0].jsonObject
+            val content = firstCandidate["content"]?.jsonObject ?: return null
+            val parts = content["parts"] as? JsonArray ?: return null
+            if (parts.isEmpty()) return null
+            val rawText = parts[0].jsonObject["text"]?.jsonPrimitive?.content ?: return null
+            cleanTranscribedText(rawText)
+        }.getOrNull()
+    }
+
+    internal fun cleanTranscribedText(rawText: String): String? {
+        var cleaned = rawText.trim()
+        fun stripQuotes(s: String): String {
+            var res = s.trim()
+            if ((res.startsWith("\"") && res.endsWith("\"")) ||
+                (res.startsWith("“") && res.endsWith("”")) ||
+                (res.startsWith("'") && res.endsWith("'"))) {
+                res = res.substring(1, res.length - 1).trim()
+            }
+            return res
+        }
+        cleaned = stripQuotes(cleaned)
+        val preambles = listOf(
+            "transcription:",
+            "here is the transcription:",
+            "audio transcription:",
+            "التفريغ الصوتي:",
+            "التفريغ:",
+            "النص:"
+        )
+        for (preamble in preambles) {
+            if (cleaned.startsWith(preamble, ignoreCase = true)) {
+                cleaned = cleaned.substring(preamble.length).trim()
+                break
+            }
+        }
+        cleaned = stripQuotes(cleaned)
+        return cleaned.ifBlank { null }
     }
 
     private suspend fun callGroqWhisper(audioFile: File, apiKey: String): String? {

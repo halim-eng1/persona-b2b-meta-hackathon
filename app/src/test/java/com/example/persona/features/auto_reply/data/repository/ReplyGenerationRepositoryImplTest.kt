@@ -2130,4 +2130,290 @@ class ReplyGenerationRepositoryImplTest {
         assertEquals(ReplyGenerationRepositoryImpl.QWEN_TEXT_MODELS.size, qwenAttempts)
         assertTrue(capturedUrls.any { it.contains("nvidia.com") })
     }
+
+    @Test
+    fun `callGemini returns success on gemini-3_1-flash-lite with valid response`() = runTest {
+        val capturedAuth = mutableListOf<String>()
+        var capturedUrl: String? = null
+        val mockEngine = MockEngine { request ->
+            capturedAuth.add(request.headers[HttpHeaders.Authorization] ?: "")
+            capturedUrl = request.url.toString()
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد من جيميني 3.1\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            geminiApiKey = "gemini-primary-key",
+            geminiApiKey2 = "gemini-fallback-key"
+        )
+
+        val result = repo.callGemini(
+            model = "gemini-3.1-flash-lite",
+            messages = listOf(ChatMessage(role = "user", content = "سلام")),
+            maxTokens = 600
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد من جيميني 3.1\"}", (result as ReplyGenerationRepositoryImpl.CallResult.Success).content)
+        assertEquals(listOf("Bearer gemini-primary-key"), capturedAuth)
+        assertTrue(capturedUrl!!.contains("openai/chat/completions"))
+    }
+
+    @Test
+    fun `callGemini dual-key rotation immediately falls back to geminiApiKey2 on 429`() = runTest {
+        val capturedAuth = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val auth = request.headers[HttpHeaders.Authorization] ?: ""
+            capturedAuth.add(auth)
+
+            if (auth.contains("gemini-primary-key")) {
+                respond(
+                    content = """{"error":{"code":429,"message":"Resource exhausted","status":"RESOURCE_EXHAUSTED"}}""",
+                    status = HttpStatusCode.TooManyRequests,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد من المفتاح البديل بعد ليمت 429\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            geminiApiKey = "gemini-primary-key",
+            geminiApiKey2 = "gemini-fallback-key"
+        )
+
+        val result = repo.callGemini(
+            model = "gemini-3.1-flash-lite",
+            messages = listOf(ChatMessage(role = "user", content = "سلام")),
+            maxTokens = 600
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد من المفتاح البديل بعد ليمت 429\"}", (result as ReplyGenerationRepositoryImpl.CallResult.Success).content)
+        assertEquals(2, capturedAuth.size)
+        assertEquals("Bearer gemini-primary-key", capturedAuth[0])
+        assertEquals("Bearer gemini-fallback-key", capturedAuth[1])
+    }
+
+    @Test
+    fun `callGemini dual-key rotation falls back to geminiApiKey2 on server error`() = runTest {
+        val capturedAuth = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val auth = request.headers[HttpHeaders.Authorization] ?: ""
+            capturedAuth.add(auth)
+
+            if (auth.contains("gemini-primary-key")) {
+                respond(
+                    content = """{"error":{"code":500,"message":"Internal Server Error"}}""",
+                    status = HttpStatusCode.InternalServerError,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد من المفتاح البديل بعد خطأ 500\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            geminiApiKey = "gemini-primary-key",
+            geminiApiKey2 = "gemini-fallback-key"
+        )
+
+        val result = repo.callGemini(
+            model = "gemini-3.5-flash-lite",
+            messages = listOf(ChatMessage(role = "user", content = "سلام")),
+            maxTokens = 600
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد من المفتاح البديل بعد خطأ 500\"}", (result as ReplyGenerationRepositoryImpl.CallResult.Success).content)
+        assertEquals(listOf("Bearer gemini-primary-key", "Bearer gemini-fallback-key"), capturedAuth)
+    }
+
+    @Test
+    fun `executeFailoverChain text cascade prioritizes Gemini Tier 1_5 when Qwen models fail`() = runTest {
+        val capturedUrls = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val url = request.url.toString()
+            capturedUrls.add(url)
+
+            if (url.contains("qwencloudapi.com")) {
+                respond(
+                    content = """{"error":{"message":"Quota exhausted"}}""",
+                    status = HttpStatusCode.Forbidden,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else if (url.contains("generativelanguage.googleapis.com")) {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد جيميني تير 1.5 الفوري\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد من إنفيديا غير المتوقع\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            nvidiaApiKey = "nvapi_key",
+            qwenApiKey = "qwen_key",
+            geminiApiKey = "gemini_key"
+        )
+
+        val reply = repo.executeFailoverChain(
+            messages = listOf(ChatMessage(role = "user", content = "هلا")),
+            maxTokens = 500
+        )
+
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد جيميني تير 1.5 الفوري\"}", reply)
+        val qwenAttempts = capturedUrls.count { it.contains("qwencloudapi.com") }
+        assertEquals(ReplyGenerationRepositoryImpl.QWEN_TEXT_MODELS.size, qwenAttempts)
+        assertTrue("Must call Gemini Tier 1.5 after Qwen exhaustion", capturedUrls.any { it.contains("generativelanguage.googleapis.com") })
+        assertFalse("NVIDIA Tier 2 must not be called when Gemini succeeds", capturedUrls.any { it.contains("nvidia.com") })
+    }
+
+    @Test
+    fun `executeFailoverChain vision cascade prioritizes Gemini Tier 2_5 when Qwen and Groq fail`() = runTest {
+        val capturedUrls = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val url = request.url.toString()
+            capturedUrls.add(url)
+
+            if (url.contains("qwencloudapi.com")) {
+                respond(
+                    content = """{"error":{"message":"Quota exhausted"}}""",
+                    status = HttpStatusCode.Forbidden,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else if (url.contains("api.groq.com")) {
+                respond(
+                    content = """{"error":{"message":"Rate limit exceeded"}}""",
+                    status = HttpStatusCode.TooManyRequests,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else if (url.contains("generativelanguage.googleapis.com")) {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد فيجن من جيميني 3.8 فلاش\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد إنفيديا\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "groq_key",
+            nvidiaApiKey = "nvapi_key",
+            qwenApiKey = "qwen_key",
+            geminiApiKey = "gemini_key"
+        )
+
+        val reply = repo.executeFailoverChain(
+            messages = listOf(ChatMessage(role = "user", content = "بكام ده؟", imageUrl = "data:image/jpeg;base64,12345")),
+            maxTokens = 500
+        )
+
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد فيجن من جيميني 3.8 فلاش\"}", reply)
+        assertTrue("Must call Qwen first", capturedUrls.any { it.contains("qwencloudapi.com") })
+        assertTrue("Must call Groq second", capturedUrls.any { it.contains("api.groq.com") })
+        assertTrue("Must call Gemini Tier 2.5 third", capturedUrls.any { it.contains("generativelanguage.googleapis.com") })
+        assertFalse("NVIDIA Tier 3 must not be called when Gemini succeeds", capturedUrls.any { it.contains("nvidia.com") })
+    }
+
+    @Test
+    fun `callGemini parses native Gemini REST candidates schema safely`() = runTest {
+        val mockEngine = MockEngine { request ->
+            respond(
+                content = """{"candidates":[{"content":{"parts":[{"text":"{\"action\":\"REPLY\",\"final_reply_text\":\"منور من جيميني ريست النيتيف\"}"}]}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            geminiApiKey = "gemini-primary-key"
+        )
+
+        val result = repo.callGemini(
+            model = "gemini-3.8-flash",
+            messages = listOf(ChatMessage(role = "user", content = "سلام")),
+            maxTokens = 600
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"منور من جيميني ريست النيتيف\"}", (result as ReplyGenerationRepositoryImpl.CallResult.Success).content)
+    }
 }

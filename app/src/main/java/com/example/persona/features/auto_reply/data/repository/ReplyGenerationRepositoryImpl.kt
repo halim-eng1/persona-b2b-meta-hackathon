@@ -39,7 +39,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -66,7 +76,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         groqPrimaryApiKey: String? = "",
         groqFallbackApiKey: String? = "",
         nvidiaApiKey: String? = "",
-        qwenApiKey: String? = ""
+        qwenApiKey: String? = "",
+        geminiApiKey: String? = "",
+        geminiApiKey2: String? = ""
     ) : this(httpClient, promptContextBuilder, context, userPreferencesRepository) {
         this.primaryApiKeyOverride = primaryApiKey
         this.fallbackApiKeyOverride = fallbackApiKey
@@ -74,6 +86,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         this.groqFallbackApiKeyOverride = groqFallbackApiKey
         this.nvidiaApiKeyOverride = nvidiaApiKey
         this.qwenApiKeyOverride = qwenApiKey
+        this.geminiApiKeyOverride = geminiApiKey
+        this.geminiApiKey2Override = geminiApiKey2
     }
 
     private var primaryApiKeyOverride: String? = null
@@ -82,6 +96,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     private var groqFallbackApiKeyOverride: String? = null
     private var nvidiaApiKeyOverride: String? = null
     private var qwenApiKeyOverride: String? = null
+    private var geminiApiKeyOverride: String? = null
+    private var geminiApiKey2Override: String? = null
 
     internal val primaryApiKey: String
         get() = primaryApiKeyOverride ?: BuildConfig.OPENROUTER_API_KEY
@@ -100,6 +116,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
     internal val qwenApiKey: String
         get() = qwenApiKeyOverride ?: BuildConfig.QWEN_API_KEY
+
+    internal val geminiApiKey: String
+        get() = geminiApiKeyOverride ?: BuildConfig.GEMINI_API_KEY
+
+    internal val geminiApiKey2: String
+        get() = geminiApiKey2Override ?: BuildConfig.GEMINI_API_KEY_2
 
     companion object {
         private const val TAG = PersonaLogTags.LLM
@@ -128,6 +150,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             "qwen3.8-flash"
         )
         val VISION_GROQ_MODELS = listOf("qwen/qwen3.8-27b")
+        val VISION_GEMINI_MODELS = listOf("gemini-3.8-flash")
         val VISION_NVIDIA_MODELS = listOf(
             "meta/llama-3.2-11b-vision-instruct",
             "nvidia/nemotron-3.5-super-vl-120b-a12b"
@@ -146,6 +169,13 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             "qwen3.5-flash",
             "qwen3-coder-flash",
             "qwen3.6-27b"
+        )
+
+        /** Tier 1.5: Gemini */
+        val GEMINI_TEXT_MODELS = listOf(
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite",
+            "gemini-3.8-flash"
         )
 
         /** Tier 2: NVIDIA NIM (Ultra-550B with reasoning_effort='none' & Bolt-e4b) */
@@ -523,8 +553,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val targetMaxTokens = minOf(maxTokens, ABSOLUTE_FAILOVER_CEILING)
 
         if (hasImage) {
-            PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade (Qwen -> Groq -> NVIDIA -> OpenRouter)...")
-            Log.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade (Qwen -> Groq -> NVIDIA -> OpenRouter)...")
+            PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade (Qwen -> Groq -> Gemini -> NVIDIA -> OpenRouter)...")
+            Log.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade (Qwen -> Groq -> Gemini -> NVIDIA -> OpenRouter)...")
 
             // ── Vision Tier 1: QwenCloud Multimodal Vision (Primary) ───
             val qwenStartTime = System.currentTimeMillis()
@@ -556,8 +586,25 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                         return result.content
                     }
                 }
-                PersonaLogger.w(TAG, "Vision Tier 2 (Groq) exhausted. Cascading to Vision Tier 3 (NVIDIA NIM)...")
-                Log.w(TAG, "Vision Tier 2 (Groq) exhausted. Cascading to Vision Tier 3 (NVIDIA NIM)...")
+                PersonaLogger.w(TAG, "Vision Tier 2 (Groq) exhausted. Cascading to Vision Tier 2.5 (Gemini)...")
+                Log.w(TAG, "Vision Tier 2 (Groq) exhausted. Cascading to Vision Tier 2.5 (Gemini)...")
+            }
+
+            // ── Vision Tier 2.5: Gemini ──────────────────────────────────
+            val geminiStartTime = System.currentTimeMillis()
+            val hasGeminiKeys = geminiApiKey.isNotBlank() || (geminiApiKey2.isNotBlank() && geminiApiKey2 != "gemini_placeholder_key_2")
+            if (hasGeminiKeys) {
+                for (model in VISION_GEMINI_MODELS) {
+                    val result = callGemini(model, messages, targetMaxTokens)
+                    if (result is CallResult.Success) {
+                        val durationMs = System.currentTimeMillis() - geminiStartTime
+                        PersonaLogger.i(TAG, "Vision Tier 2.5 (Gemini) succeeded with $model in ${durationMs}ms!")
+                        Log.i(TAG, "Vision Tier 2.5 (Gemini) succeeded with $model in ${durationMs}ms")
+                        return result.content
+                    }
+                }
+                PersonaLogger.w(TAG, "Vision Tier 2.5 (Gemini) exhausted. Cascading to Vision Tier 3 (NVIDIA NIM)...")
+                Log.w(TAG, "Vision Tier 2.5 (Gemini) exhausted. Cascading to Vision Tier 3 (NVIDIA NIM)...")
             }
 
             // ── Vision Tier 3: NVIDIA NIM ──────────────────────────
@@ -596,7 +643,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 return executeFailoverChain(strippedMessages, maxTokens)
             }
 
-            Log.w(TAG, "All Vision models failed across Qwen, Groq, NVIDIA, and OpenRouter tiers. Returning HITL fallback JSON.")
+            Log.w(TAG, "All Vision models failed across Qwen, Groq, Gemini, NVIDIA, and OpenRouter tiers. Returning HITL fallback JSON.")
             PersonaLogger.d(TAG, "All Vision models failed — HITL fallback")
             return HITL_FALLBACK_JSON
         }
@@ -628,8 +675,37 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                     }
                 }
             }
-            PersonaLogger.w(TAG, "Qwen Tier 1 exhausted. Cascading to Tier 2 (NVIDIA NIM)...")
-            Log.w(TAG, "Qwen Tier 1 exhausted. Cascading to Tier 2 (NVIDIA NIM)...")
+            PersonaLogger.w(TAG, "Qwen Tier 1 exhausted. Cascading to Tier 1.5 (Gemini)...")
+            Log.w(TAG, "Qwen Tier 1 exhausted. Cascading to Tier 1.5 (Gemini)...")
+        }
+
+        // ── Tier 1.5: Gemini ──────────────────────────────────────────
+        val geminiStartTime = System.currentTimeMillis()
+        val hasGeminiKeys = geminiApiKey.isNotBlank() || (geminiApiKey2.isNotBlank() && geminiApiKey2 != "gemini_placeholder_key_2")
+        if (hasGeminiKeys) {
+            for (model in GEMINI_TEXT_MODELS) {
+                when (val result = callGemini(model, messages, targetMaxTokens)) {
+                    is CallResult.Success -> {
+                        val durationMs = System.currentTimeMillis() - geminiStartTime
+                        PersonaLogger.i(TAG, "Gemini Tier 1.5 succeeded with model $model in ${durationMs}ms!")
+                        Log.i(TAG, "Gemini Tier 1.5 succeeded with model $model in ${durationMs}ms")
+                        return result.content
+                    }
+                    is CallResult.AuthOrQuotaError -> {
+                        PersonaLogger.w(TAG, "Gemini model $model quota/auth error (${result.code}). Cascading immediately to next model.")
+                        Log.w(TAG, "Gemini model $model quota/auth error (${result.code}). Cascading immediately to next model.")
+                    }
+                    is CallResult.RateLimited -> {
+                        PersonaLogger.w(TAG, "Gemini model $model rate limited (429). Cascading immediately to next model.")
+                        Log.w(TAG, "Gemini model $model rate limited (429). Cascading immediately to next model.")
+                    }
+                    else -> {
+                        Log.w(TAG, "Gemini model $model call failed ($result). Cascading to next model.")
+                    }
+                }
+            }
+            PersonaLogger.w(TAG, "Gemini Tier 1.5 exhausted. Cascading to Tier 2 (NVIDIA NIM)...")
+            Log.w(TAG, "Gemini Tier 1.5 exhausted. Cascading to Tier 2 (NVIDIA NIM)...")
         }
 
         // ── Tier 2: NVIDIA NIM (Primary Fast Text) ─────────────────────
@@ -693,7 +769,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             }
         }
 
-        Log.w(TAG, "All models failed across Qwen, NVIDIA, Groq, and OpenRouter tiers. Returning HITL fallback JSON.")
+        Log.w(TAG, "All models failed across Qwen, Gemini, NVIDIA, Groq, and OpenRouter tiers. Returning HITL fallback JSON.")
         PersonaLogger.d(TAG, "All models failed — HITL fallback")
         return HITL_FALLBACK_JSON
     }
@@ -1221,4 +1297,261 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             }
         }
     }
+
+    internal suspend fun callGemini(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int
+    ): CallResult = withContext(Dispatchers.IO) {
+        val primary = geminiApiKey.trim()
+        val fallback = geminiApiKey2.trim()
+
+        val effectivePrimary = primary.ifBlank { fallback }
+        val hasDistinctFallback = fallback.isNotBlank() && fallback != effectivePrimary
+
+        if (effectivePrimary.isBlank()) {
+            Log.w(TAG, "No Gemini API keys configured; skipping Gemini model $model")
+            return@withContext CallResult.Failed
+        }
+
+        val primaryMasked = maskKey(effectivePrimary)
+        PersonaLogger.i(TAG, "Attempting [Gemini] model $model with key $primaryMasked")
+        Log.i(TAG, "Attempting [Gemini] model $model with key $primaryMasked")
+
+        val primaryResult = executeSingleGeminiCall(
+            model = model,
+            messages = messages,
+            maxTokens = maxTokens,
+            apiKey = effectivePrimary
+        )
+
+        if (primaryResult is CallResult.Success) {
+            return@withContext primaryResult
+        }
+
+        val isKeyOrError = primaryResult is CallResult.RateLimited ||
+            primaryResult is CallResult.AuthOrQuotaError ||
+            primaryResult is CallResult.ServerError ||
+            primaryResult is CallResult.Failed ||
+            primaryResult is CallResult.Timeout
+
+        if (hasDistinctFallback && isKeyOrError) {
+            val fallbackMasked = maskKey(fallback)
+            Log.w(
+                TAG,
+                "Primary Gemini key ($primaryMasked) failed on model $model with $primaryResult. " +
+                    "Falling back to GEMINI_API_KEY_2 ($fallbackMasked)."
+            )
+            PersonaLogger.w(
+                TAG,
+                "Primary Gemini key ($primaryMasked) failed on model $model with $primaryResult -> fallback to GEMINI_API_KEY_2 ($fallbackMasked)"
+            )
+            PersonaLogger.i(TAG, "Attempting [Gemini] model $model with key $fallbackMasked")
+
+            val fallbackResult = executeSingleGeminiCall(
+                model = model,
+                messages = messages,
+                maxTokens = maxTokens,
+                apiKey = fallback
+            )
+
+            if (fallbackResult is CallResult.Success) {
+                Log.i(TAG, "Fallback GEMINI_API_KEY_2 succeeded on model $model")
+                PersonaLogger.i(TAG, "Fallback GEMINI_API_KEY_2 succeeded on model $model")
+                return@withContext fallbackResult
+            }
+
+            Log.w(
+                TAG,
+                "Fallback GEMINI_API_KEY_2 also failed on model $model with $fallbackResult"
+            )
+            return@withContext fallbackResult
+        }
+
+        primaryResult
+    }
+
+    internal suspend fun executeSingleGeminiCall(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int,
+        apiKey: String
+    ): CallResult {
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "Gemini API key is blank; skipping request for model $model")
+            return CallResult.Failed
+        }
+
+        val keyMasked = maskKey(apiKey)
+        val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
+        val isVision = model in VISION_GEMINI_MODELS || hasImage
+        val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
+        val effectiveMaxTokens = if (isVision) maxOf(maxTokens, 1500) else maxTokens
+
+        val baseUrl = BuildConfig.GEMINI_BASE_URL.trimEnd('/')
+        val isNativeRest = baseUrl.contains(":generateContent") || baseUrl.contains("/models")
+
+        val endpoint = when {
+            isNativeRest -> {
+                if (baseUrl.contains(":generateContent")) {
+                    if (baseUrl.contains("key=")) baseUrl else "$baseUrl?key=$apiKey"
+                } else {
+                    "$baseUrl/models/$model:generateContent?key=$apiKey"
+                }
+            }
+            baseUrl.endsWith("/chat/completions") -> baseUrl
+            baseUrl.endsWith("/openai") -> "$baseUrl/chat/completions"
+            else -> "$baseUrl/openai/chat/completions"
+        }
+
+        PersonaLogger.i(TAG, "Attempting [Gemini] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
+        Log.i(TAG, "Attempting [Gemini] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
+
+        return try {
+            withTimeout(timeoutMs) {
+                val response = httpClient.post(endpoint) {
+                    contentType(ContentType.Application.Json)
+                    if (!isNativeRest) {
+                        bearerAuth(apiKey)
+                        setBody(
+                            GeminiChatRequest(
+                                model = model,
+                                messages = messages,
+                                temperature = 0.5f,
+                                maxTokens = effectiveMaxTokens
+                            )
+                        )
+                    } else {
+                        setBody(
+                            buildJsonObject {
+                                put("contents", buildJsonArray {
+                                    for (msg in messages) {
+                                        addJsonObject {
+                                            put("role", if (msg.role == "assistant") "model" else "user")
+                                            put("parts", buildJsonArray {
+                                                addJsonObject {
+                                                    put("text", msg.content)
+                                                }
+                                                msg.imageUrl?.let { imgUrl ->
+                                                    if (imgUrl.isNotBlank()) {
+                                                        addJsonObject {
+                                                            putJsonObject("inline_data") {
+                                                                put("mime_type", "image/jpeg")
+                                                                put("data", imgUrl.substringAfter("base64,"))
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            })
+                                        }
+                                    }
+                                })
+                                putJsonObject("generationConfig") {
+                                    put("maxOutputTokens", effectiveMaxTokens)
+                                    put("temperature", 0.5)
+                                }
+                            }.toString()
+                        )
+                    }
+                }
+
+                val status = response.status.value
+                when {
+                    status == 429 -> {
+                        PersonaLogger.w(TAG, "Rate limited (429) on [Gemini] model $model (key $keyMasked)")
+                        Log.w(TAG, "Rate limited (429) on [Gemini] model $model (key $keyMasked)")
+                        CallResult.RateLimited
+                    }
+                    status in listOf(401, 402, 403) -> {
+                        val errorBody = runCatching { response.body<String>() }.getOrNull() ?: ""
+                        if (errorBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true)) {
+                            PersonaLogger.w(TAG, "Resource exhausted (429/quota) on [Gemini] model $model (key $keyMasked)")
+                            Log.w(TAG, "Resource exhausted (429/quota) on [Gemini] model $model (key $keyMasked)")
+                            CallResult.RateLimited
+                        } else {
+                            PersonaLogger.w(TAG, "Auth/quota error ($status) on [Gemini] model $model (key $keyMasked)")
+                            Log.w(TAG, "Auth/quota error ($status) on [Gemini] model $model (key $keyMasked)")
+                            CallResult.AuthOrQuotaError(status)
+                        }
+                    }
+                    status in 500..599 -> {
+                        Log.w(TAG, "Server error ($status) on [Gemini] model $model (key $keyMasked)")
+                        CallResult.ServerError(status)
+                    }
+                    response.status.isSuccess() -> {
+                        val responseBody = response.body<String>()
+                        PersonaLogger.d(PersonaLogTags.LLM, "📥 Raw LLM Output from [Gemini] $model: $responseBody")
+                        val content = extractGeminiContent(responseBody)
+                        if (content.isNullOrBlank()) {
+                            Log.w(TAG, "Empty content in successful response from [Gemini] $model (key $keyMasked)")
+                            CallResult.Failed
+                        } else {
+                            try {
+                                ReasoningLeakSanitizer.decodeAgenticResponseSafely(content)
+                                CallResult.Success(content)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Invalid JSON content in response from [Gemini] $model (key $keyMasked): $content", e)
+                                CallResult.Failed
+                            }
+                        }
+                    }
+                    else -> {
+                        val errorBody = runCatching { response.body<String>() }.getOrNull() ?: ""
+                        if (errorBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true)) {
+                            CallResult.RateLimited
+                        } else {
+                            Log.w(TAG, "HTTP $status error from [Gemini] $model (key $keyMasked)")
+                            CallResult.Failed
+                        }
+                    }
+                }
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.w(TAG, "Timeout (${timeoutMs}ms) on [Gemini] model $model (key $keyMasked)")
+            CallResult.Timeout
+        } catch (e: Exception) {
+            when (e) {
+                is java.net.SocketTimeoutException,
+                is io.ktor.client.network.sockets.SocketTimeoutException -> {
+                    Log.w(TAG, "Socket timeout on [Gemini] model $model (key $keyMasked): ${e.message}")
+                    CallResult.Timeout
+                }
+                else -> {
+                    Log.e(TAG, "Network error on [Gemini] model $model (key $keyMasked)", e)
+                    CallResult.Failed
+                }
+            }
+        }
+    }
+
+    private fun extractGeminiContent(responseBody: String): String? {
+        return try {
+            // 1. Try OpenAI-compatible chat completions schema: choices[0].message.content
+            val openAiBody = jsonParser.decodeFromString<OpenRouterResponse>(responseBody)
+            val openAiContent = openAiBody.choices?.firstOrNull()?.message?.content
+            if (!openAiContent.isNullOrBlank()) {
+                return openAiContent
+            }
+
+            // 2. Try native Gemini REST schema: candidates[0].content.parts[0].text
+            val jsonElement = jsonParser.parseToJsonElement(responseBody)
+            val candidates = jsonElement.jsonObject["candidates"]?.jsonArray
+            val parts = candidates?.firstOrNull()?.jsonObject
+                ?.get("content")?.jsonObject
+                ?.get("parts")?.jsonArray
+            val textPart = parts?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+            textPart
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
+
+@Serializable
+internal data class GeminiChatRequest(
+    val model: String,
+    val messages: List<ChatMessage>,
+    val temperature: Float = 0.5f,
+    @SerialName("max_tokens")
+    val maxTokens: Int = 1000
+)
