@@ -12,6 +12,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.navigation
 import com.example.persona.features.auto_reply.presentation.audit.AuditLogScreen
 import com.example.persona.features.chat_import.presentation.ChatImportProgressScreen
 import com.example.persona.features.chat_import.presentation.ChatImportScreen
@@ -91,42 +92,49 @@ fun PersonaNavGraph(
             PlaceholderScreen(name = "Onboarding")
         }
 
-        composable<Screen.ChatImport> { backStackEntry ->
-            val viewModel: ChatImportViewModel = hiltViewModel(backStackEntry)
-            ChatImportScreen(
-                viewModel = viewModel,
-                onImportStarted = {
-                    navController.navigate(Screen.ChatImportProgress(""))
-                },
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToSettings = {
-                    navController.navigate(Screen.Settings)
+        // ── Nested Chat Import Flow ───────────────────────────────────────────
+        navigation<Screen.ChatImportGraph>(startDestination = Screen.ChatImport) {
+            composable<Screen.ChatImport> { backStackEntry ->
+                val parentEntry = remember(backStackEntry) {
+                    runCatching { navController.getBackStackEntry<Screen.ChatImportGraph>() }.getOrNull()
                 }
-            )
-        }
-
-        composable<Screen.ChatImportProgress> { backStackEntry ->
-            val parentEntry = remember(backStackEntry) {
-                try {
-                    navController.getBackStackEntry<Screen.ChatImport>()
-                } catch (e: Exception) {
-                    null
+                val viewModel: ChatImportViewModel = if (parentEntry != null) {
+                    hiltViewModel(parentEntry)
+                } else {
+                    hiltViewModel(backStackEntry)
                 }
-            }
-            val viewModel: ChatImportViewModel = if (parentEntry != null) {
-                hiltViewModel(parentEntry)
-            } else {
-                hiltViewModel()
-            }
-            ChatImportProgressScreen(
-                viewModel = viewModel,
-                onComplete = {
-                    navController.navigate(Screen.Home) {
-                        popUpTo(Screen.Home) { inclusive = true }
+                ChatImportScreen(
+                    viewModel = viewModel,
+                    onImportStarted = {
+                        navController.navigate(Screen.ChatImportProgress(""))
+                    },
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToSettings = {
+                        navController.navigate(Screen.Settings)
                     }
-                },
-                onNavigateBack = { navController.popBackStack() }
-            )
+                )
+            }
+
+            composable<Screen.ChatImportProgress> { backStackEntry ->
+                val parentEntry = remember(backStackEntry) {
+                    runCatching { navController.getBackStackEntry<Screen.ChatImportGraph>() }.getOrNull()
+                        ?: runCatching { navController.getBackStackEntry<Screen.ChatImport>() }.getOrNull()
+                }
+                val viewModel: ChatImportViewModel = if (parentEntry != null) {
+                    hiltViewModel(parentEntry)
+                } else {
+                    hiltViewModel(backStackEntry)
+                }
+                ChatImportProgressScreen(
+                    viewModel = viewModel,
+                    onComplete = {
+                        navController.navigate(Screen.Home) {
+                            popUpTo(Screen.Home) { inclusive = true }
+                        }
+                    },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
 
         composable<Screen.PermissionSetup> {

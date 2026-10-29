@@ -13,71 +13,13 @@ import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrch
 import com.example.persona.features.chats.domain.usecase.ManualReplyResult
 import com.example.persona.features.chats.domain.usecase.SendManualReplyUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import java.util.Calendar
-import java.util.Locale
 import javax.inject.Inject
-
-enum class ReplyCapability {
-    READY_VIA_NOTIFICATION,
-    AWAITING_ACTIVE_NOTIFICATION
-}
-
-enum class ExportTimeRange(
-    val titleArabic: String,
-    val titleEnglish: String,
-    val subtitle: String,
-    val exportLabel: String
-) {
-    ALL_TIME(
-        titleArabic = "كامل المحادثة",
-        titleEnglish = "All Time",
-        subtitle = "All Time • كافة الرسائل المسجلة",
-        exportLabel = "All Time (كامل المحادثة)"
-    ),
-    TODAY(
-        titleArabic = "محادثة اليوم",
-        titleEnglish = "Today",
-        subtitle = "Today • رسائل اليوم",
-        exportLabel = "Today (محادثة اليوم)"
-    ),
-    LAST_TWO_HOURS(
-        titleArabic = "آخر ساعتين",
-        titleEnglish = "Last 2 Hours",
-        subtitle = "Last 2 Hours • آخر ساعتين",
-        exportLabel = "Last 2 Hours (آخر ساعتين)"
-    )
-}
-
-data class ChatMessageUiModel(
-    val id: Long,
-    val text: String,
-    val isFromUser: Boolean,
-    val senderType: String,
-    val deliveryStatus: String,
-    val timestampMs: Long,
-    val formattedTime: String,
-    val dateHeader: String,
-    val hasMediaIndicator: Boolean
-)
-
-data class ChatDetailUiState(
-    val contactName: String = "",
-    val sourceClass: String = "BUSINESS",
-    val messages: List<ChatMessageUiModel> = emptyList(),
-    val isAiPaused: Boolean = false,
-    val needsHumanAttention: Boolean = false,
-    val replyCapability: ReplyCapability = ReplyCapability.AWAITING_ACTIVE_NOTIFICATION,
-    val inputText: String = "",
-    val isSending: Boolean = false,
-    val fallbackTargetPackage: String? = null,
-    val botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
-    val isAiGenerating: Boolean = false
-)
 
 @HiltViewModel
 class ChatDetailViewModel @Inject constructor(
@@ -85,7 +27,8 @@ class ChatDetailViewModel @Inject constructor(
     private val conversationMetadataDao: ConversationMetadataDao,
     private val sendManualReplyUseCase: SendManualReplyUseCase,
     savedStateHandle: SavedStateHandle,
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val chatExportFormatter: ChatExportFormatter = ChatExportFormatter()
 ) : ViewModel() {
 
     val contactName: String = savedStateHandle["contactName"] ?: ""
@@ -102,6 +45,9 @@ class ChatDetailViewModel @Inject constructor(
 
     private val _replyCapability = MutableStateFlow(ReplyCapability.AWAITING_ACTIVE_NOTIFICATION)
     val replyCapability: StateFlow<ReplyCapability> = _replyCapability
+
+    private val _uiEvents = Channel<ChatDetailUiEvent>(Channel.BUFFERED)
+    val uiEvents: Flow<ChatDetailUiEvent> = _uiEvents.receiveAsFlow()
 
     private data class InputState(
         val text: String,
@@ -328,11 +274,11 @@ class ChatDetailViewModel @Inject constructor(
         onExportReady: (String) -> Unit
     ) {
         viewModelScope.launch {
-            val sinceTimestamp = calculateSinceTimestamp(range, currentTimeMs)
+            val sinceTimestamp = chatExportFormatter.calculateSinceTimestamp(range, currentTimeMs)
             val messages = chatHistoryDao.getMessagesSince(contactName, sourceClass, sinceTimestamp)
             val storeName = userPreferencesRepository.getStoreNameSync()
             val botName = userPreferencesRepository.getBotNameSync()
-            val transcript = buildExportTranscript(
+            val transcript = chatExportFormatter.buildExportTranscript(
                 contactName = contactName,
                 sourceClass = sourceClass,
                 storeName = storeName,
@@ -354,7 +300,7 @@ class ChatDetailViewModel @Inject constructor(
         currentTimeMs: Long = System.currentTimeMillis()
     ) {
         viewModelScope.launch {
-            val sinceTimestamp = calculateClearSinceTimestamp(range, currentTimeMs)
+            val sinceTimestamp = chatExportFormatter.calculateClearSinceTimestamp(range, currentTimeMs)
             chatHistoryDao.deleteMessagesSince(contactName, sourceClass, sinceTimestamp)
 
             val latestRemaining = chatHistoryDao.getLatestMessageForSource(contactName, sourceClass)
@@ -375,45 +321,12 @@ class ChatDetailViewModel @Inject constructor(
     internal fun calculateClearSinceTimestamp(
         range: ClearChatTimeRange,
         currentTimeMs: Long = System.currentTimeMillis()
-    ): Long {
-        return when (range) {
-            ClearChatTimeRange.ALL_TIME -> 0L
-            ClearChatTimeRange.LAST_HOUR -> currentTimeMs - (1 * 60 * 60 * 1000L)
-            ClearChatTimeRange.LAST_TWO_HOURS -> currentTimeMs - (2 * 60 * 60 * 1000L)
-            ClearChatTimeRange.TODAY -> {
-                val cal = Calendar.getInstance().apply {
-                    timeInMillis = currentTimeMs
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                cal.timeInMillis
-            }
-        }
-    }
+    ): Long = chatExportFormatter.calculateClearSinceTimestamp(range, currentTimeMs)
 
     internal fun calculateSinceTimestamp(
         range: ExportTimeRange,
         currentTimeMs: Long = System.currentTimeMillis()
-    ): Long {
-        return when (range) {
-            ExportTimeRange.ALL_TIME -> 0L
-            ExportTimeRange.TODAY -> {
-                val cal = Calendar.getInstance().apply {
-                    timeInMillis = currentTimeMs
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                cal.timeInMillis
-            }
-            ExportTimeRange.LAST_TWO_HOURS -> {
-                currentTimeMs - (2 * 60 * 60 * 1000L)
-            }
-        }
-    }
+    ): Long = chatExportFormatter.calculateSinceTimestamp(range, currentTimeMs)
 
     internal fun buildExportTranscript(
         contactName: String,
@@ -423,48 +336,17 @@ class ChatDetailViewModel @Inject constructor(
         range: ExportTimeRange,
         exportTimestampMs: Long,
         messages: List<ChatHistoryEntity>
-    ): String {
-        val exportDateStr = formatExportTimestamp(exportTimestampMs)
-        val lines = mutableListOf<String>()
-        lines.add("سجل محادثة: $contactName ($sourceClass)")
-        lines.add("المتجر: $storeName")
-        lines.add("تاريخ التصدير: $exportDateStr")
-        lines.add("نطاق التصدير: ${range.exportLabel}")
-        lines.add(TRANSCRIPT_DIVIDER)
-
-        for (msg in messages) {
-            val timeStr = formatExportTimestamp(msg.timestamp)
-            val senderLabel = when {
-                msg.isFromUser || msg.senderType.equals("CUSTOMER", ignoreCase = true) -> "العميل"
-                msg.senderType.equals("MERCHANT_MANUAL", ignoreCase = true) -> "التاجر (Manual)"
-                else -> "$botName (AI)"
-            }
-            lines.add("[$timeStr] $senderLabel: ${msg.messageText}")
-        }
-
-        lines.add(TRANSCRIPT_DIVIDER)
-        return lines.joinToString("\n")
-    }
-
-    private fun formatExportTimestamp(timestampMs: Long): String {
-        return try {
-            val dt = Instant.fromEpochMilliseconds(timestampMs).toLocalDateTime(TimeZone.currentSystemDefault())
-            String.format(
-                Locale.US,
-                "%04d-%02d-%02d %02d:%02d:%02d",
-                dt.year,
-                dt.monthNumber,
-                dt.dayOfMonth,
-                dt.hour,
-                dt.minute,
-                dt.second
-            )
-        } catch (e: Exception) {
-            ""
-        }
-    }
+    ): String = chatExportFormatter.buildExportTranscript(
+        contactName = contactName,
+        sourceClass = sourceClass,
+        storeName = storeName,
+        botName = botName,
+        range = range,
+        exportTimestampMs = exportTimestampMs,
+        messages = messages
+    )
 
     companion object {
-        const val TRANSCRIPT_DIVIDER = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        const val TRANSCRIPT_DIVIDER = ChatExportFormatter.TRANSCRIPT_DIVIDER
     }
 }

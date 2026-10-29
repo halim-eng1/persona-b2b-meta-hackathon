@@ -10,6 +10,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
+import com.example.persona.features.settings.data.repository.InMemorySecureCredentialsRepository
+import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -18,8 +20,17 @@ import javax.inject.Singleton
 
 @Singleton
 class UserPreferencesRepository @Inject constructor(
-    private val dataStore: DataStore<Preferences>
+    private val dataStore: DataStore<Preferences>,
+    private val secureCredentialsRepository: SecureCredentialsRepository
 ) {
+    /**
+     * Backward-compatible constructor for unit tests or legacy callers
+     * providing only [DataStore]. Defaults to [InMemorySecureCredentialsRepository].
+     */
+    constructor(dataStore: DataStore<Preferences>) : this(
+        dataStore = dataStore,
+        secureCredentialsRepository = InMemorySecureCredentialsRepository()
+    )
     companion object {
         // ── Core toggles ──────────────────────────────────────────────────────
         val KEY_AUTO_REPLY_ENABLED = booleanPreferencesKey("auto_reply_enabled")
@@ -170,9 +181,9 @@ class UserPreferencesRepository @Inject constructor(
         prefs[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() } ?: DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE
     }
 
-    val nvidiaApiKeyFlow: Flow<String?> = dataStore.data.map { prefs ->
-        prefs[KEY_NVIDIA_API_KEY]?.takeIf { it.isNotBlank() }
-    }
+    val nvidiaApiKeyFlow: Flow<String?> = secureCredentialsRepository.nvidiaApiKeyFlow
+
+    val qwenApiKeyFlow: Flow<String?> = secureCredentialsRepository.qwenApiKeyFlow
 
     // ── Suspend setters ───────────────────────────────────────────────────────
 
@@ -335,30 +346,38 @@ class UserPreferencesRepository @Inject constructor(
         dataStore.data.first()[KEY_MEDIA_FALLBACK_MESSAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_MEDIA_FALLBACK_MESSAGE
 
     suspend fun setNvidiaApiKey(key: String?) {
+        secureCredentialsRepository.setNvidiaApiKey(key)
         dataStore.edit { prefs ->
-            if (key.isNullOrBlank()) {
-                prefs.remove(KEY_NVIDIA_API_KEY)
-            } else {
-                prefs[KEY_NVIDIA_API_KEY] = key.trim()
-            }
+            prefs.remove(KEY_NVIDIA_API_KEY)
         }
     }
 
-    suspend fun getNvidiaApiKeySync(): String =
-        dataStore.data.first()[KEY_NVIDIA_API_KEY]?.takeIf { it.isNotBlank() } ?: ""
+    suspend fun getNvidiaApiKeySync(): String {
+        val secureKey = secureCredentialsRepository.getNvidiaApiKey()
+        if (secureKey.isNotBlank()) return secureKey
+        val legacy = dataStore.data.first()[KEY_NVIDIA_API_KEY]?.takeIf { it.isNotBlank() } ?: ""
+        if (legacy.isNotBlank()) {
+            secureCredentialsRepository.setNvidiaApiKey(legacy)
+        }
+        return legacy
+    }
 
     suspend fun setQwenApiKey(key: String?) {
+        secureCredentialsRepository.setQwenApiKey(key)
         dataStore.edit { prefs ->
-            if (key.isNullOrBlank()) {
-                prefs.remove(KEY_QWEN_API_KEY)
-            } else {
-                prefs[KEY_QWEN_API_KEY] = key.trim()
-            }
+            prefs.remove(KEY_QWEN_API_KEY)
         }
     }
 
-    suspend fun getQwenApiKeySync(): String =
-        dataStore.data.first()[KEY_QWEN_API_KEY]?.takeIf { it.isNotBlank() } ?: ""
+    suspend fun getQwenApiKeySync(): String {
+        val secureKey = secureCredentialsRepository.getQwenApiKey()
+        if (secureKey.isNotBlank()) return secureKey
+        val legacy = dataStore.data.first()[KEY_QWEN_API_KEY]?.takeIf { it.isNotBlank() } ?: ""
+        if (legacy.isNotBlank()) {
+            secureCredentialsRepository.setQwenApiKey(legacy)
+        }
+        return legacy
+    }
 
     suspend fun getBlankReplyFallbackTemplateSync(): String =
         dataStore.data.first()[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() } ?: DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE

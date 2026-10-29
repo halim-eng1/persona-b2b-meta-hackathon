@@ -8,10 +8,11 @@ import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.features.auto_reply.domain.model.AuditLogItem
 import com.example.persona.features.auto_reply.domain.repository.AuditLogRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -31,36 +32,50 @@ class HomeViewModel @Inject constructor(
     private val conversationMetadataDao: ConversationMetadataDao
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            // Combine toggle state, reply count, recent 3 logs, and knowledge chunk count into a single coherent state
-            combine(
-                userPreferencesRepository.isAutoReplyEnabled,
-                auditLogRepository.observeReplyCount(),
-                auditLogRepository.observeLogs(limit = 3),
-                businessKnowledgeDao.observeChunkCount(),
-                conversationMetadataDao.observeAllConversations()
-            ) { isEnabled, replyCount, recentLogs, chunkCount, conversations ->
-                val contactToSource = conversations.associate { it.contactName to it.sourceClass }
-                val mappedLogs = recentLogs.map { log ->
-                    val resolvedSource = contactToSource[log.contactName] ?: log.sourceClass
-                    log.copy(sourceClass = resolvedSource)
+    /**
+     * Targeted log-to-contact resolution: resolves sourceClass only for the
+     * at-most-3 recent audit logs instead of observing all database conversations.
+     */
+    private val recentLogsFlow = auditLogRepository.observeLogs(limit = 3).map { recentLogs ->
+        if (recentLogs.isEmpty()) {
+            emptyList()
+        } else {
+            val contactToSource = mutableMapOf<String, String>()
+            for (log in recentLogs) {
+                if (!contactToSource.containsKey(log.contactName)) {
+                    val resolvedSource = conversationMetadataDao.getLatestConversationForContact(log.contactName)?.sourceClass
+                        ?: log.sourceClass
+                    contactToSource[log.contactName] = resolvedSource
                 }
-                HomeUiState(
-                    isAutoReplyEnabled = isEnabled,
-                    totalRepliesSent = replyCount,
-                    knowledgeChunkCount = chunkCount,
-                    recentActivity = mappedLogs,
-                    isLoading = false
-                )
-            }.collect { state ->
-                _uiState.value = state
+            }
+            recentLogs.map { log ->
+                val resolved = contactToSource[log.contactName] ?: log.sourceClass
+                log.copy(sourceClass = resolved)
             }
         }
     }
+
+    /**
+     * Unified reactive dashboard state with lifecycle-aware subscription policy.
+     */
+    val uiState: StateFlow<HomeUiState> = combine(
+        userPreferencesRepository.isAutoReplyEnabled,
+        auditLogRepository.observeReplyCount(),
+        recentLogsFlow,
+        businessKnowledgeDao.observeChunkCount()
+    ) { isEnabled, replyCount, recentLogs, chunkCount ->
+        HomeUiState(
+            isAutoReplyEnabled = isEnabled,
+            totalRepliesSent = replyCount,
+            knowledgeChunkCount = chunkCount,
+            recentActivity = recentLogs,
+            isLoading = false
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = HomeUiState()
+    )
 
     fun setAutoReplyEnabled(enabled: Boolean) {
         viewModelScope.launch {

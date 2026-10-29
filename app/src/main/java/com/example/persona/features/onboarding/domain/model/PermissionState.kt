@@ -1,17 +1,23 @@
 package com.example.persona.features.onboarding.domain.model
 
-import android.os.Build
-
+/**
+ * Pure Kotlin domain model representing the application's permission state.
+ * Fully decoupled from Android SDK / runtime framework dependencies.
+ */
 data class PermissionState(
     val isNotificationListenerGranted: Boolean = false,
     val isBatteryOptimizationIgnored: Boolean = false,
-    val isPostNotificationsGranted: Boolean = false,  // Android 13+ only
-    val isAutoStartEnabled: Boolean? = null,           // null = not applicable, false = applicable but not confirmed, true = confirmed
+    val isPostNotificationsGranted: Boolean = false,
+    val isPostNotificationsRequired: Boolean = false, // Injected by caller/platform checker (e.g. true on API 33+)
+    val isAutoStartEnabled: Boolean? = null,          // null = not applicable, false = applicable but not confirmed, true = confirmed
     val isManageStorageGranted: Boolean = false
 ) {
+    /**
+     * Pure domain validation of critical permissions required to run the auto-reply engine.
+     */
     val allCriticalGranted: Boolean
         get() = isNotificationListenerGranted &&
                 isBatteryOptimizationIgnored &&
-                (Build.VERSION.SDK_INT < 33 || isPostNotificationsGranted) &&
+                (!isPostNotificationsRequired || isPostNotificationsGranted) &&
                 (isAutoStartEnabled != false)
 }

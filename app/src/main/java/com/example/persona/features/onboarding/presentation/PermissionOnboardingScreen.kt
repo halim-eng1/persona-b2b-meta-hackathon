@@ -1,9 +1,5 @@
 package com.example.persona.features.onboarding.presentation
 
-import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -31,6 +27,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.persona.features.onboarding.data.AutoStartHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,6 +39,9 @@ fun PermissionOnboardingScreen(
     val context = LocalContext.current
     val state by viewModel.permissionState.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
+    val intentDispatcher = remember(context) {
+        PermissionIntentDispatcher(AutoStartHelper(context.applicationContext))
+    }
 
     // Refresh permissions whenever returning to screen from system settings
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -117,15 +117,7 @@ fun PermissionOnboardingScreen(
                     description = "Needed to detect and read incoming notifications from WhatsApp to calculate response matches.",
                     isGranted = state.isNotificationListenerGranted,
                     onGrantClick = {
-                        try {
-                            val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            // Fallback to general settings
-                            context.startActivity(Intent(Settings.ACTION_SETTINGS))
-                        }
+                        intentDispatcher.openNotificationListenerSettings(context)
                     }
                 )
 
@@ -137,23 +129,12 @@ fun PermissionOnboardingScreen(
                     description = "Prevents the system from shutting down the auto-responder background process when your device goes idle.",
                     isGranted = state.isBatteryOptimizationIgnored,
                     onGrantClick = {
-                        try {
-                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                data = Uri.parse("package:${context.packageName}")
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            // Fallback to battery saver settings page
-                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            context.startActivity(intent)
-                        }
+                        intentDispatcher.openBatteryOptimizationSettings(context)
                     }
                 )
 
-                // Step 3: POST_NOTIFICATIONS (Android 13+ only)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // Step 3: POST_NOTIFICATIONS (Platform requires it)
+                if (state.isPostNotificationsRequired) {
                     Spacer(modifier = Modifier.height(16.dp))
                     PermissionCard(
                         title = "Post Notifications",

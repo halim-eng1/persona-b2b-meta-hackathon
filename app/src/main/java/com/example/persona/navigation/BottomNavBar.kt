@@ -1,10 +1,5 @@
 package com.example.persona.navigation
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,13 +14,16 @@ import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.persona.core.database.dao.ConversationMetadataDao
-import com.example.persona.core.debug.DebugFlags
+import com.example.persona.ui.components.formatBadgeCount
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
+/**
+ * Backward-compatible holder for bottom navigation tab configuration.
+ */
 data class BottomNavItem(
     val screen: Screen,
     val label: String,
@@ -52,42 +50,34 @@ fun BottomNavBar(
     viewModel: BottomNavViewModel = hiltViewModel()
 ) {
     val unreadCount by viewModel.totalUnreadCount.collectAsStateWithLifecycle()
-
-    val items = buildList {
-        add(BottomNavItem(Screen.Home, "Home", Icons.Default.Home))
-        if (DebugFlags.ENABLE_CHATS_TAB) {
-            add(BottomNavItem(Screen.Chats, "Chats", Icons.Default.ChatBubble, hasBadge = true))
-        }
-        add(BottomNavItem(Screen.Orders, "Orders", Icons.Default.ShoppingBag))
-        add(BottomNavItem(Screen.KnowledgeManagement, "Knowledge", Icons.Default.Info))
-    }
+    val destinations = TopLevelDestination.activeDestinations
 
     NavigationBar(modifier = modifier) {
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentDestination = navBackStackEntry?.destination
 
-        items.forEach { item ->
-            val isSelected = currentDestination?.hasRoute(item.screen::class) == true
+        destinations.forEach { destination ->
+            val isSelected = currentDestination?.hasRoute(destination.screen::class) == true
 
             NavigationBarItem(
                 icon = {
-                    if (item.hasBadge && unreadCount > 0) {
+                    if (destination.hasBadge && unreadCount > 0) {
                         BadgedBox(
                             badge = {
                                 Badge {
-                                    Text(text = if (unreadCount > 99) "99+" else unreadCount.toString())
+                                    Text(text = formatBadgeCount(unreadCount) ?: "")
                                 }
                             }
                         ) {
-                            Icon(item.icon, contentDescription = item.label)
+                            Icon(destination.icon, contentDescription = destination.label)
                         }
                     } else {
-                        Icon(item.icon, contentDescription = item.label)
+                        Icon(destination.icon, contentDescription = destination.label)
                     }
                 },
                 label = {
                     Text(
-                        text = item.label,
+                        text = destination.label,
                         maxLines = 1,
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
@@ -96,7 +86,7 @@ fun BottomNavBar(
                 },
                 selected = isSelected,
                 onClick = {
-                    navController.navigate(item.screen) {
+                    navController.navigate(destination.screen) {
                         popUpTo(Screen.Home) {
                             saveState = true
                         }

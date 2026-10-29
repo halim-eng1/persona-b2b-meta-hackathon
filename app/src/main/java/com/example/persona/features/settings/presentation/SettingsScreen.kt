@@ -50,6 +50,8 @@ import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import com.example.persona.features.settings.presentation.components.CooldownOption
 import com.example.persona.features.settings.presentation.components.PersonaToneCard
+import com.example.persona.features.settings.presentation.components.PreferenceSection
+import com.example.persona.features.settings.presentation.components.PreferenceSwitchRow
 import com.example.persona.features.settings.presentation.components.ProfileOption
 import com.example.persona.features.settings.presentation.components.ThresholdOption
 
@@ -129,261 +131,182 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     // ── Bot & Brand Identity ──────────────────────────────────
-                    SettingsSection(
+                    PreferenceSection(
                         title = "BOT & BRAND IDENTITY",
                         subtitle = "Configure the persona name and store brand name used in AI conversations."
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = state.botName,
-                                onValueChange = { viewModel.setBotName(it) },
-                                label = { Text("Bot Representative Name") },
-                                placeholder = { Text("e.g. سارة / مساعد المبيعات") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            OutlinedTextField(
-                                value = state.storeName,
-                                onValueChange = { viewModel.setStoreName(it) },
-                                label = { Text("Store / Brand Name") },
-                                placeholder = { Text("e.g. متجرنا / متجر الأناقة") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
+                        OutlinedTextField(
+                            value = state.botName,
+                            onValueChange = { viewModel.setBotName(it) },
+                            label = { Text("Bot Representative Name") },
+                            placeholder = { Text("e.g. سارة / مساعد المبيعات") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = state.storeName,
+                            onValueChange = { viewModel.setStoreName(it) },
+                            label = { Text("Store / Brand Name") },
+                            placeholder = { Text("e.g. متجرنا / متجر الأناقة") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
 
                     // ── App Routing ───────────────────────────────────────────
-                    SettingsSection(
+                    PreferenceSection(
                         title = "APP ROUTING",
                         subtitle = "Select which WhatsApp apps Persona should intercept and reply to."
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Main WhatsApp App", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
-                                    Text("com.whatsapp (Standard)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                Switch(checked = state.listenMainApp, onCheckedChange = { viewModel.setListenMainApp(it) })
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("WhatsApp Business", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
-                                    Text("com.whatsapp.w4b (Business)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                Switch(checked = state.listenBusinessApp, onCheckedChange = { viewModel.setListenBusinessApp(it) })
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Cloned / Dual SIM App", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
-                                    Text("Secondary profile clone instances", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                Switch(checked = state.listenCloneApp, onCheckedChange = { viewModel.setListenCloneApp(it) })
-                            }
-                        }
+                        PreferenceSwitchRow(
+                            title = "Main WhatsApp App",
+                            subtitle = "com.whatsapp (Standard)",
+                            checked = state.listenMainApp,
+                            onCheckedChange = { viewModel.setListenMainApp(it) }
+                        )
+                        PreferenceSwitchRow(
+                            title = "WhatsApp Business",
+                            subtitle = "com.whatsapp.w4b (Business)",
+                            checked = state.listenBusinessApp,
+                            onCheckedChange = { viewModel.setListenBusinessApp(it) }
+                        )
+                        PreferenceSwitchRow(
+                            title = "Cloned / Dual SIM App",
+                            subtitle = "Secondary profile clone instances",
+                            checked = state.listenCloneApp,
+                            onCheckedChange = { viewModel.setListenCloneApp(it) }
+                        )
                     }
 
                     // ── WhatsApp Media & Voice Notes Storage Access ────────────
-                    SettingsSection(
+                    PreferenceSection(
                         title = "WHATSAPP MEDIA & VOICE ACCESS",
                         subtitle = "Allows Persona to read incoming WhatsApp images and voice notes directly."
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "All Files Access (WhatsApp Media)",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Text(
+                                    text = if (state.isStorageAccessGranted)
+                                        "مفعل ✓ - يمكن قراءة صور ورسائل الواتساب الصوتية ومعالجتها بالذكاء الاصطناعي"
+                                    else
+                                        "غير مفعل - يلزم منح الإذن لقراءة وسائط الواتساب والرسائل الصوتية",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (state.isStorageAccessGranted)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.error
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = { viewModel.requestStoragePermission(context) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.isStorageAccessGranted)
+                                        MaterialTheme.colorScheme.secondaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.primary
+                                )
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "All Files Access (WhatsApp Media)",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                                    )
-                                    Text(
-                                        text = if (state.isStorageAccessGranted)
-                                            "مفعل ✓ - يمكن قراءة صور ورسائل الواتساب الصوتية ومعالجتها بالذكاء الاصطناعي"
-                                        else
-                                            "غير مفعل - يلزم منح الإذن لقراءة وسائط الواتساب والرسائل الصوتية",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (state.isStorageAccessGranted)
-                                            MaterialTheme.colorScheme.primary
-                                        else
-                                            MaterialTheme.colorScheme.error
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Button(
-                                    onClick = { viewModel.requestStoragePermission(context) },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (state.isStorageAccessGranted)
-                                            MaterialTheme.colorScheme.secondaryContainer
-                                        else
-                                            MaterialTheme.colorScheme.primary
-                                    )
-                                ) {
-                                    Text(
-                                        text = if (state.isStorageAccessGranted) "مفعل ✓" else "منح الإذن",
-                                        color = if (state.isStorageAccessGranted)
-                                            MaterialTheme.colorScheme.onSecondaryContainer
-                                        else
-                                            MaterialTheme.colorScheme.onPrimary
-                                    )
-                                }
+                                Text(
+                                    text = if (state.isStorageAccessGranted) "مفعل ✓" else "منح الإذن",
+                                    color = if (state.isStorageAccessGranted)
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.onPrimary
+                                )
                             }
                         }
                     }
 
                     // ── Human Takeover & Safety ───────────────────────────────
-                    SettingsSection(
+                    PreferenceSection(
                         title = "HUMAN TAKEOVER & SAFETY",
                         subtitle = "Configure automated escalation and customer hand-off behavior."
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Auto-pause AI on Hand-off",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                                    )
-                                    Text(
-                                        text = "Automatically freeze bot replies for a contact when escalated to human customer service (HITL).",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Switch(
-                                    checked = state.isAutoPauseOnHitl,
-                                    onCheckedChange = { viewModel.onAutoPauseOnHitlToggled(it) }
-                                )
-                            }
-                        }
+                        PreferenceSwitchRow(
+                            title = "Auto-pause AI on Hand-off",
+                            subtitle = "Automatically freeze bot replies for a contact when escalated to human customer service (HITL).",
+                            checked = state.isAutoPauseOnHitl,
+                            onCheckedChange = { viewModel.onAutoPauseOnHitlToggled(it) }
+                        )
                     }
 
                     // ── Interception Templates ────────────────────────────────
-                    SettingsSection(
+                    PreferenceSection(
                         title = "RESPONSE TEMPLATES",
                         subtitle = "Customize templates for short-circuit replies (Greetings and Farewell / Closing intent)."
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = state.greetingTemplate,
-                                onValueChange = { viewModel.setGreetingTemplate(it) },
-                                label = { Text("Greeting Template") },
-                                modifier = Modifier.fillMaxWidth(),
-                                minLines = 2
-                            )
-                            OutlinedTextField(
-                                value = state.farewellTemplate,
-                                onValueChange = { viewModel.setFarewellTemplate(it) },
-                                label = { Text("Farewell / Closing Template") },
-                                modifier = Modifier.fillMaxWidth(),
-                                minLines = 2
-                            )
-                        }
+                        OutlinedTextField(
+                            value = state.greetingTemplate,
+                            onValueChange = { viewModel.setGreetingTemplate(it) },
+                            label = { Text("Greeting Template") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2
+                        )
+                        OutlinedTextField(
+                            value = state.farewellTemplate,
+                            onValueChange = { viewModel.setFarewellTemplate(it) },
+                            label = { Text("Farewell / Closing Template") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2
+                        )
                     }
 
                     // ── System Fallback & Holding Messages ────────────────────
-                    SettingsSection(
+                    PreferenceSection(
                         title = "SYSTEM FALLBACK & HOLDING MESSAGES",
                         subtitle = "Customize automated messages for support hand-offs (HITL), media failures, and blank AI fallbacks."
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = state.hitlHoldingMessage,
-                                onValueChange = { viewModel.setHitlHoldingMessage(it) },
-                                label = { Text("Human Support Holding Message (HITL)") },
-                                placeholder = { Text(UserPreferencesRepository.DEFAULT_HITL_HOLDING_MESSAGE) },
-                                modifier = Modifier.fillMaxWidth(),
-                                minLines = 2
-                            )
-                            OutlinedTextField(
-                                value = state.mediaFallbackMessage,
-                                onValueChange = { viewModel.setMediaFallbackMessage(it) },
-                                label = { Text("Media Fallback Message") },
-                                placeholder = { Text(UserPreferencesRepository.DEFAULT_MEDIA_FALLBACK_MESSAGE) },
-                                modifier = Modifier.fillMaxWidth(),
-                                minLines = 2
-                            )
-                            OutlinedTextField(
-                                value = state.blankReplyFallbackTemplate,
-                                onValueChange = { viewModel.setBlankReplyFallbackTemplate(it) },
-                                label = { Text("Blank Reply Fallback Template (%s = Store Name)") },
-                                placeholder = { Text(UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE) },
-                                modifier = Modifier.fillMaxWidth(),
-                                minLines = 2
-                            )
-                        }
+                        OutlinedTextField(
+                            value = state.hitlHoldingMessage,
+                            onValueChange = { viewModel.setHitlHoldingMessage(it) },
+                            label = { Text("Human Support Holding Message (HITL)") },
+                            placeholder = { Text(UserPreferencesRepository.DEFAULT_HITL_HOLDING_MESSAGE) },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2
+                        )
+                        OutlinedTextField(
+                            value = state.mediaFallbackMessage,
+                            onValueChange = { viewModel.setMediaFallbackMessage(it) },
+                            label = { Text("Media Fallback Message") },
+                            placeholder = { Text(UserPreferencesRepository.DEFAULT_MEDIA_FALLBACK_MESSAGE) },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2
+                        )
+                        OutlinedTextField(
+                            value = state.blankReplyFallbackTemplate,
+                            onValueChange = { viewModel.setBlankReplyFallbackTemplate(it) },
+                            label = { Text("Blank Reply Fallback Template (%s = Store Name)") },
+                            placeholder = { Text(UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE) },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2
+                        )
                     }
 
                     // ── AI Persona Tone ─────────────────────────────────────
-                    SettingsSection(
+                    PreferenceSection(
                         title = "AI PERSONA TONE",
                         subtitle = "Choose how the AI communicates with your customers."
                     ) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            PersonaTone.entries.forEach { tone ->
-                                PersonaToneCard(
-                                    tone = tone,
-                                    isSelected = state.personaTone == tone,
-                                    onSelect = { viewModel.setPersonaTone(tone) }
-                                )
-                            }
+                        PersonaTone.entries.forEach { tone ->
+                            PersonaToneCard(
+                                tone = tone,
+                                isSelected = state.personaTone == tone,
+                                onSelect = { viewModel.setPersonaTone(tone) }
+                            )
                         }
                     }
 
                     // ── Similarity Threshold ──────────────────────────────────
-                    SettingsSection(
+                    PreferenceSection(
                         title = "MATCH SENSITIVITY",
                         subtitle = "Controls how closely incoming messages must match your training data."
                     ) {
@@ -397,7 +320,7 @@ fun SettingsScreen(
                     }
 
                     // ── Cooldown Duration ─────────────────────────────────────
-                    SettingsSection(
+                    PreferenceSection(
                         title = "COOLDOWN DURATION",
                         subtitle = "Minimum wait time between auto-replies to the same contact."
                     ) {
@@ -411,74 +334,30 @@ fun SettingsScreen(
                     }
 
                     // ── Reply Precision Delay ─────────────────────────────────
-                    SettingsSection(
+                    PreferenceSection(
                         title = "REPLY PRECISION DELAY",
                         subtitle = "Configure a delay before auto-reply to simulate natural response time."
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = state.replyDelayInput,
-                                onValueChange = { viewModel.setReplyDelayInput(it) },
-                                label = { Text("Reply Delay (Seconds)") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                                isError = state.replyDelayError != null,
-                                supportingText = {
-                                    if (state.replyDelayError != null) {
-                                        Text(
-                                            text = state.replyDelayError!!,
-                                            color = MaterialTheme.colorScheme.error
-                                        )
-                                    }
+                        OutlinedTextField(
+                            value = state.replyDelayInput,
+                            onValueChange = { viewModel.setReplyDelayInput(it) },
+                            label = { Text("Reply Delay (Seconds)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            isError = state.replyDelayError != null,
+                            supportingText = {
+                                if (state.replyDelayError != null) {
+                                    Text(
+                                        text = state.replyDelayError!!,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
                                 }
-                            )
-                        }
+                            }
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsSection(
-    title: String,
-    subtitle: String? = null,
-    content: @Composable () -> Unit
-) {
-    Column {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelSmall.copy(
-                letterSpacing = 1.2.sp,
-                fontWeight = FontWeight.SemiBold
-            ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        if (subtitle != null) {
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
-            Column(modifier = Modifier.padding(4.dp)) {
-                content()
             }
         }
     }

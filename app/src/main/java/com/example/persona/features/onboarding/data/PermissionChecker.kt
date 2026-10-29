@@ -100,6 +100,7 @@ class PermissionChecker @Inject constructor(
         isNotificationListenerGranted = isNotificationListenerEnabled(),
         isBatteryOptimizationIgnored = isBatteryOptimizationIgnored(),
         isPostNotificationsGranted = isPostNotificationsGranted(),
+        isPostNotificationsRequired = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU,
         isAutoStartEnabled = detectAutoStartCapability(),
         isManageStorageGranted = isManageStorageGranted()
     )

@@ -7,62 +7,45 @@ import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.database.entity.OrderStatusCount
-import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.logging.PersonaLogTags
+import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.network.dto.ChatMessage
-import com.example.persona.core.network.dto.GroqRequest
-import com.example.persona.core.network.dto.GroqResponse
-import com.example.persona.core.network.dto.NvidiaRequest
-import com.example.persona.core.network.dto.NvidiaResponse
-import com.example.persona.core.network.dto.OpenRouterRequest
-import com.example.persona.core.network.dto.OpenRouterResponse
-import com.example.persona.core.network.dto.QwenChatRequest
-import com.example.persona.core.network.dto.QwenChatResponse
-import com.example.persona.core.network.dto.ReasoningConfig
+import com.example.persona.features.auto_reply.data.media.ImagePayloadPreprocessor
+import com.example.persona.features.auto_reply.data.providers.GeminiClient
+import com.example.persona.features.auto_reply.data.providers.GroqClient
+import com.example.persona.features.auto_reply.data.providers.NaraRouterClient
+import com.example.persona.features.auto_reply.data.providers.NvidiaNimClient
+import com.example.persona.features.auto_reply.data.providers.OpenRouterClient
+import com.example.persona.features.auto_reply.data.providers.QwenCloudClient
 import com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
-import com.example.persona.features.auto_reply.domain.orchestrator.ReasoningLeakSanitizer
 import com.example.persona.features.auto_reply.domain.repository.ReplyGenerationRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.request.bearerAuth
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
-import io.ktor.http.isSuccess
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.addJsonObject
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Cloud LLM generation via Groq Cloud (Primary Tier 1) with OpenRouter Failover (Tier 2).
- * Delegates prompt assembly and token budgeting to [PromptContextBuilder].
+ * Lean coordinator for cloud LLM response generation.
+ * Orchestrates multi-tier failover chains across Qwen, Gemini, NVIDIA, Groq, and OpenRouter,
+ * delegating network transports and image processing to dedicated single-responsibility components.
  */
 @Singleton
 class ReplyGenerationRepositoryImpl @Inject constructor(
     private val httpClient: HttpClient,
     private val promptContextBuilder: PromptContextBuilder,
     @ApplicationContext private val context: Context,
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val qwenClient: QwenCloudClient,
+    private val nvidiaClient: NvidiaNimClient,
+    private val groqClient: GroqClient,
+    private val geminiClient: GeminiClient,
+    private val openRouterClient: OpenRouterClient,
+    private val naraRouterClient: NaraRouterClient,
+    private val imagePreprocessor: ImagePayloadPreprocessor
 ) : ReplyGenerationRepository {
 
     /** Test seam: overrides API keys and supplies dependencies explicitly. */
@@ -79,7 +62,19 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         qwenApiKey: String? = "",
         geminiApiKey: String? = "",
         geminiApiKey2: String? = ""
-    ) : this(httpClient, promptContextBuilder, context, userPreferencesRepository) {
+    ) : this(
+        httpClient = httpClient,
+        promptContextBuilder = promptContextBuilder,
+        context = context,
+        userPreferencesRepository = userPreferencesRepository,
+        qwenClient = QwenCloudClient(httpClient),
+        nvidiaClient = NvidiaNimClient(httpClient),
+        groqClient = GroqClient(httpClient),
+        geminiClient = GeminiClient(httpClient),
+        openRouterClient = OpenRouterClient(httpClient),
+        naraRouterClient = NaraRouterClient(httpClient),
+        imagePreprocessor = ImagePayloadPreprocessor()
+    ) {
         this.primaryApiKeyOverride = primaryApiKey
         this.fallbackApiKeyOverride = fallbackApiKey
         this.groqPrimaryApiKeyOverride = groqPrimaryApiKey
@@ -89,6 +84,26 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         this.geminiApiKeyOverride = geminiApiKey
         this.geminiApiKey2Override = geminiApiKey2
     }
+
+    /** Secondary convenience constructor preserving standard 4-arg instantiations. */
+    constructor(
+        httpClient: HttpClient,
+        promptContextBuilder: PromptContextBuilder,
+        context: Context,
+        userPreferencesRepository: UserPreferencesRepository
+    ) : this(
+        httpClient = httpClient,
+        promptContextBuilder = promptContextBuilder,
+        context = context,
+        userPreferencesRepository = userPreferencesRepository,
+        qwenClient = QwenCloudClient(httpClient),
+        nvidiaClient = NvidiaNimClient(httpClient),
+        groqClient = GroqClient(httpClient),
+        geminiClient = GeminiClient(httpClient),
+        openRouterClient = OpenRouterClient(httpClient),
+        naraRouterClient = NaraRouterClient(httpClient),
+        imagePreprocessor = ImagePayloadPreprocessor()
+    )
 
     private var primaryApiKeyOverride: String? = null
     private var fallbackApiKeyOverride: String? = null
@@ -125,8 +140,6 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
     companion object {
         private const val TAG = PersonaLogTags.LLM
-        private val AUDIO_EXTENSIONS = setOf("opus", "ogg", "mp3", "m4a", "wav", "aac", "m4p", "amr")
-        private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
 
         const val MODEL_TIMEOUT_MS = 10_000L
         const val VISION_MODEL_TIMEOUT_MS = 25_000L
@@ -134,84 +147,29 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         const val QWEN_STREAM_TIMEOUT_MS = 25_000L
         private const val ABSOLUTE_FAILOVER_CEILING = 8000
 
-        private val jsonParser = Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-        }
-
         const val HITL_FALLBACK_JSON =
             """{"action":"HITL","refined_search_keyword":null,"order_action":null,"final_reply_text":"${PromptContextBuilder.CANONICAL_HITL_MESSAGE}","extracted_order":null}"""
 
         val CANONICAL_HITL_MESSAGE = PromptContextBuilder.CANONICAL_HITL_MESSAGE
 
-        /** Tier 1: QwenCloud Multimodal Vision (Primary) */
-        val VISION_QWEN_MODELS = listOf(
-            "qwen3.8-omni-flash",
-            "qwen3.8-flash"
-        )
-        val VISION_GROQ_MODELS = listOf("qwen/qwen3.8-27b")
-        val VISION_GEMINI_MODELS = listOf("gemini-3.8-flash")
-        val VISION_NVIDIA_MODELS = listOf(
-            "meta/llama-3.2-11b-vision-instruct",
-            "nvidia/nemotron-3.5-super-vl-120b-a12b"
-        )
-        val VISION_OPENROUTER_MODELS = listOf("nvidia/nemotron-3.5-super-vl:free")
+        val VISION_QWEN_MODELS = QwenCloudClient.VISION_QWEN_MODELS
+        val VISION_GROQ_MODELS = GroqClient.VISION_GROQ_MODELS
+        val VISION_GEMINI_MODELS = GeminiClient.VISION_GEMINI_MODELS
+        val VISION_NVIDIA_MODELS = NvidiaNimClient.VISION_NVIDIA_MODELS
+        val VISION_OPENROUTER_MODELS = OpenRouterClient.VISION_OPENROUTER_MODELS
 
-        /** Tier 1: QwenCloud Active Quotas (Primary Text & VIP Reasoning) */
-        val QWEN_TEXT_MODELS = listOf(
-            "deepseek-v4.1-flash",
-            "qwen3.8-max",
-            "deepseek-v4-pro-0813",
-            "qwen3.8-flash",
-            "qwen3.7-plus",
-            "qwen3.7-flash",
-            "qwen3.6-flash",
-            "qwen3.5-flash",
-            "qwen3-coder-flash",
-            "qwen3.6-27b"
-        )
-
-        /** Tier 1.5: Gemini */
-        val GEMINI_TEXT_MODELS = listOf(
-            "gemini-3.1-flash-lite",
-            "gemini-3.5-flash-lite",
-            "gemini-3.8-flash"
-        )
-
-        /** Tier 2: NVIDIA NIM (Ultra-550B with reasoning_effort='none' & Bolt-e4b) */
-        val NVIDIA_TEXT_MODELS = listOf(
-            "nvidia/nemotron-3-ultra-550b-a55b",
-            "nvidia/nemotron-3.5-bolt-e4b"
-        )
-
-        /** Tier 3: Groq Cloud (Secondary) */
-        val GROQ_MODELS = listOf(
-            "openai/gpt-oss-120b",
-            "openai/gpt-oss-20b"
-        )
-
-        /** Tier 4: Nara Router & OpenRouter (Free Fallback) */
-        val NARA_TEXT_MODELS = listOf("laguna-s-2.1")
-        val OPENROUTER_FAILOVER_MODELS = listOf(
-            "nvidia/nemotron-3-ultra-550b-a55b:free",
-            "liquid/lfm-2.5-2.6b:free",
-            "openrouter/free"
-        )
-
+        val QWEN_TEXT_MODELS = QwenCloudClient.QWEN_TEXT_MODELS
+        val GEMINI_TEXT_MODELS = GeminiClient.GEMINI_TEXT_MODELS
+        val NVIDIA_TEXT_MODELS = NvidiaNimClient.NVIDIA_TEXT_MODELS
+        val GROQ_MODELS = GroqClient.GROQ_MODELS
+        val NARA_TEXT_MODELS = NaraRouterClient.NARA_TEXT_MODELS
+        val OPENROUTER_FAILOVER_MODELS = OpenRouterClient.OPENROUTER_FAILOVER_MODELS
         val FAILOVER_MODELS = OPENROUTER_FAILOVER_MODELS
+        val REASONING_MODELS = OpenRouterClient.REASONING_MODELS
 
-        internal val REASONING_MODELS = setOf(
-            "nvidia/nemotron-3-ultra-550b-a55b:free",
-            "liquid/lfm-2.5-2.6b:free",
-            "cohere/north-mini-code:free"
-        )
-
-        // Derived from the single-source builders; not `const` because the rule text is
-        // now assembled by Kotlin functions rather than compile-time literals.
         val SYSTEM_PROMPT_FIRST_PASS = PromptContextBuilder.SYSTEM_PROMPT_FIRST_PASS
         val SYSTEM_PROMPT_FINAL_PASS = PromptContextBuilder.SYSTEM_PROMPT_FINAL_PASS
 
-        // Backward compatibility bridges for existing static callers & tests
         internal fun formatStoreKnowledge(
             candidates: List<RetrievalCandidate>,
             budgetTokens: Int = 2500
@@ -301,99 +259,59 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         }
     }
 
-    // ── Public API ─────────────────────────────────────────────────────────
+    sealed interface CallResult {
+        data class Success(val content: String) : CallResult
+        data object RateLimited : CallResult
+        data class AuthOrQuotaError(val code: Int) : CallResult
+        data class ServerError(val code: Int) : CallResult
+        data object Timeout : CallResult
+        data object Failed : CallResult
+    }
 
     internal fun compressAndScaleImage(
         filePath: String,
         maxDimension: Int = 1024,
         quality: Int = 80
-    ): ByteArray? {
-        val file = java.io.File(filePath)
-        if (!file.exists() || file.length() == 0L) return null
+    ): ByteArray? = imagePreprocessor.compressAndScaleImage(filePath, maxDimension, quality)
 
-        val ext = file.extension.lowercase()
-        if (AUDIO_EXTENSIONS.contains(ext) || !IMAGE_EXTENSIONS.contains(ext)) {
-            Log.d(TAG, "compressAndScaleImage: Skipping non-image file with extension .$ext ($filePath)")
-            return null
-        }
+    internal fun resolveImageUri(filePathOrUri: String?): String? =
+        imagePreprocessor.resolveImageUri(filePathOrUri)
 
-        return try {
-            val boundsOptions = android.graphics.BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-            }
-            android.graphics.BitmapFactory.decodeFile(file.absolutePath, boundsOptions)
-            val origWidth = boundsOptions.outWidth
-            val origHeight = boundsOptions.outHeight
-
-            if (origWidth > 0 && origHeight > 0) {
-                var sampleSize = 1
-                val maxDim = maxOf(origWidth, origHeight)
-                while ((maxDim / (sampleSize * 2)) >= maxDimension) {
-                    sampleSize *= 2
-                }
-                val decodeOptions = android.graphics.BitmapFactory.Options().apply {
-                    inSampleSize = sampleSize
-                }
-                val decoded = android.graphics.BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
-                if (decoded != null) {
-                    val w = decoded.width
-                    val h = decoded.height
-                    val finalBitmap = if (w > maxDimension || h > maxDimension) {
-                        val ratio = minOf(maxDimension.toFloat() / w, maxDimension.toFloat() / h)
-                        val targetW = (w * ratio).toInt().coerceAtLeast(1)
-                        val targetH = (h * ratio).toInt().coerceAtLeast(1)
-                        val scaled = android.graphics.Bitmap.createScaledBitmap(decoded, targetW, targetH, true)
-                        if (scaled != decoded) {
-                            decoded.recycle()
-                        }
-                        scaled
-                    } else {
-                        decoded
-                    }
-
-                    try {
-                        val stream = java.io.ByteArrayOutputStream()
-                        finalBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, stream)
-                        val compressed = stream.toByteArray()
-                        Log.d(TAG, "Image scaled and compressed to ${compressed.size} bytes (target quality=$quality)")
-                        compressed
-                    } finally {
-                        finalBitmap.recycle()
-                    }
-                } else {
-                    file.readBytes()
-                }
-            } else {
-                file.readBytes()
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Image decoding/scaling failed for $filePath, falling back to raw file: ${e.message}")
-            try { file.readBytes() } catch (_: Exception) { null }
-        }
+    internal suspend fun callQwenCloud(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int
+    ): CallResult {
+        val apiKey = qwenApiKey.ifBlank { userPreferencesRepository.getQwenApiKeySync() }.trim()
+        return qwenClient.call(model, messages, maxTokens, apiKey)
     }
 
-    internal fun resolveImageUri(filePathOrUri: String?): String? {
-        if (filePathOrUri.isNullOrBlank()) return null
-        if (filePathOrUri.startsWith("data:image/") || filePathOrUri.startsWith("http://") || filePathOrUri.startsWith("https://")) {
-            return filePathOrUri
-        }
-        val file = java.io.File(filePathOrUri)
-        val ext = file.extension.lowercase()
-        if (AUDIO_EXTENSIONS.contains(ext) || !IMAGE_EXTENSIONS.contains(ext)) {
-            Log.d(TAG, "resolveImageUri: Ignoring non-image media file path: $filePathOrUri")
-            return null
-        }
-        return try {
-            val bytes = compressAndScaleImage(filePathOrUri, maxDimension = 1024, quality = 80)
-            if (bytes != null && bytes.isNotEmpty()) {
-                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                "data:image/jpeg;base64,$base64"
-            } else null
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to encode media image to Base64: ${e.message}")
-            null
-        }
+    internal suspend fun callNvidiaNim(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int
+    ): CallResult {
+        val apiKey = nvidiaApiKey.ifBlank { userPreferencesRepository.getNvidiaApiKeySync() }.trim()
+        return nvidiaClient.call(model, messages, maxTokens, apiKey)
     }
+
+    internal suspend fun callGroq(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int
+    ): CallResult = groqClient.call(model, messages, maxTokens, groqPrimaryApiKey, groqFallbackApiKey)
+
+    internal suspend fun callGemini(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int
+    ): CallResult = geminiClient.call(model, messages, maxTokens, geminiApiKey, geminiApiKey2)
+
+    internal suspend fun callOpenRouter(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int
+    ): CallResult = openRouterClient.call(model, messages, maxTokens, primaryApiKey, fallbackApiKey)
 
     override suspend fun generateReply(
         notification: ProcessedNotification,
@@ -535,17 +453,6 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         )
         val effectiveMaxTokens = if (isMultimodal) 1500 else maxTokens
         return executeFailoverChain(messages, effectiveMaxTokens)
-    }
-
-    // ── Internal / Private Implementation ───────────────────────────────
-
-    internal sealed interface CallResult {
-        data class Success(val content: String) : CallResult
-        data object RateLimited : CallResult
-        data class AuthOrQuotaError(val code: Int) : CallResult
-        data class ServerError(val code: Int) : CallResult
-        data object Timeout : CallResult
-        data object Failed : CallResult
     }
 
     internal suspend fun executeFailoverChain(messages: List<ChatMessage>, maxTokens: Int): String? {
@@ -773,785 +680,4 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         PersonaLogger.d(TAG, "All models failed — HITL fallback")
         return HITL_FALLBACK_JSON
     }
-
-    internal suspend fun callQwenCloud(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int
-    ): CallResult = withContext(Dispatchers.IO) {
-        val apiKey = qwenApiKey.ifBlank { userPreferencesRepository.getQwenApiKeySync() }.trim()
-        if (apiKey.isBlank()) {
-            Log.w(TAG, "Qwen API key is blank; skipping request for model $model")
-            return@withContext CallResult.Failed
-        }
-
-        val keyMasked = maskKey(apiKey)
-        val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
-        val isVision = model in VISION_QWEN_MODELS || hasImage
-        val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
-        val effectiveMaxTokens = if (isVision) maxOf(maxTokens, 1500) else maxTokens
-        PersonaLogger.i(TAG, "Attempting [QwenCloud] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
-        Log.i(TAG, "Attempting [QwenCloud] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
-
-        try {
-            withTimeout(timeoutMs) {
-                val response = httpClient.post(BuildConfig.QWEN_BASE_URL) {
-                    contentType(ContentType.Application.Json)
-                    bearerAuth(apiKey)
-                    setBody(
-                        QwenChatRequest(
-                            model = model,
-                            messages = messages,
-                            temperature = 0.5f,
-                            maxTokens = effectiveMaxTokens,
-                            stream = false
-                        )
-                    )
-                }
-
-                when {
-                    response.status.value == 429 -> {
-                        PersonaLogger.w(TAG, "Rate limited (429) on [QwenCloud] model $model (key $keyMasked)")
-                        Log.w(TAG, "Rate limited (429) on [QwenCloud] model $model (key $keyMasked)")
-                        CallResult.RateLimited
-                    }
-                    response.status.value in listOf(401, 402, 403) -> {
-                        PersonaLogger.w(TAG, "Auth/quota error (${response.status.value}) on [QwenCloud] model $model (key $keyMasked)")
-                        Log.w(TAG, "Auth/quota error (${response.status.value}) on [QwenCloud] model $model (key $keyMasked)")
-                        CallResult.AuthOrQuotaError(response.status.value)
-                    }
-                    response.status.value in 500..599 -> {
-                        Log.w(TAG, "Server error (${response.status.value}) on [QwenCloud] model $model (key $keyMasked)")
-                        CallResult.ServerError(response.status.value)
-                    }
-                    response.status.isSuccess() -> {
-                        val responseBody = response.body<String>()
-                        PersonaLogger.d(PersonaLogTags.LLM, "📥 Raw LLM Output from [QwenCloud] $model: $responseBody")
-                        val body = jsonParser.decodeFromString<QwenChatResponse>(responseBody)
-                        val content = body.choices?.firstOrNull()?.message?.content
-                        if (content.isNullOrBlank()) {
-                            Log.w(TAG, "Empty content in successful response from [QwenCloud] $model (key $keyMasked)")
-                            CallResult.Failed
-                        } else {
-                            try {
-                                ReasoningLeakSanitizer.decodeAgenticResponseSafely(content)
-                                CallResult.Success(content)
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Invalid JSON content in response from [QwenCloud] $model (key $keyMasked): $content", e)
-                                CallResult.Failed
-                            }
-                        }
-                    }
-                    else -> {
-                        Log.w(TAG, "HTTP ${response.status.value} error from [QwenCloud] $model (key $keyMasked)")
-                        CallResult.Failed
-                    }
-                }
-            }
-        } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "Timeout (${timeoutMs}ms) on [QwenCloud] model $model (key $keyMasked)")
-            CallResult.Timeout
-        } catch (e: Exception) {
-            when (e) {
-                is java.net.SocketTimeoutException,
-                is io.ktor.client.network.sockets.SocketTimeoutException -> {
-                    Log.w(TAG, "Socket timeout on [QwenCloud] model $model (key $keyMasked): ${e.message}")
-                    CallResult.Timeout
-                }
-                else -> {
-                    Log.e(TAG, "Network error on [QwenCloud] model $model (key $keyMasked)", e)
-                    CallResult.Failed
-                }
-            }
-        }
-    }
-
-    internal suspend fun callNvidiaNim(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int
-    ): CallResult = withContext(Dispatchers.IO) {
-        val apiKey = nvidiaApiKey.ifBlank { userPreferencesRepository.getNvidiaApiKeySync() }.trim()
-        if (apiKey.isBlank()) {
-            Log.w(TAG, "NVIDIA API key is blank; skipping request for model $model")
-            return@withContext CallResult.Failed
-        }
-
-        val keyMasked = maskKey(apiKey)
-        val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
-        val isVision = model in VISION_NVIDIA_MODELS || hasImage
-        val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
-        val effectiveMaxTokens = if (model.contains("super-vl")) maxOf(maxTokens, 1500) else maxTokens
-        val reasoningEffort = if (model.contains("ultra-550b")) "none" else null
-        val temperature = if (model.contains("ultra-550b")) 1.0f else 0.5f
-        PersonaLogger.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
-        Log.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
-
-        try {
-            withTimeout(timeoutMs) {
-                val response = httpClient.post(BuildConfig.NVIDIA_BASE_URL) {
-                    contentType(ContentType.Application.Json)
-                    bearerAuth(apiKey)
-                    setBody(
-                        NvidiaRequest(
-                            model = model,
-                            messages = messages,
-                            temperature = temperature,
-                            maxTokens = effectiveMaxTokens,
-                            reasoningEffort = reasoningEffort
-                        )
-                    )
-                }
-
-                when {
-                    response.status.value == 429 -> {
-                        Log.w(TAG, "Rate limited (429) on [NVIDIA NIM] model $model (key $keyMasked)")
-                        CallResult.RateLimited
-                    }
-                    response.status.value in listOf(401, 402, 403) -> {
-                        Log.w(TAG, "Auth/quota error (${response.status.value}) on [NVIDIA NIM] model $model (key $keyMasked)")
-                        CallResult.AuthOrQuotaError(response.status.value)
-                    }
-                    response.status.value in 500..599 -> {
-                        Log.w(TAG, "Server error (${response.status.value}) on [NVIDIA NIM] model $model (key $keyMasked)")
-                        CallResult.ServerError(response.status.value)
-                    }
-                    response.status.isSuccess() -> {
-                        val responseBody = response.body<String>()
-                        PersonaLogger.d(PersonaLogTags.LLM, "📥 Raw LLM Output from [NVIDIA NIM] $model: $responseBody")
-                        val body = jsonParser.decodeFromString<NvidiaResponse>(responseBody)
-                        val content = body.choices?.firstOrNull()?.message?.content
-                        if (content.isNullOrBlank()) {
-                            Log.w(TAG, "Empty content in successful response from [NVIDIA NIM] $model (key $keyMasked)")
-                            CallResult.Failed
-                        } else {
-                            try {
-                                ReasoningLeakSanitizer.decodeAgenticResponseSafely(content)
-                                CallResult.Success(content)
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Invalid JSON content in response from [NVIDIA NIM] $model (key $keyMasked): $content", e)
-                                CallResult.Failed
-                            }
-                        }
-                    }
-                    else -> {
-                        Log.w(TAG, "HTTP ${response.status.value} error from [NVIDIA NIM] $model (key $keyMasked)")
-                        CallResult.Failed
-                    }
-                }
-            }
-        } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "Timeout (${timeoutMs}ms) on [NVIDIA NIM] model $model (key $keyMasked)")
-            CallResult.Timeout
-        } catch (e: Exception) {
-            when (e) {
-                is java.net.SocketTimeoutException,
-                is io.ktor.client.network.sockets.SocketTimeoutException -> {
-                    Log.w(TAG, "Socket timeout on [NVIDIA NIM] model $model (key $keyMasked): ${e.message}")
-                    CallResult.Timeout
-                }
-                else -> {
-                    Log.e(TAG, "Network error on [NVIDIA NIM] model $model (key $keyMasked)", e)
-                    CallResult.Failed
-                }
-            }
-        }
-    }
-
-    internal suspend fun callGroq(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int
-    ): CallResult = withContext(Dispatchers.IO) {
-        val primary = groqPrimaryApiKey.trim()
-        val fallback = groqFallbackApiKey.trim()
-
-        val effectivePrimary = primary.ifBlank { fallback }
-        val hasDistinctFallback = fallback.isNotBlank() && fallback != effectivePrimary
-
-        if (effectivePrimary.isBlank()) {
-            Log.w(TAG, "No Groq API keys configured; skipping Groq model $model")
-            return@withContext CallResult.Failed
-        }
-
-        val primaryMasked = maskKey(effectivePrimary)
-        PersonaLogger.i(TAG, "Attempting [Groq] model $model with key $primaryMasked")
-        Log.i(TAG, "Attempting [Groq] model $model with key $primaryMasked")
-
-        val primaryResult = executeSingleGroqCall(
-            model = model,
-            messages = messages,
-            maxTokens = maxTokens,
-            apiKey = effectivePrimary
-        )
-
-        if (primaryResult is CallResult.Success) {
-            return@withContext primaryResult
-        }
-
-        val isKeyOrServerError = primaryResult is CallResult.RateLimited ||
-            primaryResult is CallResult.AuthOrQuotaError ||
-            primaryResult is CallResult.ServerError
-
-        if (hasDistinctFallback && isKeyOrServerError) {
-            val fallbackMasked = maskKey(fallback)
-            Log.w(
-                TAG,
-                "Primary Groq key ($primaryMasked) failed on model $model with $primaryResult. " +
-                    "Falling back to GROQ_API_KEY_V2 ($fallbackMasked)."
-            )
-            PersonaLogger.w(
-                TAG,
-                "Primary Groq key ($primaryMasked) failed on model $model with $primaryResult -> fallback to GROQ_API_KEY_V2 ($fallbackMasked)"
-            )
-            PersonaLogger.i(TAG, "Attempting [Groq] model $model with key $fallbackMasked")
-
-            val fallbackResult = executeSingleGroqCall(
-                model = model,
-                messages = messages,
-                maxTokens = maxTokens,
-                apiKey = fallback
-            )
-
-            if (fallbackResult is CallResult.Success) {
-                Log.i(TAG, "Fallback GROQ_API_KEY_V2 succeeded on model $model")
-                PersonaLogger.i(TAG, "Fallback GROQ_API_KEY_V2 succeeded on model $model")
-                return@withContext fallbackResult
-            }
-
-            Log.w(
-                TAG,
-                "Fallback GROQ_API_KEY_V2 also failed on model $model with $fallbackResult"
-            )
-            return@withContext fallbackResult
-        }
-
-        primaryResult
-    }
-
-    internal suspend fun executeSingleGroqCall(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int,
-        apiKey: String
-    ): CallResult {
-        if (apiKey.isBlank()) {
-            Log.w(TAG, "Groq API key is blank; skipping request for model $model")
-            return CallResult.Failed
-        }
-
-        val keyMasked = maskKey(apiKey)
-        val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
-        val isVision = model in VISION_GROQ_MODELS || hasImage
-        val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
-        val reasoningEffort = if (isVision) null else "low"
-
-        return try {
-            withTimeout(timeoutMs) {
-                var response = httpClient.post(BuildConfig.GROQ_BASE_URL) {
-                    contentType(ContentType.Application.Json)
-                    bearerAuth(apiKey)
-                    setBody(
-                        GroqRequest(
-                            model = model,
-                            messages = messages,
-                            maxCompletionTokens = maxTokens,
-                            reasoningEffort = reasoningEffort
-                        )
-                    )
-                }
-
-                if (response.status.value == 400 && !isVision) {
-                    Log.w(TAG, "HTTP 400 on [Groq] $model with reasoning_effort. Retrying without reasoning payload.")
-                    response = httpClient.post(BuildConfig.GROQ_BASE_URL) {
-                        contentType(ContentType.Application.Json)
-                        bearerAuth(apiKey)
-                        setBody(
-                            GroqRequest(
-                                model = model,
-                                messages = messages,
-                                maxCompletionTokens = maxTokens,
-                                reasoningEffort = null
-                            )
-                        )
-                    }
-                }
-
-                when {
-                    response.status.value == 429 -> {
-                        Log.w(TAG, "Rate limited (429) on [Groq] model $model (key $keyMasked)")
-                        CallResult.RateLimited
-                    }
-                    response.status.value in listOf(401, 402, 403) -> {
-                        Log.w(TAG, "Auth/quota error (${response.status.value}) on [Groq] model $model (key $keyMasked)")
-                        CallResult.AuthOrQuotaError(response.status.value)
-                    }
-                    response.status.value in 500..599 -> {
-                        Log.w(TAG, "Server error (${response.status.value}) on [Groq] model $model (key $keyMasked)")
-                        CallResult.ServerError(response.status.value)
-                    }
-                    response.status.isSuccess() -> {
-                        val responseBody = response.body<String>()
-                        PersonaLogger.d(PersonaLogTags.LLM, "📥 Raw LLM Output from [Groq] $model: $responseBody")
-                        val body = jsonParser.decodeFromString<GroqResponse>(responseBody)
-                        val content = body.choices?.firstOrNull()?.message?.content
-                        if (content.isNullOrBlank()) {
-                            Log.w(TAG, "Empty content in successful response from [Groq] $model (key $keyMasked)")
-                            CallResult.Failed
-                        } else {
-                            try {
-                                ReasoningLeakSanitizer.decodeAgenticResponseSafely(content)
-                                CallResult.Success(content)
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Invalid JSON content in response from [Groq] $model (key $keyMasked): $content", e)
-                                CallResult.Failed
-                            }
-                        }
-                    }
-                    else -> {
-                        Log.w(TAG, "HTTP ${response.status.value} error from [Groq] $model (key $keyMasked)")
-                        CallResult.Failed
-                    }
-                }
-            }
-        } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "Timeout (${timeoutMs}ms) on [Groq] model $model (key $keyMasked)")
-            CallResult.Timeout
-        } catch (e: Exception) {
-            when (e) {
-                is java.net.SocketTimeoutException,
-                is io.ktor.client.network.sockets.SocketTimeoutException -> {
-                    Log.w(TAG, "Socket timeout on [Groq] model $model (key $keyMasked): ${e.message}")
-                    CallResult.Timeout
-                }
-                else -> {
-                    Log.e(TAG, "Network error on [Groq] model $model (key $keyMasked)", e)
-                    CallResult.Failed
-                }
-            }
-        }
-    }
-
-    internal suspend fun callOpenRouter(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int
-    ): CallResult = withContext(Dispatchers.IO) {
-        val primary = primaryApiKey.trim()
-        val fallback = fallbackApiKey.trim()
-
-        val effectivePrimary = primary.ifBlank { fallback }
-        val hasDistinctFallback = fallback.isNotBlank() && fallback != effectivePrimary
-
-        if (effectivePrimary.isBlank()) {
-            Log.w(TAG, "No OpenRouter API keys configured; skipping model $model")
-            return@withContext CallResult.Failed
-        }
-
-        val primaryMasked = maskKey(effectivePrimary)
-        PersonaLogger.i(TAG, "Attempting [OpenRouter] model $model with key $primaryMasked")
-
-        val primaryResult = executeSingleOpenRouterCall(
-            model = model,
-            messages = messages,
-            maxTokens = maxTokens,
-            apiKey = effectivePrimary
-        )
-
-        if (primaryResult is CallResult.Success) {
-            return@withContext primaryResult
-        }
-
-        val isKeyOrQuotaError = primaryResult is CallResult.RateLimited || primaryResult is CallResult.AuthOrQuotaError
-
-        if (hasDistinctFallback && isKeyOrQuotaError) {
-            val fallbackMasked = maskKey(fallback)
-            Log.w(
-                TAG,
-                "Primary OpenRouter key ($primaryMasked) failed on model $model with key/quota error $primaryResult. " +
-                    "Falling back to OPENROUTER_API_KEY_V2 ($fallbackMasked)."
-            )
-            PersonaLogger.w(
-                TAG,
-                "Primary OpenRouter key ($primaryMasked) failed on $model ($primaryResult) -> fallback to OPENROUTER_API_KEY_V2 ($fallbackMasked)"
-            )
-            PersonaLogger.i(TAG, "Attempting [OpenRouter] model $model with key $fallbackMasked")
-
-            val fallbackResult = executeSingleOpenRouterCall(
-                model = model,
-                messages = messages,
-                maxTokens = maxTokens,
-                apiKey = fallback
-            )
-
-            if (fallbackResult is CallResult.Success) {
-                Log.i(TAG, "Fallback OPENROUTER_API_KEY_V2 succeeded on model $model")
-                PersonaLogger.d(TAG, "Fallback OPENROUTER_API_KEY_V2 succeeded on model: $model")
-                return@withContext fallbackResult
-            }
-
-            Log.w(
-                TAG,
-                "Fallback OPENROUTER_API_KEY_V2 also failed on model $model with $fallbackResult"
-            )
-            return@withContext fallbackResult
-        }
-
-        primaryResult
-    }
-
-    internal suspend fun executeSingleOpenRouterCall(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int,
-        apiKey: String
-    ): CallResult {
-        if (apiKey.isBlank()) {
-            Log.w(TAG, "API key is blank; skipping request for model $model")
-            return CallResult.Failed
-        }
-
-        val keyMasked = maskKey(apiKey)
-        val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
-        val isVision = model in VISION_OPENROUTER_MODELS || hasImage
-        val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
-        val effectiveMaxTokens = if (model.contains("super-vl")) maxOf(maxTokens, 1500) else maxTokens
-
-        return try {
-            withTimeout(timeoutMs) {
-                val reasoning = if (model in REASONING_MODELS && !hasImage) ReasoningConfig(effort = "low") else null
-                var response = httpClient.post(BuildConfig.OPENROUTER_BASE_URL) {
-                    contentType(ContentType.Application.Json)
-                    bearerAuth(apiKey)
-                    setBody(
-                        OpenRouterRequest(
-                            model = model,
-                            messages = messages,
-                            maxTokens = effectiveMaxTokens,
-                            reasoning = reasoning
-                        )
-                    )
-                }
-
-                if (response.status.value == 400 && reasoning != null) {
-                    Log.w(TAG, "HTTP 400 on $model with reasoning object. Retrying without reasoning payload.")
-                    response = httpClient.post(BuildConfig.OPENROUTER_BASE_URL) {
-                        contentType(ContentType.Application.Json)
-                        bearerAuth(apiKey)
-                        setBody(
-                            OpenRouterRequest(
-                                model = model,
-                                messages = messages,
-                                maxTokens = effectiveMaxTokens,
-                                reasoning = null
-                            )
-                        )
-                    }
-                }
-
-                when {
-                    response.status.value == 429 -> {
-                        Log.w(TAG, "Rate limited (429) on model $model (key $keyMasked)")
-                        CallResult.RateLimited
-                    }
-                    response.status.value in listOf(401, 402, 403) -> {
-                        Log.w(TAG, "Auth/quota error (${response.status.value}) on model $model (key $keyMasked)")
-                        CallResult.AuthOrQuotaError(response.status.value)
-                    }
-                    response.status.value in 500..599 -> {
-                        Log.w(TAG, "Server error (${response.status.value}) on model $model (key $keyMasked)")
-                        CallResult.ServerError(response.status.value)
-                    }
-                    response.status.isSuccess() -> {
-                        val responseBody = response.body<String>()
-                        PersonaLogger.d(PersonaLogTags.LLM, "📥 Raw LLM Output from $model: $responseBody")
-                        val body = jsonParser.decodeFromString<OpenRouterResponse>(responseBody)
-                        val content = body.choices?.firstOrNull()?.message?.content
-                        if (content.isNullOrBlank()) {
-                            Log.w(TAG, "Empty content in successful response from $model (key $keyMasked)")
-                            CallResult.Failed
-                        } else {
-                            CallResult.Success(content)
-                        }
-                    }
-                    else -> {
-                        Log.w(TAG, "HTTP ${response.status.value} error from $model (key $keyMasked)")
-                        CallResult.Failed
-                    }
-                }
-            }
-        } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "Timeout (${timeoutMs}ms) on model $model (key $keyMasked)")
-            CallResult.Timeout
-        } catch (e: Exception) {
-            when (e) {
-                is java.net.SocketTimeoutException,
-                is io.ktor.client.network.sockets.SocketTimeoutException -> {
-                    Log.w(TAG, "Socket timeout on model $model (key $keyMasked): ${e.message}")
-                    CallResult.Timeout
-                }
-                else -> {
-                    Log.e(TAG, "Network error on model $model (key $keyMasked)", e)
-                    CallResult.Failed
-                }
-            }
-        }
-    }
-
-    internal suspend fun callGemini(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int
-    ): CallResult = withContext(Dispatchers.IO) {
-        val primary = geminiApiKey.trim()
-        val fallback = geminiApiKey2.trim()
-
-        val effectivePrimary = primary.ifBlank { fallback }
-        val hasDistinctFallback = fallback.isNotBlank() && fallback != effectivePrimary
-
-        if (effectivePrimary.isBlank()) {
-            Log.w(TAG, "No Gemini API keys configured; skipping Gemini model $model")
-            return@withContext CallResult.Failed
-        }
-
-        val primaryMasked = maskKey(effectivePrimary)
-        PersonaLogger.i(TAG, "Attempting [Gemini] model $model with key $primaryMasked")
-        Log.i(TAG, "Attempting [Gemini] model $model with key $primaryMasked")
-
-        val primaryResult = executeSingleGeminiCall(
-            model = model,
-            messages = messages,
-            maxTokens = maxTokens,
-            apiKey = effectivePrimary
-        )
-
-        if (primaryResult is CallResult.Success) {
-            return@withContext primaryResult
-        }
-
-        val isKeyOrError = primaryResult is CallResult.RateLimited ||
-            primaryResult is CallResult.AuthOrQuotaError ||
-            primaryResult is CallResult.ServerError ||
-            primaryResult is CallResult.Failed ||
-            primaryResult is CallResult.Timeout
-
-        if (hasDistinctFallback && isKeyOrError) {
-            val fallbackMasked = maskKey(fallback)
-            Log.w(
-                TAG,
-                "Primary Gemini key ($primaryMasked) failed on model $model with $primaryResult. " +
-                    "Falling back to GEMINI_API_KEY_2 ($fallbackMasked)."
-            )
-            PersonaLogger.w(
-                TAG,
-                "Primary Gemini key ($primaryMasked) failed on model $model with $primaryResult -> fallback to GEMINI_API_KEY_2 ($fallbackMasked)"
-            )
-            PersonaLogger.i(TAG, "Attempting [Gemini] model $model with key $fallbackMasked")
-
-            val fallbackResult = executeSingleGeminiCall(
-                model = model,
-                messages = messages,
-                maxTokens = maxTokens,
-                apiKey = fallback
-            )
-
-            if (fallbackResult is CallResult.Success) {
-                Log.i(TAG, "Fallback GEMINI_API_KEY_2 succeeded on model $model")
-                PersonaLogger.i(TAG, "Fallback GEMINI_API_KEY_2 succeeded on model $model")
-                return@withContext fallbackResult
-            }
-
-            Log.w(
-                TAG,
-                "Fallback GEMINI_API_KEY_2 also failed on model $model with $fallbackResult"
-            )
-            return@withContext fallbackResult
-        }
-
-        primaryResult
-    }
-
-    internal suspend fun executeSingleGeminiCall(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int,
-        apiKey: String
-    ): CallResult {
-        if (apiKey.isBlank()) {
-            Log.w(TAG, "Gemini API key is blank; skipping request for model $model")
-            return CallResult.Failed
-        }
-
-        val keyMasked = maskKey(apiKey)
-        val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
-        val isVision = model in VISION_GEMINI_MODELS || hasImage
-        val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
-        val effectiveMaxTokens = if (isVision) maxOf(maxTokens, 1500) else maxTokens
-
-        val baseUrl = BuildConfig.GEMINI_BASE_URL.trimEnd('/')
-        val isNativeRest = baseUrl.contains(":generateContent") || baseUrl.contains("/models")
-
-        val endpoint = when {
-            isNativeRest -> {
-                if (baseUrl.contains(":generateContent")) {
-                    if (baseUrl.contains("key=")) baseUrl else "$baseUrl?key=$apiKey"
-                } else {
-                    "$baseUrl/models/$model:generateContent?key=$apiKey"
-                }
-            }
-            baseUrl.endsWith("/chat/completions") -> baseUrl
-            baseUrl.endsWith("/openai") -> "$baseUrl/chat/completions"
-            else -> "$baseUrl/openai/chat/completions"
-        }
-
-        PersonaLogger.i(TAG, "Attempting [Gemini] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
-        Log.i(TAG, "Attempting [Gemini] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
-
-        return try {
-            withTimeout(timeoutMs) {
-                val response = httpClient.post(endpoint) {
-                    contentType(ContentType.Application.Json)
-                    if (!isNativeRest) {
-                        bearerAuth(apiKey)
-                        setBody(
-                            GeminiChatRequest(
-                                model = model,
-                                messages = messages,
-                                temperature = 0.5f,
-                                maxTokens = effectiveMaxTokens
-                            )
-                        )
-                    } else {
-                        setBody(
-                            buildJsonObject {
-                                put("contents", buildJsonArray {
-                                    for (msg in messages) {
-                                        addJsonObject {
-                                            put("role", if (msg.role == "assistant") "model" else "user")
-                                            put("parts", buildJsonArray {
-                                                addJsonObject {
-                                                    put("text", msg.content)
-                                                }
-                                                msg.imageUrl?.let { imgUrl ->
-                                                    if (imgUrl.isNotBlank()) {
-                                                        addJsonObject {
-                                                            putJsonObject("inline_data") {
-                                                                put("mime_type", "image/jpeg")
-                                                                put("data", imgUrl.substringAfter("base64,"))
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            })
-                                        }
-                                    }
-                                })
-                                putJsonObject("generationConfig") {
-                                    put("maxOutputTokens", effectiveMaxTokens)
-                                    put("temperature", 0.5)
-                                }
-                            }.toString()
-                        )
-                    }
-                }
-
-                val status = response.status.value
-                when {
-                    status == 429 -> {
-                        PersonaLogger.w(TAG, "Rate limited (429) on [Gemini] model $model (key $keyMasked)")
-                        Log.w(TAG, "Rate limited (429) on [Gemini] model $model (key $keyMasked)")
-                        CallResult.RateLimited
-                    }
-                    status in listOf(401, 402, 403) -> {
-                        val errorBody = runCatching { response.body<String>() }.getOrNull() ?: ""
-                        if (errorBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true)) {
-                            PersonaLogger.w(TAG, "Resource exhausted (429/quota) on [Gemini] model $model (key $keyMasked)")
-                            Log.w(TAG, "Resource exhausted (429/quota) on [Gemini] model $model (key $keyMasked)")
-                            CallResult.RateLimited
-                        } else {
-                            PersonaLogger.w(TAG, "Auth/quota error ($status) on [Gemini] model $model (key $keyMasked)")
-                            Log.w(TAG, "Auth/quota error ($status) on [Gemini] model $model (key $keyMasked)")
-                            CallResult.AuthOrQuotaError(status)
-                        }
-                    }
-                    status in 500..599 -> {
-                        Log.w(TAG, "Server error ($status) on [Gemini] model $model (key $keyMasked)")
-                        CallResult.ServerError(status)
-                    }
-                    response.status.isSuccess() -> {
-                        val responseBody = response.body<String>()
-                        PersonaLogger.d(PersonaLogTags.LLM, "📥 Raw LLM Output from [Gemini] $model: $responseBody")
-                        val content = extractGeminiContent(responseBody)
-                        if (content.isNullOrBlank()) {
-                            Log.w(TAG, "Empty content in successful response from [Gemini] $model (key $keyMasked)")
-                            CallResult.Failed
-                        } else {
-                            try {
-                                ReasoningLeakSanitizer.decodeAgenticResponseSafely(content)
-                                CallResult.Success(content)
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Invalid JSON content in response from [Gemini] $model (key $keyMasked): $content", e)
-                                CallResult.Failed
-                            }
-                        }
-                    }
-                    else -> {
-                        val errorBody = runCatching { response.body<String>() }.getOrNull() ?: ""
-                        if (errorBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true)) {
-                            CallResult.RateLimited
-                        } else {
-                            Log.w(TAG, "HTTP $status error from [Gemini] $model (key $keyMasked)")
-                            CallResult.Failed
-                        }
-                    }
-                }
-            }
-        } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "Timeout (${timeoutMs}ms) on [Gemini] model $model (key $keyMasked)")
-            CallResult.Timeout
-        } catch (e: Exception) {
-            when (e) {
-                is java.net.SocketTimeoutException,
-                is io.ktor.client.network.sockets.SocketTimeoutException -> {
-                    Log.w(TAG, "Socket timeout on [Gemini] model $model (key $keyMasked): ${e.message}")
-                    CallResult.Timeout
-                }
-                else -> {
-                    Log.e(TAG, "Network error on [Gemini] model $model (key $keyMasked)", e)
-                    CallResult.Failed
-                }
-            }
-        }
-    }
-
-    private fun extractGeminiContent(responseBody: String): String? {
-        return try {
-            // 1. Try OpenAI-compatible chat completions schema: choices[0].message.content
-            val openAiBody = jsonParser.decodeFromString<OpenRouterResponse>(responseBody)
-            val openAiContent = openAiBody.choices?.firstOrNull()?.message?.content
-            if (!openAiContent.isNullOrBlank()) {
-                return openAiContent
-            }
-
-            // 2. Try native Gemini REST schema: candidates[0].content.parts[0].text
-            val jsonElement = jsonParser.parseToJsonElement(responseBody)
-            val candidates = jsonElement.jsonObject["candidates"]?.jsonArray
-            val parts = candidates?.firstOrNull()?.jsonObject
-                ?.get("content")?.jsonObject
-                ?.get("parts")?.jsonArray
-            val textPart = parts?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
-            textPart
-        } catch (e: Exception) {
-            null
-        }
-    }
 }
-
-@Serializable
-internal data class GeminiChatRequest(
-    val model: String,
-    val messages: List<ChatMessage>,
-    val temperature: Float = 0.5f,
-    @SerialName("max_tokens")
-    val maxTokens: Int = 1000
-)

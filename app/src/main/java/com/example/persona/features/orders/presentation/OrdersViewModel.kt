@@ -6,6 +6,8 @@ import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.database.entity.OrderStatus
 import com.example.persona.features.orders.domain.repository.OrderRepository
+import com.example.persona.features.orders.domain.usecase.AdvanceOrderStatusUseCase
+import com.example.persona.features.orders.domain.usecase.FormatCourierManifestUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -87,8 +89,21 @@ data class OrdersUiState(
 @HiltViewModel
 class OrdersViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
-    private val conversationMetadataDao: ConversationMetadataDao
+    private val conversationMetadataDao: ConversationMetadataDao,
+    private val advanceOrderStatusUseCase: AdvanceOrderStatusUseCase,
+    private val formatCourierManifestUseCase: FormatCourierManifestUseCase
 ) : ViewModel() {
+
+    // Test seam constructor: allows existing unit tests calling OrdersViewModel(repo, dao) to work unchanged
+    constructor(
+        orderRepository: OrderRepository,
+        conversationMetadataDao: ConversationMetadataDao
+    ) : this(
+        orderRepository = orderRepository,
+        conversationMetadataDao = conversationMetadataDao,
+        advanceOrderStatusUseCase = AdvanceOrderStatusUseCase(orderRepository),
+        formatCourierManifestUseCase = FormatCourierManifestUseCase()
+    )
 
     private val selectedTab = MutableStateFlow(OrderFilter.ALL)
     private val searchQuery = MutableStateFlow("")
@@ -178,22 +193,20 @@ class OrdersViewModel @Inject constructor(
     }
 
     /**
-     * Tactile Kanban advancement: moves an order to its natural next lifecycle state:
-     * - [OrderStatus.PENDING] -> [OrderStatus.IN_PREPARATION]
-     * - [OrderStatus.IN_PREPARATION] -> [OrderStatus.SHIPPED]
-     * - [OrderStatus.SHIPPING_IN_PROGRESS] -> [OrderStatus.SHIPPED]
+     * Tactile Kanban advancement: moves an order to its natural next lifecycle state
+     * via [AdvanceOrderStatusUseCase].
      */
     fun advanceOrderStatus(order: OrderEntity) {
-        val nextStatus = when (OrderStatus.fromString(order.status)) {
-            OrderStatus.PENDING -> OrderStatus.IN_PREPARATION
-            OrderStatus.IN_PREPARATION -> OrderStatus.SHIPPED
-            OrderStatus.SHIPPING_IN_PROGRESS -> OrderStatus.SHIPPED
-            else -> null
-        }
-        if (nextStatus != null) {
-            onStatusChanged(order.id, nextStatus)
+        runTrackedWrite {
+            advanceOrderStatusUseCase(order)
         }
     }
+
+    /**
+     * Formats order information into a courier manifest via [FormatCourierManifestUseCase].
+     */
+    fun formatCourierManifest(order: OrderEntity): String =
+        formatCourierManifestUseCase(order)
 
     fun onMerchantNoteSaved(orderId: Long, note: String) {
         runTrackedWrite {
