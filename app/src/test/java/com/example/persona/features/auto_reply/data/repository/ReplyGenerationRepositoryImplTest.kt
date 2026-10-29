@@ -10,6 +10,7 @@ import com.example.persona.core.network.dto.ChatMessage
 import com.example.persona.core.network.dto.GroqRequest
 import com.example.persona.core.network.dto.NvidiaRequest
 import com.example.persona.core.network.dto.OpenRouterRequest
+import com.example.persona.core.network.dto.QwenChatRequest
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -728,10 +729,17 @@ class ReplyGenerationRepositoryImplTest {
     fun `model tier lists prioritize benchmark winning models`() {
         assertEquals(
             listOf(
-                "nvidia/nemotron-3.5-bolt-e4b",
-                "nvidia/nemotron-3.5-lightning-30b-a3b",
+                "deepseek-v4.1-flash",
+                "qwen3.8-max",
+                "deepseek-v4-pro-0813",
+                "qwen3.8-flash"
+            ),
+            ReplyGenerationRepositoryImpl.QWEN_TEXT_MODELS
+        )
+        assertEquals(
+            listOf(
                 "nvidia/nemotron-3-ultra-550b-a55b",
-                "openai/gpt-oss-20b"
+                "nvidia/nemotron-3.5-bolt-e4b"
             ),
             ReplyGenerationRepositoryImpl.NVIDIA_TEXT_MODELS
         )
@@ -743,7 +751,6 @@ class ReplyGenerationRepositoryImplTest {
             listOf(
                 "nvidia/nemotron-3-ultra-550b-a55b:free",
                 "liquid/lfm-2.5-2.6b:free",
-                "cohere/north-mini-code:free",
                 "openrouter/free"
             ),
             ReplyGenerationRepositoryImpl.OPENROUTER_FAILOVER_MODELS
@@ -1828,5 +1835,123 @@ class ReplyGenerationRepositoryImplTest {
         val resultBytes = repo.compressAndScaleImage(tempFile.absolutePath, maxDimension = 1024, quality = 80)
         assertNotNull(resultBytes)
         assertTrue(resultBytes!!.isNotEmpty())
+    }
+
+    @Test
+    fun `callNvidiaNim passes reasoning_effort='none' and temperature=1_0 on ultra-550b model`() = runTest {
+        var capturedReasoningEffort: String? = null
+        var capturedTemperature: Float? = null
+        val mockEngine = MockEngine { request ->
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            val parsed = Json { ignoreUnknownKeys = true }.decodeFromString<NvidiaRequest>(bodyText)
+            capturedReasoningEffort = parsed.reasoningEffort
+            capturedTemperature = parsed.temperature
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد بدون reasoning\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            nvidiaApiKey = "nvapi-test-key"
+        )
+
+        val result = repo.callNvidiaNim(
+            model = "nvidia/nemotron-3-ultra-550b-a55b",
+            messages = listOf(ChatMessage(role = "user", content = "هلا")),
+            maxTokens = 500
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals("none", capturedReasoningEffort)
+        assertEquals(1.0f, capturedTemperature)
+    }
+
+    @Test
+    fun `callQwenCloud returns success on deepseek-v4-1-flash with valid JSON`() = runTest {
+        val capturedAuthHeaders = mutableListOf<String>()
+        var capturedModel: String? = null
+        val mockEngine = MockEngine { request ->
+            capturedAuthHeaders.add(request.headers[HttpHeaders.Authorization] ?: "")
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            val parsed = Json { ignoreUnknownKeys = true }.decodeFromString<QwenChatRequest>(bodyText)
+            capturedModel = parsed.model
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"منور المتجر يا غالي من كوين\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            qwenApiKey = "qwen-test-key-123"
+        )
+
+        val result = repo.callQwenCloud(
+            model = "deepseek-v4.1-flash",
+            messages = listOf(ChatMessage(role = "user", content = "سلام")),
+            maxTokens = 600
+        )
+
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"منور المتجر يا غالي من كوين\"}", (result as ReplyGenerationRepositoryImpl.CallResult.Success).content)
+        assertEquals("Bearer qwen-test-key-123", capturedAuthHeaders[0])
+        assertEquals("deepseek-v4.1-flash", capturedModel)
+    }
+
+    @Test
+    fun `executeFailoverChain prioritizes QwenCloud Tier 1 when Qwen key is present`() = runTest {
+        val capturedUrls = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            capturedUrls.add(request.url.toString())
+            respond(
+                content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد كوين الفوري\"}"}}]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            groqPrimaryApiKey = "gsk_key",
+            nvidiaApiKey = "nvapi_key",
+            qwenApiKey = "qwen_key"
+        )
+
+        val reply = repo.executeFailoverChain(
+            messages = listOf(ChatMessage(role = "user", content = "هلا")),
+            maxTokens = 500
+        )
+
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد كوين الفوري\"}", reply)
+        assertEquals(1, capturedUrls.size)
+        assertTrue(capturedUrls[0].contains("qwencloudapi.com"))
     }
 }

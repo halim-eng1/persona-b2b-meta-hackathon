@@ -282,7 +282,8 @@ class AutoReplyOrchestratorMediaTest {
                 chatHistory = any(),
                 activeOrders = any(),
                 personalChunks = any(),
-                maxTokens = 600
+                maxTokens = 600,
+                inboundIntent = any()
             )
         } returns """{"action":"REPLY","refined_search_keyword":null,"order_action":null,"final_reply_text":"أهلاً بك! نعم أنا متواجد لمساعدتك، اتفضل تحت أمرك 💙","extracted_order":null}"""
 
@@ -297,7 +298,8 @@ class AutoReplyOrchestratorMediaTest {
                 chatHistory = any(),
                 activeOrders = any(),
                 personalChunks = any(),
-                maxTokens = 600
+                maxTokens = 600,
+                inboundIntent = any()
             )
         }
 

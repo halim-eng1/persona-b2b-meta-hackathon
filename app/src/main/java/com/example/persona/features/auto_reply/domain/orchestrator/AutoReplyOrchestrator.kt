@@ -32,6 +32,8 @@ import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormalizer
 import com.example.persona.core.network.dto.AgenticLlmResponse
 import com.example.persona.core.network.dto.ExtractedOrder
+import com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent
+import com.example.persona.features.auto_reply.domain.gatekeeper.LocalDecisionClassifier
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,7 +70,8 @@ class AutoReplyOrchestrator @Inject constructor(
     private val orderIngestionManager: OrderIngestionManager = OrderIngestionManager(orderDao, chatHistoryDao),
     private val hitlNotificationHandler: HitlNotificationHandler = HitlNotificationHandler(context, conversationMetadataDao, prefsRepository),
     private val antiEchoGuard: AntiEchoGuard = AntiEchoGuard(),
-    private val reasoningLeakSanitizer: ReasoningLeakSanitizer = ReasoningLeakSanitizer()
+    private val reasoningLeakSanitizer: ReasoningLeakSanitizer = ReasoningLeakSanitizer(),
+    private val localDecisionClassifier: LocalDecisionClassifier = LocalDecisionClassifier()
 ) {
     companion object {
         private const val TAG = "AutoReplyOrchestrator"
@@ -409,6 +412,19 @@ class AutoReplyOrchestrator @Inject constructor(
                 } else {
                     chatHistoryDao.updateEmbeddingState(insertedId, "FAILED")
                 }
+            } else {
+                chatHistoryDao.updateEmbeddingState(insertedId, "FAILED")
+            }
+
+            val isImagePresent = !isTranscribedVoice && !isVoiceTranscribedNow && effectiveProcessed.mediaFilePath != null
+
+            // Intent classification via on-device gatekeeper
+            val decision = localDecisionClassifier.classify(queryTextForEmbedding, queryEmbedding)
+            val inboundIntent = if (isImagePresent) InboundIntent.CATALOG_INQUIRY else decision.intent
+            Log.i(TAG, "🎯 Gatekeeper decision: intent=$inboundIntent (conf=${decision.confidence}, latency=${decision.latencyMs}ms)")
+
+            // Only retrieve RAG candidates if intent is CATALOG_INQUIRY
+            if (inboundIntent == InboundIntent.CATALOG_INQUIRY && queryEmbedding != null) {
                 val (retrievedCandidates, bestScore) = semanticRetrievalRepository.retrieveCandidates(
                     queryEmbedding = queryEmbedding,
                     minimumSimilarityThreshold = ragBaseThreshold,
@@ -418,10 +434,9 @@ class AutoReplyOrchestrator @Inject constructor(
                 candidates = retrievedCandidates.filter { it.similarityScore >= 0.38f }
                 maxScore = bestScore
             } else {
-                chatHistoryDao.updateEmbeddingState(insertedId, "FAILED")
+                Log.d(TAG, "⚡ Bypassing RAG retrieval for intent $inboundIntent (candidates=0)")
             }
 
-            val isImagePresent = !isTranscribedVoice && !isVoiceTranscribedNow && effectiveProcessed.mediaFilePath != null
             val finalCandidates = candidates
 
             // Context Assembly
@@ -454,7 +469,8 @@ class AutoReplyOrchestrator @Inject constructor(
                 personalChunks = emptyList(),
                 maxTokens = maxTokensForGeneration,
                 lastOrder = if (isImagePresent) null else latestOrder,
-                orderStatusCounts = if (isImagePresent) emptyList() else orderStatusCounts
+                orderStatusCounts = if (isImagePresent) emptyList() else orderStatusCounts,
+                inboundIntent = inboundIntent
             )
             if (rawLlmOutput.isNullOrBlank()) {
                 Log.d(TAG, "LLM returned null/blank — all models failed. HITL fallback.")

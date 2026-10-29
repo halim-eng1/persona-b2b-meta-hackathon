@@ -16,7 +16,10 @@ import com.example.persona.core.network.dto.NvidiaRequest
 import com.example.persona.core.network.dto.NvidiaResponse
 import com.example.persona.core.network.dto.OpenRouterRequest
 import com.example.persona.core.network.dto.OpenRouterResponse
+import com.example.persona.core.network.dto.QwenChatRequest
+import com.example.persona.core.network.dto.QwenChatResponse
 import com.example.persona.core.network.dto.ReasoningConfig
+import com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.auto_reply.domain.orchestrator.ReasoningLeakSanitizer
@@ -62,13 +65,15 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         userPreferencesRepository: UserPreferencesRepository,
         groqPrimaryApiKey: String? = "",
         groqFallbackApiKey: String? = "",
-        nvidiaApiKey: String? = ""
+        nvidiaApiKey: String? = "",
+        qwenApiKey: String? = ""
     ) : this(httpClient, promptContextBuilder, context, userPreferencesRepository) {
         this.primaryApiKeyOverride = primaryApiKey
         this.fallbackApiKeyOverride = fallbackApiKey
         this.groqPrimaryApiKeyOverride = groqPrimaryApiKey
         this.groqFallbackApiKeyOverride = groqFallbackApiKey
         this.nvidiaApiKeyOverride = nvidiaApiKey
+        this.qwenApiKeyOverride = qwenApiKey
     }
 
     private var primaryApiKeyOverride: String? = null
@@ -76,6 +81,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     private var groqPrimaryApiKeyOverride: String? = null
     private var groqFallbackApiKeyOverride: String? = null
     private var nvidiaApiKeyOverride: String? = null
+    private var qwenApiKeyOverride: String? = null
 
     internal val primaryApiKey: String
         get() = primaryApiKeyOverride ?: BuildConfig.OPENROUTER_API_KEY
@@ -92,6 +98,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     internal val nvidiaApiKey: String
         get() = nvidiaApiKeyOverride ?: BuildConfig.NVIDIA_API_KEY
 
+    internal val qwenApiKey: String
+        get() = qwenApiKeyOverride ?: BuildConfig.QWEN_API_KEY
+
     companion object {
         private const val TAG = PersonaLogTags.LLM
         private val AUDIO_EXTENSIONS = setOf("opus", "ogg", "mp3", "m4a", "wav", "aac", "m4p", "amr")
@@ -99,6 +108,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         const val MODEL_TIMEOUT_MS = 10_000L
         const val VISION_MODEL_TIMEOUT_MS = 25_000L
+        const val QWEN_TTFT_TIMEOUT_MS = 5_000L
+        const val QWEN_STREAM_TIMEOUT_MS = 25_000L
         private const val ABSOLUTE_FAILOVER_CEILING = 8000
 
         private val jsonParser = Json {
@@ -111,37 +122,43 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         val CANONICAL_HITL_MESSAGE = PromptContextBuilder.CANONICAL_HITL_MESSAGE
 
-        /** Vision Primary & Failover Tiers */
-        val VISION_GROQ_MODELS = listOf(
-            "qwen/qwen3.8-27b" // 1.2s Champion on apparel graphic OCR
+        /** Tier 1: QwenCloud Multimodal Vision (Primary) */
+        val VISION_QWEN_MODELS = listOf(
+            "qwen3.8-omni-flash",
+            "qwen3.8-flash"
         )
+        val VISION_GROQ_MODELS = listOf("qwen/qwen3.8-27b")
         val VISION_NVIDIA_MODELS = listOf(
             "meta/llama-3.2-11b-vision-instruct",
-            "nvidia/nemotron-3.5-super-vl-120b-a12b" // max_tokens >= 1500
+            "nvidia/nemotron-3.5-super-vl-120b-a12b"
         )
-        val VISION_OPENROUTER_MODELS = listOf(
-            "nvidia/nemotron-3.5-super-vl:free"
+        val VISION_OPENROUTER_MODELS = listOf("nvidia/nemotron-3.5-super-vl:free")
+
+        /** Tier 1: QwenCloud Active Quotas (Primary Text & VIP Reasoning) */
+        val QWEN_TEXT_MODELS = listOf(
+            "deepseek-v4.1-flash",     // 2.8s Champion @ 55 TPS
+            "qwen3.8-max",             // 1M Tokens VIP Engine (Expiring in 3 days)
+            "deepseek-v4-pro-0813",     // Advanced Reasoning (15 days remaining)
+            "qwen3.8-flash"
         )
 
-        /** Tier 1: NVIDIA NIM (Primary Fast Text - Top 4 Benchmarked) */
+        /** Tier 2: NVIDIA NIM (Ultra-550B with reasoning_effort='none' & Bolt-e4b) */
         val NVIDIA_TEXT_MODELS = listOf(
-            "nvidia/nemotron-3.5-bolt-e4b",          // Primary 1.5s engine
-            "nvidia/nemotron-3.5-lightning-30b-a3b",  // Fast MoE fallback
-            "nvidia/nemotron-3-ultra-550b-a55b",      // Deep reasoner (Tier 3 fallback)
-            "openai/gpt-oss-20b"
+            "nvidia/nemotron-3-ultra-550b-a55b",
+            "nvidia/nemotron-3.5-bolt-e4b"
         )
 
-        /** Tier 2: Groq Cloud (Fast Text Secondary) */
+        /** Tier 3: Groq Cloud (Secondary) */
         val GROQ_MODELS = listOf(
             "openai/gpt-oss-120b",
             "openai/gpt-oss-20b"
         )
 
-        /** Tier 3: OpenRouter Failover (Pure Text First, Multimodal Last) */
+        /** Tier 4: Nara Router & OpenRouter (Free Fallback) */
+        val NARA_TEXT_MODELS = listOf("laguna-s-2.1")
         val OPENROUTER_FAILOVER_MODELS = listOf(
             "nvidia/nemotron-3-ultra-550b-a55b:free",
             "liquid/lfm-2.5-2.6b:free",
-            "cohere/north-mini-code:free",
             "openrouter/free"
         )
 
@@ -351,7 +368,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         personalChunks: List<ChatHistoryEntity>,
         maxTokens: Int,
         lastOrder: OrderEntity?,
-        orderStatusCounts: List<OrderStatusCount>
+        orderStatusCounts: List<OrderStatusCount>,
+        inboundIntent: InboundIntent
     ): String? {
         val imageUri = resolveImageUri(notification.mediaFilePath)
         val isMultimodal = imageUri != null
@@ -383,21 +401,50 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         val storeWebsite = userPreferencesRepository.storeWebsiteFlow.first()
         val tone = userPreferencesRepository.stylePreferences.first().personaTone
-        val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
-            botName = userPreferencesRepository.getBotNameSync(),
-            storeName = userPreferencesRepository.getStoreNameSync(),
-            tone = tone,
-            isMultimodal = false
-        )
-        val systemPromptWithContext = PromptContextBuilder.buildSystemPromptWithContext(
-            staticSystemPrompt = baseSystemPrompt,
-            candidates = candidates,
-            activeOrders = activeOrders,
-            storeTopics = storeTopics,
-            storeWebsite = storeWebsite,
-            lastOrder = lastOrder,
-            statusCounts = orderStatusCounts
-        )
+        val botName = userPreferencesRepository.getBotNameSync()
+        val storeName = userPreferencesRepository.getStoreNameSync()
+
+        val systemPromptWithContext = when (inboundIntent) {
+            InboundIntent.GREETING, InboundIntent.BANTER -> {
+                Log.d(TAG, "⚡ Routing to buildMicroBanterPrompt (intent=$inboundIntent, bypassing RAG)")
+                PromptContextBuilder.buildMicroBanterPrompt(
+                    botName = botName,
+                    storeName = storeName,
+                    tone = tone
+                )
+            }
+            InboundIntent.ORDER_STATUS -> {
+                Log.d(TAG, "⚡ Routing to buildMicroOrderStatusPrompt (intent=$inboundIntent)")
+                val orderContext = PromptContextBuilder.formatCustomerOrderState(
+                    activeOrders = activeOrders,
+                    lastOrder = lastOrder,
+                    statusCounts = orderStatusCounts
+                )
+                PromptContextBuilder.buildMicroOrderStatusPrompt(
+                    botName = botName,
+                    storeName = storeName,
+                    tone = tone,
+                    orderStateContext = orderContext
+                )
+            }
+            InboundIntent.CATALOG_INQUIRY -> {
+                val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
+                    botName = botName,
+                    storeName = storeName,
+                    tone = tone,
+                    isMultimodal = false
+                )
+                PromptContextBuilder.buildSystemPromptWithContext(
+                    staticSystemPrompt = baseSystemPrompt,
+                    candidates = candidates,
+                    activeOrders = activeOrders,
+                    storeTopics = storeTopics,
+                    storeWebsite = storeWebsite,
+                    lastOrder = lastOrder,
+                    statusCounts = orderStatusCounts
+                )
+            }
+        }
 
         val customMediaFallback = runCatching { userPreferencesRepository.getMediaFallbackMessageSync() }.getOrNull()
         val messages = PromptContextBuilder.buildOpenRouterMessages(
@@ -470,10 +517,27 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val targetMaxTokens = minOf(maxTokens, ABSOLUTE_FAILOVER_CEILING)
 
         if (hasImage) {
-            PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade (Groq -> NVIDIA -> OpenRouter)...")
-            Log.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade (Groq -> NVIDIA -> OpenRouter)...")
+            PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade (Qwen -> Groq -> NVIDIA -> OpenRouter)...")
+            Log.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade (Qwen -> Groq -> NVIDIA -> OpenRouter)...")
 
-            // ── Vision Tier 1: Groq Cloud (Champion) ───────────────────
+            // ── Vision Tier 1: QwenCloud Multimodal Vision (Primary) ───
+            val qwenStartTime = System.currentTimeMillis()
+            val qwenKey = qwenApiKey.ifBlank { userPreferencesRepository.getQwenApiKeySync() }.trim()
+            if (qwenKey.isNotBlank()) {
+                for (model in VISION_QWEN_MODELS) {
+                    val result = callQwenCloud(model, messages, targetMaxTokens)
+                    if (result is CallResult.Success) {
+                        val durationMs = System.currentTimeMillis() - qwenStartTime
+                        PersonaLogger.i(TAG, "Vision Tier 1 (Qwen) succeeded with $model in ${durationMs}ms!")
+                        Log.i(TAG, "Vision Tier 1 (Qwen) succeeded with $model in ${durationMs}ms")
+                        return result.content
+                    }
+                }
+                PersonaLogger.w(TAG, "Vision Tier 1 (Qwen) exhausted. Cascading to Vision Tier 2 (Groq)...")
+                Log.w(TAG, "Vision Tier 1 (Qwen) exhausted. Cascading to Vision Tier 2 (Groq)...")
+            }
+
+            // ── Vision Tier 2: Groq Cloud (Secondary) ───────────────────
             val groqStartTime = System.currentTimeMillis()
             val hasGroqKeys = groqPrimaryApiKey.isNotBlank() || groqFallbackApiKey.isNotBlank()
             if (hasGroqKeys) {
@@ -481,16 +545,16 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                     val result = callGroq(model, messages, targetMaxTokens)
                     if (result is CallResult.Success) {
                         val durationMs = System.currentTimeMillis() - groqStartTime
-                        PersonaLogger.i(TAG, "Vision Tier 1 (Groq) succeeded with $model in ${durationMs}ms!")
-                        Log.i(TAG, "Vision Tier 1 (Groq) succeeded with $model in ${durationMs}ms")
+                        PersonaLogger.i(TAG, "Vision Tier 2 (Groq) succeeded with $model in ${durationMs}ms!")
+                        Log.i(TAG, "Vision Tier 2 (Groq) succeeded with $model in ${durationMs}ms")
                         return result.content
                     }
                 }
-                PersonaLogger.w(TAG, "Vision Tier 1 (Groq) exhausted. Cascading to Vision Tier 2 (NVIDIA NIM)...")
-                Log.w(TAG, "Vision Tier 1 (Groq) exhausted. Cascading to Vision Tier 2 (NVIDIA NIM)...")
+                PersonaLogger.w(TAG, "Vision Tier 2 (Groq) exhausted. Cascading to Vision Tier 3 (NVIDIA NIM)...")
+                Log.w(TAG, "Vision Tier 2 (Groq) exhausted. Cascading to Vision Tier 3 (NVIDIA NIM)...")
             }
 
-            // ── Vision Tier 2: NVIDIA NIM ──────────────────────────
+            // ── Vision Tier 3: NVIDIA NIM ──────────────────────────
             val nvidiaStartTime = System.currentTimeMillis()
             val nvidiaKey = nvidiaApiKey.ifBlank { userPreferencesRepository.getNvidiaApiKeySync() }.trim()
             if (nvidiaKey.isNotBlank()) {
@@ -498,21 +562,21 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                     val result = callNvidiaNim(model, messages, targetMaxTokens)
                     if (result is CallResult.Success) {
                         val durationMs = System.currentTimeMillis() - nvidiaStartTime
-                        PersonaLogger.i(TAG, "Vision Tier 2 (NVIDIA NIM) succeeded with $model in ${durationMs}ms!")
-                        Log.i(TAG, "Vision Tier 2 (NVIDIA NIM) succeeded with $model in ${durationMs}ms")
+                        PersonaLogger.i(TAG, "Vision Tier 3 (NVIDIA NIM) succeeded with $model in ${durationMs}ms!")
+                        Log.i(TAG, "Vision Tier 3 (NVIDIA NIM) succeeded with $model in ${durationMs}ms")
                         return result.content
                     }
                 }
-                PersonaLogger.w(TAG, "Vision Tier 2 (NVIDIA NIM) exhausted. Cascading to Vision Tier 3 (OpenRouter)...")
-                Log.w(TAG, "Vision Tier 2 (NVIDIA NIM) exhausted. Cascading to Vision Tier 3 (OpenRouter)...")
+                PersonaLogger.w(TAG, "Vision Tier 3 (NVIDIA NIM) exhausted. Cascading to Vision Tier 4 (OpenRouter)...")
+                Log.w(TAG, "Vision Tier 3 (NVIDIA NIM) exhausted. Cascading to Vision Tier 4 (OpenRouter)...")
             }
 
-            // ── Vision Tier 3: OpenRouter Fallback ──────────────────
+            // ── Vision Tier 4: OpenRouter Fallback ──────────────────
             for (model in VISION_OPENROUTER_MODELS) {
                 val result = callOpenRouter(model, messages, targetMaxTokens)
                 if (result is CallResult.Success) {
-                    PersonaLogger.i(TAG, "Vision Tier 3 (OpenRouter) succeeded with $model")
-                    Log.i(TAG, "Vision Tier 3 (OpenRouter) succeeded with $model")
+                    PersonaLogger.i(TAG, "Vision Tier 4 (OpenRouter) succeeded with $model")
+                    Log.i(TAG, "Vision Tier 4 (OpenRouter) succeeded with $model")
                     return result.content
                 }
             }
@@ -526,14 +590,31 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 return executeFailoverChain(strippedMessages, maxTokens)
             }
 
-            Log.w(TAG, "All Vision models failed across Groq, NVIDIA, and OpenRouter tiers. Returning HITL fallback JSON.")
+            Log.w(TAG, "All Vision models failed across Qwen, Groq, NVIDIA, and OpenRouter tiers. Returning HITL fallback JSON.")
             PersonaLogger.d(TAG, "All Vision models failed — HITL fallback")
             return HITL_FALLBACK_JSON
         }
 
         // ── Pure Text / Transcribed Voice Request ─────────────────────
 
-        // ── Tier 1: NVIDIA NIM (Primary Fast Text) ─────────────────────
+        // ── Tier 1: QwenCloud Active Quotas (Primary Text & VIP Reasoning) ──
+        val qwenStartTime = System.currentTimeMillis()
+        val qwenKey = qwenApiKey.ifBlank { userPreferencesRepository.getQwenApiKeySync() }.trim()
+        if (qwenKey.isNotBlank()) {
+            for (model in QWEN_TEXT_MODELS) {
+                val result = callQwenCloud(model, messages, targetMaxTokens)
+                if (result is CallResult.Success) {
+                    val durationMs = System.currentTimeMillis() - qwenStartTime
+                    PersonaLogger.i(TAG, "Qwen Tier 1 succeeded with model $model in ${durationMs}ms!")
+                    Log.i(TAG, "Qwen Tier 1 succeeded with model $model in ${durationMs}ms")
+                    return result.content
+                }
+            }
+            PersonaLogger.w(TAG, "Qwen Tier 1 exhausted. Cascading to Tier 2 (NVIDIA NIM)...")
+            Log.w(TAG, "Qwen Tier 1 exhausted. Cascading to Tier 2 (NVIDIA NIM)...")
+        }
+
+        // ── Tier 2: NVIDIA NIM (Primary Fast Text) ─────────────────────
         val nvidiaStartTime = System.currentTimeMillis()
         val nvidiaKey = nvidiaApiKey.ifBlank { userPreferencesRepository.getNvidiaApiKeySync() }.trim()
         if (nvidiaKey.isNotBlank()) {
@@ -541,16 +622,16 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 val result = callNvidiaNim(model, messages, targetMaxTokens)
                 if (result is CallResult.Success) {
                     val durationMs = System.currentTimeMillis() - nvidiaStartTime
-                    PersonaLogger.i(TAG, "NVIDIA Tier 1 succeeded with model $model in ${durationMs}ms!")
-                    Log.i(TAG, "NVIDIA Tier 1 succeeded with model $model in ${durationMs}ms")
+                    PersonaLogger.i(TAG, "NVIDIA Tier 2 succeeded with model $model in ${durationMs}ms!")
+                    Log.i(TAG, "NVIDIA Tier 2 succeeded with model $model in ${durationMs}ms")
                     return result.content
                 }
             }
-            PersonaLogger.w(TAG, "NVIDIA Tier 1 exhausted. Cascading to Tier 2 (Groq)...")
-            Log.w(TAG, "NVIDIA Tier 1 exhausted. Cascading to Tier 2 (Groq)...")
+            PersonaLogger.w(TAG, "NVIDIA Tier 2 exhausted. Cascading to Tier 3 (Groq)...")
+            Log.w(TAG, "NVIDIA Tier 2 exhausted. Cascading to Tier 3 (Groq)...")
         }
 
-        // ── Tier 2: Groq Cloud (Secondary Fast Text) ───────────────────
+        // ── Tier 3: Groq Cloud (Secondary Fast Text) ───────────────────
         val groqStartTime = System.currentTimeMillis()
         val hasGroqKeys = groqPrimaryApiKey.isNotBlank() || groqFallbackApiKey.isNotBlank()
         if (hasGroqKeys) {
@@ -558,16 +639,16 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 val result = callGroq(model, messages, targetMaxTokens)
                 if (result is CallResult.Success) {
                     val durationMs = System.currentTimeMillis() - groqStartTime
-                    PersonaLogger.i(TAG, "Groq Tier 2 succeeded with model $model in ${durationMs}ms!")
-                    Log.i(TAG, "Groq Tier 2 succeeded with model $model in ${durationMs}ms")
+                    PersonaLogger.i(TAG, "Groq Tier 3 succeeded with model $model in ${durationMs}ms!")
+                    Log.i(TAG, "Groq Tier 3 succeeded with model $model in ${durationMs}ms")
                     return result.content
                 }
             }
-            PersonaLogger.w(TAG, "Groq Tier 2 exhausted. Cascading to Tier 3 (OpenRouter)...")
-            Log.w(TAG, "Groq Tier 2 exhausted. Cascading to Tier 3 (OpenRouter)...")
+            PersonaLogger.w(TAG, "Groq Tier 3 exhausted. Cascading to Tier 4 (OpenRouter)...")
+            Log.w(TAG, "Groq Tier 3 exhausted. Cascading to Tier 4 (OpenRouter)...")
         }
 
-        // ── Tier 3: OpenRouter Failover (Emergency Safety Net) ───────────
+        // ── Tier 4: OpenRouter Failover (Emergency Safety Net) ───────────
         var consecutive429Count = 0
         for ((index, model) in OPENROUTER_FAILOVER_MODELS.withIndex()) {
             Log.d(TAG, "Attempting [OpenRouter] model ${index + 1}/${OPENROUTER_FAILOVER_MODELS.size}: $model with max_tokens=$targetMaxTokens")
@@ -594,9 +675,99 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             }
         }
 
-        Log.w(TAG, "All models failed across NVIDIA, Groq, and OpenRouter tiers. Returning HITL fallback JSON.")
+        Log.w(TAG, "All models failed across Qwen, NVIDIA, Groq, and OpenRouter tiers. Returning HITL fallback JSON.")
         PersonaLogger.d(TAG, "All models failed — HITL fallback")
         return HITL_FALLBACK_JSON
+    }
+
+    internal suspend fun callQwenCloud(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int
+    ): CallResult = withContext(Dispatchers.IO) {
+        val apiKey = qwenApiKey.ifBlank { userPreferencesRepository.getQwenApiKeySync() }.trim()
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "Qwen API key is blank; skipping request for model $model")
+            return@withContext CallResult.Failed
+        }
+
+        val keyMasked = maskKey(apiKey)
+        val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
+        val isVision = model in VISION_QWEN_MODELS || hasImage
+        val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
+        val effectiveMaxTokens = if (isVision) maxOf(maxTokens, 1500) else maxTokens
+        PersonaLogger.i(TAG, "Attempting [QwenCloud] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
+        Log.i(TAG, "Attempting [QwenCloud] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
+
+        try {
+            withTimeout(timeoutMs) {
+                val response = httpClient.post(BuildConfig.QWEN_BASE_URL) {
+                    contentType(ContentType.Application.Json)
+                    bearerAuth(apiKey)
+                    setBody(
+                        QwenChatRequest(
+                            model = model,
+                            messages = messages,
+                            temperature = 0.5f,
+                            maxTokens = effectiveMaxTokens,
+                            stream = false
+                        )
+                    )
+                }
+
+                when {
+                    response.status.value == 429 -> {
+                        Log.w(TAG, "Rate limited (429) on [QwenCloud] model $model (key $keyMasked)")
+                        CallResult.RateLimited
+                    }
+                    response.status.value in listOf(401, 402, 403) -> {
+                        Log.w(TAG, "Auth/quota error (${response.status.value}) on [QwenCloud] model $model (key $keyMasked)")
+                        CallResult.AuthOrQuotaError(response.status.value)
+                    }
+                    response.status.value in 500..599 -> {
+                        Log.w(TAG, "Server error (${response.status.value}) on [QwenCloud] model $model (key $keyMasked)")
+                        CallResult.ServerError(response.status.value)
+                    }
+                    response.status.isSuccess() -> {
+                        val responseBody = response.body<String>()
+                        PersonaLogger.d(PersonaLogTags.LLM, "📥 Raw LLM Output from [QwenCloud] $model: $responseBody")
+                        val body = jsonParser.decodeFromString<QwenChatResponse>(responseBody)
+                        val content = body.choices?.firstOrNull()?.message?.content
+                        if (content.isNullOrBlank()) {
+                            Log.w(TAG, "Empty content in successful response from [QwenCloud] $model (key $keyMasked)")
+                            CallResult.Failed
+                        } else {
+                            try {
+                                ReasoningLeakSanitizer.decodeAgenticResponseSafely(content)
+                                CallResult.Success(content)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Invalid JSON content in response from [QwenCloud] $model (key $keyMasked): $content", e)
+                                CallResult.Failed
+                            }
+                        }
+                    }
+                    else -> {
+                        Log.w(TAG, "HTTP ${response.status.value} error from [QwenCloud] $model (key $keyMasked)")
+                        CallResult.Failed
+                    }
+                }
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.w(TAG, "Timeout (${timeoutMs}ms) on [QwenCloud] model $model (key $keyMasked)")
+            CallResult.Timeout
+        } catch (e: Exception) {
+            when (e) {
+                is java.net.SocketTimeoutException,
+                is io.ktor.client.network.sockets.SocketTimeoutException -> {
+                    Log.w(TAG, "Socket timeout on [QwenCloud] model $model (key $keyMasked): ${e.message}")
+                    CallResult.Timeout
+                }
+                else -> {
+                    Log.e(TAG, "Network error on [QwenCloud] model $model (key $keyMasked)", e)
+                    CallResult.Failed
+                }
+            }
+        }
     }
 
     internal suspend fun callNvidiaNim(
@@ -615,6 +786,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val isVision = model in VISION_NVIDIA_MODELS || hasImage
         val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
         val effectiveMaxTokens = if (model.contains("super-vl")) maxOf(maxTokens, 1500) else maxTokens
+        val reasoningEffort = if (model.contains("ultra-550b")) "none" else null
+        val temperature = if (model.contains("ultra-550b")) 1.0f else 0.5f
         PersonaLogger.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
         Log.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
 
@@ -627,8 +800,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                         NvidiaRequest(
                             model = model,
                             messages = messages,
-                            temperature = 0.5f,
-                            maxTokens = effectiveMaxTokens
+                            temperature = temperature,
+                            maxTokens = effectiveMaxTokens,
+                            reasoningEffort = reasoningEffort
                         )
                     )
                 }

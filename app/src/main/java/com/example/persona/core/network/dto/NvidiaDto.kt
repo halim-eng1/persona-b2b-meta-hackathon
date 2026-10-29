@@ -13,7 +13,9 @@ data class NvidiaRequest(
     val messages: List<OpenRouterChatMessage>,
     val temperature: Float = 0.45f,
     @SerialName("max_tokens")
-    val maxTokens: Int = 1000
+    val maxTokens: Int = 1000,
+    @SerialName("reasoning_effort")
+    val reasoningEffort: String? = null
 )
 
 /**

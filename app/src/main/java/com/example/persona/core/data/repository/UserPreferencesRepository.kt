@@ -76,6 +76,7 @@ class UserPreferencesRepository @Inject constructor(
 
         // ── LLM Credentials Overrides ─────────────────────────────────────────
         val KEY_NVIDIA_API_KEY = stringPreferencesKey("nvidia_api_key")
+        val KEY_QWEN_API_KEY = stringPreferencesKey("qwen_api_key")
 
         const val DEFAULT_BOT_NAME = "مساعد المبيعات"
         const val DEFAULT_STORE_NAME = "متجرنا"
@@ -345,6 +346,19 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun getNvidiaApiKeySync(): String =
         dataStore.data.first()[KEY_NVIDIA_API_KEY]?.takeIf { it.isNotBlank() } ?: ""
+
+    suspend fun setQwenApiKey(key: String?) {
+        dataStore.edit { prefs ->
+            if (key.isNullOrBlank()) {
+                prefs.remove(KEY_QWEN_API_KEY)
+            } else {
+                prefs[KEY_QWEN_API_KEY] = key.trim()
+            }
+        }
+    }
+
+    suspend fun getQwenApiKeySync(): String =
+        dataStore.data.first()[KEY_QWEN_API_KEY]?.takeIf { it.isNotBlank() } ?: ""
 
     suspend fun getBlankReplyFallbackTemplateSync(): String =
         dataStore.data.first()[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() } ?: DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE

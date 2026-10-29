@@ -877,4 +877,31 @@ class WhatsAppMediaExtractorTest {
         assertNotNull(audioFile)
         assertEquals(99.toByte(), audioFile!!.readBytes()[0])
     }
+
+    @Test
+    fun `parseQwenAsrResponse correctly parses SSE stream frames from Qwen FunASR`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        val sseStream = """
+            id:1
+            event:result
+            data:{"sentence":{"sentence_id":1,"begin_time":280,"end_time":3393,"text":"هو المفروض في حد موجود هنا دلوقتي ولا إيه؟","sentence_end":true},"text":"هو المفروض في حد موجود هنا دلوقتي ولا إيه؟"}
+        """.trimIndent()
+
+        val parsed = extractor.parseQwenAsrResponse(sseStream)
+        assertEquals("هو المفروض في حد موجود هنا دلوقتي ولا إيه؟", parsed)
+    }
+
+    @Test
+    fun `parseQwenAsrResponse handles empty or malformed SSE stream gracefully`() {
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
+        val emptySse = ""
+        val malformedSse = """
+            id:1
+            event:result
+            data:not-valid-json
+        """.trimIndent()
+
+        assertNull(extractor.parseQwenAsrResponse(emptySse))
+        assertNull(extractor.parseQwenAsrResponse(malformedSse))
+    }
 }

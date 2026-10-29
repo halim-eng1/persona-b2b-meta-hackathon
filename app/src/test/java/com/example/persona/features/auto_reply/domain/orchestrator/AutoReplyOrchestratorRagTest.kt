@@ -565,7 +565,8 @@ class AutoReplyOrchestratorRagTest {
                 chatHistory = any(),
                 activeOrders = any(),
                 personalChunks = any(),
-                maxTokens = any()
+                maxTokens = any(),
+                inboundIntent = any()
             )
         } returns """{"action":"REPLY","refined_search_keyword":null,"order_action":null,"final_reply_text":"وعليكم السلام! نورتنا يا فندم 😊","extracted_order":null}"""
 
@@ -599,7 +600,8 @@ class AutoReplyOrchestratorRagTest {
                 chatHistory = any(),
                 activeOrders = any(),
                 personalChunks = any(),
-                maxTokens = any()
+                maxTokens = any(),
+                inboundIntent = any()
             )
         }
 
@@ -684,7 +686,8 @@ class AutoReplyOrchestratorRagTest {
                 chatHistory = any(),
                 activeOrders = any(),
                 personalChunks = any(),
-                maxTokens = any()
+                maxTokens = any(),
+                inboundIntent = any()
             )
         } returns """{"action":"UPDATE","refined_search_keyword":null,"order_action":"UPDATE","final_reply_text":"تمام يا فندم، تم تسجيل العنوان الجديد ✅","extracted_order":{"customer_name":null,"delivery_address":"مدينة نصر الحي السابع","order_details":null,"custom_notes":null}}"""
 
@@ -794,7 +797,7 @@ class AutoReplyOrchestratorRagTest {
         coEvery { embeddingEngine.embedForAutoReply(any()) } returns floatArrayOf(0.1f, 0.2f)
 
         coEvery {
-            replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns """{"action":"REPLY","refined_search_keyword":null,"order_action":null,"final_reply_text":"أحلى صحاب يا غالي، ومفيش أي مشكلة خالص! 💙 قولّي محتاج إيه؟","extracted_order":null}"""
 
         val orchestrator = createTestOrchestrator(
@@ -824,7 +827,7 @@ class AutoReplyOrchestratorRagTest {
         }
         // Must proceed to LLM reply generation
         coVerify(exactly = 1) {
-            replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
         }
     }
 
@@ -872,7 +875,7 @@ class AutoReplyOrchestratorRagTest {
         }
         // LLM generation must NOT be called
         coVerify(exactly = 0) {
-            replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
         }
     }
 }

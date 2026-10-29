@@ -3,6 +3,7 @@ package com.example.persona.features.auto_reply.domain.repository
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.database.entity.OrderStatusCount
+import com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 
@@ -24,7 +25,8 @@ interface ReplyGenerationRepository {
         personalChunks: List<ChatHistoryEntity> = emptyList(),
         maxTokens: Int = 180,
         lastOrder: OrderEntity? = null,
-        orderStatusCounts: List<OrderStatusCount> = emptyList()
+        orderStatusCounts: List<OrderStatusCount> = emptyList(),
+        inboundIntent: InboundIntent = InboundIntent.CATALOG_INQUIRY
     ): String?
 
     /**

@@ -114,6 +114,24 @@ android {
             "NVIDIA_BASE_URL",
             "\"${resolveSecret("NVIDIA_BASE_URL") ?: "https://integrate.api.nvidia.com/v1/chat/completions"}\""
         )
+
+        // QwenCloud / DashScope credentials — resolved from environment or secrets properties
+        val resolvedQwenKey = resolveSecret("QWEN_API_KEY") ?: resolveSecret("DASHSCOPE_API_KEY") ?: ""
+        buildConfigField(
+            "String",
+            "QWEN_API_KEY",
+            "\"$resolvedQwenKey\""
+        )
+        buildConfigField(
+            "String",
+            "QWEN_BASE_URL",
+            "\"${resolveSecret("QWEN_BASE_URL") ?: "https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1/chat/completions"}\""
+        )
+        buildConfigField(
+            "String",
+            "QWEN_ASR_BASE_URL",
+            "\"${resolveSecret("QWEN_ASR_BASE_URL") ?: "https://ap-southeast-1.maas.qwencloudapi.com/api/v1/services/aigc/multimodal-generation/generation"}\""
+        )
     }
 
     buildTypes {

@@ -21,6 +21,8 @@ import com.example.persona.features.auto_reply.data.diagnostics.NotificationSour
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.request.forms.formData
 import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.client.statement.bodyAsText
@@ -32,8 +34,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ConcurrentHashMap
@@ -47,6 +54,7 @@ class WhatsAppMediaExtractor @Inject constructor(
 ) {
     internal var groqPrimaryApiKeyOverride: String? = null
     internal var groqFallbackApiKeyOverride: String? = null
+    internal var qwenApiKeyOverride: String? = null
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
     private val groqPrimaryApiKey: String
@@ -54,6 +62,9 @@ class WhatsAppMediaExtractor @Inject constructor(
 
     private val groqFallbackApiKey: String
         get() = groqFallbackApiKeyOverride ?: BuildConfig.GROQ_API_KEY_V2
+
+    private val qwenApiKey: String
+        get() = qwenApiKeyOverride ?: BuildConfig.QWEN_API_KEY
 
     companion object {
         private const val TAG = "PersonaMedia"
@@ -70,10 +81,12 @@ class WhatsAppMediaExtractor @Inject constructor(
         context: Context,
         httpClient: HttpClient,
         groqPrimaryApiKey: String?,
-        groqFallbackApiKey: String?
+        groqFallbackApiKey: String?,
+        qwenApiKey: String? = ""
     ) : this(context, httpClient) {
         this.groqPrimaryApiKeyOverride = groqPrimaryApiKey
         this.groqFallbackApiKeyOverride = groqFallbackApiKey
+        this.qwenApiKeyOverride = qwenApiKey
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -656,11 +669,22 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     /**
-     * Transcribes an audio voice note via Groq Audio API using `whisper-large-v3-turbo`.
-     * Request: Multipart POST with the audio file (.ogg upload format) and `language: "ar"`.
+     * Transcribes an audio voice note via Qwen FunASR (Primary) or Groq Whisper (Fallback).
      */
     suspend fun transcribeVoiceNote(audioFile: File): String? {
         try {
+            val qKey = qwenApiKey.trim()
+            if (qKey.isNotBlank()) {
+                val qwenResult = callQwenFunAsr(audioFile, qKey)
+                if (!qwenResult.isNullOrBlank()) {
+                    val logMsg = "🎙️ Qwen FunASR transcription completed: '$qwenResult'"
+                    Log.i(TAG, logMsg)
+                    PersonaLogger.i(TAG, logMsg)
+                    return qwenResult
+                }
+                Log.w(TAG, "Qwen FunASR returned null or blank. Falling back to Groq Whisper...")
+            }
+
             val primaryKey = groqPrimaryApiKey.trim()
             val fallbackKey = groqFallbackApiKey.trim()
 
@@ -685,7 +709,7 @@ class WhatsAppMediaExtractor @Inject constructor(
                 }
             }
 
-            Log.w(TAG, "Groq Whisper transcription failed on all keys for ${audioFile.name}")
+            Log.w(TAG, "ASR transcription failed across Qwen FunASR and Groq Whisper for ${audioFile.name}")
             return null
         } finally {
             if (audioFile.name.startsWith("incoming_voice_") && audioFile.name.endsWith(".ogg")) {
@@ -696,6 +720,89 @@ class WhatsAppMediaExtractor @Inject constructor(
                 }
             }
         }
+    }
+
+    private suspend fun callQwenFunAsr(audioFile: File, apiKey: String): String? {
+        return try {
+            if (!audioFile.exists() || audioFile.length() <= 100L) {
+                delay(150L)
+            }
+            if (!audioFile.exists() || audioFile.length() <= 100L) {
+                Log.w(TAG, "Audio file does not exist or has insufficient bytes (< 100B): ${audioFile.absolutePath} (${if (audioFile.exists()) audioFile.length() else 0} bytes)")
+                return null
+            }
+            val audioBytes = audioFile.readBytes()
+            val base64Audio = runCatching {
+                android.util.Base64.encodeToString(audioBytes, android.util.Base64.NO_WRAP)
+            }.getOrElse {
+                java.util.Base64.getEncoder().encodeToString(audioBytes)
+            }
+            val dataUri = "data:audio/ogg;base64,$base64Audio"
+
+            val payloadJson = buildJsonObject {
+                put("model", "fun-asr-flash-2026-06-15")
+                putJsonObject("input") {
+                    putJsonArray("messages") {
+                        addJsonObject {
+                            put("role", "user")
+                            putJsonArray("content") {
+                                addJsonObject {
+                                    put("type", "input_audio")
+                                    putJsonObject("input_audio") {
+                                        put("data", dataUri)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                putJsonObject("parameters") {
+                    put("format", "ogg")
+                }
+            }.toString()
+
+            val response = httpClient.post(BuildConfig.QWEN_ASR_BASE_URL) {
+                header(HttpHeaders.Authorization, "Bearer $apiKey")
+                header(HttpHeaders.ContentType, "application/json")
+                header("X-DashScope-SSE", "enable")
+                setBody(payloadJson)
+            }
+
+            if (response.status.isSuccess()) {
+                val responseText = response.bodyAsText()
+                parseQwenAsrResponse(responseText)
+            } else {
+                val status = response.status.value
+                val errorBody = response.bodyAsText()
+                Log.w(TAG, "Qwen FunASR returned error code $status: $errorBody")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception during Qwen FunASR call: ${e.message}", e)
+            null
+        }
+    }
+
+    internal fun parseQwenAsrResponse(sseText: String): String? {
+        var lastExtractedText: String? = null
+        for (line in sseText.lines()) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith("data:")) {
+                val jsonPart = trimmed.removePrefix("data:").trim()
+                if (jsonPart.isNotEmpty()) {
+                    runCatching {
+                        val root = jsonParser.parseToJsonElement(jsonPart).jsonObject
+                        val text = root["text"]?.jsonPrimitive?.content
+                            ?: root["output"]?.jsonObject?.get("text")?.jsonPrimitive?.content
+                            ?: root["sentence"]?.jsonObject?.get("text")?.jsonPrimitive?.content
+                        if (!text.isNullOrBlank()) {
+                            lastExtractedText = text.trim()
+                        }
+                    }
+                }
+            }
+        }
+        return lastExtractedText
     }
 
     private suspend fun callGroqWhisper(audioFile: File, apiKey: String): String? {
