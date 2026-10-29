@@ -27,23 +27,124 @@ class LocalDecisionClassifier @Inject constructor() {
     companion object {
         private const val TAG = "LocalDecisionClassifier"
         private const val EMBEDDING_DIM = 384
+        private val DIACRITICS_REGEX = Regex("[\u064B-\u065F\u0670]")
 
         private val GREETING_KEYWORDS = listOf(
+            // Arabic Standard & Colloquial
             "هلا", "مرحبا", "سلام", "صباح الخير", "مساء الخير", 
-            "أهلاً", "اهلين", "ألو", "هاي", "ازيك", "عامل ايه", "يا هلا"
+            "أهلاً", "اهلاً", "أهلا", "اهلا", "اهلين", "ألو", "الو", 
+            "هاي", "ازيك", "عامل ايه", "يا هلا", "صباح الفل", "مساء الفل",
+            "حد هنا", "في حد هنا", "في حد", "ف حد", "هلو",
+            // Franco-Arab & English Commercial Tokens
+            "hi", "hello", "hey", "salam", "sabah el kher", "morning",
+            "good morning", "good evening", "sabah el kheir", "sabah el fol",
+            "fe 7ad hena", "fe 7ad", "feh 7ad"
         )
         private val ORDER_KEYWORDS = listOf(
+            // Arabic Status / Tracking
             "أوردر", "اوردر", "طلب", "طلبي", "الشحنة", "شحنتي", 
-            "الطلب", "الاوردر", "الأوردر", "تتبع", "فين الاوردر", "مالوا الاوردر", "وصل لفين"
+            "الطلب", "الاوردر", "الأوردر", "تتبع", "فين الاوردر", "مالوا الاوردر", 
+            "ماله الاوردر", "وصل لفين", "وصل فين", "فين طلبي", "فين الطلب",
+            // Franco-Arab & English
+            "status", "order feen", "tracking", "track", "order status"
         )
         private val BANTER_KEYWORDS = listOf(
-            "العشا", "مخك", "تعبان", "نايم", "بتهزر", "نكتة", 
-            "المانجا", "البطيخ", "روبوت", "ذكاء", "هههه", "😂", "🤣", "اممم"
+            // Arabic Colloquial & Emojis
+            "العشا", "عشا", "العشاء", "عشاء", "مخك", "تعبان", "نايم", "بتهزر", "نكتة", 
+            "المانجا", "البطيخ", "روبوت", "ذكاء", "هههه", "😂", "🤣", "اممم", "امم", "امممم",
+            // Franco-Arab & English
+            "haha", "hahaha", "lol", "joke", "jokes", "3asha", "akl", "akel", "sa7by", "sa7bi",
+            "mmm", "hmmm"
         )
         private val CATALOG_KEYWORDS = listOf(
-            "بكام", "سعر", "اسعار", "مقاس", "مقاسات", "خامة", "قماش", 
-            "الوان", "ألوان", "هودي", "تيشيرت", "شراء", "اشتري", "كتالوج"
+            // Arabic Product / Specs / Price
+            "بكام", "سعر", "اسعار", "مقاس", "مقاسات", "المقاس", "المقاسات", 
+            "خامة", "قماش", "الوان", "ألوان", "هودي", "تيشيرت", "شراء", "اشتري", 
+            "كتالوج", "كام", "تصميم", "التصميم",
+            // Franco-Arab & English
+            "price", "prices", "bkam", "bekam", "b kam", "hoodie", "hoodies", 
+            "tshirt", "tshirts", "t-shirt", "t-shirts", "size", "sizes", 
+            "oversize", "oversized", "colors", "color", "colours", "colour"
         )
+
+        private sealed class KeywordMatcher {
+            abstract fun matches(text: String): Boolean
+
+            class Phrase(private val phrase: String) : KeywordMatcher() {
+                override fun matches(text: String): Boolean = text.contains(phrase)
+            }
+
+            class Symbol(private val symbol: String) : KeywordMatcher() {
+                override fun matches(text: String): Boolean = text.contains(symbol)
+            }
+
+            class WordRegex(private val regex: Regex) : KeywordMatcher() {
+                override fun matches(text: String): Boolean = regex.containsMatchIn(text)
+            }
+
+            class ArabicSubstring(private val sub: String) : KeywordMatcher() {
+                override fun matches(text: String): Boolean = text.contains(sub)
+            }
+
+            object ArabicKam : KeywordMatcher() {
+                override fun matches(text: String): Boolean {
+                    var startIndex = 0
+                    while (startIndex < text.length) {
+                        val idx = text.indexOf("كام", startIndex)
+                        if (idx == -1) break
+                        val beforeValid = if (idx == 0) {
+                            true
+                        } else {
+                            val prevChar = text[idx - 1]
+                            if (prevChar == 'ب') {
+                                idx - 1 == 0 || !isArabicLetter(text[idx - 2])
+                            } else {
+                                !isArabicLetter(prevChar)
+                            }
+                        }
+                        val afterValid = if (idx + 3 >= text.length) {
+                            true
+                        } else {
+                            !isArabicLetter(text[idx + 3])
+                        }
+                        if (beforeValid && afterValid) return true
+                        startIndex = idx + 1
+                    }
+                    return false
+                }
+            }
+        }
+
+        private fun isArabicLetter(c: Char): Boolean {
+            return (c in '\u0621'..'\u064A') || (c in '\u0671'..'\u06D3')
+        }
+
+        private fun buildMatcher(keyword: String): KeywordMatcher {
+            val kw = keyword.lowercase()
+            if (kw.contains(' ') || kw.contains('-')) {
+                return KeywordMatcher.Phrase(kw)
+            }
+            if (kw.any { !it.isLetterOrDigit() && !it.isWhitespace() }) {
+                return KeywordMatcher.Symbol(kw)
+            }
+            if (kw == "كام") {
+                return KeywordMatcher.ArabicKam
+            }
+            if (kw == "haha" || kw == "hahaha") {
+                return KeywordMatcher.Phrase("haha")
+            }
+            if (kw.all { it.code < 128 }) {
+                return KeywordMatcher.WordRegex(
+                    Regex("(?:^|[^a-zA-Z0-9])" + Regex.escape(kw) + "(?:[^a-zA-Z0-9]|$)", RegexOption.IGNORE_CASE)
+                )
+            }
+            return KeywordMatcher.ArabicSubstring(kw)
+        }
+
+        private val GREETING_MATCHERS = GREETING_KEYWORDS.map { buildMatcher(it) }
+        private val BANTER_MATCHERS = BANTER_KEYWORDS.map { buildMatcher(it) }
+        private val ORDER_MATCHERS = ORDER_KEYWORDS.map { buildMatcher(it) }
+        private val CATALOG_MATCHERS = CATALOG_KEYWORDS.map { buildMatcher(it) }
 
         private val CENTROID_GREETING = floatArrayOf(
             0.037092f, 0.051966f, 0.055985f, 0.032466f, -0.037546f, -0.042706f, 0.130584f, 0.042225f,
@@ -252,7 +353,7 @@ class LocalDecisionClassifier @Inject constructor() {
 
     fun classify(queryText: String, queryEmbedding: FloatArray?): DecisionResult {
         val t0 = System.currentTimeMillis()
-        val text = queryText.trim().lowercase()
+        val text = normalizeInput(queryText)
 
         var greetingScore = 0f
         var banterScore = 0f
@@ -267,10 +368,10 @@ class LocalDecisionClassifier @Inject constructor() {
         }
 
         // Lexical feature boosting to guarantee deterministic precision
-        if (GREETING_KEYWORDS.any { text.contains(it) }) greetingScore += 0.25f
-        if (ORDER_KEYWORDS.any { text.contains(it) }) orderScore += 0.35f
-        if (BANTER_KEYWORDS.any { text.contains(it) }) banterScore += 0.25f
-        if (CATALOG_KEYWORDS.any { text.contains(it) }) catalogScore += 0.30f
+        if (GREETING_MATCHERS.any { it.matches(text) }) greetingScore += 0.25f
+        if (ORDER_MATCHERS.any { it.matches(text) }) orderScore += 0.35f
+        if (BANTER_MATCHERS.any { it.matches(text) }) banterScore += 0.25f
+        if (CATALOG_MATCHERS.any { it.matches(text) }) catalogScore += 0.30f
 
         val scores = listOf(
             InboundIntent.GREETING to greetingScore,
@@ -291,6 +392,11 @@ class LocalDecisionClassifier @Inject constructor() {
             confidence = best.second.coerceIn(0f, 1f),
             latencyMs = duration
         )
+    }
+
+    private fun normalizeInput(queryText: String): String {
+        val trimmed = queryText.trim().lowercase().replace("\u0640", "")
+        return DIACRITICS_REGEX.replace(trimmed, "")
     }
 
     private fun dotProduct(a: FloatArray, b: FloatArray): Float {

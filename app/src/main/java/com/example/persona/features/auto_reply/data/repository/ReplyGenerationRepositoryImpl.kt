@@ -136,10 +136,16 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         /** Tier 1: QwenCloud Active Quotas (Primary Text & VIP Reasoning) */
         val QWEN_TEXT_MODELS = listOf(
-            "deepseek-v4.1-flash",     // 2.8s Champion @ 55 TPS
-            "qwen3.8-max",             // 1M Tokens VIP Engine (Expiring in 3 days)
-            "deepseek-v4-pro-0813",     // Advanced Reasoning (15 days remaining)
-            "qwen3.8-flash"
+            "deepseek-v4.1-flash",
+            "qwen3.8-max",
+            "deepseek-v4-pro-0813",
+            "qwen3.8-flash",
+            "qwen3.7-plus",
+            "qwen3.7-flash",
+            "qwen3.6-flash",
+            "qwen3.5-flash",
+            "qwen3-coder-flash",
+            "qwen3.6-27b"
         )
 
         /** Tier 2: NVIDIA NIM (Ultra-550B with reasoning_effort='none' & Bolt-e4b) */
@@ -602,12 +608,24 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val qwenKey = qwenApiKey.ifBlank { userPreferencesRepository.getQwenApiKeySync() }.trim()
         if (qwenKey.isNotBlank()) {
             for (model in QWEN_TEXT_MODELS) {
-                val result = callQwenCloud(model, messages, targetMaxTokens)
-                if (result is CallResult.Success) {
-                    val durationMs = System.currentTimeMillis() - qwenStartTime
-                    PersonaLogger.i(TAG, "Qwen Tier 1 succeeded with model $model in ${durationMs}ms!")
-                    Log.i(TAG, "Qwen Tier 1 succeeded with model $model in ${durationMs}ms")
-                    return result.content
+                when (val result = callQwenCloud(model, messages, targetMaxTokens)) {
+                    is CallResult.Success -> {
+                        val durationMs = System.currentTimeMillis() - qwenStartTime
+                        PersonaLogger.i(TAG, "Qwen Tier 1 succeeded with model $model in ${durationMs}ms!")
+                        Log.i(TAG, "Qwen Tier 1 succeeded with model $model in ${durationMs}ms")
+                        return result.content
+                    }
+                    is CallResult.AuthOrQuotaError -> {
+                        PersonaLogger.w(TAG, "Qwen model $model quota/auth error (${result.code}). Cascading immediately to next model.")
+                        Log.w(TAG, "Qwen model $model quota/auth error (${result.code}). Cascading immediately to next model.")
+                    }
+                    is CallResult.RateLimited -> {
+                        PersonaLogger.w(TAG, "Qwen model $model rate limited (429). Cascading immediately to next model.")
+                        Log.w(TAG, "Qwen model $model rate limited (429). Cascading immediately to next model.")
+                    }
+                    else -> {
+                        Log.w(TAG, "Qwen model $model call failed ($result). Cascading to next model.")
+                    }
                 }
             }
             PersonaLogger.w(TAG, "Qwen Tier 1 exhausted. Cascading to Tier 2 (NVIDIA NIM)...")
@@ -717,10 +735,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
                 when {
                     response.status.value == 429 -> {
+                        PersonaLogger.w(TAG, "Rate limited (429) on [QwenCloud] model $model (key $keyMasked)")
                         Log.w(TAG, "Rate limited (429) on [QwenCloud] model $model (key $keyMasked)")
                         CallResult.RateLimited
                     }
                     response.status.value in listOf(401, 402, 403) -> {
+                        PersonaLogger.w(TAG, "Auth/quota error (${response.status.value}) on [QwenCloud] model $model (key $keyMasked)")
                         Log.w(TAG, "Auth/quota error (${response.status.value}) on [QwenCloud] model $model (key $keyMasked)")
                         CallResult.AuthOrQuotaError(response.status.value)
                     }

@@ -219,9 +219,9 @@ class ReplyGenerationRepositoryImplTest {
         assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS.contains("\"order_action\": \"CREATE\" | \"CANCEL\" | \"UPDATE\" | null"))
         assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS.contains("\"extracted_order\": {"))
 
-        // Parity on order status template
-        assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS.contains("الأوردر بتاعك حالته [Status]"))
-        assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS.contains("الأوردر بتاعك حالته [Status]"))
+        // Parity on order status instruction
+        assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS.contains("ORDER STATUS: When the customer asks about their order status"))
+        assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FINAL_PASS.contains("ORDER STATUS: When the customer asks about their order status"))
 
         // Difference: First pass allows RE_QUERY, Final pass strictly forbids RE_QUERY
         assertTrue(ReplyGenerationRepositoryImpl.SYSTEM_PROMPT_FIRST_PASS.contains("\"action\": \"REPLY\" | \"RE_QUERY\" | \"HITL\""))
@@ -732,7 +732,13 @@ class ReplyGenerationRepositoryImplTest {
                 "deepseek-v4.1-flash",
                 "qwen3.8-max",
                 "deepseek-v4-pro-0813",
-                "qwen3.8-flash"
+                "qwen3.8-flash",
+                "qwen3.7-plus",
+                "qwen3.7-flash",
+                "qwen3.6-flash",
+                "qwen3.5-flash",
+                "qwen3-coder-flash",
+                "qwen3.6-27b"
             ),
             ReplyGenerationRepositoryImpl.QWEN_TEXT_MODELS
         )
@@ -1953,5 +1959,175 @@ class ReplyGenerationRepositoryImplTest {
         assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد كوين الفوري\"}", reply)
         assertEquals(1, capturedUrls.size)
         assertTrue(capturedUrls[0].contains("qwencloudapi.com"))
+    }
+
+    @Test
+    fun `callQwenCloud handles 403 quota error and 429 rate limit correctly`() = runTest {
+        var statusCode = HttpStatusCode.Forbidden
+        val mockEngine = MockEngine { _ ->
+            respond(
+                content = """{"error":{"message":"Allocation quota exhausted","type":"insufficient_quota","code":"quota_exhausted"}}""",
+                status = statusCode,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            qwenApiKey = "qwen-test-key"
+        )
+
+        val result403 = repo.callQwenCloud("deepseek-v4.1-flash", listOf(ChatMessage(role = "user", content = "hi")), 100)
+        assertTrue(result403 is ReplyGenerationRepositoryImpl.CallResult.AuthOrQuotaError)
+        assertEquals(403, (result403 as ReplyGenerationRepositoryImpl.CallResult.AuthOrQuotaError).code)
+
+        statusCode = HttpStatusCode.TooManyRequests
+        val result429 = repo.callQwenCloud("deepseek-v4.1-flash", listOf(ChatMessage(role = "user", content = "hi")), 100)
+        assertTrue(result429 is ReplyGenerationRepositoryImpl.CallResult.RateLimited)
+    }
+
+    @Test
+    fun `executeFailoverChain cascades to next Qwen model immediately when first model returns 403 quota error`() = runTest {
+        val attemptedModels = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            val parsed = Json { ignoreUnknownKeys = true }.decodeFromString<QwenChatRequest>(bodyText)
+            attemptedModels.add(parsed.model)
+
+            if (parsed.model == "deepseek-v4.1-flash") {
+                respond(
+                    content = """{"error":{"message":"Quota exhausted","code":"quota_exhausted"}}""",
+                    status = HttpStatusCode.Forbidden,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد من qwen3.8-max بعد كوتا 403\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            qwenApiKey = "qwen_key"
+        )
+
+        val reply = repo.executeFailoverChain(
+            messages = listOf(ChatMessage(role = "user", content = "هلا")),
+            maxTokens = 500
+        )
+
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد من qwen3.8-max بعد كوتا 403\"}", reply)
+        assertEquals(listOf("deepseek-v4.1-flash", "qwen3.8-max"), attemptedModels)
+    }
+
+    @Test
+    fun `executeFailoverChain cascades to next Qwen model immediately when first model returns 429 rate limit`() = runTest {
+        val attemptedModels = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val bodyText = (request.body as? io.ktor.http.content.TextContent)?.text ?: request.body.toString()
+            val parsed = Json { ignoreUnknownKeys = true }.decodeFromString<QwenChatRequest>(bodyText)
+            attemptedModels.add(parsed.model)
+
+            if (parsed.model == "deepseek-v4.1-flash") {
+                respond(
+                    content = """{"error":{"message":"Rate limit exceeded"}}""",
+                    status = HttpStatusCode.TooManyRequests,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد من qwen3.8-max بعد ليمت 429\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            qwenApiKey = "qwen_key"
+        )
+
+        val reply = repo.executeFailoverChain(
+            messages = listOf(ChatMessage(role = "user", content = "هلا")),
+            maxTokens = 500
+        )
+
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد من qwen3.8-max بعد ليمت 429\"}", reply)
+        assertEquals(listOf("deepseek-v4.1-flash", "qwen3.8-max"), attemptedModels)
+    }
+
+    @Test
+    fun `executeFailoverChain cascades from Qwen Tier 1 to NVIDIA Tier 2 when all Qwen models return 403`() = runTest {
+        val capturedUrls = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val url = request.url.toString()
+            capturedUrls.add(url)
+
+            if (url.contains("qwencloudapi.com")) {
+                respond(
+                    content = """{"error":{"message":"Quota exhausted"}}""",
+                    status = HttpStatusCode.Forbidden,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = """{"choices":[{"message":{"content":"{\"action\":\"REPLY\",\"final_reply_text\":\"رد من إنفيديا بعد استنفاد كوين\"}"}}]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true })
+            }
+        }
+        val repo = ReplyGenerationRepositoryImpl(
+            httpClient = client,
+            context = mockk<Context>(relaxed = true),
+            primaryApiKey = "primary-key",
+            fallbackApiKey = "fallback-key",
+            userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true),
+            nvidiaApiKey = "nvapi_key",
+            qwenApiKey = "qwen_key"
+        )
+
+        val reply = repo.executeFailoverChain(
+            messages = listOf(ChatMessage(role = "user", content = "هلا")),
+            maxTokens = 500
+        )
+
+        assertEquals("{\"action\":\"REPLY\",\"final_reply_text\":\"رد من إنفيديا بعد استنفاد كوين\"}", reply)
+        val qwenAttempts = capturedUrls.count { it.contains("qwencloudapi.com") }
+        assertEquals(ReplyGenerationRepositoryImpl.QWEN_TEXT_MODELS.size, qwenAttempts)
+        assertTrue(capturedUrls.any { it.contains("nvidia.com") })
     }
 }

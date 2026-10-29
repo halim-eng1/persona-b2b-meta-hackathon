@@ -103,18 +103,51 @@ class PromptContextBuilderTest {
     }
 
     @Test
-    fun `both tones contain strict emoji mirroring and graceful closing anti-looping rules`() {
+    fun `both tones contain sensible emoji rule and graceful closing anti-looping behavioral rules`() {
         val wittyFirst = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
         val politeFirst = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
         val wittyFinal = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
         val politeFinal = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
 
+        val expectedEmojiRule = "EMOJI RULE: Respond in plain text by default. ONLY if the customer includes an emoji in their message, you may mirror with AT MOST ONE contextually appropriate emoji."
+
         for (prompt in listOf(wittyFirst, politeFirst, wittyFinal, politeFinal)) {
-            assertTrue(prompt.contains("STRICT EMOJI MIRRORING"))
-            assertTrue(prompt.contains("Default state: ZERO EMOJIS"))
+            assertTrue(prompt.contains(expectedEmojiRule))
             assertTrue(prompt.contains("GRACEFUL CLOSING & THANKS (Anti-Looping)"))
-            assertTrue(prompt.contains("العفو يا فندم، نورتنا ونتمنى لك يوم سعيد! 💙"))
+            assertFalse(prompt.contains("NEVER append 😎 to every message"))
+            assertFalse(prompt.contains("العفو يا فندم، نورتنا ونتمنى لك يوم سعيد! 💙"))
         }
+    }
+
+    @Test
+    fun `system prompts do not contain literal canned dialogue examples`() {
+        val wittyPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val politePrompt = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
+
+        for (prompt in listOf(wittyPrompt, politePrompt)) {
+            assertFalse(prompt.contains("وعليكم السلام! منورنا"))
+            assertFalse(prompt.contains("واقفين على رجلينا"))
+            assertFalse(prompt.contains("في النعمة الحمد لله"))
+            assertFalse(prompt.contains("أنا معاك أهو يا فندم وسامعك كويس"))
+            assertFalse(prompt.contains("طب ما نشوفلك حاجة رايقة"))
+            assertFalse(prompt.contains("الأوردر بيسلم عليك"))
+            assertFalse(prompt.contains("الأوردر بتاعك حالته [Status]"))
+        }
+    }
+
+    @Test
+    fun `micro prompts contain sensible emoji rule and no canned dialogue`() {
+        val banterPrompt = PromptContextBuilder.buildMicroBanterPrompt()
+        val orderStatusPrompt = PromptContextBuilder.buildMicroOrderStatusPrompt()
+
+        val expectedEmojiRule = "EMOJI RULE: Respond in plain text by default. ONLY if the customer includes an emoji in their message, you may mirror with AT MOST ONE contextually appropriate emoji."
+
+        assertTrue(banterPrompt.contains(expectedEmojiRule))
+        assertTrue(orderStatusPrompt.contains(expectedEmojiRule))
+        assertFalse(banterPrompt.contains("NEVER append 😎 to every message"))
+        assertFalse(orderStatusPrompt.contains("NEVER append 😎 to every message"))
+        assertFalse(banterPrompt.contains("واقفين على رجلينا"))
+        assertFalse(orderStatusPrompt.contains("الأوردر بتاعك حالته [Status]"))
     }
 
     @Test
