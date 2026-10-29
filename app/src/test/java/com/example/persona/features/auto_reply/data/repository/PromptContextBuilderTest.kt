@@ -276,6 +276,88 @@ class PromptContextBuilderTest {
         assertFalse(formatted.contains("IN_PREPARATION"))
     }
 
+    @Test
+    fun `buildMicroOrderStatusPrompt includes extracted_order schema keys and order_action options`() {
+        val prompt = PromptContextBuilder.buildMicroOrderStatusPrompt()
+
+        // Verify valid order_action options
+        assertTrue(prompt.contains("\"order_action\": \"CREATE\" | \"CANCEL\" | \"UPDATE\" | null"))
+
+        // Verify extracted_order schema keys
+        assertTrue(prompt.contains("\"extracted_order\": {"))
+        assertTrue(prompt.contains("\"customer_name\": \"Full name or null\""))
+        assertTrue(prompt.contains("\"delivery_address\": \"Detailed address or null\""))
+        assertTrue(prompt.contains("\"order_details\": \"Items and sizes or null\""))
+        assertTrue(prompt.contains("\"custom_notes\": \"Special instructions or null\""))
+
+        // Verify behavioral rules for order status & updates
+        assertTrue(prompt.contains("ORDER STATUS & UPDATE RULES:"))
+        assertTrue(prompt.contains("If the customer confirms an address, provides missing details, or requests an update to their order, set \"order_action\": \"UPDATE\""))
+        assertTrue(prompt.contains("If they explicitly request order cancellation, set \"order_action\": \"CANCEL\""))
+    }
+
+    @Test
+    fun `buildVisionExtractionSystemPrompt and buildFirstPassSystemPrompt do not contain old canned hoodie example strings`() {
+        val visionPrompt = PromptContextBuilder.buildVisionExtractionSystemPrompt()
+        val firstPassWitty = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val firstPassPolite = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
+        val finalPassWitty = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val finalPassPolite = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
+
+        val cannedStrings = listOf("NO SYSTEM IS SAFE", "أنا مش بني آدم أنا مهندس")
+
+        for (prompt in listOf(visionPrompt, firstPassWitty, firstPassPolite, finalPassWitty, finalPassPolite)) {
+            for (canned in cannedStrings) {
+                assertFalse("Prompt must not contain canned string '$canned'", prompt.contains(canned))
+            }
+        }
+    }
+
+    @Test
+    fun `buildMicroOrderStatusPrompt and buildMicroBanterPrompt support PersonaTone and conciseness directives`() {
+        val concisenessDirective = "Match reply length strictly to the question: keep replies to 1–3 short, natural lines maximum unless specific order or catalog details require slightly more."
+
+        val wittyBanter = PromptContextBuilder.buildMicroBanterPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val politeBanter = PromptContextBuilder.buildMicroBanterPrompt(tone = PersonaTone.STANDARD_POLITE)
+        val wittyOrderStatus = PromptContextBuilder.buildMicroOrderStatusPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val politeOrderStatus = PromptContextBuilder.buildMicroOrderStatusPrompt(tone = PersonaTone.STANDARD_POLITE)
+
+        // Conciseness directive present across all micro prompts and tones
+        assertTrue(wittyBanter.contains(concisenessDirective))
+        assertTrue(politeBanter.contains(concisenessDirective))
+        assertTrue(wittyOrderStatus.contains(concisenessDirective))
+        assertTrue(politeOrderStatus.contains(concisenessDirective))
+
+        // Tone calibration for WITTY_EGYPTIAN
+        assertTrue(wittyBanter.contains("ابن بلد لمّاح، واقعي، وسريع البديهة"))
+        assertTrue(wittyOrderStatus.contains("ابن بلد لمّاح، واقعي، وسريع البديهة"))
+        assertFalse(wittyBanter.contains("العامية المصرية المهذبة"))
+
+        // Tone calibration for STANDARD_POLITE
+        assertTrue(politeBanter.contains("Welcoming, courteous, and practical customer service representative"))
+        assertTrue(politeOrderStatus.contains("Welcoming, courteous, and practical customer service representative"))
+        assertFalse(politeBanter.contains("ابن بلد لمّاح"))
+        assertFalse(politeOrderStatus.contains("ابن بلد لمّاح"))
+    }
+
+    @Test
+    fun `voice note ASR handling directive is present in generated system prompts`() {
+        val firstWitty = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val firstPolite = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
+        val finalWitty = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val finalPolite = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
+
+        val asrDirective = "VOICE NOTE & ASR HANDLING:"
+        val asrPrefix = "[رسالة صوتية من العميل]:"
+        val asrPhoneRule = "normalize into a standard 11-digit Egyptian mobile number (010, 011, 012, or 015) without duplicating spoken digits."
+
+        for (prompt in listOf(firstWitty, firstPolite, finalWitty, finalPolite)) {
+            assertTrue("System prompt must contain ASR header", prompt.contains(asrDirective))
+            assertTrue("System prompt must contain voice note prefix directive", prompt.contains(asrPrefix))
+            assertTrue("System prompt must contain phone normalization rule", prompt.contains(asrPhoneRule))
+        }
+    }
+
     private fun extractSection(fullText: String, startHeader: String, endHeader: String): String {
         return fullText.substringAfter(startHeader).substringBefore(endHeader).trim()
     }

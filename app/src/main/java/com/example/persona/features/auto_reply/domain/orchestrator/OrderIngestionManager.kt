@@ -36,7 +36,7 @@ class OrderIngestionManager @Inject constructor(
         const val PIVOT_MARKER = "أنا شايف إنك لسه عامل أوردر مشابه"
 
         const val NO_ACTIVE_ORDER_REPLY =
-            "يا فندم، ما لقيناش أوردر نشط باسم حضرتك في النظام حالياً 😊 لو في أوردر حضرتك شايفه ينتظر إلغاء، ابعتلنا تفاصيله وهنراجع حالاً."
+            "يا فندم، ما لقيناش أوردر نشط باسم حضرتك في النظام حالياً، لو في أوردر حضرتك شايفه ينتظر إلغاء، ابعتلنا تفاصيله وهنراجع حالاً."
 
         fun normalizeField(value: String?): String? {
             return value?.trim()?.replace(Regex("\\s+"), " ")
@@ -203,7 +203,7 @@ class OrderIngestionManager @Inject constructor(
                 }
             } else {
                 Log.i(TAG, "🔄 Duplicate order detected for $contactName. Sending verification pivot.")
-                val pivotText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية 😊 تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟"
+                val pivotText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية، تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟"
                 OrderIngestionResult.DuplicatePivot(pivotText)
             }
         } else {

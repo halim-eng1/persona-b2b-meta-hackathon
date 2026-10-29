@@ -10,6 +10,8 @@ import com.example.persona.core.database.dao.FailedQueryDao
 import com.example.persona.core.database.dao.OrderDao
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceClass
+import com.example.persona.features.auto_reply.data.gatekeeper.CloudflareClefClient
+import com.example.persona.features.auto_reply.data.gatekeeper.LiquidDecisionClient
 import com.example.persona.features.auto_reply.data.repository.NotificationProcessorImpl
 import com.example.persona.features.auto_reply.data.repository.PromptContextBuilder
 import com.example.persona.features.auto_reply.data.repository.SemanticRetrievalRepository
@@ -608,5 +610,58 @@ class AutoReplyOrchestratorMediaTest {
                 imageUrl = any()
             )
         }
+    }
+
+    @Test
+    fun `vision fast-path completely bypasses gatekeeper network clients on image turn`() = runBlocking {
+        val mockCfClient = mockk<CloudflareClefClient>(relaxed = true)
+        val mockLiquidClient = mockk<LiquidDecisionClient>(relaxed = true)
+
+        val imageOrchestrator = AutoReplyOrchestrator(
+            incomingMessageDispatcher = mockk(relaxed = true),
+            processor = processor,
+            embeddingEngine = embeddingEngine,
+            semanticRetrievalRepository = semanticRetrievalRepository,
+            replyGenerationRepository = replyGenerationRepository,
+            directReplyExecutionUseCase = directReplyExecutionUseCase,
+            auditLogRepository = auditLogRepository,
+            prefsRepository = prefsRepository,
+            stylePostProcessor = stylePostProcessor,
+            normalizer = normalizer,
+            failedQueryDao = failedQueryDao,
+            chatHistoryDao = chatHistoryDao,
+            orderDao = orderDao,
+            businessKnowledgeDao = businessKnowledgeDao,
+            conversationMetadataDao = conversationMetadataDao,
+            context = mockContext,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            mediaExtractor = mediaExtractor,
+            cloudflareClefClient = mockCfClient,
+            liquidDecisionClient = mockLiquidClient
+        )
+
+        val imageFile = tempFolder.newFile("fastpath_img.jpg").apply {
+            writeBytes(byteArrayOf(1, 2, 3, 4))
+        }
+
+        val notification = WhatsAppNotification(
+            title = "Customer",
+            text = "📷 بكام ده",
+            postTime = 1000L,
+            notificationKey = "key_fastpath_123",
+            sourceClass = NotificationSourceClass.BUSINESS,
+            mediaFilePath = imageFile.absolutePath
+        )
+
+        coEvery {
+            replyGenerationRepository.generateReply(
+                any(), any(), any(), any(), any(), any(), any()
+            )
+        } returns """{"action":"REPLY","final_reply_text":"ده ب 200 جنيه"}"""
+
+        imageOrchestrator.processNotificationSequentially(notification)
+
+        coVerify(exactly = 0) { mockCfClient.decide(any(), any()) }
+        coVerify(exactly = 0) { mockLiquidClient.decide(any(), any()) }
     }
 }

@@ -78,7 +78,7 @@ class LiquidDecisionClientTest {
     }
 
     @Test
-    fun `decide maps BANTER and PRESENCE_CHECK to InboundIntent BANTER`() = runTest {
+    fun `decide maps BANTER, PRESENCE_CHECK, and CLOSING to InboundIntent BANTER`() = runTest {
         val banterJson = """
             {
               "answers": {
@@ -95,11 +95,24 @@ class LiquidDecisionClientTest {
             }
         """.trimIndent()
 
+        val closingJson = """
+            {
+              "answers": {
+                "intent": { "type": "choice", "choice": "CLOSING", "confidence": 0.97 }
+              }
+            }
+        """.trimIndent()
+
         var callCount = 0
         val mockEngine = MockEngine {
             callCount++
+            val jsonContent = when (callCount) {
+                1 -> banterJson
+                2 -> presenceJson
+                else -> closingJson
+            }
             respond(
-                content = if (callCount == 1) banterJson else presenceJson,
+                content = jsonContent,
                 status = HttpStatusCode.OK,
                 headers = headersOf(HttpHeaders.ContentType, "application/json")
             )
@@ -108,16 +121,23 @@ class LiquidDecisionClientTest {
         val client = createClient(mockEngine)
         val resultBanter = client.decide("هو انت مرتبط؟")
         val resultPresence = client.decide("ف حد هنا؟")
+        val resultClosing = client.decide("شكرا يا غالي مع السلامة")
 
         assertEquals(InboundIntent.BANTER, resultBanter)
         assertEquals(InboundIntent.BANTER, resultPresence)
+        assertEquals(InboundIntent.BANTER, resultClosing)
     }
 
     @Test
-    fun `decide maps ORDER_CREATE, ORDER_UPDATE, and ORDER_CANCEL to InboundIntent ORDER_STATUS`() = runTest {
-        val choices = listOf("ORDER_CREATE", "ORDER_UPDATE", "ORDER_CANCEL")
+    fun `decide maps ORDER_CREATE to CATALOG_INQUIRY and ORDER_STATUS, ORDER_UPDATE, ORDER_CANCEL to ORDER_STATUS`() = runTest {
+        val cases = listOf(
+            "ORDER_CREATE" to InboundIntent.CATALOG_INQUIRY,
+            "ORDER_STATUS" to InboundIntent.ORDER_STATUS,
+            "ORDER_UPDATE" to InboundIntent.ORDER_STATUS,
+            "ORDER_CANCEL" to InboundIntent.ORDER_STATUS
+        )
 
-        for (choice in choices) {
+        for ((choice, expectedIntent) in cases) {
             val responseJson = """
                 {
                   "answers": {
@@ -136,8 +156,25 @@ class LiquidDecisionClientTest {
 
             val client = createClient(mockEngine)
             val result = client.decide("order message for $choice")
-            assertEquals("Choice $choice must map to InboundIntent.ORDER_STATUS", InboundIntent.ORDER_STATUS, result)
+            assertEquals("Choice $choice must map to $expectedIntent", expectedIntent, result)
         }
+    }
+
+    @Test
+    fun `mapChoiceToIntent maps CLOSING and PRESENCE_CHECK to BANTER, ORDER_CREATE to CATALOG_INQUIRY, and ORDER_UPDATE and ORDER_CANCEL to ORDER_STATUS`() {
+        val client = createClient(MockEngine { respond("") })
+        assertEquals(InboundIntent.BANTER, client.mapChoiceToIntent("CLOSING"))
+        assertEquals(InboundIntent.BANTER, client.mapChoiceToIntent("closing"))
+        assertEquals(InboundIntent.BANTER, client.mapChoiceToIntent("PRESENCE_CHECK"))
+        assertEquals(InboundIntent.BANTER, client.mapChoiceToIntent("presence_check"))
+        assertEquals(InboundIntent.BANTER, client.mapChoiceToIntent("BANTER"))
+
+        assertEquals(InboundIntent.CATALOG_INQUIRY, client.mapChoiceToIntent("ORDER_CREATE"))
+        assertEquals(InboundIntent.CATALOG_INQUIRY, client.mapChoiceToIntent("order_create"))
+
+        assertEquals(InboundIntent.ORDER_STATUS, client.mapChoiceToIntent("ORDER_STATUS"))
+        assertEquals(InboundIntent.ORDER_STATUS, client.mapChoiceToIntent("ORDER_UPDATE"))
+        assertEquals(InboundIntent.ORDER_STATUS, client.mapChoiceToIntent("ORDER_CANCEL"))
     }
 
     @Test
@@ -246,7 +283,7 @@ class LiquidDecisionClientTest {
 
         val result = client.decide("عايز اطلب هودي")
 
-        assertEquals(InboundIntent.ORDER_STATUS, result)
+        assertEquals(InboundIntent.CATALOG_INQUIRY, result)
         assertTrue(capturedModels.contains(LiquidDecisionClient.PRIMARY_MODEL))
         assertTrue(capturedModels.contains(LiquidDecisionClient.FAILOVER_MODEL))
     }

@@ -196,8 +196,9 @@ class LiquidDecisionClient @Inject constructor(
     internal fun mapChoiceToIntent(choice: String?): InboundIntent {
         return when (choice?.trim()?.uppercase()) {
             "GREETING" -> InboundIntent.GREETING
-            "BANTER", "PRESENCE_CHECK" -> InboundIntent.BANTER
-            "ORDER_CREATE", "ORDER_UPDATE", "ORDER_CANCEL" -> InboundIntent.ORDER_STATUS
+            "BANTER", "PRESENCE_CHECK", "CLOSING" -> InboundIntent.BANTER
+            "ORDER_CREATE" -> InboundIntent.CATALOG_INQUIRY
+            "ORDER_STATUS", "ORDER_UPDATE", "ORDER_CANCEL" -> InboundIntent.ORDER_STATUS
             "CATALOG_INQUIRY" -> InboundIntent.CATALOG_INQUIRY
             "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
             else -> InboundIntent.CATALOG_INQUIRY

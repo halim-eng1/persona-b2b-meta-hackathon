@@ -52,6 +52,7 @@ class CloudflareClefClient @Inject constructor(
 
         val INTENT_CRITERIA: Map<String, String> = linkedMapOf(
             "GREETING" to "Hello, peace, welcome, good morning/evening",
+            "CLOSING" to "Thanks, goodbye, parting, finishing conversation",
             "BANTER" to "Jokes, flirting, riddles, dinner banter, teasing",
             "ORDER_STATUS" to "Checking active order status, tracking, courier",
             "CATALOG_INQUIRY" to "Inquiring about hoodies, t-shirts, prices, sizes, fabric, shipping fees",
@@ -92,7 +93,7 @@ class CloudflareClefClient @Inject constructor(
         }
     }
 
-    suspend fun decide(text: String, timeoutMs: Long = 800L): InboundIntent? = withContext(Dispatchers.IO) {
+    suspend fun decide(text: String, timeoutMs: Long = 1150L): InboundIntent? = withContext(Dispatchers.IO) {
         withTimeoutOrNull(timeoutMs) {
             val token = apiToken.trim()
             val account = accountId.trim()
@@ -103,7 +104,7 @@ class CloudflareClefClient @Inject constructor(
             }
 
             // 1. Try PRIMARY_MODEL (@cf/cloudflare/clef-flash) with an allocated budget within the SLA
-            val primaryTimeout = (timeoutMs * 5 / 8).coerceAtLeast(300L)
+            val primaryTimeout = (timeoutMs * 5 / 8).coerceAtLeast(400L)
             val primaryOutcome = withTimeoutOrNull(primaryTimeout) {
                 executeCall(token, PRIMARY_MODEL, text)
             }
@@ -199,8 +200,9 @@ class CloudflareClefClient @Inject constructor(
     internal fun mapChoiceToIntent(choice: String?): InboundIntent {
         return when (choice?.trim()?.uppercase()) {
             "GREETING" -> InboundIntent.GREETING
-            "BANTER", "PRESENCE_CHECK" -> InboundIntent.BANTER
-            "ORDER_STATUS", "ORDER_CREATE", "ORDER_UPDATE", "ORDER_CANCEL" -> InboundIntent.ORDER_STATUS
+            "BANTER", "PRESENCE_CHECK", "CLOSING" -> InboundIntent.BANTER
+            "ORDER_CREATE" -> InboundIntent.CATALOG_INQUIRY
+            "ORDER_STATUS", "ORDER_UPDATE", "ORDER_CANCEL" -> InboundIntent.ORDER_STATUS
             "CATALOG_INQUIRY" -> InboundIntent.CATALOG_INQUIRY
             "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
             else -> InboundIntent.CATALOG_INQUIRY

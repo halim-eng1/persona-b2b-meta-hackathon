@@ -147,6 +147,97 @@ class CloudflareClefClientTest {
     }
 
     @Test
+    fun `decide maps BANTER, PRESENCE_CHECK, and CLOSING to InboundIntent BANTER`() = runTest {
+        val choices = listOf("BANTER", "PRESENCE_CHECK", "CLOSING")
+        for (choice in choices) {
+            val responseJson = """
+                {
+                  "result": {
+                    "model": "clef-flash",
+                    "answers": {
+                      "intent": {
+                        "type": "choice",
+                        "choice": "$choice",
+                        "confidence": 0.94
+                      }
+                    }
+                  },
+                  "success": true
+                }
+            """.trimIndent()
+
+            val mockEngine = MockEngine {
+                respond(
+                    content = responseJson,
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+
+            val client = createClient(mockEngine)
+            val result = client.decide("test query for $choice")
+            assertEquals("Choice $choice must map to InboundIntent.BANTER", InboundIntent.BANTER, result)
+        }
+    }
+
+    @Test
+    fun `decide maps ORDER_CREATE to CATALOG_INQUIRY and ORDER_STATUS, ORDER_UPDATE, ORDER_CANCEL to ORDER_STATUS`() = runTest {
+        val cases = listOf(
+            "ORDER_CREATE" to InboundIntent.CATALOG_INQUIRY,
+            "ORDER_STATUS" to InboundIntent.ORDER_STATUS,
+            "ORDER_UPDATE" to InboundIntent.ORDER_STATUS,
+            "ORDER_CANCEL" to InboundIntent.ORDER_STATUS
+        )
+
+        for ((choice, expectedIntent) in cases) {
+            val responseJson = """
+                {
+                  "result": {
+                    "model": "clef-flash",
+                    "answers": {
+                      "intent": {
+                        "type": "choice",
+                        "choice": "$choice",
+                        "confidence": 0.95
+                      }
+                    }
+                  },
+                  "success": true
+                }
+            """.trimIndent()
+
+            val mockEngine = MockEngine {
+                respond(
+                    content = responseJson,
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
+
+            val client = createClient(mockEngine)
+            val result = client.decide("order query for $choice")
+            assertEquals("Choice $choice must map to $expectedIntent", expectedIntent, result)
+        }
+    }
+
+    @Test
+    fun `mapChoiceToIntent maps CLOSING and PRESENCE_CHECK to BANTER, ORDER_CREATE to CATALOG_INQUIRY, and ORDER_UPDATE and ORDER_CANCEL to ORDER_STATUS`() {
+        val client = createClient(MockEngine { respond("") })
+        assertEquals(InboundIntent.BANTER, client.mapChoiceToIntent("CLOSING"))
+        assertEquals(InboundIntent.BANTER, client.mapChoiceToIntent("closing"))
+        assertEquals(InboundIntent.BANTER, client.mapChoiceToIntent("PRESENCE_CHECK"))
+        assertEquals(InboundIntent.BANTER, client.mapChoiceToIntent("presence_check"))
+        assertEquals(InboundIntent.BANTER, client.mapChoiceToIntent("BANTER"))
+
+        assertEquals(InboundIntent.CATALOG_INQUIRY, client.mapChoiceToIntent("ORDER_CREATE"))
+        assertEquals(InboundIntent.CATALOG_INQUIRY, client.mapChoiceToIntent("order_create"))
+
+        assertEquals(InboundIntent.ORDER_STATUS, client.mapChoiceToIntent("ORDER_STATUS"))
+        assertEquals(InboundIntent.ORDER_STATUS, client.mapChoiceToIntent("ORDER_UPDATE"))
+        assertEquals(InboundIntent.ORDER_STATUS, client.mapChoiceToIntent("ORDER_CANCEL"))
+    }
+
+    @Test
     fun `decide maps CATALOG_INQUIRY and GENUINE_COMPLAINT_HITL correctly`() = runTest {
         val cases = listOf(
             "CATALOG_INQUIRY" to InboundIntent.CATALOG_INQUIRY,
@@ -317,6 +408,7 @@ class CloudflareClefClientTest {
         val intentCriteria = intentQ["criteria"]?.jsonObject
         assertNotNull(intentCriteria)
         assertTrue(intentCriteria!!.containsKey("GREETING"))
+        assertTrue(intentCriteria.containsKey("CLOSING"))
         assertTrue(intentCriteria.containsKey("BANTER"))
         assertTrue(intentCriteria.containsKey("ORDER_STATUS"))
         assertTrue(intentCriteria.containsKey("CATALOG_INQUIRY"))
@@ -331,6 +423,23 @@ class CloudflareClefClientTest {
         assertNotNull(urgentCriteria)
         assertTrue(urgentCriteria!!.containsKey("yes"))
         assertTrue(urgentCriteria.containsKey("no"))
+    }
+
+    @Test
+    fun `decide respects default 1150ms timeout SLA`() = runTest {
+        val mockEngine = MockEngine {
+            delay(500L)
+            respond(
+                content = """{"result":{"answers":{"intent":{"type":"choice","choice":"GREETING"}}},"success":true}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+
+        val client = createClient(mockEngine)
+        val result = client.decide("سلام عليكم")
+
+        assertEquals(InboundIntent.GREETING, result)
     }
 
     @Test

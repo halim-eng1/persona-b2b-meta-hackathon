@@ -299,7 +299,7 @@ class AutoReplyOrchestratorRagTest {
         val pivotMsg = ChatHistoryEntity(
             id = 10L,
             contactName = "محمد علي",
-            messageText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية 😊 تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟",
+            messageText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية، تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟",
             isFromUser = false,
             timestamp = pivotTimestamp,
             sourceClass = "BUSINESS"
@@ -359,7 +359,7 @@ class AutoReplyOrchestratorRagTest {
         val pivotMsg = ChatHistoryEntity(
             id = 10L,
             contactName = "محمد علي",
-            messageText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية 😊 تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟",
+            messageText = "أنا شايف إنك لسه عامل أوردر مشابه من شوية، تحب نعدل على الأوردر القديم ونضيف عليه التفاصيل الجديدة دي، ولا ده أوردر جديد خالص يا فندم؟",
             isFromUser = false,
             timestamp = pivotTimestamp,
             sourceClass = "BUSINESS"

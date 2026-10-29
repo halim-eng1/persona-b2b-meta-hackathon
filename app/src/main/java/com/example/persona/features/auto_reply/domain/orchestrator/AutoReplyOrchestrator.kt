@@ -424,38 +424,42 @@ class AutoReplyOrchestrator @Inject constructor(
             val isImagePresent = !isTranscribedVoice && !isVoiceTranscribedNow && effectiveProcessed.mediaFilePath != null
 
             // 3-Tier Multi-Cloud Gatekeeper Cascade:
-            // Tier 1: Cloudflare Clef (clef-flash / clef-omni) [800ms SLA]
+            // Tier 1: Cloudflare Clef (clef-flash / clef-omni) [1150ms SLA]
             // Tier 2: Liquid AI (d1 / d1:latest) [800ms SLA fallback]
             // Tier 3: LocalDecisionClassifier (On-Device Emergency Fallback, <0.2ms)
             val tGatekeeper = System.currentTimeMillis()
 
-            val cfIntent = runCatching {
-                cloudflareClefClient.decide(queryTextForEmbedding, timeoutMs = 800L)
-            }.onFailure { e ->
-                Log.w(TAG, "Gatekeeper Tier 1 (Cloudflare Clef) threw exception: ${e.message}")
-            }.getOrNull()
-
-            val (decision, resolvedTier) = if (cfIntent != null) {
-                val latency = System.currentTimeMillis() - tGatekeeper
-                DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Tier 1: Cloudflare Clef"
+            val (decision, resolvedTier) = if (isImagePresent) {
+                DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 1.0f, latencyMs = 0L) to "FastPath: Image Present"
             } else {
-                val liquidIntent = runCatching {
-                    liquidDecisionClient.decide(queryTextForEmbedding, timeoutMs = 800L)
+                val cfIntent = runCatching {
+                    cloudflareClefClient.decide(queryTextForEmbedding, timeoutMs = 1150L)
                 }.onFailure { e ->
-                    Log.w(TAG, "Gatekeeper Tier 2 (Liquid AI) threw exception: ${e.message}")
+                    Log.w(TAG, "Gatekeeper Tier 1 (Cloudflare Clef) threw exception: ${e.message}")
                 }.getOrNull()
 
-                if (liquidIntent != null) {
+                if (cfIntent != null) {
                     val latency = System.currentTimeMillis() - tGatekeeper
-                    DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Tier 2: Liquid AI"
+                    DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Tier 1: Cloudflare Clef"
                 } else {
-                    val localDecision = runCatching {
-                        localDecisionClassifier.classify(queryTextForEmbedding, queryEmbedding)
-                    }.getOrElse { e ->
-                        Log.e(TAG, "Gatekeeper Tier 3 (Local Decision) failed: ${e.message}", e)
-                        DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 0.5f, latencyMs = 0L)
+                    val liquidIntent = runCatching {
+                        liquidDecisionClient.decide(queryTextForEmbedding, timeoutMs = 800L)
+                    }.onFailure { e ->
+                        Log.w(TAG, "Gatekeeper Tier 2 (Liquid AI) threw exception: ${e.message}")
+                    }.getOrNull()
+
+                    if (liquidIntent != null) {
+                        val latency = System.currentTimeMillis() - tGatekeeper
+                        DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Tier 2: Liquid AI"
+                    } else {
+                        val localDecision = runCatching {
+                            localDecisionClassifier.classify(queryTextForEmbedding, queryEmbedding)
+                        }.getOrElse { e ->
+                            Log.e(TAG, "Gatekeeper Tier 3 (Local Decision) failed: ${e.message}", e)
+                            DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 0.5f, latencyMs = 0L)
+                        }
+                        localDecision to "Tier 3: LocalDecisionClassifier (On-Device)"
                     }
-                    localDecision to "Tier 3: LocalDecisionClassifier (On-Device)"
                 }
             }
 
