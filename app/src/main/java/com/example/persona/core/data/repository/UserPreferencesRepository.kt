@@ -11,12 +11,32 @@ import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import com.example.persona.features.settings.data.repository.InMemorySecureCredentialsRepository
+import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Value object representing merchant's configured business hours and automated schedule.
+ */
+data class BusinessHoursSchedule(
+    val isEnabled: Boolean = false,
+    val workingDays: Set<String> = DEFAULT_WORKING_DAYS,
+    val startTime: String = "10:00",
+    val endTime: String = "23:00",
+    val outOfHoursMessage: String = DEFAULT_OUT_OF_HOURS_MESSAGE
+) {
+    companion object {
+        val DEFAULT_WORKING_DAYS = setOf(
+            "SATURDAY", "SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY"
+        )
+        const val DEFAULT_OUT_OF_HOURS_MESSAGE =
+            "أهلاً بك في متجرنا! مواعيد العمل الرسمية من 10:00 صباحاً إلى 11:00 مساءً. تم استلام رسالتك وسنرد عليك فور بدء ساعات العمل الرسمية."
+    }
+}
 
 @Singleton
 class UserPreferencesRepository @Inject constructor(
@@ -31,6 +51,7 @@ class UserPreferencesRepository @Inject constructor(
         dataStore = dataStore,
         secureCredentialsRepository = InMemorySecureCredentialsRepository()
     )
+
     companion object {
         // ── Core toggles ──────────────────────────────────────────────────────
         val KEY_AUTO_REPLY_ENABLED = booleanPreferencesKey("auto_reply_enabled")
@@ -43,25 +64,12 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_REPLY_DELAY_SECONDS = intPreferencesKey("reply_delay_seconds")
 
         // ── App routing toggles ────────────────────────────────────────────────
-        /** Listen to notifications from the main WhatsApp app (com.whatsapp). */
         val KEY_LISTEN_MAIN_APP = booleanPreferencesKey("listen_main_app")
-
-        /** Listen to notifications from WhatsApp Business (com.whatsapp.w4b). */
         val KEY_LISTEN_BUSINESS_APP = booleanPreferencesKey("listen_business_app")
-
-        /**
-         * Listen to notifications from a cloned/dual-SIM WhatsApp instance.
-         * Clones are identified by [UserHandle.identifier] != 0 on the MAIN_APP package.
-         * Off by default — requires explicit user opt-in since clone detection is
-         * device-manufacturer-specific and may produce false positives.
-         */
         val KEY_LISTEN_CLONE_APP = booleanPreferencesKey("listen_clone_app")
 
         // ── Greeting / Farewell response templates ────────────────────────────
-        /** Response text sent when the ContextDetector classifies the query as GREETING. */
         val KEY_GREETING_TEMPLATE = stringPreferencesKey("greeting_template")
-
-        /** Response text sent when the ContextDetector classifies the query as CLOSING. */
         val KEY_FAREWELL_TEMPLATE = stringPreferencesKey("farewell_template")
 
         // ── Bot & Store Brand Identity ────────────────────────────────────────
@@ -69,10 +77,7 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_STORE_NAME = stringPreferencesKey("store_name")
 
         // ── Store Topics Index (hierarchical knowledge indexing) ──────────────
-        /** Newline-joined list of Level-1 (`#`) headings extracted from the imported knowledge document. */
         private val STORE_KNOWLEDGE_TOPICS_KEY = stringPreferencesKey("store_knowledge_topics")
-
-        /** Canonical base URL / storefront of the merchant's official e-commerce store. */
         val KEY_STORE_WEBSITE = stringPreferencesKey("store_website")
         private val STORE_WEBSITE_KEY = KEY_STORE_WEBSITE
 
@@ -85,9 +90,27 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_MEDIA_FALLBACK_MESSAGE = stringPreferencesKey("media_fallback_message")
         val KEY_BLANK_REPLY_FALLBACK_TEMPLATE = stringPreferencesKey("blank_reply_fallback_template")
 
-        // ── LLM Credentials Overrides ─────────────────────────────────────────
+        // ── LLM Credentials Overrides (Legacy keys migrated to SecureCredentialsRepository) ─
         val KEY_NVIDIA_API_KEY = stringPreferencesKey("nvidia_api_key")
         val KEY_QWEN_API_KEY = stringPreferencesKey("qwen_api_key")
+
+        // ── Provider Ordering & Model Management ──────────────────────────────
+        val KEY_PROVIDER_ORDER = stringPreferencesKey("provider_order")
+        private fun providerModelsKey(provider: String) =
+            stringPreferencesKey("provider_models_${provider.trim().lowercase()}")
+
+        // ── Auto-Start Onboarding Confirmation ─────────────────────────────────
+        val KEY_AUTO_START_CONFIRMED = booleanPreferencesKey("is_auto_start_confirmed")
+
+        // ── Business Hours & Blacklist ────────────────────────────────────────
+        val KEY_BUSINESS_HOURS_ENABLED = booleanPreferencesKey("business_hours_enabled")
+        val KEY_BUSINESS_HOURS_DAYS = stringPreferencesKey("business_hours_days")
+        val KEY_BUSINESS_HOURS_START = stringPreferencesKey("business_hours_start")
+        val KEY_BUSINESS_HOURS_END = stringPreferencesKey("business_hours_end")
+        val KEY_BUSINESS_HOURS_OUT_OF_HOURS_MSG = stringPreferencesKey("business_hours_out_of_hours_msg")
+
+        val KEY_IGNORE_GROUPS = booleanPreferencesKey("ignore_whatsapp_groups")
+        val KEY_BLACKLISTED_NUMBERS = stringPreferencesKey("blacklisted_phone_numbers")
 
         const val DEFAULT_BOT_NAME = "مساعد المبيعات"
         const val DEFAULT_STORE_NAME = "متجرنا"
@@ -98,6 +121,28 @@ class UserPreferencesRepository @Inject constructor(
             "عفواً، لا يمكنني معالجة الوسائط. يرجى كتابة استفسارك في رسالة نصية."
         const val DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE =
             "أنا معاك وسامعك كويس يا فندم، بس قولّي نقدر نجهزلك إيه النهارده من منتجاتنا في %s؟ 💙"
+
+        val DEFAULT_PROVIDER_ORDER = listOf(
+            ModelProviders.QWEN,
+            ModelProviders.GEMINI,
+            ModelProviders.GROQ,
+            ModelProviders.NVIDIA,
+            ModelProviders.OPENROUTER,
+            ModelProviders.CLOUDFLARE,
+            ModelProviders.LIQUID,
+            ModelProviders.NARA
+        )
+
+        val DEFAULT_PROVIDER_MODELS = mapOf(
+            ModelProviders.QWEN to listOf("qwen-max-latest", "qwen-plus", "qwen-turbo"),
+            ModelProviders.GEMINI to listOf("gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash"),
+            ModelProviders.GROQ to listOf("llama-3.3-70b-versatile", "whisper-large-v3", "mixtral-8x7b-32768"),
+            ModelProviders.NVIDIA to listOf("meta/llama-3.1-70b-instruct", "mistralai/mixtral-8x22b-instruct-v0.1"),
+            ModelProviders.OPENROUTER to listOf("anthropic/claude-3.5-sonnet", "openai/gpt-4o", "deepseek/deepseek-chat"),
+            ModelProviders.CLOUDFLARE to listOf("@cf/meta/llama-3.1-8b-instruct", "@cf/meta/llama-3.1-70b-instruct"),
+            ModelProviders.LIQUID to listOf("liquid-lfm-40b", "liquid-lfm-7b"),
+            ModelProviders.NARA to listOf("nara-arabic-base", "nara-chat")
+        )
     }
 
     // ── Flows ─────────────────────────────────────────────────────────────────
@@ -147,26 +192,17 @@ class UserPreferencesRepository @Inject constructor(
         prefs[KEY_STORE_NAME]?.takeIf { it.isNotBlank() } ?: DEFAULT_STORE_NAME
     }
 
-    /**
-     * Store Topics Index: the Level-1 (`#`) section headings of the last imported
-     * knowledge document, exposed as a reactive list. Consumed by [PromptContextBuilder]
-     * to inject the `<store_topics>` block into the system prompt.
-     */
     val storeKnowledgeTopicsFlow: Flow<List<String>> = dataStore.data.map { preferences ->
         val raw = preferences[STORE_KNOWLEDGE_TOPICS_KEY] ?: ""
         if (raw.isBlank()) emptyList() else raw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
     }
 
-    /**
-     * Primary official store website URL, exposed as a reactive flow.
-     * Injected into the system prompt as the `<store_website>` block.
-     */
     val storeWebsiteFlow: Flow<String?> = dataStore.data.map { preferences ->
         preferences[STORE_WEBSITE_KEY]?.takeIf { it.isNotBlank() }
     }
 
     val isAutoPauseOnHitlEnabledFlow: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[AUTO_PAUSE_ON_HITL_KEY] ?: false // Default is FALSE
+        preferences[AUTO_PAUSE_ON_HITL_KEY] ?: false
     }
 
     val hitlHoldingMessageFlow: Flow<String> = dataStore.data.map { prefs ->
@@ -182,10 +218,211 @@ class UserPreferencesRepository @Inject constructor(
     }
 
     val nvidiaApiKeyFlow: Flow<String?> = secureCredentialsRepository.nvidiaApiKeyFlow
-
     val qwenApiKeyFlow: Flow<String?> = secureCredentialsRepository.qwenApiKeyFlow
 
-    // ── Suspend setters ───────────────────────────────────────────────────────
+    // ── AutoStart Confirmation Persistence ─────────────────────────────────────
+
+    val isAutoStartConfirmedFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_AUTO_START_CONFIRMED] ?: false
+    }
+
+    suspend fun setAutoStartConfirmed(confirmed: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[KEY_AUTO_START_CONFIRMED] = confirmed
+        }
+    }
+
+    suspend fun isAutoStartConfirmedSync(): Boolean =
+        dataStore.data.first()[KEY_AUTO_START_CONFIRMED] ?: false
+
+    // ── Provider Ordering Management ──────────────────────────────────────────
+
+    val providerOrderFlow: Flow<List<String>> = dataStore.data.map { prefs ->
+        val raw = prefs[KEY_PROVIDER_ORDER]
+        if (raw.isNullOrBlank()) {
+            DEFAULT_PROVIDER_ORDER
+        } else {
+            raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+        }
+    }
+
+    fun getProviderOrder(): Flow<List<String>> = providerOrderFlow
+
+    suspend fun setProviderOrder(order: List<String>) {
+        val sanitized = order.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+        dataStore.edit { prefs ->
+            prefs[KEY_PROVIDER_ORDER] = sanitized.joinToString(",")
+        }
+    }
+
+    suspend fun getProviderOrderSync(): List<String> {
+        val raw = dataStore.data.first()[KEY_PROVIDER_ORDER]
+        return if (raw.isNullOrBlank()) {
+            DEFAULT_PROVIDER_ORDER
+        } else {
+            raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+        }
+    }
+
+    // ── Dynamic Provider Model Management ─────────────────────────────────────
+
+    fun getProviderModels(provider: String): Flow<List<String>> {
+        val norm = ModelProviders.normalize(provider)
+        val key = providerModelsKey(norm)
+        return dataStore.data.map { prefs ->
+            val raw = prefs[key]
+            if (raw.isNullOrBlank()) {
+                DEFAULT_PROVIDER_MODELS[norm] ?: emptyList()
+            } else {
+                raw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+            }
+        }
+    }
+
+    suspend fun setProviderModels(provider: String, models: List<String>) {
+        val norm = ModelProviders.normalize(provider)
+        val key = providerModelsKey(norm)
+        val sanitized = models.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        dataStore.edit { prefs ->
+            prefs[key] = sanitized.joinToString("\n")
+        }
+    }
+
+    suspend fun addProviderModel(provider: String, model: String) {
+        val norm = ModelProviders.normalize(provider)
+        val trimmed = model.trim()
+        if (trimmed.isBlank()) return
+        val current = getProviderModelsSync(norm)
+        if (!current.contains(trimmed)) {
+            setProviderModels(norm, current + trimmed)
+        }
+    }
+
+    suspend fun removeProviderModel(provider: String, model: String) {
+        val norm = ModelProviders.normalize(provider)
+        val trimmed = model.trim()
+        val current = getProviderModelsSync(norm)
+        setProviderModels(norm, current.filter { it != trimmed })
+    }
+
+    suspend fun getProviderModelsSync(provider: String): List<String> {
+        val norm = ModelProviders.normalize(provider)
+        val raw = dataStore.data.first()[providerModelsKey(norm)]
+        return if (raw.isNullOrBlank()) {
+            DEFAULT_PROVIDER_MODELS[norm] ?: emptyList()
+        } else {
+            raw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+        }
+    }
+
+    // ── Business Hours Schedule Persistence ───────────────────────────────────
+
+    val businessHoursScheduleFlow: Flow<BusinessHoursSchedule> = dataStore.data.map { prefs ->
+        val isEnabled = prefs[KEY_BUSINESS_HOURS_ENABLED] ?: false
+        val rawDays = prefs[KEY_BUSINESS_HOURS_DAYS]
+        val days = if (rawDays.isNullOrBlank()) {
+            BusinessHoursSchedule.DEFAULT_WORKING_DAYS
+        } else {
+            rawDays.split(",").map { it.trim().uppercase() }.filter { it.isNotEmpty() }.toSet()
+        }
+        val startTime = prefs[KEY_BUSINESS_HOURS_START] ?: "10:00"
+        val endTime = prefs[KEY_BUSINESS_HOURS_END] ?: "23:00"
+        val outOfHoursMsg = prefs[KEY_BUSINESS_HOURS_OUT_OF_HOURS_MSG]?.takeIf { it.isNotBlank() }
+            ?: BusinessHoursSchedule.DEFAULT_OUT_OF_HOURS_MESSAGE
+
+        BusinessHoursSchedule(
+            isEnabled = isEnabled,
+            workingDays = days,
+            startTime = startTime,
+            endTime = endTime,
+            outOfHoursMessage = outOfHoursMsg
+        )
+    }
+
+    suspend fun setBusinessHoursSchedule(schedule: BusinessHoursSchedule) {
+        dataStore.edit { prefs ->
+            prefs[KEY_BUSINESS_HOURS_ENABLED] = schedule.isEnabled
+            prefs[KEY_BUSINESS_HOURS_DAYS] = schedule.workingDays.joinToString(",")
+            prefs[KEY_BUSINESS_HOURS_START] = schedule.startTime
+            prefs[KEY_BUSINESS_HOURS_END] = schedule.endTime
+            prefs[KEY_BUSINESS_HOURS_OUT_OF_HOURS_MSG] = schedule.outOfHoursMessage
+        }
+    }
+
+    suspend fun setBusinessHoursEnabled(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[KEY_BUSINESS_HOURS_ENABLED] = enabled }
+    }
+
+    suspend fun setWorkingDays(days: Set<String>) {
+        dataStore.edit { prefs -> prefs[KEY_BUSINESS_HOURS_DAYS] = days.joinToString(",") }
+    }
+
+    suspend fun setWorkingHours(startTime: String, endTime: String) {
+        dataStore.edit { prefs ->
+            prefs[KEY_BUSINESS_HOURS_START] = startTime.trim()
+            prefs[KEY_BUSINESS_HOURS_END] = endTime.trim()
+        }
+    }
+
+    suspend fun setOutOfHoursMessage(message: String) {
+        dataStore.edit { prefs -> prefs[KEY_BUSINESS_HOURS_OUT_OF_HOURS_MSG] = message.trim() }
+    }
+
+    suspend fun getBusinessHoursScheduleSync(): BusinessHoursSchedule =
+        businessHoursScheduleFlow.first()
+
+    // ── Blacklist & Privacy Persistence ───────────────────────────────────────
+
+    val ignoreGroupsFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_IGNORE_GROUPS] ?: true // Ignore groups by default for privacy
+    }
+
+    val blacklistedNumbersFlow: Flow<Set<String>> = dataStore.data.map { prefs ->
+        val raw = prefs[KEY_BLACKLISTED_NUMBERS]
+        if (raw.isNullOrBlank()) {
+            emptySet()
+        } else {
+            raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        }
+    }
+
+    suspend fun setIgnoreGroups(ignore: Boolean) {
+        dataStore.edit { prefs -> prefs[KEY_IGNORE_GROUPS] = ignore }
+    }
+
+    suspend fun setBlacklistedNumbers(numbers: Set<String>) {
+        val sanitized = numbers.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        dataStore.edit { prefs ->
+            prefs[KEY_BLACKLISTED_NUMBERS] = sanitized.joinToString(",")
+        }
+    }
+
+    suspend fun addBlacklistedNumber(number: String) {
+        val trimmed = number.trim()
+        if (trimmed.isBlank()) return
+        val current = getBlacklistedNumbersSync()
+        setBlacklistedNumbers(current + trimmed)
+    }
+
+    suspend fun removeBlacklistedNumber(number: String) {
+        val trimmed = number.trim()
+        val current = getBlacklistedNumbersSync()
+        setBlacklistedNumbers(current.filter { it != trimmed }.toSet())
+    }
+
+    suspend fun isIgnoreGroupsSync(): Boolean =
+        dataStore.data.first()[KEY_IGNORE_GROUPS] ?: true
+
+    suspend fun getBlacklistedNumbersSync(): Set<String> {
+        val raw = dataStore.data.first()[KEY_BLACKLISTED_NUMBERS]
+        return if (raw.isNullOrBlank()) {
+            emptySet()
+        } else {
+            raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        }
+    }
+
+    // ── Core Suspend Setters ──────────────────────────────────────────────────
 
     suspend fun setAutoReplyEnabled(enabled: Boolean) {
         dataStore.edit { prefs -> prefs[KEY_AUTO_REPLY_ENABLED] = enabled }
@@ -236,26 +473,18 @@ class UserPreferencesRepository @Inject constructor(
         dataStore.edit { prefs -> prefs[KEY_STORE_NAME] = name.trim() }
     }
 
-    /**
-     * Atomically persists the Store Topics Index (one topic per line).
-     * Overwrites any previous list — re-importing a knowledge document supersedes it.
-     */
     suspend fun setStoreKnowledgeTopics(topics: List<String>) {
         dataStore.edit { preferences ->
             preferences[STORE_KNOWLEDGE_TOPICS_KEY] = topics.joinToString("\n")
         }
     }
 
-    /** Removes the Store Topics Index (called when the merchant clears/resets the Knowledge Base). */
     suspend fun clearStoreKnowledgeTopics() {
         dataStore.edit { preferences ->
             preferences.remove(STORE_KNOWLEDGE_TOPICS_KEY)
         }
     }
 
-    /**
-     * Persists the official store website URL extracted from imported knowledge.
-     */
     suspend fun setStoreWebsite(website: String?) {
         dataStore.edit { preferences ->
             if (website.isNullOrBlank()) {
@@ -266,7 +495,6 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
-    /** Removes the persisted store website URL. */
     suspend fun clearStoreWebsite() {
         dataStore.edit { preferences ->
             preferences.remove(STORE_WEBSITE_KEY)
@@ -298,10 +526,6 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun getPersonaToneSync(): PersonaTone = getStylePreferencesSync().personaTone
 
-    /**
-     * Reads all routing toggles and template strings in a single DataStore read.
-     * Intended for use in the NotificationListenerService hot path.
-     */
     suspend fun getRoutingPrefsSync(): RoutingPrefs {
         val prefs = dataStore.data.first()
         return RoutingPrefs(

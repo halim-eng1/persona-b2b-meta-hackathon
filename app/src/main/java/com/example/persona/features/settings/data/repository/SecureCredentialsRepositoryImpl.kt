@@ -6,12 +6,16 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.util.Log
+import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import org.json.JSONArray
 import java.security.KeyStore
+import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -33,64 +37,154 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
         private const val GCM_IV_LENGTH = 12
         private const val GCM_TAG_LENGTH = 128
 
-        private const val PREF_KEY_NVIDIA = "enc_nvidia_api_key"
-        private const val PREF_KEY_QWEN = "enc_qwen_api_key"
+        private const val PREF_PREFIX_PROVIDER_KEYS = "enc_keys_"
+        private const val LEGACY_KEY_NVIDIA = "enc_nvidia_api_key"
+        private const val LEGACY_KEY_QWEN = "enc_qwen_api_key"
     }
 
     private val prefs: SharedPreferences by lazy {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
-    private val isKeystoreAvailable: Boolean by lazy {
-        initKeystore()
-    }
+    @Volatile
+    private var keystoreAvailable: Boolean? = null
 
-    // In-memory fallback map if keystore is unavailable (e.g. local unit tests)
-    private val memoryFallback = mutableMapOf<String, String>()
+    // In-memory fallback map if keystore is unavailable (e.g. local unit tests or hardware failure)
+    private val memoryFallback = ConcurrentHashMap<String, String>()
 
-    private val _nvidiaApiKeyFlow = MutableStateFlow<String?>(null)
-    override val nvidiaApiKeyFlow: Flow<String?> = _nvidiaApiKeyFlow.asStateFlow()
-
-    private val _qwenApiKeyFlow = MutableStateFlow<String?>(null)
-    override val qwenApiKeyFlow: Flow<String?> = _qwenApiKeyFlow.asStateFlow()
+    // Flow cache for providers
+    private val providerFlows = ConcurrentHashMap<String, MutableStateFlow<List<String>>>()
 
     init {
-        // Hydrate flows with initial persisted values
-        val initialNvidia = readCredential(PREF_KEY_NVIDIA)
-        val initialQwen = readCredential(PREF_KEY_QWEN)
-        _nvidiaApiKeyFlow.value = initialNvidia.takeIf { it.isNotBlank() }
-        _qwenApiKeyFlow.value = initialQwen.takeIf { it.isNotBlank() }
+        // Pre-warm flows for standard providers
+        ModelProviders.ALL.forEach { provider ->
+            getOrCreateFlow(provider).value = getApiKeys(provider)
+        }
     }
 
-    override fun getNvidiaApiKey(): String {
-        return _nvidiaApiKeyFlow.value ?: readCredential(PREF_KEY_NVIDIA).also {
-            _nvidiaApiKeyFlow.value = it.takeIf { s -> s.isNotBlank() }
+    private fun getOrCreateFlow(provider: String): MutableStateFlow<List<String>> {
+        val norm = ModelProviders.normalize(provider)
+        return providerFlows.computeIfAbsent(norm) {
+            MutableStateFlow(emptyList())
         }
+    }
+
+    private fun prefKey(provider: String): String =
+        PREF_PREFIX_PROVIDER_KEYS + ModelProviders.normalize(provider)
+
+    override fun getApiKeys(provider: String): List<String> {
+        val norm = ModelProviders.normalize(provider)
+        val key = prefKey(norm)
+        val encryptedData = readCredential(key)
+
+        var keys = deserializeKeys(encryptedData)
+
+        // Handle legacy single-key migration if needed
+        if (keys.isEmpty()) {
+            if (norm == ModelProviders.NVIDIA) {
+                val legacy = readCredential(LEGACY_KEY_NVIDIA)
+                if (legacy.isNotBlank()) {
+                    keys = listOf(legacy)
+                    setApiKeys(norm, keys)
+                }
+            } else if (norm == ModelProviders.QWEN) {
+                val legacy = readCredential(LEGACY_KEY_QWEN)
+                if (legacy.isNotBlank()) {
+                    keys = listOf(legacy)
+                    setApiKeys(norm, keys)
+                }
+            }
+        }
+
+        getOrCreateFlow(norm).value = keys
+        return keys
+    }
+
+    override fun setApiKeys(provider: String, keys: List<String>) {
+        val norm = ModelProviders.normalize(provider)
+        val sanitized = keys.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        val key = prefKey(norm)
+
+        if (sanitized.isEmpty()) {
+            writeCredential(key, "")
+        } else {
+            val serialized = serializeKeys(sanitized)
+            writeCredential(key, serialized)
+        }
+
+        getOrCreateFlow(norm).value = sanitized
+    }
+
+    override fun addApiKey(provider: String, key: String) {
+        val trimmed = key.trim()
+        if (trimmed.isBlank()) return
+        val current = getApiKeys(provider)
+        if (!current.contains(trimmed)) {
+            setApiKeys(provider, current + trimmed)
+        }
+    }
+
+    override fun removeApiKey(provider: String, key: String) {
+        val trimmed = key.trim()
+        val current = getApiKeys(provider)
+        setApiKeys(provider, current.filter { it != trimmed })
+    }
+
+    override fun getApiKeysFlow(provider: String): Flow<List<String>> {
+        val norm = ModelProviders.normalize(provider)
+        val flow = getOrCreateFlow(norm)
+        flow.value = getApiKeys(norm)
+        return flow.asStateFlow()
+    }
+
+    // ── Convenience backward-compatibility wrappers ───────────────────────────
+
+    override fun getNvidiaApiKey(): String {
+        return getApiKeys(ModelProviders.NVIDIA).firstOrNull().orEmpty()
     }
 
     override fun setNvidiaApiKey(key: String?) {
         val trimmed = key?.trim()?.takeIf { it.isNotBlank() }
-        writeCredential(PREF_KEY_NVIDIA, trimmed.orEmpty())
-        _nvidiaApiKeyFlow.value = trimmed
+        if (trimmed == null) {
+            setApiKeys(ModelProviders.NVIDIA, emptyList())
+        } else {
+            setApiKeys(ModelProviders.NVIDIA, listOf(trimmed))
+        }
     }
 
     override fun getQwenApiKey(): String {
-        return _qwenApiKeyFlow.value ?: readCredential(PREF_KEY_QWEN).also {
-            _qwenApiKeyFlow.value = it.takeIf { s -> s.isNotBlank() }
-        }
+        return getApiKeys(ModelProviders.QWEN).firstOrNull().orEmpty()
     }
 
     override fun setQwenApiKey(key: String?) {
         val trimmed = key?.trim()?.takeIf { it.isNotBlank() }
-        writeCredential(PREF_KEY_QWEN, trimmed.orEmpty())
-        _qwenApiKeyFlow.value = trimmed
+        if (trimmed == null) {
+            setApiKeys(ModelProviders.QWEN, emptyList())
+        } else {
+            setApiKeys(ModelProviders.QWEN, listOf(trimmed))
+        }
+    }
+
+    override val nvidiaApiKeyFlow: Flow<String?> =
+        getApiKeysFlow(ModelProviders.NVIDIA).map { it.firstOrNull() }
+
+    override val qwenApiKeyFlow: Flow<String?> =
+        getApiKeysFlow(ModelProviders.QWEN).map { it.firstOrNull() }
+
+    // ── Internal Keystore Encryption & Decryption ────────────────────────────
+
+    private fun ensureKeystore(): Boolean {
+        if (keystoreAvailable == true) return true
+        val initialized = initKeystore()
+        keystoreAvailable = initialized
+        return initialized
     }
 
     private fun initKeystore(): Boolean {
         return try {
             val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE)
             keyStore.load(null)
-            if (!keyStore.containsAlias(KEY_ALIAS)) {
+            if (!keyStore.containsAlias(KEY_ALIAS) || keyStore.getKey(KEY_ALIAS, null) == null) {
                 val keyGenerator = KeyGenerator.getInstance(
                     KeyProperties.KEY_ALGORITHM_AES,
                     ANDROID_KEYSTORE
@@ -108,7 +202,7 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
             }
             true
         } catch (e: Throwable) {
-            Log.w(TAG, "AndroidKeyStore is not available; falling back to memory/prefs store: ${e.message}")
+            Log.w(TAG, "AndroidKeyStore is not available; falling back to memory store only: ${e.message}")
             false
         }
     }
@@ -122,37 +216,37 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
             return
         }
 
-        if (isKeystoreAvailable) {
+        if (ensureKeystore()) {
             try {
                 val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
                 val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-                val secretKey = keyStore.getKey(KEY_ALIAS, null) as SecretKey
-                cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-                val iv = cipher.iv
-                val encrypted = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
+                val secretKey = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+                if (secretKey != null) {
+                    cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+                    val iv = cipher.iv
+                    val encrypted = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
 
-                val combined = ByteArray(iv.size + encrypted.size)
-                System.arraycopy(iv, 0, combined, 0, iv.size)
-                System.arraycopy(encrypted, 0, combined, iv.size, encrypted.size)
+                    val combined = ByteArray(iv.size + encrypted.size)
+                    System.arraycopy(iv, 0, combined, 0, iv.size)
+                    System.arraycopy(encrypted, 0, combined, iv.size, encrypted.size)
 
-                val encoded = Base64.encodeToString(combined, Base64.NO_WRAP)
-                prefs.edit().putString(prefKey, encoded).apply()
-                return
+                    val encoded = Base64.encodeToString(combined, Base64.NO_WRAP)
+                    prefs.edit().putString(prefKey, encoded).apply()
+                    memoryFallback[prefKey] = plainText
+                    return
+                }
             } catch (e: Throwable) {
-                Log.e(TAG, "Failed to encrypt credential with KeyStore; falling back: ${e.message}")
+                Log.e(TAG, "Failed to encrypt credential with KeyStore: ${e.message}")
             }
         }
 
-        // Fallback: memory + base64 prefs
+        // STRICT SECURITY: Never store plaintext or Base64 in persistent unencrypted SharedPreferences.
+        // Fall back only to transient process memory.
         memoryFallback[prefKey] = plainText
-        try {
-            val encodedFallback = Base64.encodeToString(plainText.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-            prefs.edit().putString(prefKey, encodedFallback).apply()
-        } catch (_: Throwable) {}
     }
 
     private fun readCredential(prefKey: String): String {
-        if (isKeystoreAvailable) {
+        if (ensureKeystore()) {
             val storedBase64 = try {
                 prefs.getString(prefKey, null)
             } catch (_: Throwable) {
@@ -168,28 +262,46 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
                         System.arraycopy(combined, GCM_IV_LENGTH, cipherText, 0, cipherText.size)
 
                         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-                        val secretKey = keyStore.getKey(KEY_ALIAS, null) as SecretKey
-                        val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
-                        val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
-                        cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
-                        val decrypted = cipher.doFinal(cipherText)
-                        return String(decrypted, Charsets.UTF_8)
+                        val secretKey = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+                        if (secretKey != null) {
+                            val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
+                            val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+                            cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
+                            val decrypted = cipher.doFinal(cipherText)
+                            val result = String(decrypted, Charsets.UTF_8)
+                            memoryFallback[prefKey] = result
+                            return result
+                        }
                     }
                 } catch (e: Throwable) {
-                    Log.e(TAG, "Failed to decrypt credential with KeyStore; attempting fallback: ${e.message}")
+                    Log.e(TAG, "Failed to decrypt credential with KeyStore: ${e.message}")
                 }
             }
         }
 
-        // Fallback read
-        memoryFallback[prefKey]?.let { return it }
+        // Fallback read from secure transient memory
+        return memoryFallback[prefKey].orEmpty()
+    }
+
+    private fun serializeKeys(keys: List<String>): String {
+        val array = JSONArray()
+        keys.forEach { array.put(it) }
+        return array.toString()
+    }
+
+    private fun deserializeKeys(raw: String): List<String> {
+        if (raw.isBlank()) return emptyList()
         return try {
-            val encoded = prefs.getString(prefKey, null)
-            if (!encoded.isNullOrBlank()) {
-                String(Base64.decode(encoded, Base64.NO_WRAP), Charsets.UTF_8)
-            } else ""
+            val array = JSONArray(raw)
+            val list = mutableListOf<String>()
+            for (i in 0 until array.length()) {
+                val str = array.getString(i).trim()
+                if (str.isNotEmpty()) list.add(str)
+            }
+            list
         } catch (_: Throwable) {
-            ""
+            // Support newline-delimited or single string fallback
+            raw.lines().map { it.trim() }.filter { it.isNotEmpty() }
         }
     }
 }

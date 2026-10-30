@@ -1,0 +1,247 @@
+package com.example.persona.features.settings.presentation.components
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.example.persona.features.settings.presentation.SettingsUiState
+
+private val ALL_DAYS = listOf(
+    "SATURDAY" to "السبت",
+    "SUNDAY" to "الأحد",
+    "MONDAY" to "الإثنين",
+    "TUESDAY" to "الثلاثاء",
+    "WEDNESDAY" to "الأربعاء",
+    "THURSDAY" to "الخميس",
+    "FRIDAY" to "الجمعة"
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun BusinessHoursSection(
+    state: SettingsUiState,
+    onBusinessHoursEnabledChange: (Boolean) -> Unit,
+    onWorkingDaysChange: (Set<String>) -> Unit,
+    onWorkingHoursChange: (String, String) -> Unit,
+    onOutOfHoursMessageChange: (String) -> Unit,
+    onIgnoreGroupsChange: (Boolean) -> Unit,
+    onAddBlacklistNumber: (String) -> Unit,
+    onRemoveBlacklistNumber: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val schedule = state.businessHoursSchedule
+    var startTimeInput by remember(schedule.startTime) { mutableStateOf(schedule.startTime) }
+    var endTimeInput by remember(schedule.endTime) { mutableStateOf(schedule.endTime) }
+    var newNumberInput by remember { mutableStateOf("") }
+
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // ── Business Hours Schedule ───────────────────────────────────────────
+        PreferenceSection(
+            title = "مواعيد العمل والجدول الزمني (Business Hours Schedule)",
+            subtitle = "حدد أوقات دوام المتجر ليقوم الروبوت بالرد برسالة مخصصة خارج ساعات العمل."
+        ) {
+            PreferenceSwitchRow(
+                title = "تفعيل جدول مواعيد العمل",
+                subtitle = "عند التفعيل، سيرسل الروبوت رسالة خارج أوقات العمل بدلاً من محاولة البيع في غير أوقات الدوام.",
+                checked = schedule.isEnabled,
+                onCheckedChange = onBusinessHoursEnabledChange
+            )
+
+            if (schedule.isEnabled) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "أيام العمل الرسمية:",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    ALL_DAYS.forEach { (code, arabicName) ->
+                        val isSelected = schedule.workingDays.contains(code)
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                val updated = if (isSelected) {
+                                    schedule.workingDays - code
+                                } else {
+                                    schedule.workingDays + code
+                                }
+                                onWorkingDaysChange(updated)
+                            },
+                            label = { Text(arabicName) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = startTimeInput,
+                        onValueChange = {
+                            startTimeInput = it
+                            onWorkingHoursChange(it, endTimeInput)
+                        },
+                        label = { Text("بداية العمل (مثلاً 10:00)") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = endTimeInput,
+                        onValueChange = {
+                            endTimeInput = it
+                            onWorkingHoursChange(startTimeInput, it)
+                        },
+                        label = { Text("نهاية العمل (مثلاً 23:00)") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = schedule.outOfHoursMessage,
+                    onValueChange = onOutOfHoursMessageChange,
+                    label = { Text("رسالة الرد خارج أوقات العمل") },
+                    placeholder = { Text("أهلاً بك في متجرنا! مواعيد العمل الرسمية من 10:00 ص إلى 11:00 م...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2
+                )
+            }
+        }
+
+        // ── Privacy & Blacklist ───────────────────────────────────────────────
+        PreferenceSection(
+            title = "الخصوصية وقائمة الحظر (Privacy & Blacklist)",
+            subtitle = "منع الروبوت من التفاعل مع مجموعات واتساب أو أرقام معينة (مثل الأهل أو الموردين)."
+        ) {
+            PreferenceSwitchRow(
+                title = "تجاهل مجموعات واتساب (Ignore Groups)",
+                subtitle = "عدم الرد إطلاقاً داخل المحادثات الجماعية لحماية الخصوصية وتوفير الرصيد.",
+                checked = state.ignoreWhatsAppGroups,
+                onCheckedChange = onIgnoreGroupsChange
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "الأرقام المستثناة من الرد التلقائي:",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+
+            if (state.blacklistedNumbers.isEmpty()) {
+                Text(
+                    text = "لا توجد أرقام محظورة حالياً. سيرد الروبوت على جميع المحادثات الفردية.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                state.blacklistedNumbers.forEach { number ->
+                    Card(
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = number,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            IconButton(
+                                onClick = { onRemoveBlacklistNumber(number) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Remove",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Input to add new number
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = newNumberInput,
+                    onValueChange = { newNumberInput = it },
+                    label = { Text("إضافة رقم هاتف للحظر") },
+                    placeholder = { Text("مثال: 01012345678 أو 201012345678") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        if (newNumberInput.isNotBlank()) {
+                            onAddBlacklistNumber(newNumberInput)
+                            newNumberInput = ""
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("حظر")
+                }
+            }
+        }
+    }
+}

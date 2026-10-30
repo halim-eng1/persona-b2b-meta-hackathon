@@ -1,9 +1,8 @@
 package com.example.persona.features.settings.data.repository
 
 import com.example.persona.core.data.repository.UserPreferencesRepository
+import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -28,6 +27,11 @@ class SecureCredentialsRepositoryTest {
         assertEquals("", secureCredentialsRepository.getQwenApiKey())
         assertNull(secureCredentialsRepository.nvidiaApiKeyFlow.first())
         assertNull(secureCredentialsRepository.qwenApiKeyFlow.first())
+
+        ModelProviders.ALL.forEach { provider ->
+            assertTrue(secureCredentialsRepository.getApiKeys(provider).isEmpty())
+            assertTrue(secureCredentialsRepository.getApiKeysFlow(provider).first().isEmpty())
+        }
     }
 
     @Test
@@ -54,6 +58,46 @@ class SecureCredentialsRepositoryTest {
         secureCredentialsRepository.setQwenApiKey(null)
         assertEquals("", secureCredentialsRepository.getQwenApiKey())
         assertNull(secureCredentialsRepository.qwenApiKeyFlow.first())
+    }
+
+    @Test
+    fun `unlimited API keys per provider can be added, retrieved, and removed`() = runTest {
+        val providers = listOf(
+            ModelProviders.QWEN,
+            ModelProviders.GEMINI,
+            ModelProviders.GROQ,
+            ModelProviders.NVIDIA,
+            ModelProviders.OPENROUTER,
+            ModelProviders.CLOUDFLARE,
+            ModelProviders.LIQUID,
+            ModelProviders.NARA
+        )
+
+        providers.forEach { provider ->
+            // Add keys
+            secureCredentialsRepository.addApiKey(provider, "key-1-$provider")
+            secureCredentialsRepository.addApiKey(provider, "key-2-$provider")
+            secureCredentialsRepository.addApiKey(provider, "key-3-$provider")
+
+            val keys = secureCredentialsRepository.getApiKeys(provider)
+            assertEquals(3, keys.size)
+            assertEquals(listOf("key-1-$provider", "key-2-$provider", "key-3-$provider"), keys)
+            assertEquals(keys, secureCredentialsRepository.getApiKeysFlow(provider).first())
+
+            // Duplicate key should not be re-added
+            secureCredentialsRepository.addApiKey(provider, "key-2-$provider")
+            assertEquals(3, secureCredentialsRepository.getApiKeys(provider).size)
+
+            // Remove a key
+            secureCredentialsRepository.removeApiKey(provider, "key-2-$provider")
+            val afterRemoval = secureCredentialsRepository.getApiKeys(provider)
+            assertEquals(2, afterRemoval.size)
+            assertEquals(listOf("key-1-$provider", "key-3-$provider"), afterRemoval)
+
+            // Overwrite with setApiKeys
+            secureCredentialsRepository.setApiKeys(provider, listOf("new-key-a", "new-key-b"))
+            assertEquals(listOf("new-key-a", "new-key-b"), secureCredentialsRepository.getApiKeys(provider))
+        }
     }
 
     @Test

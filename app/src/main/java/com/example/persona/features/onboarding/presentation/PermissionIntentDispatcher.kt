@@ -30,6 +30,26 @@ class PermissionIntentDispatcher @Inject constructor(
         }
     }
 
+    /**
+     * Directly opens the Application Details page for this app.
+     * Essential for Android 13+ (API 33+) merchants where sideloaded APKs have
+     * Notification Listener blocked as a "Restricted Setting".
+     * Merchant must click the 3-dots menu -> "Allow restricted settings".
+     */
+    fun openAppDetailsForRestrictedSettings(context: Context) {
+        try {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
+        }
+    }
+
     fun openBatteryOptimizationSettings(context: Context) {
         try {
             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
@@ -71,11 +91,19 @@ class PermissionIntentDispatcher @Inject constructor(
                 }
             }
         } else {
-            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.parse("package:${context.packageName}")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            try {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (_: Exception) {
+                try {
+                    context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
+                } catch (_: Exception) {}
             }
-            context.startActivity(intent)
         }
     }
 

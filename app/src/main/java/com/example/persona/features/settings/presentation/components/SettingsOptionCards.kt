@@ -1,17 +1,22 @@
 package com.example.persona.features.settings.presentation.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
-import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import com.example.persona.features.settings.presentation.ThresholdLevel
 
 @Composable
@@ -29,65 +34,6 @@ fun PersonaToneCard(
         modifier = modifier,
         previewContent = tone.samplePreview
     )
-}
-
-private val profileDescriptions = mapOf(
-    StyleProfile.PROFESSIONAL to "Formal tone, no emojis, complete sentences.",
-    StyleProfile.CASUAL       to "Natural tone matching your emoji usage rate.",
-    StyleProfile.STRICT_MATCH to "Exact historical reply, no modifications.",
-    StyleProfile.SHORT_DIRECT to "Concise replies with pleasantries stripped.",
-    StyleProfile.EMOJI_HEAVY  to "Expressive replies with contextual emojis."
-)
-
-@Composable
-fun ProfileOption(
-    profile: StyleProfile,
-    isSelected: Boolean,
-    onSelect: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSelect)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        RadioButton(
-            selected = isSelected,
-            onClick = onSelect,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = MaterialTheme.colorScheme.primary
-            )
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = profile.displayName,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                )
-            )
-            Text(
-                text = profileDescriptions[profile] ?: "",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (isSelected) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Text(
-                    text = "Active",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
-        }
-    }
 }
 
 private val thresholdDescriptions = mapOf(

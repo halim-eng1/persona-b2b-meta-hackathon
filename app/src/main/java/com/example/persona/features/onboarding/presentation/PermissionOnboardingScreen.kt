@@ -1,18 +1,52 @@
 package com.example.persona.features.onboarding.presentation
 
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -28,6 +62,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.persona.features.onboarding.data.AutoStartHelper
+import com.example.persona.features.onboarding.domain.model.OnboardingStep
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +73,7 @@ fun PermissionOnboardingScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.permissionState.collectAsStateWithLifecycle()
+    val wizardState by viewModel.wizardState.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
     val intentDispatcher = remember(context) {
         PermissionIntentDispatcher(AutoStartHelper(context.applicationContext))
@@ -69,7 +105,7 @@ fun PermissionOnboardingScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "System Permissions",
+                        text = "تهيئة الصلاحيات وحماية التشغيل",
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -102,20 +138,117 @@ fun PermissionOnboardingScreen(
                     .padding(horizontal = 24.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // ── Linear Wizard Progress ────────────────────────────────────
+                val progress = if (wizardState.totalSteps > 0) {
+                    ((wizardState.currentStepIndex + 1).toFloat() / wizardState.totalSteps.toFloat()).coerceIn(0f, 1f)
+                } else 0f
+
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "مؤشر التقدم في الإعداد",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "الخطوة ${wizardState.currentStepIndex + 1} من ${wizardState.totalSteps}",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.outlineVariant
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Text(
-                    text = "Configure your device to run the auto-reply engine locally. All AI model tasks remain entirely on your device.",
+                    text = "يرجى منح الأذونات المطلوبة لتمكين محرك الرد الآلي المحلي من العمل في الخلفية دون انقطاع. جميع بياناتك ومحادثات عملائك تظل مشفرة محلياً على جهازك.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     lineHeight = 20.sp,
-                    modifier = Modifier.padding(bottom = 24.dp)
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                // Step 1: Notification Access (Always Required)
+                // ── Android 13+ Restricted Settings Warning Card ───────────────
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !state.isNotificationListenerGranted) {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "تنبيه لمستخدمي أندرويد 13 فما فوق (Restricted Setting)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "إذا كان زر تفعيل الإشعارات معطلاً باللون الرمادي أو ظهرت رسالة أمان (Restricted setting):\n" +
+                                        "1. اضغط على الزر بالأسفل لفتح «معلومات التطبيق».\n" +
+                                        "2. اضغط على القائمة (الثلاث نقاط ⋮) في أعلى الشاشة.\n" +
+                                        "3. اختر «السماح بالإعدادات المقيدة» (Allow restricted settings).\n" +
+                                        "4. ارجع هنا وفعّل صلاحية قراءة الإشعارات.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                lineHeight = 18.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = { intentDispatcher.openAppDetailsForRestrictedSettings(context) },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("فتح معلومات التطبيق (App Info)")
+                            }
+                        }
+                    }
+                }
+
+                // ── Step 1: Notification Access (Always Required) ─────────────
                 PermissionCard(
-                    title = "Notification Access",
-                    description = "Needed to detect and read incoming notifications from WhatsApp to calculate response matches.",
+                    title = "قراءة إشعارات واتساب (Notification Access)",
+                    description = "مطلوبة لاكتشاف وقراءة الرسائل الواردة من تطبيق واتساب واقتراح أو إرسال الردود التلقائية الذكية.",
                     isGranted = state.isNotificationListenerGranted,
+                    isActiveStep = wizardState.currentStep is OnboardingStep.NotificationAccess,
                     onGrantClick = {
                         intentDispatcher.openNotificationListenerSettings(context)
                     }
@@ -123,36 +256,42 @@ fun PermissionOnboardingScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Step 2: Ignore Battery Optimizations (Always Required)
+                // ── Step 2: Ignore Battery Optimizations (Always Required) ────
                 PermissionCard(
-                    title = "Ignore Battery Optimizations",
-                    description = "Prevents the system from shutting down the auto-responder background process when your device goes idle.",
+                    title = "استثناء توفير البطارية (Battery Optimization)",
+                    description = "يمنع نظام أندرويد من إيقاف أو قتل خدمة الرد الآلي في الخلفية عندما يكون الهاتف في وضع الاستعداد أو الشاشة مغلقة.",
                     isGranted = state.isBatteryOptimizationIgnored,
+                    isActiveStep = wizardState.currentStep is OnboardingStep.BatteryOptimization,
                     onGrantClick = {
                         intentDispatcher.openBatteryOptimizationSettings(context)
                     }
                 )
 
-                // Step 3: POST_NOTIFICATIONS (Platform requires it)
+                // ── Step 3: POST_NOTIFICATIONS (Platform requires it on API 33+) ─
                 if (state.isPostNotificationsRequired) {
                     Spacer(modifier = Modifier.height(16.dp))
                     PermissionCard(
-                        title = "Post Notifications",
-                        description = "Required to show status bar notifications about active running processes and draft suggestions.",
+                        title = "إشعارات شريط الحالة (Post Notifications)",
+                        description = "مطلوبة لعرض حالة تشغيل محرك الذكاء الاصطناعي وتنبيهات التدخل البشري العاجلة.",
                         isGranted = state.isPostNotificationsGranted,
+                        isActiveStep = wizardState.currentStep is OnboardingStep.PostNotifications,
                         onGrantClick = {
                             postNotificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                         }
                     )
                 }
 
-                // Step 4: AutoStart Configuration (Chinese OEMs)
+                // ── Step 4: AutoStart Configuration (Chinese / OEM ROMs) ───────
                 if (state.isAutoStartEnabled != null) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            containerColor = if (state.isAutoStartEnabled == true) {
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            }
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -165,7 +304,7 @@ fun PermissionOnboardingScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = "Configure Auto-Start",
+                                    text = "التشغيل التلقائي مع فتح الهاتف (${viewModel.getManufacturerName()})",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -188,13 +327,13 @@ fun PermissionOnboardingScreen(
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Your device manufactured by ${viewModel.getManufacturerName()} restricts apps from starting automatically on boot. Click below to enable Auto-Start in device settings.",
+                                text = "تقوم واجهات أجهزة (${viewModel.getManufacturerName()}) بتقييد التطبيقات بعد إعادة تشغيل الهاتف. انقر بالأسفل لفتح إعدادات بدء التشغيل التلقائي وضمان استمرار عمل الردود.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 18.sp
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            
+
                             Button(
                                 onClick = { viewModel.launchAutoStart() },
                                 shape = RoundedCornerShape(12.dp),
@@ -203,7 +342,7 @@ fun PermissionOnboardingScreen(
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Open Auto-Start Settings")
+                                Text("فتح إعدادات التشغيل التلقائي (Auto-Start)")
                             }
 
                             Spacer(modifier = Modifier.height(12.dp))
@@ -220,7 +359,7 @@ fun PermissionOnboardingScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "I have enabled Auto-Start for PersonaChat.",
+                                    text = "أؤكد تفعيل خيار بدء التشغيل التلقائي لتطبيق PersonaChat.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -229,15 +368,15 @@ fun PermissionOnboardingScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(36.dp))
 
-                // Bottom Action: Finish/Onboard Confirmation
+                // ── Bottom Action: Finish / Enable Auto-Reply ─────────────────
                 Button(
                     onClick = {
                         viewModel.onAllPermissionsGranted()
                         onComplete()
                     },
-                    enabled = state.allCriticalGranted,
+                    enabled = wizardState.canProceed,
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -249,7 +388,7 @@ fun PermissionOnboardingScreen(
                         .padding(bottom = 32.dp)
                 ) {
                     Text(
-                        text = "Enable Auto-Reply",
+                        text = if (wizardState.canProceed) "بدء تشغيل محرك الرد الآلي ✓" else "يرجى استكمال الصلاحيات أعلاه",
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )
@@ -264,16 +403,17 @@ private fun PermissionCard(
     title: String,
     description: String,
     isGranted: Boolean,
+    isActiveStep: Boolean = false,
     onGrantClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isGranted) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            containerColor = when {
+                isGranted -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                isActiveStep -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
             }
         ),
         modifier = modifier.fillMaxWidth()
@@ -294,8 +434,10 @@ private fun PermissionCard(
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.onSurface
-                    }
+                    },
+                    modifier = Modifier.weight(1f)
                 )
+                Spacer(modifier = Modifier.width(8.dp))
                 if (isGranted) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
@@ -304,7 +446,7 @@ private fun PermissionCard(
                         modifier = Modifier.size(24.dp)
                     )
                 } else {
-                    Icon(   
+                    Icon(
                         imageVector = Icons.Default.Warning,
                         contentDescription = "Missing",
                         tint = MaterialTheme.colorScheme.error,
@@ -329,7 +471,7 @@ private fun PermissionCard(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Grant Permission")
+                    Text("منح الصلاحية الآن")
                 }
             }
         }
