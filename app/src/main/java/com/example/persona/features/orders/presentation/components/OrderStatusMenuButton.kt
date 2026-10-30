@@ -29,12 +29,12 @@ fun OrderStatusMenuButton(
     Box(modifier = modifier) {
         IconButton(
             onClick = { expanded = true },
-            modifier = Modifier.size(38.dp)
+            modifier = Modifier.size(48.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
-                contentDescription = "Change Status",
-                modifier = Modifier.size(18.dp)
+                contentDescription = "تغيير حالة الطلب",
+                modifier = Modifier.size(20.dp)
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

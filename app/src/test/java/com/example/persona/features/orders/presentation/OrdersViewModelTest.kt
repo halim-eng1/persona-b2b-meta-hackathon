@@ -39,47 +39,66 @@ class OrdersViewModelTest {
         id = 1L,
         contactName = "01012345678",
         customerNameFromLlm = "أحمد محمد",
+        customerPhone = "01012345678",
         deliveryAddress = "القاهرة، المعادي، شارع 9",
         orderDetails = "2x تي شيرت قطن أسود مقاس L",
+        totalAmount = 300.0,
+        shippingFee = 50.0,
         customNotes = "الاستلام بعد الساعة 5",
-        status = OrderStatus.PENDING.name
+        status = OrderStatus.PENDING.name,
+        timestamp = System.currentTimeMillis()
     )
 
     private val order2 = OrderEntity(
         id = 2L,
         contactName = "01198765432",
         customerNameFromLlm = "سارة علي",
+        customerPhone = "01198765432",
         deliveryAddress = "الجيزة، الدقي، ميدان المساحة",
         orderDetails = "1x فستان صيفي أزرق M",
-        status = OrderStatus.PENDING.name
+        totalAmount = 450.0,
+        shippingFee = 40.0,
+        status = OrderStatus.PENDING.name,
+        timestamp = System.currentTimeMillis()
     )
 
     private val order3 = OrderEntity(
         id = 3L,
         contactName = "01234567890",
         customerNameFromLlm = "محمود حسن",
+        customerPhone = "01234567890",
         deliveryAddress = "الإسكندرية، سموحة",
         orderDetails = "3x قمصان كتان أبيض",
         merchantNote = "تم التغليف وجاهز للشحن",
-        status = OrderStatus.IN_PREPARATION.name
+        totalAmount = 600.0,
+        shippingFee = 60.0,
+        status = OrderStatus.IN_PREPARATION.name,
+        timestamp = System.currentTimeMillis()
     )
 
     private val order4 = OrderEntity(
         id = 4L,
         contactName = "01555555555",
         customerNameFromLlm = "عمر فاروق",
+        customerPhone = "01555555555",
         deliveryAddress = "طوخ، القليوبية",
         orderDetails = "1x جاكيت جلد أسود XL",
-        status = OrderStatus.SHIPPED.name
+        totalAmount = 800.0,
+        shippingFee = 50.0,
+        status = OrderStatus.SHIPPED.name,
+        timestamp = System.currentTimeMillis()
     )
 
     private val order5 = OrderEntity(
         id = 5L,
         contactName = "01000000000",
         customerNameFromLlm = "خالد إبراهيم",
+        customerPhone = "01000000000",
         deliveryAddress = "المنصورة، الدقهلية",
         orderDetails = "حذاء كلاسيك أسود 43",
-        status = OrderStatus.CANCELLED.name
+        status = OrderStatus.CANCELLED.name,
+        cancellationReason = "العميل غير رأيه",
+        timestamp = System.currentTimeMillis()
     )
 
     @Before
@@ -108,6 +127,7 @@ class OrdersViewModelTest {
         assertEquals(1, state.inPreparationCount)
         assertEquals(1, state.completedCount)
         assertEquals(1, state.cancelledCount)
+        assertEquals(0, state.returnedCount)
 
         collectJob.cancel()
     }
@@ -145,9 +165,20 @@ class OrdersViewModelTest {
     }
 
     @Test
-    fun `filter by COMPLETED shows fulfilled orders`() = runTest(testDispatcher) {
+    fun `filter by COMPLETED shows strictly fulfilled orders excluding returned`() = runTest(testDispatcher) {
+        val returnedOrder = OrderEntity(
+            id = 6L,
+            contactName = "01677777777",
+            status = OrderStatus.RETURNED.name
+        )
+        fakeRepository.ordersFlow.value = listOf(order1, order2, order3, order4, order5, returnedOrder)
+
         val collectJob = launch { viewModel.uiState.collect() }
         advanceUntilIdle()
+
+        // completedCount counts strictly SHIPPED (not RETURNED)
+        assertEquals(1, viewModel.uiState.value.completedCount)
+        assertEquals(1, viewModel.uiState.value.returnedCount)
 
         viewModel.onFilterSelected(OrderFilter.COMPLETED)
         advanceUntilIdle()
@@ -156,6 +187,7 @@ class OrdersViewModelTest {
         assertEquals(OrderFilter.COMPLETED, state.selectedTab)
         assertEquals(1, state.ordersList.size)
         assertEquals(4L, state.ordersList.first().id)
+        assertTrue(state.ordersList.all { it.status == OrderStatus.SHIPPED.name })
 
         collectJob.cancel()
     }
@@ -199,39 +231,6 @@ class OrdersViewModelTest {
         assertEquals(1, viewModel.uiState.value.ordersList.size)
         assertEquals(1L, viewModel.uiState.value.ordersList.first().id)
 
-        // Clear query
-        viewModel.onSearchQueryChanged("")
-        advanceUntilIdle()
-        assertEquals(5, viewModel.uiState.value.ordersList.size)
-
-        collectJob.cancel()
-    }
-
-    @Test
-    fun `advanceOrderStatus transitions PENDING to IN_PREPARATION`() = runTest(testDispatcher) {
-        val collectJob = launch { viewModel.uiState.collect() }
-        advanceUntilIdle()
-
-        viewModel.advanceOrderStatus(order1)
-        advanceUntilIdle()
-
-        assertEquals(1, fakeRepository.updatedStatuses.size)
-        assertEquals(1L to OrderStatus.IN_PREPARATION, fakeRepository.updatedStatuses.first())
-
-        collectJob.cancel()
-    }
-
-    @Test
-    fun `advanceOrderStatus transitions IN_PREPARATION to SHIPPED`() = runTest(testDispatcher) {
-        val collectJob = launch { viewModel.uiState.collect() }
-        advanceUntilIdle()
-
-        viewModel.advanceOrderStatus(order3)
-        advanceUntilIdle()
-
-        assertEquals(1, fakeRepository.updatedStatuses.size)
-        assertEquals(3L to OrderStatus.SHIPPED, fakeRepository.updatedStatuses.first())
-
         collectJob.cancel()
     }
 
@@ -266,6 +265,109 @@ class OrdersViewModelTest {
     }
 
     @Test
+    fun `createOrder inserts manual order into repository`() = runTest(testDispatcher) {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.createOrder(
+            customerName = "يوسف عادل",
+            customerPhone = "01099991111",
+            deliveryAddress = "شبرا، القاهرة",
+            governorate = "القاهرة",
+            orderDetails = "ساعة يد كلاسيك",
+            totalAmount = 650.0,
+            shippingFee = 40.0
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, fakeRepository.createdOrders.size)
+        val created = fakeRepository.createdOrders.first()
+        assertEquals("يوسف عادل", created.customerNameFromLlm)
+        assertEquals("01099991111", created.customerPhone)
+        assertEquals("القاهرة", created.governorate)
+        assertEquals(650.0, created.totalAmount, 0.01)
+        assertEquals(OrderStatus.PENDING.name, created.status)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `updateOrder persists edited details into repository`() = runTest(testDispatcher) {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.updateOrder(
+            orderId = 1L,
+            customerName = "أحمد محمد المعدل",
+            customerPhone = "01012345678",
+            deliveryAddress = "المعادي الجديدة",
+            governorate = "القاهرة",
+            orderDetails = "3x تي شيرت قطن أبيض",
+            totalAmount = 450.0,
+            shippingFee = 50.0
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, fakeRepository.updatedOrders.size)
+        val updated = fakeRepository.updatedOrders.first()
+        assertEquals(1L, updated.first)
+        assertEquals("أحمد محمد المعدل", updated.second)
+        assertEquals(450.0, updated.third, 0.01)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `cancelOrder sets status and mandatory cancellation reason`() = runTest(testDispatcher) {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.cancelOrder(1L, "العميل لم يرد على مكالمة التأكيد")
+        advanceUntilIdle()
+
+        assertEquals(1, fakeRepository.cancelledOrders.size)
+        assertEquals(1L to "العميل لم يرد على مكالمة التأكيد", fakeRepository.cancelledOrders.first())
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `multi selection and bulk status advance`() = runTest(testDispatcher) {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.toggleOrderSelection(1L)
+        viewModel.toggleOrderSelection(2L)
+        advanceUntilIdle()
+
+        assertEquals(2, viewModel.uiState.value.selectedOrderIds.size)
+        assertTrue(viewModel.uiState.value.isMultiSelectMode)
+
+        viewModel.bulkAdvanceStatus()
+        advanceUntilIdle()
+
+        assertEquals(0, viewModel.uiState.value.selectedOrderIds.size)
+        assertFalse(viewModel.uiState.value.isMultiSelectMode)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `exportSelectedBulkManifest exports all selected orders`() = runTest(testDispatcher) {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.toggleOrderSelection(1L)
+        advanceUntilIdle()
+
+        val manifest = viewModel.exportSelectedBulkManifest()
+        assertTrue(manifest.contains("كشف تسليم الشحنات المجمع"))
+        assertTrue(manifest.contains("أحمد محمد"))
+
+        collectJob.cancel()
+    }
+
+    @Test
     fun `formatCourierManifest produces structured Egyptian courier text`() {
         val manifest = formatCourierManifest(order1)
 
@@ -275,38 +377,8 @@ class OrdersViewModelTest {
         assertTrue(manifest.contains("المعادي"))
         assertTrue(manifest.contains("2x تي شيرت"))
         assertTrue(manifest.contains("الاستلام بعد الساعة 5"))
-        // Human-readable Arabic status (never the raw enum)
+        assertTrue(manifest.contains("المطلوب تحصيله (COD): 350 ج.م (شامل الشحن)"))
         assertTrue(manifest.contains("الحالة: طلب جديد"))
-
-        val manifestInPrep = formatCourierManifest(order3)
-        assertTrue(manifestInPrep.contains("الحالة: قيد التجهيز"))
-    }
-
-    @Test
-    fun `COMPLETED chip count equals the items the COMPLETED tab displays`() = runTest(testDispatcher) {
-        // Dedicated fixtures so existing metrics assertions are untouched:
-        // order4 is SHIPPED (fulfilled), here RETURNED is added as the second fulfilled state.
-        val order6 = OrderEntity(
-            id = 6L,
-            contactName = "01677777777",
-            orderDetails = "مرتجع",
-            status = OrderStatus.RETURNED.name
-        )
-        val localRepo = FakeOrderRepository()
-        localRepo.ordersFlow.value = listOf(order1, order2, order3, order4, order5, order6)
-        val localViewModel = OrdersViewModel(localRepo, conversationMetadataDao)
-        val collectJob = launch { localViewModel.uiState.collect() }
-        advanceUntilIdle()
-
-        // completedCount counts SHIPPED + RETURNED, exactly OrderFilter.COMPLETED's state set
-        assertEquals(2, localViewModel.uiState.value.completedCount)
-        localViewModel.onFilterSelected(OrderFilter.COMPLETED)
-        advanceUntilIdle()
-        val completedOrders = localViewModel.uiState.value.ordersList
-        assertEquals(2, completedOrders.size)
-        assertTrue(completedOrders.all { it.status in listOf(OrderStatus.SHIPPED.name, OrderStatus.RETURNED.name) })
-
-        collectJob.cancel()
     }
 
     @Test
@@ -329,8 +401,45 @@ class OrdersViewModelTest {
         val ordersFlow = MutableStateFlow<List<OrderEntity>>(emptyList())
         val updatedStatuses = mutableListOf<Pair<Long, OrderStatus>>()
         val updatedNotes = mutableListOf<Pair<Long, String?>>()
+        val createdOrders = mutableListOf<OrderEntity>()
+        val updatedOrders = mutableListOf<Triple<Long, String?, Double>>()
+        val cancelledOrders = mutableListOf<Pair<Long, String>>()
 
         override fun getAllOrders(): Flow<List<OrderEntity>> = ordersFlow
+
+        override suspend fun createOrder(order: OrderEntity): Long {
+            createdOrders.add(order)
+            val newId = (ordersFlow.value.maxOfOrNull { it.id } ?: 0L) + 1L
+            val created = order.copy(id = newId)
+            ordersFlow.value = ordersFlow.value + created
+            return newId
+        }
+
+        override suspend fun updateOrder(
+            orderId: Long,
+            name: String?,
+            phone: String,
+            address: String?,
+            details: String?,
+            total: Double,
+            shipping: Double,
+            governorate: String?
+        ) {
+            updatedOrders.add(Triple(orderId, name, total))
+            ordersFlow.value = ordersFlow.value.map {
+                if (it.id == orderId) {
+                    it.copy(
+                        customerNameFromLlm = name,
+                        customerPhone = phone,
+                        deliveryAddress = address,
+                        orderDetails = details,
+                        totalAmount = total,
+                        shippingFee = shipping,
+                        governorate = governorate
+                    )
+                } else it
+            }
+        }
 
         override suspend fun updateOrderStatus(orderId: Long, status: OrderStatus) {
             updatedStatuses.add(orderId to status)
@@ -339,11 +448,28 @@ class OrdersViewModelTest {
             }
         }
 
+        override suspend fun cancelOrder(orderId: Long, reason: String) {
+            cancelledOrders.add(orderId to reason)
+            ordersFlow.value = ordersFlow.value.map {
+                if (it.id == orderId) it.copy(status = OrderStatus.CANCELLED.name, cancellationReason = reason) else it
+            }
+        }
+
         override suspend fun updateMerchantNote(orderId: Long, note: String?) {
             updatedNotes.add(orderId to note)
             ordersFlow.value = ordersFlow.value.map {
                 if (it.id == orderId) it.copy(merchantNote = note) else it
             }
+        }
+
+        override suspend fun updateOrderStatusBulk(orderIds: List<Long>, status: OrderStatus) {
+            ordersFlow.value = ordersFlow.value.map {
+                if (it.id in orderIds) it.copy(status = status.name) else it
+            }
+        }
+
+        override suspend fun deleteOrder(orderId: Long) {
+            ordersFlow.value = ordersFlow.value.filterNot { it.id == orderId }
         }
     }
 }

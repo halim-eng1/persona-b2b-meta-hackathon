@@ -181,4 +181,59 @@ interface OrderDao {
     /** Total order count — useful for diagnostics. */
     @Query("SELECT COUNT(*) FROM orders_table")
     suspend fun getTotalCount(): Int
+
+    /**
+     * Updates full order details from the merchant edit dialog.
+     */
+    @Query("""
+        UPDATE orders_table
+        SET customer_name_from_llm = :name,
+            customer_phone = :phone,
+            delivery_address = :address,
+            order_details = :details,
+            total_amount = :total,
+            shipping_fee = :shipping,
+            governorate = :gov
+        WHERE id = :id
+    """)
+    suspend fun updateFullOrderDetails(
+        id: Long,
+        name: String?,
+        phone: String,
+        address: String?,
+        details: String?,
+        total: Double,
+        shipping: Double,
+        gov: String?
+    )
+
+    /**
+     * Cancels or transitions an order with an explicit cancellation/rejection reason.
+     */
+    @Query("UPDATE orders_table SET status = :status, cancellation_reason = :reason WHERE id = :id")
+    suspend fun updateStatusWithReason(id: Long, status: String, reason: String?)
+
+    /**
+     * Updates the status of multiple orders in bulk.
+     */
+    @Query("UPDATE orders_table SET status = :status WHERE id IN (:ids)")
+    suspend fun updateStatusBulk(ids: List<Long>, status: String)
+
+    /**
+     * Permanently deletes an order by its ID.
+     */
+    @Query("DELETE FROM orders_table WHERE id = :id")
+    suspend fun deleteOrder(id: Long)
+
+    /**
+     * Reactive observable of orders filtered by status.
+     */
+    @Query("SELECT * FROM orders_table WHERE status = :status ORDER BY timestamp DESC")
+    fun observeOrdersByStatus(status: String): Flow<List<OrderEntity>>
+
+    /**
+     * Reactive observable of orders within a specific timestamp date range.
+     */
+    @Query("SELECT * FROM orders_table WHERE timestamp BETWEEN :fromTimestamp AND :toTimestamp ORDER BY timestamp DESC")
+    fun observeOrdersByDateRange(fromTimestamp: Long, toTimestamp: Long): Flow<List<OrderEntity>>
 }

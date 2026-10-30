@@ -270,10 +270,18 @@ data class AgenticLlmResponse(
 data class ExtractedOrder(
     @SerialName("customer_name")
     val customerName: String? = null,
+    @SerialName("customer_phone")
+    val customerPhone: String? = null,
     @SerialName("delivery_address")
     val deliveryAddress: String? = null,
+    @SerialName("governorate")
+    val governorate: String? = null,
     @SerialName("order_details")
     val orderDetails: String? = null,
+    @SerialName("total_amount")
+    val totalAmount: Double? = null,
+    @SerialName("shipping_fee")
+    val shippingFee: Double? = null,
     @SerialName("custom_notes")
     val customNotes: String? = null
 )

@@ -6,10 +6,11 @@ import com.example.persona.features.orders.domain.repository.OrderRepository
 import javax.inject.Inject
 
 /**
- * Encapsulates tactile Kanban lifecycle progression for orders:
+ * Encapsulates sequential B2B shipping lifecycle progression for orders:
  * - [OrderStatus.PENDING] -> [OrderStatus.IN_PREPARATION]
- * - [OrderStatus.IN_PREPARATION] -> [OrderStatus.SHIPPED]
+ * - [OrderStatus.IN_PREPARATION] -> [OrderStatus.SHIPPING_IN_PROGRESS]
  * - [OrderStatus.SHIPPING_IN_PROGRESS] -> [OrderStatus.SHIPPED]
+ * - Terminal states ([OrderStatus.SHIPPED], [OrderStatus.CANCELLED], [OrderStatus.RETURNED]) -> null
  */
 class AdvanceOrderStatusUseCase @Inject constructor(
     private val orderRepository: OrderRepository
@@ -17,9 +18,9 @@ class AdvanceOrderStatusUseCase @Inject constructor(
     suspend operator fun invoke(order: OrderEntity): OrderStatus? {
         val nextStatus = when (OrderStatus.fromString(order.status)) {
             OrderStatus.PENDING -> OrderStatus.IN_PREPARATION
-            OrderStatus.IN_PREPARATION -> OrderStatus.SHIPPED
+            OrderStatus.IN_PREPARATION -> OrderStatus.SHIPPING_IN_PROGRESS
             OrderStatus.SHIPPING_IN_PROGRESS -> OrderStatus.SHIPPED
-            else -> null
+            OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.RETURNED -> null
         }
         if (nextStatus != null) {
             orderRepository.updateOrderStatus(order.id, nextStatus)

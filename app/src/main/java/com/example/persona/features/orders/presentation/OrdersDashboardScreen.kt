@@ -1,47 +1,16 @@
 package com.example.persona.features.orders.presentation
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,17 +22,14 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.persona.core.database.entity.OrderEntity
-import com.example.persona.features.orders.presentation.components.MerchantNoteSheet
-import com.example.persona.features.orders.presentation.components.OrderCard
-import com.example.persona.features.orders.presentation.components.OrderMetricsRow
-import com.example.persona.features.orders.presentation.components.formatCourierManifest
+import com.example.persona.features.orders.presentation.components.*
 import kotlinx.coroutines.launch
 
 /**
  * Dedicated Merchant Orders Management & Fulfillment Dashboard.
  *
- * Provides live LLM-extracted orders with 1-tap Kanban state transitions,
- * instant courier manifest clipboard export, merchant note injection,
+ * Provides live WhatsApp/manual orders, 1-tap Kanban state transitions,
+ * bulk manifest clipboard export, order creation/editing/cancellation,
  * and direct chat jumping.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,20 +49,98 @@ fun OrdersDashboardScreen(
         modifier = modifier,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(text = "Orders & Fulfillment", fontWeight = FontWeight.Bold)
+            if (state.isMultiSelectMode) {
+                // Contextual TopAppBar for bulk actions
+                TopAppBar(
+                    title = {
                         Text(
-                            text = if (state.totalCount > 0) "${state.totalCount} total orders • Live from WhatsApp" else "Live LLM-extracted orders",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "تم تحديد ${state.selectedOrderIds.size} طلبات",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = viewModel::clearSelection,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "إلغاء التحديد")
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = viewModel::selectAllOrders,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(Icons.Default.SelectAll, contentDescription = "تحديد الكل")
+                        }
+                        IconButton(
+                            onClick = {
+                                val manifest = viewModel.exportSelectedBulkManifest()
+                                clipboardManager.setText(AnnotatedString(manifest))
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("تم نسخ كشف الشحنات المجمع")
+                                }
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = "تصدير المانيفست المجمع")
+                        }
+                        IconButton(
+                            onClick = viewModel::bulkAdvanceStatus,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(Icons.Default.DoneAll, contentDescription = "تقديم حالة المحددين")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
                 )
+            } else {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(text = "الطلبات والتنفيذ والشحن", fontWeight = FontWeight.Bold)
+                            Text(
+                                text = if (state.totalCount > 0)
+                                    "${state.totalCount} طلبات مسجلة • مزامنة حية"
+                                else
+                                    "إدارة ومتابعة طلبات المتجر",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    actions = {
+                        // Bulk export for all current orders
+                        IconButton(
+                            onClick = {
+                                val manifest = viewModel.exportSelectedBulkManifest()
+                                clipboardManager.setText(AnnotatedString(manifest))
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("تم نسخ كشف شحنات اليوم (${state.ordersList.size} طلبات)")
+                                }
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(Icons.Default.Print, contentDescription = "كشف الشحنات المجمع")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
+                )
+            }
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = viewModel::openCreateOrderDialog,
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text("طلب جديد", fontWeight = FontWeight.Bold) },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.heightIn(min = 48.dp)
             )
         }
     ) { padding ->
@@ -108,17 +152,40 @@ fun OrdersDashboardScreen(
             Column(modifier = Modifier.fillMaxSize()) {
 
                 if (state.isUpdating) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary)
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
 
                 // ── Interactive metrics chips ────────────────────────────────
                 OrderMetricsRow(
                     pendingCount = state.pendingCount,
                     inPreparationCount = state.inPreparationCount,
+                    shippingCount = state.shippingCount,
                     completedCount = state.completedCount,
+                    totalCodAmount = state.totalCodAmount,
                     selectedFilter = state.selectedTab,
                     onFilterClick = viewModel::onFilterSelected
                 )
+
+                // ── Date range filter chips ──────────────────────────────────
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    DateFilter.entries.forEach { dateFilter ->
+                        FilterChip(
+                            selected = state.selectedDateFilter == dateFilter,
+                            onClick = { viewModel.onDateFilterSelected(dateFilter) },
+                            label = { Text(dateFilter.label, style = MaterialTheme.typography.labelSmall) },
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                    }
+                }
 
                 // ── Search field ─────────────────────────────────────────────
                 OutlinedTextField(
@@ -126,25 +193,28 @@ fun OrdersDashboardScreen(
                     onValueChange = viewModel::onSearchQueryChanged,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    placeholder = { Text("Search contact, customer, address, or details…") },
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    placeholder = { Text("بحث باسم العميل، الهاتف، العنوان، أو الأصناف…") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         if (state.searchQuery.isNotEmpty()) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Clear search",
-                                modifier = Modifier
-                                    .padding(4.dp)
-                                    .clickable { viewModel.onSearchQueryChanged("") }
-                            )
+                            IconButton(
+                                onClick = { viewModel.onSearchQueryChanged("") },
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "مسح البحث",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     },
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp)
                 )
 
-                // ── Transient error banner (dismissable) ─────────────────────
+                // ── Error banner ─────────────────────────────────────────────
                 state.errorMessage?.let { message ->
                     Surface(
                         color = MaterialTheme.colorScheme.errorContainer,
@@ -153,9 +223,7 @@ fun OrdersDashboardScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = message,
                                 style = MaterialTheme.typography.bodySmall,
@@ -165,25 +233,26 @@ fun OrdersDashboardScreen(
                                     .padding(horizontal = 12.dp, vertical = 6.dp)
                             )
                             IconButton(
-                                onClick = viewModel::clearErrorMessage
+                                onClick = viewModel::clearErrorMessage,
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "Dismiss error",
+                                    contentDescription = "إغلاق التنبيه",
                                     tint = MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
                     }
                 }
 
-                // ── Filter tabs with dynamic counts ──────────────────────────
+                // ── Status Filter Tabs ────────────────────────────────────────
                 val filters = OrderFilter.entries
                 val selectedTabIndex = filters.indexOf(state.selectedTab)
                 ScrollableTabRow(
                     selectedTabIndex = if (selectedTabIndex >= 0) selectedTabIndex else 0,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     edgePadding = 4.dp,
                     containerColor = Color.Transparent,
                     divider = {}
@@ -193,6 +262,7 @@ fun OrdersDashboardScreen(
                             OrderFilter.ALL -> state.totalCount
                             OrderFilter.PENDING -> state.pendingCount
                             OrderFilter.IN_PREPARATION -> state.inPreparationCount
+                            OrderFilter.SHIPPING_IN_PROGRESS -> state.shippingCount
                             OrderFilter.COMPLETED -> state.completedCount
                             OrderFilter.CANCELLED -> state.cancelledCount
                             OrderFilter.RETURNED -> state.returnedCount
@@ -216,7 +286,7 @@ fun OrdersDashboardScreen(
                     state.isLoading -> Unit
 
                     state.ordersList.isEmpty() -> EmptyOrdersState(
-                        isSearching = state.searchQuery.isNotBlank(),
+                        isSearching = state.searchQuery.isNotBlank() || state.selectedDateFilter != DateFilter.ALL,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
@@ -238,12 +308,12 @@ fun OrdersDashboardScreen(
                                 onAdvanceStatus = viewModel::advanceOrderStatus,
                                 onEditNote = { noteEditingOrder = order },
                                 onCopyCourierManifest = { targetOrder ->
-                                    val manifest = formatCourierManifest(targetOrder)
+                                    val manifest = viewModel.formatCourierManifest(targetOrder)
                                     clipboardManager.setText(AnnotatedString(manifest))
                                     coroutineScope.launch {
                                         val customer = targetOrder.customerNameFromLlm?.takeIf { it.isNotBlank() }
                                             ?: targetOrder.contactName
-                                        snackbarHostState.showSnackbar("Copied courier manifest for $customer")
+                                        snackbarHostState.showSnackbar("تم نسخ بوليصة الشحن للعميل $customer")
                                     }
                                 },
                                 onOpenChat = { contactName ->
@@ -252,10 +322,15 @@ fun OrdersDashboardScreen(
                                             viewModel.getChatSourceClassForContact(contactName)
                                         onNavigateToChat(contactName, resolvedSourceClass)
                                     }
-                                }
+                                },
+                                onEditOrder = viewModel::openEditOrderDialog,
+                                onCancelOrder = viewModel::openCancelOrderDialog,
+                                isSelected = order.id in state.selectedOrderIds,
+                                isSelectionMode = state.isMultiSelectMode,
+                                onToggleSelect = viewModel::toggleOrderSelection
                             )
                         }
-                        item { Spacer(modifier = Modifier.height(24.dp)) }
+                        item { Spacer(modifier = Modifier.height(72.dp)) }
                     }
                 }
             }
@@ -269,6 +344,56 @@ fun OrdersDashboardScreen(
                     onSave = { note ->
                         viewModel.onMerchantNoteSaved(current.id, note)
                         noteEditingOrder = null
+                    }
+                )
+            }
+
+            // ── Manual Create Order Dialog ───────────────────────────────────
+            if (state.isCreateOrderDialogOpen) {
+                CreateOrderDialog(
+                    onDismiss = viewModel::closeCreateOrderDialog,
+                    onCreate = { name, phone, address, gov, details, total, shipping, notes ->
+                        viewModel.createOrder(
+                            customerName = name,
+                            customerPhone = phone,
+                            deliveryAddress = address,
+                            governorate = gov,
+                            orderDetails = details,
+                            totalAmount = total,
+                            shippingFee = shipping,
+                            customNotes = notes
+                        )
+                    }
+                )
+            }
+
+            // ── Edit Order Dialog ────────────────────────────────────────────
+            state.editingOrder?.let { orderToEdit ->
+                EditOrderDialog(
+                    order = orderToEdit,
+                    onDismiss = viewModel::closeEditOrderDialog,
+                    onSave = { id, name, phone, address, gov, details, total, shipping ->
+                        viewModel.updateOrder(
+                            orderId = id,
+                            customerName = name,
+                            customerPhone = phone,
+                            deliveryAddress = address,
+                            governorate = gov,
+                            orderDetails = details,
+                            totalAmount = total,
+                            shippingFee = shipping
+                        )
+                    }
+                )
+            }
+
+            // ── Cancel Order Dialog ──────────────────────────────────────────
+            state.cancellingOrder?.let { orderToCancel ->
+                CancelOrderDialog(
+                    order = orderToCancel,
+                    onDismiss = viewModel::closeCancelOrderDialog,
+                    onConfirmCancel = { reason ->
+                        viewModel.cancelOrder(orderToCancel.id, reason)
                     }
                 )
             }
@@ -304,14 +429,14 @@ private fun EmptyOrdersState(
                 }
             }
             Text(
-                text = if (isSearching) "No matching orders" else "No orders yet",
+                text = if (isSearching) "لا توجد طلبات متطابقة" else "لا توجد طلبات حتى الآن",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
             Text(
                 text = if (isSearching)
-                    "Try a different search term or switch tabs."
+                    "جرب تغيير كلمات البحث أو تغيير تاب الحالة أو الفترة الزمنية."
                 else
-                    "Orders appear here automatically when the bot extracts them from customer conversations.",
+                    "الطلبات تظهر هنا تلقائياً بمجرد استخراجها من محادثات واتساب، أو يمكنك إدخال طلب يدوياً بالضغط على زر (+).",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

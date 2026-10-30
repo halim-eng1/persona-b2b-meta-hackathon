@@ -3,18 +3,17 @@ package com.example.persona.features.orders.presentation.components
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.example.persona.core.database.entity.OrderStatus
 import com.example.persona.ui.components.PersonaOrderStatusBadge
 import com.example.persona.ui.components.PersonaStatusBadge
 
 /** Color-coded status badge surfaces. */
 enum class StatusBadgeStyle(val container: Color, val content: Color, val label: String) {
-    PENDING(OrderAmber.copy(alpha = 0.15f), OrderAmber, "Pending"),
-    IN_PREPARATION(OrderBlue.copy(alpha = 0.15f), OrderBlue, "Preparing"),
-    SHIPPING_IN_PROGRESS(OrderIndigo.copy(alpha = 0.15f), OrderIndigo, "Shipping"),
-    SHIPPED(OrderGreen.copy(alpha = 0.15f), OrderGreen, "Shipped"),
-    CANCELLED(OrderRed.copy(alpha = 0.15f), OrderRed, "Cancelled"),
-    RETURNED(OrderBrown.copy(alpha = 0.15f), OrderBrown, "Returned");
+    PENDING(OrderAmber.copy(alpha = 0.15f), OrderAmber, "طلب جديد"),
+    IN_PREPARATION(OrderBlue.copy(alpha = 0.15f), OrderBlue, "قيد التجهيز"),
+    SHIPPING_IN_PROGRESS(OrderIndigo.copy(alpha = 0.15f), OrderIndigo, "جاري التوصيل"),
+    SHIPPED(OrderGreen.copy(alpha = 0.15f), OrderGreen, "تم التسليم"),
+    CANCELLED(OrderRed.copy(alpha = 0.15f), OrderRed, "ملغي"),
+    RETURNED(OrderBrown.copy(alpha = 0.15f), OrderBrown, "مرتجع");
 
     companion object {
         fun from(statusName: String): StatusBadgeStyle =

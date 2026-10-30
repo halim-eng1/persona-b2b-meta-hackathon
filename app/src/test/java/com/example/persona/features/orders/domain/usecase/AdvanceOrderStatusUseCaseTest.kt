@@ -3,7 +3,6 @@ package com.example.persona.features.orders.domain.usecase
 import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.database.entity.OrderStatus
 import com.example.persona.features.orders.domain.repository.OrderRepository
-import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -26,12 +25,12 @@ class AdvanceOrderStatusUseCaseTest {
     }
 
     @Test
-    fun `advances IN_PREPARATION to SHIPPED`() = runTest {
+    fun `advances IN_PREPARATION to SHIPPING_IN_PROGRESS`() = runTest {
         val order = OrderEntity(id = 11L, contactName = "01000", status = OrderStatus.IN_PREPARATION.name)
         val result = useCase(order)
 
-        assertEquals(OrderStatus.SHIPPED, result)
-        coVerify(exactly = 1) { orderRepository.updateOrderStatus(11L, OrderStatus.SHIPPED) }
+        assertEquals(OrderStatus.SHIPPING_IN_PROGRESS, result)
+        coVerify(exactly = 1) { orderRepository.updateOrderStatus(11L, OrderStatus.SHIPPING_IN_PROGRESS) }
     }
 
     @Test
@@ -53,6 +52,8 @@ class AdvanceOrderStatusUseCaseTest {
         assertNull(useCase(shippedOrder))
         assertNull(useCase(returnedOrder))
 
-        coVerify(exactly = 0) { orderRepository.updateOrderStatus(any(), any()) }
+        coVerify(exactly = 0) { orderRepository.updateOrderStatus(13L, any()) }
+        coVerify(exactly = 0) { orderRepository.updateOrderStatus(14L, any()) }
+        coVerify(exactly = 0) { orderRepository.updateOrderStatus(15L, any()) }
     }
 }

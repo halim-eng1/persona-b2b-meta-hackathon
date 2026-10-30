@@ -1,5 +1,8 @@
 package com.example.persona.features.orders.presentation.components
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -15,9 +19,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.persona.features.orders.domain.EgyptianOrderUtils
 import com.example.persona.ui.components.PersonaAvatar
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
@@ -37,6 +43,20 @@ internal fun formatOrderTimestamp(timestamp: Long): String {
     )
 }
 
+internal fun formatOrderTimestampArabic(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+    if (diff < 60_000) return "الآن"
+    if (diff < 3600_000) return "منذ ${diff / 60_000} د"
+    if (diff < 86400_000) return "منذ ${diff / 3600_000} س"
+
+    val dt = Instant.fromEpochMilliseconds(timestamp)
+        .toLocalDateTime(TimeZone.currentSystemDefault())
+    return "%02d/%02d — %02d:%02d".format(
+        java.util.Locale.US, dt.dayOfMonth, dt.monthNumber, dt.hour, dt.minute
+    )
+}
+
 @Composable
 fun OrderCardHeader(
     contactName: String,
@@ -44,8 +64,16 @@ fun OrderCardHeader(
     timestamp: Long,
     status: String,
     modifier: Modifier = Modifier,
+    customerPhone: String = "",
     onOpenChat: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
+    val phoneToDial = customerPhone.ifBlank {
+        if (contactName.startsWith("01") || contactName.startsWith("+20") || contactName.startsWith("20")) {
+            contactName
+        } else ""
+    }
+
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -75,25 +103,54 @@ fun OrderCardHeader(
                 )
             }
             Text(
-                text = formatOrderTimestamp(timestamp),
+                text = formatOrderTimestampArabic(timestamp),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
             )
         }
+
+        // Quick phone call dialer button (WCAG >= 48dp)
+        if (phoneToDial.isNotBlank()) {
+            IconButton(
+                onClick = { dialPhoneNumber(context, phoneToDial) },
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Phone,
+                    contentDescription = "اتصال بالعميل",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
         OrderStatusBadge(status = status)
+
         if (onOpenChat != null) {
-            Spacer(modifier = Modifier.width(4.dp))
             IconButton(
                 onClick = onOpenChat,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Chat,
-                    contentDescription = "Open Chat",
+                    contentDescription = "فتح المحادثة",
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
     }
+}
+
+private fun dialPhoneNumber(context: Context, rawPhone: String) {
+    try {
+        val cleanPhone = EgyptianOrderUtils.extractEgyptianMobilePhone(rawPhone)
+            ?: EgyptianOrderUtils.convertArabicDigitsToAscii(rawPhone).filter { it.isDigit() || it == '+' }
+        if (cleanPhone.isBlank()) return
+        val intent = Intent(Intent.ACTION_DIAL).apply {
+            data = Uri.parse("tel:$cleanPhone")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (_: Exception) {}
 }

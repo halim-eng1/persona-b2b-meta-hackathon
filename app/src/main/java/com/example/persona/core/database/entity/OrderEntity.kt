@@ -81,5 +81,25 @@ data class OrderEntity(
      * Default: [OrderStatus.PENDING.name] — all new orders start as PENDING.
      */
     @ColumnInfo(name = "status")
-    val status: String = OrderStatus.PENDING.name
+    val status: String = OrderStatus.PENDING.name,
+
+    /** Customer real phone number for shipping courier and delivery coordination. */
+    @ColumnInfo(name = "customer_phone", defaultValue = "''")
+    val customerPhone: String = "",
+
+    /** Total order price/amount (Cash On Delivery balance). */
+    @ColumnInfo(name = "total_amount", defaultValue = "0.0")
+    val totalAmount: Double = 0.0,
+
+    /** Delivery shipping fee. */
+    @ColumnInfo(name = "shipping_fee", defaultValue = "0.0")
+    val shippingFee: Double = 0.0,
+
+    /** Mandatory reason for order cancellation or rejection. */
+    @ColumnInfo(name = "cancellation_reason")
+    val cancellationReason: String? = null,
+
+    /** Destination governorate/zone in Egypt. */
+    @ColumnInfo(name = "governorate")
+    val governorate: String? = null
 )

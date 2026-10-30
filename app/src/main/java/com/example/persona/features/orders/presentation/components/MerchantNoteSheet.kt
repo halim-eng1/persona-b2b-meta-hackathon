@@ -13,7 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.persona.core.database.entity.OrderEntity
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MerchantNoteSheet(
     order: OrderEntity,
@@ -22,6 +22,13 @@ fun MerchantNoteSheet(
     modifier: Modifier = Modifier
 ) {
     var noteValue by remember(order.id) { mutableStateOf(order.merchantNote.orEmpty()) }
+
+    val quickNoteSuggestions = listOf(
+        "المندوب هيوصل لحضرتك اليوم",
+        "يرجى تأكيد المقاس واللون المفضل",
+        "العنوان غير واضح، يرجى إرسال اللوكيشن",
+        "تم شحن الطلب وسيصلك خلال 48 ساعة"
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -34,40 +41,63 @@ fun MerchantNoteSheet(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
+            val customer = order.customerNameFromLlm?.takeIf { it.isNotBlank() } ?: order.contactName
             Text(
-                text = "Merchant Note — ${order.customerNameFromLlm ?: order.contactName}",
+                text = "ملاحظة التجهيز — $customer",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "This note is injected into the bot's live context, so the assistant shares it with the customer automatically. " +
-                    "Leave it empty and save to clear it.",
+                text = "أي ملاحظة هتكتبها هنا، المساعد الآلي هيبلغها للعميل تلقائياً في أول رسالة على واتساب. يمكنك مسح الملاحظة بالكامل وحفظها لإلغائها.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Quick suggestion chips
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                quickNoteSuggestions.forEach { suggestion ->
+                    SuggestionChip(
+                        onClick = { noteValue = suggestion },
+                        label = { Text(suggestion, style = MaterialTheme.typography.labelSmall) },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(14.dp))
+
             OutlinedTextField(
                 value = noteValue,
                 onValueChange = { noteValue = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("e.g. المندوب حيوصل بكرة الساعة 3") },
+                placeholder = { Text("مثال: المندوب حيوصل بكرة الساعة 3") },
                 minLines = 3,
                 shape = RoundedCornerShape(14.dp)
             )
+
             Spacer(modifier = Modifier.height(16.dp))
+
             Button(
                 onClick = { onSave(noteValue.trim()) },
                 enabled = true,
                 shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "Save Note", fontWeight = FontWeight.Bold)
+                Text(text = "حفظ وإرسال للمساعد", fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(28.dp))
         }
