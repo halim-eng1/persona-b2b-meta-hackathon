@@ -50,11 +50,11 @@ class NavigationArchitectureTest {
     }
 
     @Test
-    fun testTopLevelDestinationsArabicLabels() {
-        assertEquals("الرئيسية", TopLevelDestination.HOME.label)
-        assertEquals("المحادثات", TopLevelDestination.CHATS.label)
-        assertEquals("الطلبات", TopLevelDestination.ORDERS.label)
-        assertEquals("قاعدة المعرفة", TopLevelDestination.KNOWLEDGE.label)
+    fun testTopLevelDestinationsResourceLabels() {
+        assertEquals(com.example.persona.R.string.nav_home, TopLevelDestination.HOME.labelResId)
+        assertEquals(com.example.persona.R.string.nav_conversations, TopLevelDestination.CHATS.labelResId)
+        assertEquals(com.example.persona.R.string.nav_orders, TopLevelDestination.ORDERS.labelResId)
+        assertEquals(com.example.persona.R.string.nav_knowledge, TopLevelDestination.KNOWLEDGE.labelResId)
     }
 
     @Test
