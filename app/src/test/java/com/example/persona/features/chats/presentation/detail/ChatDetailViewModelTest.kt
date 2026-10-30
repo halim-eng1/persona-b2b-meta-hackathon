@@ -90,7 +90,7 @@ class ChatDetailViewModelTest {
         coEvery { conversationMetadataDao.getConversation("أحمد مصطفى", "BUSINESS") } returns convMeta
         every { userPreferencesRepository.botName } returns flowOf(UserPreferencesRepository.DEFAULT_BOT_NAME)
         every { userPreferencesRepository.isAutoReplyEnabled } returns flowOf(true)
-        every { userPreferencesRepository.isAutoReplyEnabledSync() } returns true
+        coEvery { userPreferencesRepository.isAutoReplyEnabledSync() } returns true
     }
 
     @After
@@ -163,7 +163,7 @@ class ChatDetailViewModelTest {
     @Test
     fun `toggleAiActive when global is OFF toggles isAiOverrideEnabled in ConversationMetadataDao`() = runTest(testDispatcher) {
         every { userPreferencesRepository.isAutoReplyEnabled } returns flowOf(false)
-        every { userPreferencesRepository.isAutoReplyEnabledSync() } returns false
+        coEvery { userPreferencesRepository.isAutoReplyEnabledSync() } returns false
 
         val viewModel = ChatDetailViewModel(
             chatHistoryDao = chatHistoryDao,

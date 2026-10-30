@@ -2,6 +2,8 @@ package com.example.persona.features.auto_reply.domain.orchestrator
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -28,7 +30,7 @@ class HitlNotificationHandler @Inject constructor(
 ) {
     companion object {
         private const val TAG = "HitlNotificationHandler"
-        const val ALARM_CHANNEL_ID = "hitl_alarm_channel"
+        const val ALARM_CHANNEL_ID = "persona_hitl_urgent_v2"
     }
 
     init {
@@ -40,10 +42,16 @@ class HitlNotificationHandler @Inject constructor(
             val name = "Failed Query Alarm"
             val descriptionText = "Alerts when a customer query requires human manual takeover"
             val importance = NotificationManager.IMPORTANCE_HIGH
+            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val audioAttributes = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                .build()
             val channel = NotificationChannel(ALARM_CHANNEL_ID, name, importance).apply {
                 description = descriptionText
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 500, 200, 500)
+                setSound(soundUri, audioAttributes)
             }
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
@@ -93,12 +101,14 @@ class HitlNotificationHandler @Inject constructor(
                 PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
             )
 
+            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             val notification = NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(title)
                 .setContentText("$contactName: $queryText")
                 .setStyle(NotificationCompat.BigTextStyle().bigText("$body\n\nالعميل: $contactName\nالرسالة: $queryText"))
                 .setVibrate(vibrationPattern)
+                .setSound(soundUri)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setContentIntent(pendingIntent)
@@ -106,6 +116,14 @@ class HitlNotificationHandler @Inject constructor(
                 .build()
 
             notificationManager.notify(1002, notification)
+
+            // Trigger short programmatic fallback chime
+            runCatching {
+                val ringtone = RingtoneManager.getRingtone(context, soundUri)
+                ringtone?.play()
+            }.onFailure { e ->
+                Log.w(TAG, "Programmatic fallback chime failed: ${e.message}")
+            }
             Log.i(TAG, "HITL alarm notification posted for $contactName (score: $score)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to trigger HITL alarm notification", e)
@@ -131,18 +149,28 @@ class HitlNotificationHandler @Inject constructor(
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
             )
+            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             val notification = NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle("طلب تحويل لبشري")
                 .setContentText("العميل $contactName يطلب التحدث مع موظف بشري الآن!")
                 .setStyle(NotificationCompat.BigTextStyle().bigText("العميل $contactName يطلب التحدث مع موظف بشري الآن!"))
                 .setVibrate(vibrationPattern)
+                .setSound(soundUri)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .build()
             notificationManager.notify(1003, notification)
+
+            // Trigger short programmatic fallback chime
+            runCatching {
+                val ringtone = RingtoneManager.getRingtone(context, soundUri)
+                ringtone?.play()
+            }.onFailure { e ->
+                Log.w(TAG, "Programmatic fallback chime failed: ${e.message}")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to post hand-off notification to merchant", e)
         }

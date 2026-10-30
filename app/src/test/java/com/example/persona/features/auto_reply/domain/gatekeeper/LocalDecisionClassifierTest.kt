@@ -81,7 +81,7 @@ class LocalDecisionClassifierTest {
             "تتبع الطلب لو سمحت",
             "طلبي اتأخر ليه",
             "فين طلبي",
-            "الشحنة",
+            "الشحنة", "الغي طلبي", "طيب اتلغي ؟؟", "كنسل", "ألغي طلبي", "كنسل الأوردر",
             // Franco-Arab & English
             "status",
             "order feen",

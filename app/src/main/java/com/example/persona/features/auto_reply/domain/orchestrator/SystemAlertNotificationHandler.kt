@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
+import android.media.AudioAttributes
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -26,7 +27,7 @@ class SystemAlertNotificationHandler @Inject constructor(
 ) {
     companion object {
         private const val TAG = "SystemAlertNotificationHandler"
-        const val ALERT_CHANNEL_ID = "persona_system_provider_alerts_channel"
+        const val ALERT_CHANNEL_ID = "persona_system_alerts_v2"
         private val notificationIdGenerator = AtomicInteger(2000)
     }
 
@@ -39,12 +40,16 @@ class SystemAlertNotificationHandler @Inject constructor(
             val name = "تنبيهات النظام ومفاتيح التشغيل (System & Key Alerts)"
             val descriptionText = "تنبيهات فورية عند نفاد رصيد المفاتيح أو عزل مزودي الذكاء الاصطناعي"
             val importance = NotificationManager.IMPORTANCE_HIGH
+            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val audioAttributes = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                .build()
             val channel = NotificationChannel(ALERT_CHANNEL_ID, name, importance).apply {
                 description = descriptionText
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 500, 250, 500)
-                val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                setSound(soundUri, null)
+                setSound(soundUri, audioAttributes)
             }
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
@@ -102,5 +107,13 @@ class SystemAlertNotificationHandler @Inject constructor(
             .build()
 
         notificationManager.notify(notificationIdGenerator.get(), notification)
+
+        // Trigger short programmatic fallback chime
+        runCatching {
+            val ringtone = RingtoneManager.getRingtone(context, soundUri)
+            ringtone?.play()
+        }.onFailure { e ->
+            Log.w(TAG, "Programmatic fallback chime failed: ${e.message}")
+        }
     }
 }

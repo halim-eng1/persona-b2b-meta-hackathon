@@ -1,11 +1,44 @@
 package com.example.persona.features.chats.presentation.detail
 
+import com.example.persona.core.database.dao.ContactDao
+import com.example.persona.core.database.dao.OrderDao
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 
 object WhatsAppLauncher {
+
+    suspend fun resolvePhone(
+        contactName: String?,
+        contactDao: ContactDao? = null,
+        orderDao: OrderDao? = null
+    ): String? {
+        if (contactName.isNullOrBlank()) return null
+        val fromContact = contactDao?.getContactByName(contactName)?.phoneNumber?.takeIf { it.isNotBlank() }
+        if (!fromContact.isNullOrBlank()) return fromContact
+        val fromOrder = orderDao?.getLatestOrderByContact(contactName)?.customerPhone?.takeIf { it.isNotBlank() }
+        if (!fromOrder.isNullOrBlank()) return fromOrder
+        return null
+    }
+
+    suspend fun openChatWithLookup(
+        context: Context,
+        phoneNumber: String? = null,
+        contactName: String? = null,
+        preferBusiness: Boolean = false,
+        contactDao: ContactDao? = null,
+        orderDao: OrderDao? = null
+    ): Boolean {
+        val resolvedPhone = phoneNumber?.takeIf { it.isNotBlank() }
+            ?: resolvePhone(contactName, contactDao, orderDao)
+        return openChat(
+            context = context,
+            phoneNumber = resolvedPhone,
+            contactName = contactName,
+            preferBusiness = preferBusiness
+        )
+    }
 
     fun normalizePhoneNumber(phone: String): String {
         val clean = phone.replace(Regex("[^0-9+]"), "").trim()

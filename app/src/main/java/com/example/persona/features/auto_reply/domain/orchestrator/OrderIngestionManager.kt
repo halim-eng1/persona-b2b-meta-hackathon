@@ -1,6 +1,9 @@
 package com.example.persona.features.auto_reply.domain.orchestrator
 
 import android.util.Log
+import com.example.persona.core.database.dao.ContactDao
+import com.example.persona.core.database.entity.ContactEntity
+import com.example.persona.features.orders.domain.EgyptianOrderUtils
 import com.example.persona.core.database.dao.ChatHistoryDao
 import com.example.persona.core.database.dao.OrderDao
 import com.example.persona.core.database.entity.OrderEntity
@@ -28,7 +31,8 @@ sealed interface OrderIngestionResult {
 @Singleton
 class OrderIngestionManager @Inject constructor(
     private val orderDao: OrderDao,
-    private val chatHistoryDao: ChatHistoryDao
+    private val chatHistoryDao: ChatHistoryDao,
+    private val contactDao: ContactDao? = null
 ) {
     companion object {
         private const val TAG = "OrderIngestionManager"
@@ -37,6 +41,16 @@ class OrderIngestionManager @Inject constructor(
 
         const val NO_ACTIVE_ORDER_REPLY =
             "يا فندم، ما لقيناش أوردر نشط باسم حضرتك في النظام حالياً، لو في أوردر حضرتك شايفه ينتظر إلغاء، ابعتلنا تفاصيله وهنراجع حالاً."
+
+        fun normalizeOrderAction(rawAction: String?): String? {
+            if (rawAction.isNullOrBlank()) return null
+            return when (rawAction.trim().uppercase()) {
+                "CANCEL", "CANCEL_ORDER", "CANCELLED" -> "CANCEL"
+                "CREATE", "CREATE_ORDER" -> "CREATE"
+                "UPDATE", "UPDATE_ORDER" -> "UPDATE"
+                else -> null
+            }
+        }
 
         fun normalizeField(value: String?): String? {
             return value?.trim()?.replace(Regex("\\s+"), " ")
@@ -98,6 +112,29 @@ class OrderIngestionManager @Inject constructor(
 
     private val consumedPivotTimestamps = ConcurrentHashMap<String, MutableSet<Long>>()
 
+    private suspend fun syncContactPhone(contactName: String, phone: String) {
+        val dao = contactDao ?: return
+        if (phone.isBlank()) return
+        val normalized = EgyptianOrderUtils.extractEgyptianMobilePhone(phone) ?: phone.trim()
+        runCatching {
+            val existing = dao.getContactByName(contactName)
+            if (existing != null) {
+                dao.updatePhoneByName(contactName, normalized)
+            } else {
+                dao.upsert(
+                    ContactEntity(
+                        contactName = contactName,
+                        phoneNumber = normalized,
+                        lastActiveTimestamp = System.currentTimeMillis()
+                    )
+                )
+            }
+            Log.i(TAG, "Synced contact phone: $contactName -> $normalized")
+        }.onFailure { e ->
+            Log.w(TAG, "Failed to sync contact phone for $contactName: ${e.message}")
+        }
+    }
+
     suspend fun executeCancelOrderAction(processed: ProcessedNotification): Boolean {
         val activeOrder = orderDao.getActiveMatchingOrder(processed.contactName)
         if (activeOrder == null) {
@@ -143,6 +180,13 @@ class OrderIngestionManager @Inject constructor(
             orderDao.appendCustomNotes(existingOrder.id, deduplicatedNotes)
             Log.i(TAG, "🔁 Deduplicated notes appended to order id=${existingOrder.id}: '$deduplicatedNotes'")
         }
+
+        val phoneFromExtracted = extracted.customerPhone?.takeIf { it.isNotBlank() }
+            ?: EgyptianOrderUtils.extractEgyptianMobilePhone(extracted.customNotes)
+            ?: EgyptianOrderUtils.extractEgyptianMobilePhone(extracted.orderDetails)
+        if (!phoneFromExtracted.isNullOrBlank()) {
+            syncContactPhone(existingOrder.contactName, phoneFromExtracted)
+        }
     }
 
     suspend fun handleOrderCreation(
@@ -177,12 +221,24 @@ class OrderIngestionManager @Inject constructor(
                         lowerCustomerText.contains("أوردر جديد") ||
                         lowerCustomerText.contains("طلب تاني") ||
                         lowerCustomerText.contains("new") ||
-                        orderAction?.equals("CREATE", ignoreCase = true) == true
+                        normalizeOrderAction(orderAction) == "CREATE"
 
                 if (isNewOrder) {
+                    val phoneFromExtracted = extractedOrder.customerPhone?.takeIf { it.isNotBlank() }
+                        ?: EgyptianOrderUtils.extractEgyptianMobilePhone(extractedOrder.customNotes)
+                        ?: EgyptianOrderUtils.extractEgyptianMobilePhone(extractedOrder.orderDetails)
+                    val normalizedPhone = phoneFromExtracted?.let { EgyptianOrderUtils.extractEgyptianMobilePhone(it) ?: it.trim() } ?: ""
+                    if (normalizedPhone.isNotBlank()) {
+                        syncContactPhone(contactName, normalizedPhone)
+                    }
+
+                    val maxId = orderDao.getMaxOrderId() ?: 99100L
+                    val nextId = maxOf(99101L, maxId + 1L)
                     val newOrder = OrderEntity(
+                        id = nextId,
                         contactName = contactName,
                         customerNameFromLlm = normalizedCustomerName,
+                        customerPhone = normalizedPhone,
                         deliveryAddress = normalizedDeliveryAddress,
                         orderDetails = normalizedOrderDetails,
                         customNotes = normalizedCustomNotes,
@@ -207,9 +263,21 @@ class OrderIngestionManager @Inject constructor(
                 OrderIngestionResult.DuplicatePivot(pivotText)
             }
         } else {
+            val phoneFromExtracted = extractedOrder.customerPhone?.takeIf { it.isNotBlank() }
+                ?: EgyptianOrderUtils.extractEgyptianMobilePhone(extractedOrder.customNotes)
+                ?: EgyptianOrderUtils.extractEgyptianMobilePhone(extractedOrder.orderDetails)
+            val normalizedPhone = phoneFromExtracted?.let { EgyptianOrderUtils.extractEgyptianMobilePhone(it) ?: it.trim() } ?: ""
+            if (normalizedPhone.isNotBlank()) {
+                syncContactPhone(contactName, normalizedPhone)
+            }
+
+            val maxId = orderDao.getMaxOrderId() ?: 99100L
+            val nextId = maxOf(99101L, maxId + 1L)
             val newOrder = OrderEntity(
+                id = nextId,
                 contactName = contactName,
                 customerNameFromLlm = normalizedCustomerName,
+                customerPhone = normalizedPhone,
                 deliveryAddress = normalizedDeliveryAddress,
                 orderDetails = normalizedOrderDetails,
                 customNotes = normalizedCustomNotes,
@@ -226,8 +294,7 @@ class OrderIngestionManager @Inject constructor(
         processed: ProcessedNotification
     ): String? {
         var finalReplyOverride: String? = null
-        val finalOrderAction = finalParsed.orderAction?.trim()?.uppercase()
-            ?.takeIf { it == "CREATE" || it == "CANCEL" || it == "UPDATE" }
+        val finalOrderAction = normalizeOrderAction(finalParsed.orderAction)
 
         Log.i("PersonaMetrics", "metric=final_pass_order_action value=${finalOrderAction ?: "NONE"} contact=${processed.contactName.hashCode()}")
 

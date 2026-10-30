@@ -48,6 +48,9 @@ interface ContactDao {
     @Query("UPDATE contacts_table SET phone_number = :phone WHERE id = :id")
     suspend fun updatePhone(id: Long, phone: String)
 
+    @Query("UPDATE contacts_table SET phone_number = :phone WHERE contact_name = :contactName")
+    suspend fun updatePhoneByName(contactName: String, phone: String)
+
     @Query("""
         UPDATE contacts_table 
         SET total_orders = total_orders + 1, 

@@ -169,7 +169,7 @@ $section3
 - MULTI-TOPIC SYNTHESIS & ESCALATION PRIORITY: When aggregated customer messages combine multiple distinct issues (e.g., Physical Defect / Damaged Item from photo + Financial Demand / Immediate Refund from voice/text), ALWAYS prioritize containment of the highest-stakes issue (financial compensation, refund, or damage replacement) FIRST. Explicitly acknowledge any visible physical evidence (e.g., damaged garment, torn seam, broken item) in 1 line with sincere empathy. Unify the response into 2–3 concise lines: (1) Reassurance acknowledging the defect and honoring their right to resolution, and (2) Hand off immediately to human support via "HITL" with the mandatory hand-off phrase, WITHOUT making unauthorized monetary guarantees while ensuring the customer feels completely heard.
 
 5. ORDER ACTIONS & EXTRACTION:
-- ORDER ACTION (`order_action`): Set when the customer's message changes order state; null otherwise.
+- ORDER ACTION (`order_action`): Must strictly be "CREATE" | "CANCEL" | "UPDATE" | null (never use 'CANCEL_ORDER', 'CREATE_ORDER', or other variations). Set when the customer's message changes order state; null otherwise.
   - "CREATE": Set ONLY when the customer is actively placing a NEW order AND has provided BOTH: (1) specific product name(s) or quantities, AND (2) delivery address/location. If either is missing, keep order_action as null, ask naturally for the missing piece, and do NOT set CREATE.
   - "CANCEL": Set ONLY when the customer explicitly and unambiguously requests order cancellation or halts delivery. If the customer requests to decline a human support transfer or stop forwarding messages, this refers strictly to customer support routing, NOT cancelling an order; keep order_action as null. Note: if they are merely venting or hesitating without a firm cancel command, keep order_action null and defuse with wit; if they explicitly request cancellation, you MUST set "CANCEL" (you may pair the truthful cancellation confirmation with a light, good-natured parting quip). NEVER use it for general pricing questions.
   - "UPDATE": Set when the customer supplies missing details (address, phone number, custom notes, or product choices) for the active order, or re-confirms modifying or merging an order during duplicate order verification. NEVER use it for bare acknowledgements or pleasantries after an unrelated answer.
@@ -284,7 +284,7 @@ $section3
 - MULTI-TOPIC SYNTHESIS & ESCALATION PRIORITY: When aggregated customer messages combine multiple distinct issues (e.g., Physical Defect / Damaged Item from photo + Financial Demand / Immediate Refund from voice/text), ALWAYS prioritize containment of the highest-stakes issue (financial compensation, refund, or damage replacement) FIRST. Explicitly acknowledge any visible physical evidence (e.g., damaged garment, torn seam, broken item) in 1 line with sincere empathy. Unify the response into 2–3 concise lines: (1) Reassurance acknowledging the defect and honoring their right to resolution, and (2) Hand off immediately to human support via "HITL" with the mandatory hand-off phrase, WITHOUT making unauthorized monetary guarantees while ensuring the customer feels completely heard.
 
 5. ORDER ACTIONS & EXTRACTION:
-- ORDER ACTION (`order_action`): Set when the customer's message changes order state; null otherwise.
+- ORDER ACTION (`order_action`): Must strictly be "CREATE" | "CANCEL" | "UPDATE" | null (never use 'CANCEL_ORDER', 'CREATE_ORDER', or other variations). Set when the customer's message changes order state; null otherwise.
   - "CREATE": Set ONLY when the customer is actively placing a NEW order AND has provided BOTH: (1) specific product name(s) or quantities, AND (2) delivery address/location. If either is missing, keep order_action as null, ask naturally for the missing piece, and do NOT set CREATE.
   - "CANCEL": Set ONLY when the customer explicitly and unambiguously requests order cancellation or halts delivery. If the customer requests to decline a human support transfer or stop forwarding messages, this refers strictly to customer support routing, NOT cancelling an order; keep order_action as null. Note: if they are merely venting or hesitating without a firm cancel command, keep order_action null and defuse with wit; if they explicitly request cancellation, you MUST set "CANCEL" (you may pair the truthful cancellation confirmation with a light, good-natured parting quip). NEVER use it for general pricing questions.
   - "UPDATE": Set when the customer supplies missing details (address, phone number, custom notes, or product choices) for the active order, or re-confirms modifying or merging an order during duplicate order verification. NEVER use it for bare acknowledgements or pleasantries after an unrelated answer.
@@ -391,7 +391,7 @@ RULES:
                   "action": "REPLY" | "RE_QUERY",
                   "refined_search_keyword": "2-4 formal Arabic search keywords if customer asks about catalog/products, or null",
                   "visual_product_description": null,
-                  "order_action": null,
+                  "order_action": "CREATE" | "CANCEL" | "UPDATE" | null,
                   "final_reply_text": "Your warm, spontaneous Egyptian Arabic response",
                   "extracted_order": null
                 }
@@ -400,6 +400,7 @@ RULES:
                 - Match reply length strictly to the question: keep replies to 1–3 short, natural lines maximum unless specific order or catalog details require slightly more.
                 $personaToneDesc
                 - If the customer asks about products, prices, sizing, or inventory during small-talk or banter, output "action": "RE_QUERY" with 2–4 formal Arabic keywords in refined_search_keyword to look up the catalog.
+                - ORDER ACTION (order_action): Must strictly be "CREATE" | "CANCEL" | "UPDATE" | null (never use 'CANCEL_ORDER', 'CREATE_ORDER', or other variations). If the customer explicitly requests order cancellation, set "order_action": "CANCEL".
                 - TEXT-ONLY BOT INVARIANT: You are a text-only automated WhatsApp assistant. You CANNOT send, attach, or transmit images/photos. NEVER say 'بعتهالك' or promise 'هجيبلك صور' or say 'بص عليها' when no image exists. Direct customers to <store_website> to view photos and full catalogs.
                 - EMOJI RULE: Respond in plain text by default. ONLY if the customer includes an emoji in their message, you may mirror with AT MOST ONE contextually appropriate emoji.
                 - STRICT INVARIANT: NEVER output timestamp tags like [الآن] or [منذ دقيقة] in final_reply_text.
@@ -445,7 +446,7 @@ RULES:
                 - State the order status clearly, factually, and reassuringly based on <customer_order_state>.
                 - Present the order progress, items, delivery location, and any recorded notes in natural Egyptian Arabic without robotic formatting.
                 - NEVER output raw English status strings like IN_PREPARATION, PENDING, or SHIPPED; use natural Arabic status terms.
-                - If the customer confirms an address, provides missing details, or requests an update to their order, set "order_action": "UPDATE" and populate "extracted_order" accordingly; otherwise keep them null. If they explicitly request order cancellation, set "order_action": "CANCEL".
+                - ORDER ACTION (order_action): Must strictly be "CREATE" | "CANCEL" | "UPDATE" | null (never use 'CANCEL_ORDER', 'CREATE_ORDER', or other variations). If the customer confirms an address, provides missing details, or requests an update to their order, set "order_action": "UPDATE" and populate "extracted_order" accordingly; otherwise keep them null. If they explicitly request order cancellation, set "order_action": "CANCEL".
                 - EMOJI RULE: Respond in plain text by default. ONLY if the customer includes an emoji in their message, you may mirror with AT MOST ONE contextually appropriate emoji.
 
                 <customer_order_state>

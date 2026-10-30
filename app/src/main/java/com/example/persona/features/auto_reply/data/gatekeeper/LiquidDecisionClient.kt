@@ -64,11 +64,12 @@ class LiquidDecisionClient @Inject constructor(
             "GREETING" to "Hello, welcome, peace, good morning/evening",
             "CLOSING" to "Thanks, goodbye, parting, finishing conversation",
             "PRESENCE_CHECK" to "Checking if anyone is there/online (e.g. ف حد هنا, موجودين, الو)",
-            "BANTER" to "Jokes, flirting, riddles, dinner banter, teasing",
+            "BANTER" to "Jokes, flirting, riddles, dinner banter, teasing (strictly non-order, non-commercial small talk)",
             "CATALOG_INQUIRY" to "Inquiring about hoodies, t-shirts, prices, sizes, fabric, shipping fees",
             "ORDER_CREATE" to "Submitting order with address/specs",
             "ORDER_UPDATE" to "Changing address, size, or notes on existing order",
-            "ORDER_CANCEL" to "Cancelling active order",
+            "ORDER_STATUS" to "Checking active order status, tracking, courier, delivery progress, or questions about whether an order is cancelled or shipped",
+            "ORDER_CANCEL" to "Explicit request to cancel an order, modify an order, or asking if an order was cancelled or shipped (e.g. الغي طلبي, طيب اتلغي ؟؟, كنسل الأوردر, إلغاء, اتلغى)",
             "GENUINE_COMPLAINT_HITL" to "Severe anger, damaged item, fraud accusation, demanding human manager"
         )
 
@@ -171,18 +172,29 @@ class LiquidDecisionClient @Inject constructor(
             val latency = System.currentTimeMillis() - t0
             val status = response.status
 
+            // Always consume response body immediately to prevent OkHttp connection leak
+            val responseBody = runCatching { response.bodyAsText() }.getOrDefault("")
+
             if (status == HttpStatusCode.TooManyRequests) {
-                Log.w(TAG, "Liquid AI 429 Too Many Requests (model=$model, latency=${latency}ms)")
+                val errSnippet = responseBody.take(200)
+                PersonaLogger.w(
+                    PersonaLogTags.ORCHESTRATOR,
+                    "⚠️ Liquid AI 429 Too Many Requests (model=$model, latency=${latency}ms): $errSnippet"
+                )
+                Log.w(TAG, "Liquid AI 429 Too Many Requests (model=$model, latency=${latency}ms): $errSnippet")
                 return CallOutcome(null, isRateLimit = true, errorSummary = "HTTP 429 Too Many Requests")
             }
 
             if (!status.isSuccess()) {
-                val errBody = runCatching { response.bodyAsText().take(200) }.getOrNull() ?: ""
-                Log.w(TAG, "Liquid AI HTTP ${status.value} error (model=$model, latency=${latency}ms): $errBody")
+                val errSnippet = responseBody.take(200)
+                PersonaLogger.w(
+                    PersonaLogTags.ORCHESTRATOR,
+                    "⚠️ Liquid AI HTTP ${status.value} error (model=$model, latency=${latency}ms): $errSnippet"
+                )
+                Log.w(TAG, "Liquid AI HTTP ${status.value} error (model=$model, latency=${latency}ms): $errSnippet")
                 return CallOutcome(null, isRateLimit = false, errorSummary = "HTTP ${status.value}")
             }
 
-            val responseBody = response.bodyAsText()
             val parsed = json.decodeFromString(SystemOneDecisionResponse.serializer(), responseBody)
             val choice = parsed.answers["intent"]?.choice
             val mappedIntent = mapChoiceToIntent(choice)
@@ -205,7 +217,11 @@ class LiquidDecisionClient @Inject constructor(
             throw e
         } catch (e: Exception) {
             val latency = System.currentTimeMillis() - t0
-            Log.w(TAG, "Liquid AI network call failed (model=$model, latency=${latency}ms): ${e.message}")
+            PersonaLogger.w(
+                PersonaLogTags.ORCHESTRATOR,
+                "⚠️ Liquid AI network call failed (model=$model, latency=${latency}ms): ${e.message}"
+            )
+            Log.w(TAG, "Liquid AI network call failed (model=$model, latency=${latency}ms): ${e.message}", e)
             CallOutcome(null, isRateLimit = false, errorSummary = e.message)
         }
     }

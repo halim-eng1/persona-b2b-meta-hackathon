@@ -58,8 +58,10 @@ class CloudflareClefClient @Inject constructor(
         val INTENT_CRITERIA: Map<String, String> = linkedMapOf(
             "GREETING" to "Hello, peace, welcome, good morning/evening",
             "CLOSING" to "Thanks, goodbye, parting, finishing conversation",
-            "BANTER" to "Jokes, flirting, riddles, dinner banter, teasing",
-            "ORDER_STATUS" to "Checking active order status, tracking, courier",
+            "BANTER" to "Jokes, flirting, riddles, dinner banter, teasing (strictly non-order, non-commercial small talk)",
+            "ORDER_STATUS" to "Checking active order status, tracking, courier, delivery progress, or questions about whether an order is cancelled or shipped",
+            "ORDER_CANCEL" to "Explicit request to cancel an order, modify an order, or asking if an order was cancelled or shipped (e.g., الغي طلبي, طيب اتلغي ؟؟, كنسل الأوردر, إلغاء, اتلغى)",
+            "ORDER_UPDATE" to "Changing address, size, or notes on existing order",
             "CATALOG_INQUIRY" to "Inquiring about hoodies, t-shirts, prices, sizes, fabric, shipping fees",
             "GENUINE_COMPLAINT_HITL" to "Severe anger, damaged item, fraud accusation, demanding human manager"
         )
@@ -175,18 +177,29 @@ class CloudflareClefClient @Inject constructor(
             val latency = System.currentTimeMillis() - t0
             val status = response.status
 
+            // Always consume response body immediately to prevent OkHttp connection leak
+            val responseBody = runCatching { response.bodyAsText() }.getOrDefault("")
+
             if (status == HttpStatusCode.TooManyRequests) {
-                Log.w(TAG, "Cloudflare Clef 429 Too Many Requests (model=$model, latency=${latency}ms)")
+                val errSnippet = responseBody.take(200)
+                PersonaLogger.w(
+                    PersonaLogTags.ORCHESTRATOR,
+                    "⚠️ Cloudflare Clef 429 Too Many Requests (model=$model, latency=${latency}ms): $errSnippet"
+                )
+                Log.w(TAG, "Cloudflare Clef 429 Too Many Requests (model=$model, latency=${latency}ms): $errSnippet")
                 return CallOutcome(null, isRateLimit = true, errorSummary = "HTTP 429 Too Many Requests")
             }
 
             if (!status.isSuccess()) {
-                val errBody = runCatching { response.bodyAsText().take(200) }.getOrNull() ?: ""
-                Log.w(TAG, "Cloudflare Clef HTTP ${status.value} error (model=$model, latency=${latency}ms): $errBody")
+                val errSnippet = responseBody.take(200)
+                PersonaLogger.w(
+                    PersonaLogTags.ORCHESTRATOR,
+                    "⚠️ Cloudflare Clef HTTP ${status.value} error (model=$model, latency=${latency}ms): $errSnippet"
+                )
+                Log.w(TAG, "Cloudflare Clef HTTP ${status.value} error (model=$model, latency=${latency}ms): $errSnippet")
                 return CallOutcome(null, isRateLimit = false, errorSummary = "HTTP ${status.value}")
             }
 
-            val responseBody = response.bodyAsText()
             val parsed = json.decodeFromString(ClefResponse.serializer(), responseBody)
 
             val intentAnswer = parsed.result?.answers?.get("intent")
@@ -211,7 +224,11 @@ class CloudflareClefClient @Inject constructor(
             throw e
         } catch (e: Exception) {
             val latency = System.currentTimeMillis() - t0
-            Log.w(TAG, "Cloudflare Clef network call failed (model=$model, latency=${latency}ms): ${e.message}")
+            PersonaLogger.w(
+                PersonaLogTags.ORCHESTRATOR,
+                "⚠️ Cloudflare Clef network call failed (model=$model, latency=${latency}ms): ${e.message}"
+            )
+            Log.w(TAG, "Cloudflare Clef network call failed (model=$model, latency=${latency}ms): ${e.message}", e)
             CallOutcome(null, isRateLimit = false, errorSummary = e.message)
         }
     }

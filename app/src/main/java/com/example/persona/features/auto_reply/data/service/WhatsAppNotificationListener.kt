@@ -12,6 +12,9 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.persona.R
+import com.example.persona.core.database.dao.ContactDao
+import com.example.persona.core.database.entity.ContactEntity
+import com.example.persona.features.orders.domain.EgyptianOrderUtils
 import com.example.persona.core.data.repository.RoutingPrefs
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.logging.PersonaLogger
@@ -27,6 +30,9 @@ import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
@@ -40,6 +46,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     @Inject lateinit var sourceDiagnostics: NotificationSourceDiagnostics
     @Inject lateinit var prefsRepository: UserPreferencesRepository
     @Inject lateinit var mediaExtractor: WhatsAppMediaExtractor
+    @Inject lateinit var contactDao: ContactDao
 
     private val serviceScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Default + CoroutineName("NLS-AutoReply")
@@ -60,6 +67,13 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     companion object {
         @Volatile
         var instance: java.lang.ref.WeakReference<WhatsAppNotificationListener>? = null
+
+        private val _isConnectedFlow = MutableStateFlow(false)
+        val isConnectedFlow: StateFlow<Boolean> = _isConnectedFlow.asStateFlow()
+
+        fun setConnectedForTesting(connected: Boolean) {
+            _isConnectedFlow.value = connected
+        }
 
         private val WHATSAPP_PACKAGES = setOf(
             "com.whatsapp",
@@ -106,6 +120,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        _isConnectedFlow.value = true
         // ── 1. Package filter & Ongoing filter ─────────────────────────────────
         if (sbn.packageName !in WHATSAPP_PACKAGES) return
         if (sbn.isOngoing) return
@@ -183,6 +198,30 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             PersonaLogTags.NOTIFICATION,
             "Notification accepted: source=$sourceClass title=$title key=${sbn.key}"
         )
+
+        // Extract phone number from notification metadata & update ContactDao
+        val extractedPhone = extractWhatsAppPhoneFromNotification(sbn)
+        if (!extractedPhone.isNullOrBlank() && title.isNotBlank() && !SELF_REPLY_TITLES.any { it.equals(title.trim(), ignoreCase = true) }) {
+            serviceScope.launch(Dispatchers.IO) {
+                runCatching {
+                    val existing = contactDao.getContactByName(title)
+                    if (existing != null) {
+                        contactDao.updatePhoneByName(title, extractedPhone)
+                    } else {
+                        contactDao.upsert(
+                            ContactEntity(
+                                contactName = title,
+                                phoneNumber = extractedPhone,
+                                lastActiveTimestamp = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                    PersonaLogger.d(PersonaLogTags.NOTIFICATION, "Persisted phone for contact $title: $extractedPhone")
+                }.onFailure { e ->
+                    Log.w("NLS", "Failed to persist contact phone for $title: ${e.message}")
+                }
+            }
+        }
 
         // ── 5. Dedup ──────────────────────────────────────────────────────────
         val dedupeKey = "${sbn.key}_${text.hashCode()}"
@@ -313,6 +352,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         instance = java.lang.ref.WeakReference(this)
+        _isConnectedFlow.value = true
         createNotificationChannel()
 
         val notification = buildSilentNotification()
@@ -356,6 +396,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         if (instance?.get() === this) instance = null
+        _isConnectedFlow.value = false
         serviceScope.cancel()
         requestRebind(ComponentName(this, WhatsAppNotificationListener::class.java))
         super.onListenerDisconnected()
@@ -363,6 +404,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
     override fun onDestroy() {
         if (instance?.get() === this) instance = null
+        _isConnectedFlow.value = false
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -403,6 +445,73 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         } catch (_: Throwable) {
             0
         }
+    }
+
+    fun extractWhatsAppPhoneFromNotification(sbn: StatusBarNotification): String? {
+        val extras = sbn.notification?.extras
+        val tag = sbn.tag
+        val shortcutId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            sbn.notification?.shortcutId
+        } else null
+        val subText = extras?.getString("android.subText") ?: extras?.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+
+        var personKey: String? = null
+        var personUri: String? = null
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && extras != null) {
+            val parcelableMessages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+            if (parcelableMessages != null) {
+                for (parcelable in parcelableMessages) {
+                    if (parcelable is android.os.Bundle) {
+                        val person = parcelable.getParcelable<android.app.Person>("sender_person")
+                        if (person != null) {
+                            if (person.key != null) personKey = person.key
+                            if (person.uri != null) personUri = person.uri
+                        }
+                    }
+                }
+            }
+        }
+
+        Log.d(
+            "NLS_PHONE",
+            "Notification metadata inspected: sbn.tag=$tag, shortcutId=$shortcutId, subText=$subText, Person.key=$personKey, Person.uri=$personUri"
+        )
+
+        val candidates = listOfNotNull(tag, shortcutId, personUri, personKey, subText)
+        for (candidate in candidates) {
+            val phone = extractPhoneFromToken(candidate)
+            if (!phone.isNullOrBlank()) {
+                return phone
+            }
+        }
+        return null
+    }
+
+    internal fun extractPhoneFromToken(token: String?): String? {
+        if (token.isNullOrBlank()) return null
+
+        // 1. WhatsApp JID format: digits before @s.whatsapp.net or @c.us
+        val jidMatch = Regex("""(\d+)@(s\.whatsapp\.net|c\.us)""").find(token)
+        if (jidMatch != null) {
+            val rawDigits = jidMatch.groupValues[1]
+            return EgyptianOrderUtils.extractEgyptianMobilePhone(rawDigits) ?: rawDigits
+        }
+
+        // 2. tel: URI (e.g., tel:+201012345678 or tel:01012345678)
+        if (token.startsWith("tel:", ignoreCase = true)) {
+            val telPart = token.substring(4)
+            return EgyptianOrderUtils.extractEgyptianMobilePhone(telPart)
+                ?: telPart.filter { it.isDigit() || it == '+' }
+        }
+
+        // 3. Direct Egyptian mobile phone pattern
+        val egyptianPhone = EgyptianOrderUtils.extractEgyptianMobilePhone(token)
+        if (egyptianPhone != null) {
+            return egyptianPhone
+        }
+
+        return null
     }
 
     private fun createNotificationChannel() {

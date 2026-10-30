@@ -41,12 +41,14 @@ class LocalDecisionClassifier @Inject constructor() {
             "fe 7ad hena", "fe 7ad", "feh 7ad"
         )
         private val ORDER_KEYWORDS = listOf(
-            // Arabic Status / Tracking
+            // Arabic Status / Tracking & Cancellation Stems
             "أوردر", "اوردر", "طلب", "طلبي", "الشحنة", "شحنتي", 
             "الطلب", "الاوردر", "الأوردر", "تتبع", "فين الاوردر", "مالوا الاوردر", 
-            "ماله الاوردر", "وصل لفين", "وصل فين", "فين طلبي", "فين الطلب",
+            "ماله الاوردر", "وصل لفين", "وصل فين", "وصل", "فين طلبي", "فين الطلب",
+            "الغي", "ألغي", "إلغاء", "الغاء", "إلغي", "اتلغي", "اتلغى", "طيب اتلغي", "كنسل", "كنسل الاوردر", "كنسل الأوردر",
+            "الغي طلبي", "ألغي طلبي", "لغي", "ملغي", "ملغى", "اتكنسل", "كنسلت", "كنسللي",
             // Franco-Arab & English
-            "status", "order feen", "tracking", "track", "order status"
+            "status", "order feen", "tracking", "track", "order status", "cancel", "cancel order"
         )
         private val BANTER_KEYWORDS = listOf(
             // Arabic Colloquial & Emojis

@@ -38,6 +38,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.TimeUnit
@@ -1479,12 +1480,10 @@ class AutoReplyOrchestratorRagTest {
             )
         }
         val replyGen: ReplyGenerationRepository = mockk(relaxed = true) {
-            coEvery { generateReply(any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.success(
-                AgenticLlmResponse(replyText = "أهلاً بك يا فندم في متجرنا!")
-            )
+            coEvery { generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns """{"action":"REPLY","refined_search_keyword":null,"order_action":null,"final_reply_text":"أهلاً بك يا فندم في متجرنا!","extracted_order":null}"""
         }
         val executionUseCase: DirectReplyExecutionUseCase = mockk(relaxed = true) {
-            coEvery { execute(any(), any(), any(), any()) } returns com.example.persona.features.auto_reply.domain.model.ReplyExecutionResult.Success
+            coEvery { execute(any(), any(), any(), any()) } returns com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResult.Success
         }
 
         val orchestrator = createTestOrchestrator(
@@ -1505,6 +1504,24 @@ class AutoReplyOrchestratorRagTest {
         orchestrator.processNotificationSequentially(notification)
 
         // Reply generation MUST be invoked because isAiOverrideEnabled = true
-        coVerify(atLeast = 1) { replyGen.generateReply(any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(atLeast = 1) { replyGen.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `order_action normalization maps variations to canonical actions`() {
+        assertEquals("CANCEL", OrderIngestionManager.normalizeOrderAction("CANCEL_ORDER"))
+        assertEquals("CANCEL", OrderIngestionManager.normalizeOrderAction("CANCEL"))
+        assertEquals("CANCEL", OrderIngestionManager.normalizeOrderAction("CANCELLED"))
+        assertEquals("CANCEL", OrderIngestionManager.normalizeOrderAction(" cancel_order "))
+        assertEquals("CREATE", OrderIngestionManager.normalizeOrderAction("CREATE_ORDER"))
+        assertEquals("CREATE", OrderIngestionManager.normalizeOrderAction("CREATE"))
+        assertEquals("CREATE", OrderIngestionManager.normalizeOrderAction(" create "))
+        assertEquals("UPDATE", OrderIngestionManager.normalizeOrderAction("UPDATE_ORDER"))
+        assertEquals("UPDATE", OrderIngestionManager.normalizeOrderAction("UPDATE"))
+        assertEquals("UPDATE", OrderIngestionManager.normalizeOrderAction(" update "))
+        assertNull(OrderIngestionManager.normalizeOrderAction(null))
+        assertNull(OrderIngestionManager.normalizeOrderAction(""))
+        assertNull(OrderIngestionManager.normalizeOrderAction("   "))
+        assertNull(OrderIngestionManager.normalizeOrderAction("INVALID_ACTION"))
     }
 }
