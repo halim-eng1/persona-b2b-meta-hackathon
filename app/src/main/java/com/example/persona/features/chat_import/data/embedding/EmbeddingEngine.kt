@@ -27,6 +27,11 @@ class EmbeddingEngine @Inject constructor(
     }
 
     /**
+     * Ensures the ONNX model is loaded and ready for inference before executing embeddings.
+     */
+    suspend fun ensureReady(): Boolean = modelManager.ensureModelLoaded()
+
+    /**
      * Generates a 384-dimensional L2-normalized embedding for a single text.
      * Used by the batch import pipeline (no timeout — waits as long as needed).
      * Returns null if model is not loaded or inference fails.

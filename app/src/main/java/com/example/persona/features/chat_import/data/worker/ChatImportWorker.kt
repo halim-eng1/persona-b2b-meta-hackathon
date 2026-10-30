@@ -30,6 +30,7 @@ import com.example.persona.features.chat_import.data.parser.KnowledgeChunk
 import com.example.persona.features.chat_import.data.parser.MarkdownChunker
 import com.example.persona.features.chat_import.data.parser.StoreTopicsExtractor
 import com.example.persona.features.chat_import.data.parser.StoreWebsiteExtractor
+import com.example.persona.features.chat_import.data.parser.WhatsAppTxtExportParser
 import com.example.persona.features.chat_import.domain.model.ImportProgress
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -39,25 +40,23 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /**
- * WorkManager worker that ingests a Markdown or plain-text business knowledge
+ * WorkManager worker that ingests a Markdown, plain-text, or WhatsApp chat export
  * document into the global RAG knowledge base.
  *
- * **Pipeline (6 phases):**
+ * **Pipeline:**
  * 1. READ_FILE    — Read raw text from content URI
- * 2. CHUNKING     — Split document with [MarkdownChunker]
- * 3. PERSISTING   — Clear old CORE_DOCUMENT entries, insert new chunks in transaction
- * 4. EMBEDDING    — Batched embedding generation via [EmbeddingEngine]
+ * 2. CHUNKING     — Detect format (WhatsApp vs Markdown) and split into [KnowledgeChunk]s
+ * 3. EMBEDDING    — Generate embeddings first into memory to prevent partial DB corruption
+ * 4. PERSISTING   — Atomic transaction: delete previous file chunks and persist texts + embeddings
  * 5. CHECKPOINT   — PRAGMA wal_checkpoint(TRUNCATE)
  * 6. COMPLETE     — Report summary output
- *
- * All B2C dependencies (ChatFileParser, MessageProcessor, ownerName validation,
- * LinkedContactEntity, ChatMessageDao, EmbeddingDao) have been removed.
  */
 @HiltWorker
 class ChatImportWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val markdownChunker: MarkdownChunker,
+    private val whatsAppTxtExportParser: WhatsAppTxtExportParser,
     private val embeddingEngine: EmbeddingEngine,
     private val modelManager: OnnxModelManager,
     private val businessKnowledgeDao: BusinessKnowledgeDao,
@@ -130,11 +129,18 @@ class ChatImportWorker @AssistedInject constructor(
 
             // ── Phase 2: Chunking ──────────────────────────────────────────────
             reportProgress(ImportProgress.ImportPhase.CHUNKING, 0, 0, 0, 0)
-            val chunks: List<KnowledgeChunk> = markdownChunker.chunk(
-                documentText = rawText,
-                sourceFileName = sourceFileName,
-                sourceType = "CORE_DOCUMENT"
-            )
+            val isWhatsApp = whatsAppTxtExportParser.isSupported(rawText)
+            val chunks: List<KnowledgeChunk> = if (isWhatsApp) {
+                PersonaLogger.i(PersonaLogTags.IMPORT, "Detected WhatsApp chat export. Using WhatsAppTxtExportParser.")
+                whatsAppTxtExportParser.extractKnowledgeChunks(rawText, sourceFileName)
+            } else {
+                PersonaLogger.i(PersonaLogTags.IMPORT, "Processing document using MarkdownChunker.")
+                markdownChunker.chunk(
+                    documentText = rawText,
+                    sourceFileName = sourceFileName,
+                    sourceType = "CORE_DOCUMENT"
+                )
+            }
 
             if (chunks.isEmpty()) {
                 return@withContext failWithError(
@@ -143,49 +149,15 @@ class ChatImportWorker @AssistedInject constructor(
                 )
             }
 
-            PersonaLogger.d(PersonaLogTags.IMPORT, "Chunking complete: ${chunks.size} chunks")
+            PersonaLogger.d(PersonaLogTags.IMPORT, "Chunking complete: ${chunks.size} chunks (isWhatsApp=$isWhatsApp)")
 
-            // ── Phase 3: Persist (clear CORE_DOCUMENT + insert in transaction) ─
-            reportProgress(ImportProgress.ImportPhase.PERSISTING, 0, 0, 0, chunks.size)
-
-            database.withTransaction {
-                // Remove previous CORE_DOCUMENT entries for this filename (re-import flow).
-                // MANUAL_ENTRY and TEMPORARY_OFFER rows are intentionally preserved.
-                if (sourceFileName != null) {
-                    // Delete only chunks from the same source file to support multi-file imports
-                    database.openHelper.writableDatabase.execSQL(
-                        "DELETE FROM business_knowledge WHERE source_type = 'CORE_DOCUMENT' AND source_file_name = ?",
-                        arrayOf(sourceFileName)
-                    )
-                } else {
-                    // No filename → nuke all CORE_DOCUMENT rows (single-file default)
-                    businessKnowledgeDao.deleteBySourceType("CORE_DOCUMENT")
-                }
-
-                val entities = chunks.map { chunk ->
-                    BusinessKnowledgeEntity(
-                        chunkId = chunk.chunkId,
-                        headerContext = chunk.headerContext,
-                        chunkText = chunk.chunkText,
-                        sourceType = chunk.sourceType,
-                        sourceFileName = chunk.sourceFileName
-                    )
-                }
-                businessKnowledgeDao.insertAll(entities)
-            }
-
-            PersonaLogger.d(PersonaLogTags.IMPORT, "Chunks persisted: ${chunks.size}")
-
-            // ── Phase 3b: Store Topics Index (hierarchical indexing) ──────────
-            // Extract the Level-1 (#) headings of the imported document and persist
-            // them as the <store_topics> index consumed by PromptContextBuilder.
+            // Extract topics and website (prompt enhancement)
             val extractedTopics = StoreTopicsExtractor.extract(rawText)
             try {
                 userPreferencesRepository.setStoreKnowledgeTopics(extractedTopics)
                 PersonaLogger.i(PersonaLogTags.IMPORT, "Extracted and saved ${extractedTopics.size} store knowledge topics.")
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                // Topics are a prompt-enhancement only; never fail the import for them.
                 PersonaLogger.w(PersonaLogTags.IMPORT, "Failed to persist store knowledge topics: ${e.message}")
             }
 
@@ -198,7 +170,9 @@ class ChatImportWorker @AssistedInject constructor(
                 PersonaLogger.w(PersonaLogTags.IMPORT, "Failed to persist store website: ${e.message}")
             }
 
-            // ── Phase 4: Load model + Embed ───────────────────────────────────
+            // ── Phase 3: Load model & Generate Embeddings in Memory ─────────────
+            // We generate embeddings BEFORE mutating the database. This guarantees atomic resilience:
+            // if cancelled or stopped midway, the database remains in its previous valid state.
             if (!modelManager.isLoaded()) {
                 val loaded = modelManager.loadModel()
                 if (!loaded) return@withContext failWithError("Failed to load AI embedding model")
@@ -207,10 +181,14 @@ class ChatImportWorker @AssistedInject constructor(
             val totalChunks = chunks.size
             val totalBatches = (totalChunks + Constants.EMBEDDING_BATCH_SIZE - 1) / Constants.EMBEDDING_BATCH_SIZE
             var processedCount = 0
+            val allEmbeddingEntities = ArrayList<EmbeddingIndexEntity>(totalChunks)
 
             for (batchIndex in 0 until totalBatches) {
                 ensureActive()
-                if (isStopped) return@withContext Result.failure()
+                if (isStopped) {
+                    PersonaLogger.w(PersonaLogTags.IMPORT, "Import worker stopped during embedding phase. Aborting without mutating database.")
+                    return@withContext Result.failure()
+                }
 
                 val start = batchIndex * Constants.EMBEDDING_BATCH_SIZE
                 val end = minOf(start + Constants.EMBEDDING_BATCH_SIZE, totalChunks)
@@ -227,22 +205,60 @@ class ChatImportWorker @AssistedInject constructor(
                 ensureActive()
                 val embeddings = embeddingEngine.embedBatch(textsToEmbed)
 
-                val embeddingEntities = batchChunks.zip(embeddings).mapNotNull { (chunk, vec) ->
-                    vec?.let {
+                for (i in batchChunks.indices) {
+                    val vec = embeddings.getOrNull(i) ?: continue
+                    allEmbeddingEntities.add(
                         EmbeddingIndexEntity(
-                            chunkId = chunk.chunkId,
-                            vectorBlob = it,
+                            chunkId = batchChunks[i].chunkId,
+                            vectorBlob = vec,
                             modelVersion = EmbeddingIndexEntity("", FloatArray(0)).modelVersion
                         )
-                    }
+                    )
                 }
 
-                ensureActive()
-                embeddingIndexDao.insertAll(embeddingEntities)
                 processedCount += batchChunks.size
             }
 
             PersonaLogger.d(PersonaLogTags.IMPORT, "Embeddings generated: $processedCount")
+
+            if (allEmbeddingEntities.isEmpty()) {
+                return@withContext failWithError("Failed to generate vector embeddings for catalog chunks.")
+            }
+
+            // ── Phase 4: Atomic Persist (Transaction) ───────────────────────────
+            reportProgress(ImportProgress.ImportPhase.PERSISTING, totalBatches, totalBatches, totalChunks, totalChunks)
+
+            database.withTransaction {
+                // Delete previous CORE_DOCUMENT entries for this filename or all if unspecific
+                if (sourceFileName != null) {
+                    val oldChunks = businessKnowledgeDao.getChunksBySourceType("CORE_DOCUMENT")
+                        .filter { it.sourceFileName == sourceFileName }
+                    for (c in oldChunks) {
+                        embeddingIndexDao.deleteByChunkId(c.chunkId)
+                        businessKnowledgeDao.deleteByChunkId(c.chunkId)
+                    }
+                } else {
+                    val oldChunks = businessKnowledgeDao.getChunksBySourceType("CORE_DOCUMENT")
+                    for (c in oldChunks) {
+                        embeddingIndexDao.deleteByChunkId(c.chunkId)
+                    }
+                    businessKnowledgeDao.deleteBySourceType("CORE_DOCUMENT")
+                }
+
+                val entities = chunks.map { chunk ->
+                    BusinessKnowledgeEntity(
+                        chunkId = chunk.chunkId,
+                        headerContext = chunk.headerContext,
+                        chunkText = chunk.chunkText,
+                        sourceType = chunk.sourceType,
+                        sourceFileName = chunk.sourceFileName
+                    )
+                }
+                businessKnowledgeDao.insertAll(entities)
+                embeddingIndexDao.insertAll(allEmbeddingEntities)
+            }
+
+            PersonaLogger.d(PersonaLogTags.IMPORT, "Chunks and embeddings atomically persisted: ${chunks.size}")
 
             // ── Phase 5: WAL Checkpoint ───────────────────────────────────────
             reportProgress(ImportProgress.ImportPhase.CHECKPOINT, totalBatches, totalBatches, totalChunks, totalChunks)
@@ -267,7 +283,7 @@ class ChatImportWorker @AssistedInject constructor(
                 workDataOf(
                     KEY_RESULT_TOTAL to totalChunks,
                     KEY_RESULT_USER_MSGS to processedCount,
-                    KEY_RESULT_FORMAT to "MARKDOWN"
+                    KEY_RESULT_FORMAT to if (isWhatsApp) "WHATSAPP" else "MARKDOWN"
                 )
             )
 
@@ -298,8 +314,8 @@ class ChatImportWorker @AssistedInject constructor(
         }
 
         val notification = NotificationCompat.Builder(applicationContext, channelId)
-            .setContentTitle("استيراد قاعدة المعرفة")
-            .setContentText("جاري معالجة بيانات المتجر وتوليد التضمينات...")
+            .setContentTitle("استيراد كتالوج ومحادثات المتجر")
+            .setContentText("جاري معالجة بيانات المتجر وتوليد التضمينات الذكية...")
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

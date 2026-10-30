@@ -3,11 +3,16 @@ package com.example.persona.features.knowledge.presentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,6 +30,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.persona.R
+import com.example.persona.features.knowledge.presentation.components.AnswerFailedQueryDialog
+import com.example.persona.features.knowledge.presentation.components.BotSimulatorDialog
+import com.example.persona.features.knowledge.presentation.components.EditKnowledgeDialog
 import com.example.persona.features.knowledge.presentation.components.FailedQueryRow
 import com.example.persona.features.knowledge.presentation.components.KnowledgeEntryRow
 import com.example.persona.features.knowledge.presentation.components.ManualKnowledgeInputCard
@@ -39,6 +47,7 @@ fun KnowledgeManagementScreen(
     var selectedTab by remember { mutableStateOf(0) }
     var showClearConfirmationDialog by remember { mutableStateOf(false) }
 
+    // Clear All Dialog
     if (showClearConfirmationDialog) {
         AlertDialog(
             onDismissRequest = { showClearConfirmationDialog = false },
@@ -50,7 +59,7 @@ fun KnowledgeManagementScreen(
             },
             text = {
                 Text(
-                    text = "هل أنت متأكد من حذف جميع المقاطع والبيانات المخزنة؟ ستتمكن من استيراد ملف جديد بالكامل."
+                    text = "هل أنت متأكد من حذف جميع المقاطع والبيانات المخزنة؟ ستتمكن من استيراد ملف جديد بالكامل أو إعادة إدخال الكتالوج."
                 )
             },
             confirmButton = {
@@ -62,20 +71,56 @@ fun KnowledgeManagementScreen(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError
-                    )
+                    ),
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                 ) {
                     Text("حذف الكل")
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { showClearConfirmationDialog = false }
+                OutlinedButton(
+                    onClick = { showClearConfirmationDialog = false },
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                 ) {
                     Text("إلغاء")
                 }
             }
         )
     }
+
+    // Edit Entry Dialog
+    state.editingEntry?.let { entryToEdit ->
+        EditKnowledgeDialog(
+            entry = entryToEdit,
+            onDismiss = { viewModel.onDismissEditDialog() },
+            onSave = { newText ->
+                viewModel.onSaveEditedEntry(entryToEdit.chunkId, newText)
+            }
+        )
+    }
+
+    // Answer Failed Query Dialog (HITL Resolver)
+    state.answeringQuery?.let { queryToAnswer ->
+        AnswerFailedQueryDialog(
+            query = queryToAnswer,
+            onDismiss = { viewModel.onDismissAnswerDialog() },
+            onSaveAnswer = { answer, isOffer ->
+                viewModel.saveAnswerForFailedQuery(queryToAnswer.id, queryToAnswer.queryText, answer, isOffer)
+            }
+        )
+    }
+
+    // Bot Simulator / RAG Tester Dialog
+    BotSimulatorDialog(
+        isOpen = state.isSimulatorOpen,
+        onDismiss = { viewModel.onCloseSimulator() },
+        onRunTest = { query -> viewModel.runSimulation(query) },
+        isSimulating = state.isSimulating,
+        simulatedResponse = state.simulatedResponse,
+        simulationResults = state.simulationResults,
+        simulationBestScore = state.simulationBestScore,
+        simulationError = state.simulationError
+    )
 
     Box(
         modifier = modifier
@@ -95,7 +140,7 @@ fun KnowledgeManagementScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Title Header with Clear Action Button
+            // Title Header with Simulator & Clear Action Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -109,14 +154,34 @@ fun KnowledgeManagementScreen(
                     )
                 )
 
-                IconButton(
-                    onClick = { showClearConfirmationDialog = true }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.DeleteSweep,
-                        contentDescription = "مسح قاعدة المعرفة بالكامل",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                    FilledTonalButton(
+                        onClick = { viewModel.onOpenSimulator() },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = "محاكي البوت", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+
+                    IconButton(
+                        onClick = { showClearConfirmationDialog = true },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteSweep,
+                            contentDescription = "مسح قاعدة المعرفة بالكامل",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
 
@@ -130,10 +195,23 @@ fun KnowledgeManagementScreen(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
                     text = {
-                        Text(
-                            text = "Knowledge Base",
-                            fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "كتالوج المتجر والمعرفة",
+                                fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
+                            )
+                            if (state.entries.isNotEmpty()) {
+                                Badge(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                ) {
+                                    Text(text = state.entries.size.toString())
+                                }
+                            }
+                        }
                     }
                 )
                 Tab(
@@ -145,7 +223,7 @@ fun KnowledgeManagementScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "Pending Inquiries",
+                                text = "الاستفسارات المعلقة",
                                 fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
                             )
                             if (state.unansweredQueries.isNotEmpty()) {
@@ -165,7 +243,7 @@ fun KnowledgeManagementScreen(
                 // Tab 1: Knowledge Base List & Creation Card
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     ManualKnowledgeInputCard(
                         inputQuery = state.inputQuery,
@@ -177,18 +255,68 @@ fun KnowledgeManagementScreen(
                         onAddEntry = { viewModel.addManualEntry() }
                     )
 
-                    // Entries List Header
-                    Text(
-                        text = "KNOWLEDGE ENTRIES",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            letterSpacing = 1.2.sp,
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    // Search & Category Filter Bar
+                    OutlinedTextField(
+                        value = state.searchQuery,
+                        onValueChange = { viewModel.onSearchQueryChanged(it) },
+                        placeholder = { Text("بحث في المنتجات والسياسات...") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = "بحث", modifier = Modifier.size(20.dp))
+                        },
+                        trailingIcon = {
+                            if (state.searchQuery.isNotBlank()) {
+                                IconButton(
+                                    onClick = { viewModel.onSearchQueryChanged("") },
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(Icons.Default.Clear, contentDescription = "مسح البحث")
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
                     )
 
+                    // Filter Chips
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val filters = listOf(
+                            "ALL" to "الكل",
+                            "PRODUCT" to "المنتجات",
+                            "POLICY" to "السياسات والشحن",
+                            "OFFER" to "عروض مؤقتة"
+                        )
+                        items(filters) { (key, label) ->
+                            FilterChip(
+                                selected = state.selectedFilter == key,
+                                onClick = { viewModel.onFilterSelected(key) },
+                                label = { Text(label, fontSize = 12.sp) }
+                            )
+                        }
+                    }
+
+                    // Entries List Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "عناصر الكتالوج (${state.filteredEntries.size})",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                letterSpacing = 1.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
                     // Knowledge List
-                    if (state.entries.isEmpty()) {
+                    val displayList = state.filteredEntries
+                    if (displayList.isEmpty()) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -207,7 +335,10 @@ fun KnowledgeManagementScreen(
                                     modifier = Modifier.size(48.dp)
                                 )
                                 Text(
-                                    text = stringResource(R.string.knowledge_empty_state),
+                                    text = if (state.searchQuery.isNotBlank())
+                                        "لا توجد نتائج مطابقة لبحثك."
+                                    else
+                                        stringResource(R.string.knowledge_empty_state),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
@@ -221,9 +352,10 @@ fun KnowledgeManagementScreen(
                                 .weight(1f),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(state.entries, key = { it.chunkId }) { entry ->
+                            items(displayList, key = { it.chunkId }) { entry ->
                                 KnowledgeEntryRow(
                                     entry = entry,
+                                    onEdit = { viewModel.onEditEntry(entry) },
                                     onDelete = { viewModel.deleteEntry(entry.chunkId) }
                                 )
                             }
@@ -237,9 +369,8 @@ fun KnowledgeManagementScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = "FAILED QUERIES INBOX",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            letterSpacing = 1.2.sp,
+                        text = "صندوق الاستفسارات التي عجز عنها المساعد الآلي",
+                        style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.SemiBold
                         ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -264,7 +395,7 @@ fun KnowledgeManagementScreen(
                                     modifier = Modifier.size(48.dp)
                                 )
                                 Text(
-                                    text = "All caught up! No unanswered customer inquiries.",
+                                    text = "رائع! لا توجد أي استفسارات معلقة من الزبائن.",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
@@ -282,8 +413,7 @@ fun KnowledgeManagementScreen(
                                 FailedQueryRow(
                                     query = query,
                                     onUseAsInput = {
-                                        viewModel.useQueryAsInput(query.queryText)
-                                        selectedTab = 0
+                                        viewModel.onStartAnsweringQuery(query)
                                     },
                                     onMarkReviewed = { viewModel.markQueryReviewed(query.id) },
                                     onDelete = { viewModel.deleteQuery(query.id) }

@@ -2,6 +2,8 @@ package com.example.persona.core.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.persona.core.database.PersonaDatabase
 import com.example.persona.core.database.dao.*
 import com.example.persona.core.database.migration.DatabaseMigrations
@@ -24,12 +26,20 @@ object DatabaseModule {
      *    instead of silently wiping orders / knowledge chunks / chat history.
      *  - Downgrades only: destructive fallback is permitted, since a downgrade
      *    cannot be expressed as a forward migration.
+     *  - PRAGMA foreign_keys = ON enabled via Callback.onOpen to ensure cascading
+     *    deletions between business_knowledge and embeddings_index, avoiding zombie vectors.
      */
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): PersonaDatabase =
         Room.databaseBuilder(context, PersonaDatabase::class.java, Constants.DB_NAME)
             .addMigrations(*DatabaseMigrations.ALL_MIGRATIONS)
+            .addCallback(object : RoomDatabase.Callback() {
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                    super.onOpen(db)
+                    db.execSQL("PRAGMA foreign_keys = ON;")
+                }
+            })
             .fallbackToDestructiveMigrationOnDowngrade()
             .build()
 

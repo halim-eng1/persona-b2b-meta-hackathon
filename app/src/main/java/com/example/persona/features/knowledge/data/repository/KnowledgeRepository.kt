@@ -14,7 +14,8 @@ import javax.inject.Singleton
 @Singleton
 class KnowledgeRepository @Inject constructor(
     private val businessKnowledgeDao: BusinessKnowledgeDao,
-    private val vectorIndexer: KnowledgeVectorIndexer
+    private val vectorIndexer: KnowledgeVectorIndexer,
+    private val embeddingIndexDao: EmbeddingIndexDao? = null
 ) {
 
     /**
@@ -27,8 +28,23 @@ class KnowledgeRepository @Inject constructor(
         embeddingEngine: EmbeddingEngine
     ) : this(
         businessKnowledgeDao = businessKnowledgeDao,
-        vectorIndexer = OnnxKnowledgeVectorIndexer(embeddingEngine, embeddingIndexDao)
+        vectorIndexer = OnnxKnowledgeVectorIndexer(embeddingEngine, embeddingIndexDao),
+        embeddingIndexDao = embeddingIndexDao
     )
+
+    /**
+     * Backward-compatible secondary constructor for testing with mock vectorIndexer.
+     */
+    constructor(
+        businessKnowledgeDao: BusinessKnowledgeDao,
+        vectorIndexer: KnowledgeVectorIndexer
+    ) : this(
+        businessKnowledgeDao = businessKnowledgeDao,
+        vectorIndexer = vectorIndexer,
+        embeddingIndexDao = null
+    )
+
+    suspend fun ensureReady(): Boolean = vectorIndexer.ensureReady()
 
     fun observeAllChunks(): Flow<List<BusinessKnowledgeEntity>> {
         return businessKnowledgeDao.observeAllChunks()
@@ -54,8 +70,38 @@ class KnowledgeRepository @Inject constructor(
         return true
     }
 
+    suspend fun updateKnowledge(
+        chunkId: String,
+        newText: String,
+        sourceType: String = "MANUAL_ENTRY",
+        sourceFileName: String? = null,
+        headerContext: String? = null
+    ): Boolean {
+        if (newText.isBlank()) return false
+        val indexed = vectorIndexer.indexVector(chunkId, newText)
+        if (!indexed) return false
+
+        val updatedEntity = BusinessKnowledgeEntity(
+            chunkId = chunkId,
+            headerContext = headerContext,
+            chunkText = newText,
+            sourceType = sourceType,
+            sourceFileName = sourceFileName,
+            timestamp = System.currentTimeMillis()
+        )
+        businessKnowledgeDao.insertChunk(updatedEntity)
+        return true
+    }
+
+    /**
+     * Deletes a knowledge chunk.
+     * Deletes from business_knowledge (which cascades to embeddings_index when SQLite foreign keys are active)
+     * and explicitly deletes from embeddings_index via vectorIndexer and DAO as defense-in-depth against zombie vectors.
+     */
     suspend fun deleteKnowledge(chunkId: String) {
         businessKnowledgeDao.deleteByChunkId(chunkId)
+        vectorIndexer.deleteVector(chunkId)
+        embeddingIndexDao?.deleteByChunkId(chunkId)
     }
 
     suspend fun clearAllKnowledge() {

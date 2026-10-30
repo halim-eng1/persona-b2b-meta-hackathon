@@ -64,7 +64,6 @@ fun ChatImportScreen(
             val isSupported = displayName?.endsWith(".txt", ignoreCase = true) == true ||
                 displayName?.endsWith(".md", ignoreCase = true) == true
             if (isSupported || displayName == null) {
-                // displayName == null → provider did not expose a name; let the worker try.
                 viewModel.onFilePicked(picked)
             } else {
                 viewModel.onUnsupportedFilePicked()
@@ -81,10 +80,13 @@ fun ChatImportScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Import WhatsApp Chat", fontWeight = FontWeight.SemiBold) },
+                title = { Text("استيراد كتالوج ومحادثات المتجر", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "رجوع")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -120,13 +122,13 @@ fun ChatImportScreen(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "Build Your Digital Persona",
+                        text = "بناء كتالوج المتجر والأسئلة الشائعة",
                         style = MaterialTheme.typography.titleLarge,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Upload a exported WhatsApp chat file (.txt) or Markdown knowledge file (.md). The AI model runs on-device to index your messaging style.",
+                        text = "ارفع ملف تصدير محادثات واتساب سابقة (.txt) أو ملف كتالوج المنتجات وسياسات الشحن (.md). يعمل الموديل محلياً على جهازك لتوليد الفهرس الذكي للرد على الزبائن.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.9f)
                     )
@@ -148,21 +150,21 @@ fun ChatImportScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Info,
-                            contentDescription = "Instructions",
+                            contentDescription = "تعليمات",
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "How to export chat:",
+                            text = "كيفية تصدير محادثات واتساب:",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                     }
 
                     val steps = listOf(
-                        "1. Open WhatsApp & go to a contact's chat.",
-                        "2. Tap the three dots menu (More) -> Export chat.",
-                        "3. Select 'Without Media' to generate a .txt / .md file.",
-                        "4. Save it and select it using the picker below."
+                        "1. افتح تطبيق واتساب وادخل على محادثة سابقة مع أحد الزبائن.",
+                        "2. اضغط على القائمة (الثلاث نقاط) -> المزيد (More) -> تصدير الدردشة (Export chat).",
+                        "3. اختر 'بدون وسائط' (Without Media) لاستخراج ملف نصي .txt خفيف.",
+                        "4. احفظ الملف وحدده من الزر بالأسفل لاستخراج أسئلة وأجوبة المنتجات تلقائياً."
                     )
 
                     steps.forEach { step ->
@@ -188,19 +190,21 @@ fun ChatImportScreen(
                     Button(
                         onClick = { fileLauncher.launch(acceptedMimeTypes) },
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Pick File",
+                            contentDescription = "اختيار ملف",
                             modifier = Modifier.padding(end = 8.dp)
                         )
-                        Text("Choose Chat Export (.txt / .md)")
+                        Text("اختيار ملف الكتالوج أو الشات (.txt / .md)")
                     }
 
                     uiState.selectedFileUri?.let { uri ->
                         Text(
-                            text = "Selected: ${uri.lastPathSegment ?: "chat_export.txt"}",
+                            text = "الملف المحدد: ${uri.queryDisplayName(context) ?: uri.lastPathSegment ?: "chat_export.txt"}",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.primary,
@@ -208,7 +212,7 @@ fun ChatImportScreen(
                         )
                     } ?: run {
                         Text(
-                            text = "No file selected",
+                            text = "لم يتم اختيار أي ملف بعد",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
@@ -234,7 +238,7 @@ fun ChatImportScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
-                                contentDescription = "Error",
+                                contentDescription = "خطأ",
                                 tint = MaterialTheme.colorScheme.error
                             )
                             Text(
@@ -249,14 +253,14 @@ fun ChatImportScreen(
                                 onClick = onNavigateToSettings,
                                 modifier = Modifier.align(Alignment.End)
                             ) {
-                                Text("Go to Settings", fontWeight = FontWeight.Bold)
+                                Text("الانتقال للإعدادات", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
             }
 
-            // Fallback Notification Access Card
+            // Notification Access Guide
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
@@ -268,7 +272,7 @@ fun ChatImportScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Stuck? Make sure Notification Access is turned on for PersonaChat to enable auto-reply listener.",
+                        text = "تلميح: تأكد من تفعيل صلاحية قراءة الإشعارات للتطبيق ليعمل الرد الآلي على استفسارات الزبائن فور وصولها على واتساب.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -288,9 +292,11 @@ fun ChatImportScreen(
                             }
                         },
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
                     ) {
-                        Text("Launch System Notification Access")
+                        Text("فتح إعدادات صلاحية الإشعارات")
                     }
                 }
             }
@@ -314,10 +320,10 @@ fun ChatImportScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Start",
+                    contentDescription = "بدء",
                     modifier = Modifier.padding(end = 8.dp)
                 )
-                Text("Start Import Process", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("بدء استيراد وفهرسة الكتالوج", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
         }
     }

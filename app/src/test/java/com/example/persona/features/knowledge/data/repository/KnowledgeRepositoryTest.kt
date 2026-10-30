@@ -1,6 +1,7 @@
 package com.example.persona.features.knowledge.data.repository
 
 import com.example.persona.core.database.dao.BusinessKnowledgeDao
+import com.example.persona.core.database.dao.EmbeddingIndexDao
 import com.example.persona.core.database.entity.BusinessKnowledgeEntity
 import com.example.persona.features.knowledge.domain.indexer.KnowledgeVectorIndexer
 import io.mockk.coEvery
@@ -18,10 +19,12 @@ class KnowledgeRepositoryTest {
 
     private val businessKnowledgeDao = mockk<BusinessKnowledgeDao>(relaxed = true)
     private val vectorIndexer = mockk<KnowledgeVectorIndexer>(relaxed = true)
+    private val embeddingIndexDao = mockk<EmbeddingIndexDao>(relaxed = true)
 
     private val repository = KnowledgeRepository(
         businessKnowledgeDao = businessKnowledgeDao,
-        vectorIndexer = vectorIndexer
+        vectorIndexer = vectorIndexer,
+        embeddingIndexDao = embeddingIndexDao
     )
 
     @Test
@@ -74,9 +77,32 @@ class KnowledgeRepositoryTest {
     }
 
     @Test
-    fun `deleteKnowledge delegates to dao`() = runTest {
+    fun `updateKnowledge updates vector and persists updated entity`() = runTest {
+        coEvery { vectorIndexer.indexVector("chunk_123", "Updated Price 300 EGP") } returns true
+
+        val result = repository.updateKnowledge(
+            chunkId = "chunk_123",
+            newText = "Updated Price 300 EGP",
+            headerContext = "المنتجات والأسعار"
+        )
+
+        assertTrue(result)
+        coVerify(exactly = 1) { vectorIndexer.indexVector("chunk_123", "Updated Price 300 EGP") }
+        coVerify(exactly = 1) {
+            businessKnowledgeDao.insertChunk(match {
+                it.chunkId == "chunk_123" &&
+                    it.chunkText == "Updated Price 300 EGP" &&
+                    it.headerContext == "المنتجات والأسعار"
+            })
+        }
+    }
+
+    @Test
+    fun `deleteKnowledge deletes from businessKnowledgeDao vectorIndexer and embeddingIndexDao`() = runTest {
         repository.deleteKnowledge("target_chunk")
         coVerify(exactly = 1) { businessKnowledgeDao.deleteByChunkId("target_chunk") }
+        coVerify(exactly = 1) { vectorIndexer.deleteVector("target_chunk") }
+        coVerify(exactly = 1) { embeddingIndexDao.deleteByChunkId("target_chunk") }
     }
 
     @Test
@@ -84,5 +110,13 @@ class KnowledgeRepositoryTest {
         repository.clearAllKnowledge()
         coVerify(exactly = 1) { businessKnowledgeDao.deleteAll() }
         coVerify(exactly = 1) { vectorIndexer.clearIndex() }
+    }
+
+    @Test
+    fun `ensureReady delegates to vectorIndexer`() = runTest {
+        coEvery { vectorIndexer.ensureReady() } returns true
+        val ready = repository.ensureReady()
+        assertTrue(ready)
+        coVerify(exactly = 1) { vectorIndexer.ensureReady() }
     }
 }

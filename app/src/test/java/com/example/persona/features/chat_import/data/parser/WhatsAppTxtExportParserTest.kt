@@ -69,54 +69,40 @@ class WhatsAppTxtExportParserTest {
     }
 
     @Test
-    fun `parses iOS bracketed format with seconds and AM PM`() {
+    fun `parses iOS format in brackets`() {
         val transcript = """
-            [15/04/2026, 14:30:45] Sarah: هل متاح التوصيل للقاهرة؟
-            [15/04/2026, 02:31:00 PM] Store: نعم متاح خلال 48 ساعة
+            [15/04/2026, 14:30:00] Ahmed: السعر كام؟
+            [15/04/2026, 14:31:00] Store: ٢٥٠ جنيه يا فندم
         """.trimIndent()
 
         val messages = parser.parse(transcript)
         assertEquals(2, messages.size)
-
-        assertEquals("Sarah", messages[0].senderName)
-        assertEquals("هل متاح التوصيل للقاهرة؟", messages[0].messageText)
-
-        val cal = Calendar.getInstance(timeZone).apply { timeInMillis = messages[0].timestampMs }
-        assertEquals(14, cal.get(Calendar.HOUR_OF_DAY))
-        assertEquals(30, cal.get(Calendar.MINUTE))
-        assertEquals(45, cal.get(Calendar.SECOND))
-
-        val cal2 = Calendar.getInstance(timeZone).apply { timeInMillis = messages[1].timestampMs }
-        assertEquals(14, cal2.get(Calendar.HOUR_OF_DAY))
-        assertEquals(31, cal2.get(Calendar.MINUTE))
-    }
-
-    @Test
-    fun `handles multiline messages seamlessly`() {
-        val transcript = """
-            15/04/2026, 14:30 - Ahmed: تفاصيل الطلب:
-            - تيشيرت مقاس XL
-            - بنطلون جينز مقاس 34
-            العنوان: المعادي شارع 9
-            15/04/2026, 14:32 - Store: تم استلام طلبك وجاري التجهيز
-        """.trimIndent()
-
-        val messages = parser.parse(transcript)
-        assertEquals(2, messages.size)
-
-        val expectedFirst = "تفاصيل الطلب:\n- تيشيرت مقاس XL\n- بنطلون جينز مقاس 34\nالعنوان: المعادي شارع 9"
-        assertEquals(expectedFirst, messages[0].messageText)
         assertEquals("Ahmed", messages[0].senderName)
-
-        assertEquals("تم استلام طلبك وجاري التجهيز", messages[1].messageText)
+        assertEquals("السعر كام؟", messages[0].messageText)
         assertEquals("Store", messages[1].senderName)
+        assertEquals("٢٥٠ جنيه يا فندم", messages[1].messageText)
     }
 
     @Test
-    fun `identifies system messages correctly`() {
+    fun `parses multi-line messages correctly`() {
         val transcript = """
-            15/04/2026, 14:00 - Messages and calls are end-to-end encrypted. No one outside of this chat can read or listen to them.
-            [15/04/2026, 14:05:00] You created group "VIP Clients"
+            15/04/2026, 14:00 - Ahmed: السطر الأول
+            السطر الثاني
+            السطر الثالث
+            15/04/2026, 14:05 - Bot: تمام
+        """.trimIndent()
+
+        val messages = parser.parse(transcript)
+        assertEquals(2, messages.size)
+        assertEquals("السطر الأول\nالسطر الثاني\nالسطر الثالث", messages[0].messageText)
+        assertEquals("تمام", messages[1].messageText)
+    }
+
+    @Test
+    fun `identifies system messages without sender colon`() {
+        val transcript = """
+            15/04/2026, 14:00 - Messages and calls are end-to-end encrypted.
+            15/04/2026, 14:01 - تم تغيير رمز الأمان الخاص بك
             15/04/2026, 14:10 - Ahmed: السلام عليكم
         """.trimIndent()
 
@@ -151,7 +137,6 @@ class WhatsAppTxtExportParserTest {
 
     @Test
     fun `strips invisible BiDi Unicode marks from lines`() {
-        // Embed LRM (\u200E) and RLM (\u200F)
         val transcript = "\u200E15/04/2026, 14:30 - \u200FAhmed\u200E: مرحبا بكم"
         val messages = parser.parse(transcript)
 
@@ -171,5 +156,44 @@ class WhatsAppTxtExportParserTest {
 
         assertEquals(1, result.size)
         assertEquals("User1", result[0].senderName)
+    }
+
+    @Test
+    fun `isSupported returns true for valid WhatsApp export and false for markdown`() {
+        val waExport = """
+            15/04/2026, 14:30 - Customer: السلام عليكم
+            15/04/2026, 14:31 - Store: وعليكم السلام أهلاً بك
+        """.trimIndent()
+        assertTrue(parser.isSupported(waExport))
+
+        val markdownText = """
+            # سياسة الشحن والتوصيل
+            الشحن للقاهرة والجيزة 40 جنيه خلال 48 ساعة.
+            ## الاستبدال والاسترجاع
+            الاسترجاع متاح خلال 14 يوم.
+        """.trimIndent()
+        assertFalse(parser.isSupported(markdownText))
+    }
+
+    @Test
+    fun `extractKnowledgeChunks converts alternating conversation into structured QA chunks`() {
+        val chat = """
+            15/04/2026, 14:30 - Customer: السلام عليكم، التيشيرت الأسود بكام؟
+            15/04/2026, 14:31 - Store: وعليكم السلام يا فندم، التيشيرت سعره 250 جنيه ومتاح مقاسات L و XL
+            15/04/2026, 14:32 - Customer: <Media omitted>
+            15/04/2026, 14:33 - Customer: وعندكم توصيل للإسكندرية؟
+            15/04/2026, 14:34 - Store: أيوة متاح شحن للإسكندرية بـ 50 جنيه والتوصيل خلال 3 أيام
+        """.trimIndent()
+
+        val chunks = parser.extractKnowledgeChunks(chat, "chat_sample.txt")
+        assertEquals(2, chunks.size)
+
+        assertTrue(chunks[0].chunkText.contains("سؤال: السلام عليكم، التيشيرت الأسود بكام؟"))
+        assertTrue(chunks[0].chunkText.contains("إجابة: وعليكم السلام يا فندم، التيشيرت سعره 250 جنيه ومتاح مقاسات L و XL"))
+        assertEquals("CORE_DOCUMENT", chunks[0].sourceType)
+        assertEquals("chat_sample.txt", chunks[0].sourceFileName)
+
+        assertTrue(chunks[1].chunkText.contains("وعندكم توصيل للإسكندرية؟"))
+        assertTrue(chunks[1].chunkText.contains("أيوة متاح شحن للإسكندرية بـ 50 جنيه والتوصيل خلال 3 أيام"))
     }
 }

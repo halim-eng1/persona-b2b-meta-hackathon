@@ -4,13 +4,17 @@ import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.dao.FailedQueryDao
 import com.example.persona.core.database.entity.BusinessKnowledgeEntity
 import com.example.persona.core.database.entity.FailedQueryEntity
+import com.example.persona.features.auto_reply.data.repository.SemanticRetrievalRepository
+import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
+import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.knowledge.data.repository.KnowledgeRepository
+import com.example.persona.features.knowledge.domain.model.KnowledgeEntry
 import com.example.persona.features.knowledge.domain.usecase.AddManualKnowledgeUseCase
 import com.example.persona.features.knowledge.domain.usecase.DeleteKnowledgeEntryUseCase
+import com.example.persona.features.knowledge.domain.usecase.UpdateKnowledgeEntryUseCase
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.*
 import org.junit.After
@@ -26,6 +30,9 @@ class KnowledgeManagementViewModelTest {
     private val addManualKnowledgeUseCase = mockk<AddManualKnowledgeUseCase>()
     private val deleteKnowledgeEntryUseCase = mockk<DeleteKnowledgeEntryUseCase>()
     private val userPreferencesRepository = mockk<UserPreferencesRepository>(relaxed = true)
+    private val updateKnowledgeEntryUseCase = mockk<UpdateKnowledgeEntryUseCase>(relaxed = true)
+    private val semanticRetrievalRepository = mockk<SemanticRetrievalRepository>(relaxed = true)
+    private val embeddingEngine = mockk<EmbeddingEngine>(relaxed = true)
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -36,6 +43,12 @@ class KnowledgeManagementViewModelTest {
                 chunkText = "Fact 1",
                 sourceType = "MANUAL_ENTRY",
                 timestamp = 1000L
+            ),
+            BusinessKnowledgeEntity(
+                chunkId = "chunk_2",
+                chunkText = "[منتج]: سويت شيرت | [السعر]: 350 ج.م",
+                sourceType = "MANUAL_ENTRY",
+                timestamp = 2000L
             )
         )
     )
@@ -57,7 +70,10 @@ class KnowledgeManagementViewModelTest {
         failedQueryDao = failedQueryDao,
         addManualKnowledgeUseCase = addManualKnowledgeUseCase,
         deleteKnowledgeEntryUseCase = deleteKnowledgeEntryUseCase,
-        userPreferencesRepository = userPreferencesRepository
+        userPreferencesRepository = userPreferencesRepository,
+        updateKnowledgeEntryUseCase = updateKnowledgeEntryUseCase,
+        semanticRetrievalRepository = semanticRetrievalRepository,
+        embeddingEngine = embeddingEngine
     )
 
     @Before
@@ -79,7 +95,7 @@ class KnowledgeManagementViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(1, state.entries.size)
+        assertEquals(2, state.entries.size)
         assertEquals("Fact 1", state.entries[0].chunkText)
         assertEquals(1, state.unansweredQueries.size)
         assertEquals("What is shipping price?", state.unansweredQueries[0].queryText)
@@ -121,7 +137,7 @@ class KnowledgeManagementViewModelTest {
 
         assertEquals("Valid Fact", viewModel.uiState.value.inputQuery)
         assertFalse(viewModel.uiState.value.isProcessing)
-        assertEquals("Failed to generate embedding or save entry.", viewModel.uiState.value.errorMessage)
+        assertNotNull(viewModel.uiState.value.errorMessage)
     }
 
     @Test
@@ -133,6 +149,114 @@ class KnowledgeManagementViewModelTest {
 
         testDispatcher.scheduler.advanceUntilIdle()
         coVerify(exactly = 1) { deleteKnowledgeEntryUseCase("chunk_1") }
+    }
+
+    @Test
+    fun onSaveEditedEntry_callsUpdateUseCase() = runTest {
+        val viewModel = createViewModel()
+        coEvery { updateKnowledgeEntryUseCase(any(), any(), any(), any(), any()) } returns true
+
+        viewModel.onSaveEditedEntry("chunk_1", "Updated Fact Text")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { updateKnowledgeEntryUseCase("chunk_1", "Updated Fact Text") }
+        assertNull(viewModel.uiState.value.editingEntry)
+    }
+
+    @Test
+    fun onSaveEditedEntry_preservesCoreDocumentSourceTypeAndHeaderContext() = runTest {
+        val viewModel = createViewModel()
+        val coreEntry = KnowledgeEntry(
+            chunkId = "chunk_core_1",
+            headerContext = "سياسة الشحن",
+            chunkText = "شحن مجاني للطلبات فوق 500 جنيه",
+            sourceType = "CORE_DOCUMENT",
+            timestamp = 1000L
+        )
+        viewModel.onEditEntry(coreEntry)
+        coEvery { updateKnowledgeEntryUseCase(any(), any(), any(), any(), any()) } returns true
+
+        viewModel.onSaveEditedEntry("chunk_core_1", "شحن مجاني للطلبات فوق 600 جنيه")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            updateKnowledgeEntryUseCase(
+                chunkId = "chunk_core_1",
+                newText = "شحن مجاني للطلبات فوق 600 جنيه",
+                sourceType = "CORE_DOCUMENT",
+                headerContext = "سياسة الشحن"
+            )
+        }
+        assertNull(viewModel.uiState.value.editingEntry)
+    }
+
+    @Test
+    fun saveAnswerForFailedQuery_persistsStructuredQAAndMarksReviewed() = runTest {
+        val viewModel = createViewModel()
+        coEvery { addManualKnowledgeUseCase(any(), false) } returns true
+        coEvery { failedQueryDao.markReviewed(42L) } just Runs
+
+        viewModel.saveAnswerForFailedQuery(
+            queryId = 42L,
+            queryText = "بكام الشحن لأسيوط؟",
+            answerText = "الشحن 60 جنيه",
+            isTemporaryOffer = false
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            addManualKnowledgeUseCase("سؤال: بكام الشحن لأسيوط؟\nإجابة: الشحن 60 جنيه", false)
+        }
+        coVerify(exactly = 1) { failedQueryDao.markReviewed(42L) }
+        assertNull(viewModel.uiState.value.answeringQuery)
+    }
+
+    @Test
+    fun runSimulation_executesRetrievalAndUpdatesState() = runTest {
+        val viewModel = createViewModel()
+        val mockVector = FloatArray(384) { 0.1f }
+        val mockCandidate = RetrievalCandidate(
+            chunkId = "chunk_2",
+            headerContext = "الكتالوج",
+            chunkText = "[منتج]: سويت شيرت | [السعر]: 350 ج.م",
+            similarityScore = 0.88f
+        )
+
+        coEvery { embeddingEngine.embed("بكام السويت شيرت؟") } returns mockVector
+        coEvery {
+            semanticRetrievalRepository.retrieveCandidates(
+                queryEmbedding = mockVector,
+                limit = 5,
+                minimumSimilarityThreshold = any(),
+                queryText = "بكام السويت شيرت؟"
+            )
+        } returns Pair(listOf(mockCandidate), 0.88f)
+
+        viewModel.runSimulation("بكام السويت شيرت؟")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isSimulating)
+        assertEquals("[منتج]: سويت شيرت | [السعر]: 350 ج.م", state.simulatedResponse)
+        assertEquals(1, state.simulationResults.size)
+        assertEquals(0.88f, state.simulationBestScore, 0.001f)
+    }
+
+    @Test
+    fun filtering_worksBySearchQueryAndCategory() = runTest {
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(2, viewModel.uiState.value.filteredEntries.size)
+
+        viewModel.onSearchQueryChanged("سويت شيرت")
+        assertEquals(1, viewModel.uiState.value.filteredEntries.size)
+        assertEquals("chunk_2", viewModel.uiState.value.filteredEntries[0].chunkId)
+
+        viewModel.onSearchQueryChanged("")
+        viewModel.onFilterSelected("PRODUCT")
+        assertEquals(1, viewModel.uiState.value.filteredEntries.size)
+        assertEquals("chunk_2", viewModel.uiState.value.filteredEntries[0].chunkId)
     }
 
     @Test

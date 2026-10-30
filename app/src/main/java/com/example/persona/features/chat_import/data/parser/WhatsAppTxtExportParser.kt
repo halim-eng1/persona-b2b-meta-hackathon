@@ -25,10 +25,16 @@ typealias ParsedChatMessage = com.example.persona.features.chat_import.domain.mo
  * - Zero Android Context coupling
  */
 @Singleton
-class WhatsAppTxtExportParser @Inject constructor(
-    private val normalizer: ArabicTextNormalizer = ArabicTextNormalizer(),
-    private val defaultTimeZone: TimeZone = TimeZone.getDefault()
+class WhatsAppTxtExportParser(
+    private val normalizer: ArabicTextNormalizer,
+    private val defaultTimeZone: TimeZone
 ) {
+    @Inject
+    constructor(normalizer: ArabicTextNormalizer) : this(normalizer, TimeZone.getDefault())
+
+    constructor(defaultTimeZone: TimeZone) : this(ArabicTextNormalizer(), defaultTimeZone)
+
+    constructor() : this(ArabicTextNormalizer(), TimeZone.getDefault())
 
     private data class HeaderMatch(
         val timestampMs: Long,
@@ -106,6 +112,98 @@ class WhatsAppTxtExportParser @Inject constructor(
     fun parse(reader: Reader): Sequence<ParsedChatMessage> {
         val bufferedReader = if (reader is BufferedReader) reader else BufferedReader(reader)
         return parseStream(bufferedReader.lineSequence())
+    }
+
+    /**
+     * Checks if the given raw text resembles a WhatsApp chat export.
+     * Checks up to the first 40 non-blank lines for recognizable WhatsApp message headers.
+     */
+    fun isSupported(rawText: String): Boolean {
+        var matchCount = 0
+        for (line in rawText.lineSequence().take(40)) {
+            val cleaned = sanitizeLine(line)
+            if (cleaned.isNotBlank() && tryMatchHeader(cleaned) != null) {
+                matchCount++
+                if (matchCount >= 2) return true
+            }
+        }
+        return matchCount >= 1
+    }
+
+    /**
+     * Extracts structured Q&A pairs and store information from WhatsApp parsed messages.
+     * Filters system messages and media indicators, groups consecutive messages by sender,
+     * and forms Q&A pairs when senders alternate.
+     */
+    fun extractKnowledgeChunks(
+        rawText: String,
+        sourceFileName: String? = null
+    ): List<KnowledgeChunk> {
+        val allMessages = parse(rawText).filter {
+            !it.isSystemMessage && !it.hasMediaAttachment && it.messageText.isNotBlank()
+        }
+        if (allMessages.isEmpty()) return emptyList()
+
+        // Group consecutive messages by sender
+        data class MessageBlock(val sender: String, val text: String)
+        val blocks = mutableListOf<MessageBlock>()
+        var currentSender = allMessages[0].senderName
+        var currentText = StringBuilder(allMessages[0].messageText.trim())
+
+        for (i in 1 until allMessages.size) {
+            val msg = allMessages[i]
+            if (msg.senderName == currentSender) {
+                currentText.append("\n").append(msg.messageText.trim())
+            } else {
+                blocks.add(MessageBlock(currentSender, currentText.toString()))
+                currentSender = msg.senderName
+                currentText = StringBuilder(msg.messageText.trim())
+            }
+        }
+        blocks.add(MessageBlock(currentSender, currentText.toString()))
+
+        val chunks = mutableListOf<KnowledgeChunk>()
+        var i = 0
+        while (i < blocks.size) {
+            val current = blocks[i]
+            if (i + 1 < blocks.size) {
+                val next = blocks[i + 1]
+                val qText = current.text.trim()
+                val aText = next.text.trim()
+                if (qText.length >= 2 && aText.length >= 2) {
+                    val formatted = "سؤال: $qText\nإجابة: $aText"
+                    chunks.add(
+                        KnowledgeChunk(
+                            chunkId = java.util.UUID.randomUUID().toString(),
+                            headerContext = "محادثات خدمة العملاء والأسئلة الشائعة",
+                            chunkText = if (formatted.length > com.example.persona.core.common.Constants.EMBEDDING_MAX_CHUNK_CHARS)
+                                formatted.take(com.example.persona.core.common.Constants.EMBEDDING_MAX_CHUNK_CHARS)
+                            else formatted,
+                            sourceType = "CORE_DOCUMENT",
+                            sourceFileName = sourceFileName
+                        )
+                    )
+                }
+                i += 2
+            } else {
+                val text = current.text.trim()
+                if (text.length >= 20) {
+                    chunks.add(
+                        KnowledgeChunk(
+                            chunkId = java.util.UUID.randomUUID().toString(),
+                            headerContext = "معلومات ومحادثات المتجر",
+                            chunkText = if (text.length > com.example.persona.core.common.Constants.EMBEDDING_MAX_CHUNK_CHARS)
+                                text.take(com.example.persona.core.common.Constants.EMBEDDING_MAX_CHUNK_CHARS)
+                            else text,
+                            sourceType = "CORE_DOCUMENT",
+                            sourceFileName = sourceFileName
+                        )
+                    )
+                }
+                i++
+            }
+        }
+        return chunks
     }
 
     private fun tryMatchHeader(line: String): HeaderMatch? {

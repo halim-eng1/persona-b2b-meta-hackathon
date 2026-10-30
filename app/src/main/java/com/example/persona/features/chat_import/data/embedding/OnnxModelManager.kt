@@ -78,7 +78,7 @@ class OnnxModelManager @Inject constructor(
                 val sessionOptions = OrtSession.SessionOptions().apply {
                     setIntraOpNumThreads(intraOpThreads)
                     setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-                    addConfigEntry("session.intra_op.allow_spinning", "1")
+                    addConfigEntry("session.intra_op.allow_spinning", "0")
                 }
 
                 session = environment!!.createSession(modelFile.absolutePath, sessionOptions)
@@ -99,6 +99,16 @@ class OnnxModelManager @Inject constructor(
 
     fun isLoaded(): Boolean = session != null
 
+    suspend fun ensureModelLoaded(): Boolean = withContext(aiDispatcher) {
+        if (isLoaded()) return@withContext true
+        try {
+            loadModel()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed lazy loadModel: ${e.message}", e)
+            false
+        }
+    }
+
     /**
      * Hidden #6: Priority-aware inference.
      * Auto-reply (real-time) calls this with a timeout to avoid
@@ -108,9 +118,16 @@ class OnnxModelManager @Inject constructor(
     suspend fun <T> withInferenceLock(
         timeoutMs: Long = 0L,
         block: suspend (OrtSession) -> T
-    ): T? {
-        val sess = session ?: return null
-        return if (timeoutMs > 0) {
+    ): T? = withContext(aiDispatcher) {
+        if (session == null) {
+            try {
+                ensureModelLoaded()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed lazy model loading in withInferenceLock: ${e.message}", e)
+            }
+        }
+        val sess = session ?: return@withContext null
+        if (timeoutMs > 0) {
             try {
                 withTimeout(timeoutMs) {
                     inferenceMutex.withLock { block(sess) }
