@@ -464,7 +464,7 @@ class PromptContextBuilderTest {
         for (section3 in listOf(witty, polite)) {
             assertTrue("Must include pragmatic semantics heading", section3.contains("PRAGMATIC SEMANTICS & COLLOQUIAL METAPHORS"))
             assertTrue("Must explain 'نص كم' idiom", section3.contains("نص كم"))
-            assertTrue("Must prohibit literal product specification mapping", section3.contains("NEVER interpret them literally as physical product attributes"))
+            assertTrue("Must prohibit literal catalog mapping", section3.contains("NEVER interpret them literally as physical catalog attributes"))
             assertTrue("Must mention quality descriptors", section3.contains("أي كلام") && section3.contains("مضروب"))
         }
     }

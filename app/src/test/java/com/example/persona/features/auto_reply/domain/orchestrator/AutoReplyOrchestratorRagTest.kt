@@ -1283,4 +1283,150 @@ class AutoReplyOrchestratorRagTest {
             )
         }
     }
+
+    @Test
+    fun `isAudioFilePath correctly identifies audio and non-audio extensions`() {
+        assertTrue(AutoReplyOrchestrator.isAudioFilePath("/storage/voice.ogg"))
+        assertTrue(AutoReplyOrchestrator.isAudioFilePath("/storage/voice.opus"))
+        assertTrue(AutoReplyOrchestrator.isAudioFilePath("/storage/voice.mp3"))
+        assertTrue(AutoReplyOrchestrator.isAudioFilePath("/storage/voice.m4a"))
+        assertTrue(AutoReplyOrchestrator.isAudioFilePath("/storage/voice.wav"))
+        assertTrue(AutoReplyOrchestrator.isAudioFilePath("/storage/voice.aac"))
+        assertTrue(AutoReplyOrchestrator.isAudioFilePath("/storage/voice.amr"))
+        assertTrue(AutoReplyOrchestrator.isAudioFilePath("/storage/VOICE.OGG"))
+
+        assertFalse(AutoReplyOrchestrator.isAudioFilePath("/storage/photo.jpg"))
+        assertFalse(AutoReplyOrchestrator.isAudioFilePath("/storage/photo.jpeg"))
+        assertFalse(AutoReplyOrchestrator.isAudioFilePath("/storage/photo.png"))
+        assertFalse(AutoReplyOrchestrator.isAudioFilePath("/storage/photo.webp"))
+        assertFalse(AutoReplyOrchestrator.isAudioFilePath(null))
+        assertFalse(AutoReplyOrchestrator.isAudioFilePath(""))
+        assertFalse(AutoReplyOrchestrator.isAudioFilePath("   "))
+    }
+
+    @Test
+    fun `processNotificationSequentially preserves image file path and triggers image fast-path when burst contains transcribed voice and image`() = runBlocking {
+        val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
+        val replyRepo = mockk<ReplyGenerationRepository>(relaxed = true)
+        val prefsRepo = mockk<UserPreferencesRepository>(relaxed = true)
+        val cloudflareClient = mockk<CloudflareClefClient>(relaxed = true)
+        val liquidClient = mockk<LiquidDecisionClient>(relaxed = true)
+        val processor = mockk<NotificationProcessorImpl>()
+
+        coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
+        coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0, replyDelaySeconds = 0)
+
+        val coalescedText = "شوف التيشيرت دا\n[رسالة صوتية من العميل]: عايز اعرف السعر"
+        val imagePath = "/storage/emulated/0/WhatsApp/Media/image123.jpg"
+
+        val processed = ProcessedNotification(
+            contactName = "عميل المتعدد",
+            originalText = coalescedText,
+            normalizedText = coalescedText,
+            mediaFilePath = imagePath,
+            notificationKey = "key_multimodal_burst",
+            postTime = 3000L,
+            context = mockk(relaxed = true),
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+        coEvery { processor.process(any()) } returns processed
+        coEvery { replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+            """{"action":"REPLY","final_reply_text":"التيشيرت دا متوفر بسعر ٤٥٠ جنيه"}"""
+
+        val orchestrator = createTestOrchestrator(
+            processor = processor,
+            chatHistoryDao = chatHistoryDao,
+            replyGenerationRepository = replyRepo,
+            prefsRepository = prefsRepo,
+            cloudflareClefClient = cloudflareClient,
+            liquidDecisionClient = liquidClient
+        )
+
+        val coalescedNotification = WhatsAppNotification(
+            title = "عميل المتعدد",
+            text = coalescedText,
+            mediaFilePath = imagePath,
+            postTime = 3000L,
+            notificationKey = "key_multimodal_burst",
+            sourceClass = NotificationSourceClass.BUSINESS,
+            isPrePersisted = true,
+            burstMessageIds = listOf(301L, 302L)
+        )
+
+        orchestrator.processNotificationSequentially(coalescedNotification)
+
+        // Verify gatekeepers were NOT called because isImagePresent triggered fast-path
+        coVerify(exactly = 0) { cloudflareClient.decide(any(), any()) }
+        coVerify(exactly = 0) { liquidClient.decide(any(), any()) }
+
+        // Verify reply generation received the image media path and CATALOG_INQUIRY intent
+        coVerify(exactly = 1) {
+            replyRepo.generateReply(
+                notification = match { it.mediaFilePath == imagePath },
+                candidates = any(),
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = any(),
+                lastOrder = any(),
+                orderStatusCounts = any(),
+                inboundIntent = InboundIntent.CATALOG_INQUIRY
+            )
+        }
+    }
+
+    @Test
+    fun `processNotificationSequentially marks non-terminal burst message IDs as SKIPPED in embedding state`() = runBlocking {
+        val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
+        val replyRepo = mockk<ReplyGenerationRepository>(relaxed = true)
+        val prefsRepo = mockk<UserPreferencesRepository>(relaxed = true)
+        val embeddingEngine = mockk<EmbeddingEngine>(relaxed = true)
+        val processor = mockk<NotificationProcessorImpl>()
+
+        coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
+        coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0, replyDelaySeconds = 0)
+        coEvery { embeddingEngine.embedForAutoReply(any()) } returns FloatArray(384) { 0.1f }
+
+        val processed = ProcessedNotification(
+            contactName = "عميل الدفعة",
+            originalText = "رسالة 1\nرسالة 2\nرسالة 3",
+            normalizedText = "رسالة 1 رسالة 2 رسالة 3",
+            notificationKey = "key_burst_skip",
+            postTime = 5000L,
+            context = mockk(relaxed = true),
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+        coEvery { processor.process(any()) } returns processed
+        coEvery { replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+            """{"action":"REPLY","final_reply_text":"أهلاً بك"}"""
+
+        val orchestrator = createTestOrchestrator(
+            processor = processor,
+            chatHistoryDao = chatHistoryDao,
+            replyGenerationRepository = replyRepo,
+            prefsRepository = prefsRepo,
+            embeddingEngine = embeddingEngine
+        )
+
+        val coalescedNotification = WhatsAppNotification(
+            title = "عميل الدفعة",
+            text = "رسالة 1\nرسالة 2\nرسالة 3",
+            postTime = 5000L,
+            notificationKey = "key_burst_skip",
+            sourceClass = NotificationSourceClass.BUSINESS,
+            isPrePersisted = true,
+            burstMessageIds = listOf(401L, 402L, 403L) // 403L is terminal (insertedId)
+        )
+
+        orchestrator.processNotificationSequentially(coalescedNotification)
+
+        // Verify terminal message receives embedding update
+        coVerify(exactly = 1) { chatHistoryDao.updateEmbeddingRaw(403L, any()) }
+
+        // Verify non-terminal messages are marked as SKIPPED
+        coVerify(exactly = 1) { chatHistoryDao.updateEmbeddingState(401L, "SKIPPED") }
+        coVerify(exactly = 1) { chatHistoryDao.updateEmbeddingState(402L, "SKIPPED") }
+        coVerify(exactly = 0) { chatHistoryDao.updateEmbeddingState(403L, "SKIPPED") }
+    }
 }

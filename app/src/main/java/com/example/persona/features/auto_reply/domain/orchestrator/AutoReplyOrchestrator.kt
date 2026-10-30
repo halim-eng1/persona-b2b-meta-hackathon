@@ -82,6 +82,16 @@ class AutoReplyOrchestrator @Inject constructor(
         private const val TAG = "AutoReplyOrchestrator"
         const val ALARM_CHANNEL_ID = HitlNotificationHandler.ALARM_CHANNEL_ID
         const val CANONICAL_HITL_MESSAGE = ReasoningLeakSanitizer.CANONICAL_HITL_MESSAGE
+        const val DEBOUNCE_MICRO_EXTENSION_MS = 280L
+
+        internal fun isAudioFilePath(path: String?): Boolean {
+            if (path.isNullOrBlank()) return false
+            val lower = path.lowercase()
+            return lower.endsWith(".ogg") || lower.endsWith(".opus") ||
+                   lower.endsWith(".mp3") || lower.endsWith(".m4a") ||
+                   lower.endsWith(".wav") || lower.endsWith(".aac") ||
+                   lower.endsWith(".amr")
+        }
 
         private val _activeProcessingContacts = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
         val activeProcessingContacts: kotlinx.coroutines.flow.StateFlow<Set<String>> = _activeProcessingContacts
@@ -184,7 +194,8 @@ class AutoReplyOrchestrator @Inject constructor(
         val notifications: MutableList<WhatsAppNotification> = mutableListOf(),
         val insertedIds: MutableList<Long> = mutableListOf(),
         var debounceJob: kotlinx.coroutines.Job? = null,
-        val firstArrivalMs: Long = System.currentTimeMillis()
+        val firstArrivalMs: Long = System.currentTimeMillis(),
+        var targetDeadlineMs: Long = 0L
     )
 
     private val debounceBuffer = ConcurrentHashMap<String, BufferedTurn>()
@@ -268,7 +279,7 @@ class AutoReplyOrchestrator @Inject constructor(
             return
         }
 
-        // 3. Sliding Debounce Window
+        // 3. Sliding Debounce Window with Micro-Extension
         val stylePrefs = prefsRepository.getStylePreferencesSync()
         val delaySec = stylePrefs.replyDelaySeconds
         if (delaySec <= 0) {
@@ -276,32 +287,42 @@ class AutoReplyOrchestrator @Inject constructor(
                 isPrePersisted = true,
                 burstMessageIds = listOf(insertedId)
             )
-            scope.launch {
-                channel.send(singlePrePersisted)
-            }
+            channel.send(singlePrePersisted)
             return
         }
 
-        val delayMs = delaySec.coerceIn(1, 10) * 1000L
-        val maxWaitMs = 8000L
+        val baseDelayMs = delaySec.coerceIn(1, 10) * 1000L
+        val maxWaitMs = maxOf(baseDelayMs + 2500L, 8000L)
         val contactKey = "${processed.sourceClass.name}_${processed.contactName.trim().lowercase()}"
+        val now = System.currentTimeMillis()
 
         synchronized(debounceLock) {
+            val isNewTurn = !debounceBuffer.containsKey(contactKey)
             val turn = debounceBuffer.getOrPut(contactKey) {
-                BufferedTurn(firstArrivalMs = System.currentTimeMillis())
+                BufferedTurn(
+                    firstArrivalMs = now,
+                    targetDeadlineMs = now + baseDelayMs
+                )
             }
             turn.notifications.add(notification)
             turn.insertedIds.add(insertedId)
 
-            val elapsed = System.currentTimeMillis() - turn.firstArrivalMs
-            if (elapsed < maxWaitMs) {
-                turn.debounceJob?.cancel()
+            if (!isNewTurn) {
+                // Micro-extension per message (adds 280ms), strictly bounded by maxWaitMs
+                val maxAllowedDeadline = turn.firstArrivalMs + maxWaitMs
+                turn.targetDeadlineMs = minOf(turn.targetDeadlineMs + DEBOUNCE_MICRO_EXTENSION_MS, maxAllowedDeadline)
+            }
+
+            if (turn.debounceJob == null || !turn.debounceJob!!.isActive) {
                 turn.debounceJob = scope.launch {
-                    delay(delayMs)
-                    flushDebounceBuffer(contactKey)
-                }
-            } else if (turn.debounceJob == null || !turn.debounceJob!!.isActive) {
-                turn.debounceJob = scope.launch {
+                    while (true) {
+                        val currentNow = System.currentTimeMillis()
+                        val remaining = synchronized(debounceLock) { turn.targetDeadlineMs } - currentNow
+                        if (remaining <= 0L) {
+                            break
+                        }
+                        delay(remaining)
+                    }
                     flushDebounceBuffer(contactKey)
                 }
             }
@@ -342,8 +363,9 @@ class AutoReplyOrchestrator @Inject constructor(
             .distinct()
             .joinToString("\n")
 
-        // Retain media file if any message in burst carried media
-        val mediaPath = batch.mapNotNull { it.mediaFilePath }.firstOrNull { it.isNotBlank() }
+        // Retain media file if any message in burst carried media (prioritize image files over audio files)
+        val imageMediaPath = batch.mapNotNull { it.mediaFilePath }.firstOrNull { it.isNotBlank() && !isAudioFilePath(it) }
+        val mediaPath = imageMediaPath ?: batch.mapNotNull { it.mediaFilePath }.firstOrNull { it.isNotBlank() }
 
         // Audio failure only if all failed and no valid text exists
         val voiceFailed = batch.all { it.isVoiceTranscriptionFailed } && combinedText.isBlank()
@@ -466,9 +488,9 @@ class AutoReplyOrchestrator @Inject constructor(
             return
         }
 
-        val isTranscribedVoice = processed.originalText.startsWith("[رسالة صوتية من العميل]:")
-        var currentMediaFilePath = if (isTranscribedVoice) null else processed.mediaFilePath
-        var effectiveProcessed = if (isTranscribedVoice) {
+        val hasTranscribedVoice = processed.originalText.contains("[رسالة صوتية من العميل]:")
+        var currentMediaFilePath = if (hasTranscribedVoice && isAudioFilePath(processed.mediaFilePath)) null else processed.mediaFilePath
+        var effectiveProcessed = if (hasTranscribedVoice && isAudioFilePath(processed.mediaFilePath)) {
             processed.copy(mediaFilePath = null)
         } else {
             processed
@@ -481,7 +503,7 @@ class AutoReplyOrchestrator @Inject constructor(
             Log.d("PersonaMedia", "📥 Inbound media turn detected: text='$rawText', hasImageIndicator=$hasImage, hasAudioIndicator=$hasAudio")
         }
 
-        if (!isTranscribedVoice && containsMediaIndicators(processed.originalText)) {
+        if (!hasTranscribedVoice && containsMediaIndicators(processed.originalText)) {
             if (mediaExtractor != null) {
                 if (mediaExtractor.isVoiceMessageIndicator(processed.originalText)) {
                     val durationSeconds = mediaExtractor.extractDurationSeconds(processed.originalText)
@@ -490,12 +512,13 @@ class AutoReplyOrchestrator @Inject constructor(
                         val transcribed = mediaExtractor.transcribeVoiceNote(voiceFile)
                         if (!transcribed.isNullOrBlank()) {
                             val updatedText = "[رسالة صوتية من العميل]: $transcribed"
+                            val retainMediaPath = if (isAudioFilePath(currentMediaFilePath)) null else currentMediaFilePath
+                            currentMediaFilePath = retainMediaPath
                             effectiveProcessed = processed.copy(
                                 originalText = updatedText,
                                 normalizedText = normalizer.normalize(updatedText) ?: updatedText,
-                                mediaFilePath = null
+                                mediaFilePath = retainMediaPath
                             )
-                            currentMediaFilePath = null
                             Log.i(TAG, "🎙️ Successfully captured voice note and transcribed: '$updatedText'")
                         }
                     }
@@ -510,15 +533,15 @@ class AutoReplyOrchestrator @Inject constructor(
             }
         }
 
-        val isVoiceTranscribedNow = effectiveProcessed.originalText.startsWith("[رسالة صوتية من العميل]:")
+        val hasVoiceTranscribedNow = effectiveProcessed.originalText.contains("[رسالة صوتية من العميل]:")
         val isVoiceIndicator = mediaExtractor?.isVoiceMessageIndicator(effectiveProcessed.originalText)
             ?: com.example.persona.features.auto_reply.data.repository.NotificationProcessorImpl.isVoiceMessageIndicator(effectiveProcessed.originalText)
 
         // ONLY send media fallback if media indicator is present AND media extraction genuinely failed
-        val shouldSendFallback = if (isVoiceIndicator && !isVoiceTranscribedNow) {
+        val shouldSendFallback = if (isVoiceIndicator && !hasVoiceTranscribedNow) {
             true
         } else {
-            !isVoiceTranscribedNow && currentMediaFilePath == null && containsMediaIndicators(effectiveProcessed.originalText)
+            !hasVoiceTranscribedNow && currentMediaFilePath == null && containsMediaIndicators(effectiveProcessed.originalText)
         }
 
         if (shouldSendFallback) {
@@ -530,7 +553,7 @@ class AutoReplyOrchestrator @Inject constructor(
             return
         }
 
-        if (!isVoiceTranscribedNow && currentMediaFilePath != null && effectiveProcessed.mediaFilePath == null) {
+        if (currentMediaFilePath != null && effectiveProcessed.mediaFilePath == null && !isAudioFilePath(currentMediaFilePath)) {
             effectiveProcessed = effectiveProcessed.copy(mediaFilePath = currentMediaFilePath)
         }
 
@@ -542,8 +565,10 @@ class AutoReplyOrchestrator @Inject constructor(
             var candidates: List<RetrievalCandidate> = emptyList()
             var maxScore = 0f
 
-            val queryTextForEmbedding = if (effectiveProcessed.originalText.startsWith("[رسالة صوتية من العميل]:")) {
-                effectiveProcessed.originalText.removePrefix("[رسالة صوتية من العميل]:").trim()
+            val queryTextForEmbedding = if (hasVoiceTranscribedNow) {
+                effectiveProcessed.originalText.replace("[رسالة صوتية من العميل]:", "").trim().let {
+                    normalizer.normalize(it) ?: it
+                }
             } else {
                 effectiveProcessed.normalizedText
             }
@@ -572,7 +597,13 @@ class AutoReplyOrchestrator @Inject constructor(
                 chatHistoryDao.updateEmbeddingState(insertedId, "FAILED")
             }
 
-            val isImagePresent = !isTranscribedVoice && !isVoiceTranscribedNow && effectiveProcessed.mediaFilePath != null
+            if (rawNotification.burstMessageIds.isNotEmpty()) {
+                rawNotification.burstMessageIds.filter { it != insertedId }.forEach { oldId ->
+                    chatHistoryDao.updateEmbeddingState(oldId, "SKIPPED")
+                }
+            }
+
+            val isImagePresent = effectiveProcessed.mediaFilePath != null && !isAudioFilePath(effectiveProcessed.mediaFilePath)
 
             // 3-Tier Multi-Cloud Gatekeeper Cascade:
             // Tier 1: Cloudflare Clef (clef-flash / clef-omni) [1150ms SLA]
