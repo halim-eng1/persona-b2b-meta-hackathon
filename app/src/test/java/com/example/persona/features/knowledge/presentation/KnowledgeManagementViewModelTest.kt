@@ -503,7 +503,7 @@ class KnowledgeManagementViewModelTest {
         assertEquals(2, state.simulatorMessages.size)
         val botMsg = state.simulatorMessages[1]
         assertEquals(SimulatorSender.BOT, botMsg.sender)
-        assertTrue(botMsg.text.contains("HITL"))
+        assertTrue(botMsg.text.contains("للمراجعة البشرية"))
         assertEquals("HITL", botMsg.trace?.llmAction)
     }
 }

@@ -377,7 +377,7 @@ class OrdersViewModelTest {
         assertTrue(manifest.contains("المعادي"))
         assertTrue(manifest.contains("2x تي شيرت"))
         assertTrue(manifest.contains("الاستلام بعد الساعة 5"))
-        assertTrue(manifest.contains("المطلوب تحصيله (COD): 350 ج.م (شامل الشحن)"))
+        assertTrue(manifest.contains("المطلوب تحصيله عند الاستلام: 350 ج.م (شامل الشحن)"))
         assertTrue(manifest.contains("الحالة: طلب جديد"))
     }
 

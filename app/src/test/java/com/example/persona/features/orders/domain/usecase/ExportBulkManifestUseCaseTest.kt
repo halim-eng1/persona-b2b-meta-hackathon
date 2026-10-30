@@ -39,7 +39,7 @@ class ExportBulkManifestUseCaseTest {
 
         assertTrue(result.contains("كشف تسليم الشحنات المجمع"))
         assertTrue(result.contains("إجمالي عدد الطرود: 2"))
-        assertTrue(result.contains("إجمالي مبالغ التحصيل المطلوبة (COD): 600 ج.م"))
+        assertTrue(result.contains("إجمالي مبالغ التحصيل المطلوبة عند الاستلام: 600 ج.م"))
         assertTrue(result.contains("طرد رقم (1/2)"))
         assertTrue(result.contains("أحمد فؤاد"))
         assertTrue(result.contains("طرد رقم (2/2)"))

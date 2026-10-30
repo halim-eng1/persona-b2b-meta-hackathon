@@ -125,8 +125,6 @@ class KnowledgeManagementViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val replyRepo = replyGenerationRepository
-    private val clefClient = cloudflareClefClient ?: CloudflareClefClient()
-    private val liquidClient = liquidDecisionClient ?: LiquidDecisionClient()
     private val localClassifier = localDecisionClassifier ?: LocalDecisionClassifier()
     private val extractor = mediaExtractor
 
@@ -447,17 +445,21 @@ class KnowledgeManagementViewModel @Inject constructor(
                 effectiveText
             }
 
-            val cfIntent = runCatching {
-                clefClient.decide(gatekeeperInput, timeoutMs = 1150L)
-            }.getOrNull()
+            val cfIntent = cloudflareClefClient?.let { client ->
+                runCatching {
+                    client.decide(gatekeeperInput, timeoutMs = 1150L)
+                }.getOrNull()
+            }
 
             if (cfIntent != null) {
                 val latency = System.currentTimeMillis() - tGatekeeper
                 DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Tier 1: Cloudflare Clef"
             } else {
-                val liquidIntent = runCatching {
-                    liquidClient.decide(gatekeeperInput, timeoutMs = 800L)
-                }.getOrNull()
+                val liquidIntent = liquidDecisionClient?.let { client ->
+                    runCatching {
+                        client.decide(gatekeeperInput, timeoutMs = 800L)
+                    }.getOrNull()
+                }
 
                 if (liquidIntent != null) {
                     val latency = System.currentTimeMillis() - tGatekeeper

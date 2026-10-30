@@ -35,7 +35,7 @@ class FormatCourierManifestUseCaseTest {
         assertFalse(manifest.contains("الهاتف: أحمد كوتشيات"))
         assertTrue(manifest.contains("العنوان: المعادي، شارع 9 (القاهرة)"))
         assertTrue(manifest.contains("تفاصيل الطلب: 2x قميص قطن أبيض"))
-        assertTrue(manifest.contains("المطلوب تحصيله (COD): 550 ج.م (شامل الشحن)"))
+        assertTrue(manifest.contains("المطلوب تحصيله عند الاستلام: 550 ج.م (شامل الشحن)"))
         assertTrue(manifest.contains("ملاحظات العميل: الدور الثالث شقة 5"))
         assertTrue(manifest.contains("ملاحظة التجهيز: تغليف هدايا"))
         assertTrue(manifest.contains("الحالة: طلب جديد"))
@@ -144,7 +144,7 @@ class FormatCourierManifestUseCaseTest {
 
         val manifest = useCase(order)
 
-        assertTrue(manifest.contains("المطلوب تحصيله (COD): مدفوع مسبقاً / 0.00 ج.م"))
+        assertTrue(manifest.contains("المطلوب تحصيله عند الاستلام: مدفوع مسبقاً / 0.00 ج.م"))
     }
 
     @Test
@@ -159,7 +159,7 @@ class FormatCourierManifestUseCaseTest {
 
         val manifest = useCase(order)
 
-        assertTrue(manifest.contains("المطلوب تحصيله (COD): 349.50 ج.م (شامل الشحن)"))
+        assertTrue(manifest.contains("المطلوب تحصيله عند الاستلام: 349.50 ج.م (شامل الشحن)"))
     }
 
     @Test

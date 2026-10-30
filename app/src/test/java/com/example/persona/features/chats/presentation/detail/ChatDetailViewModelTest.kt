@@ -350,18 +350,18 @@ class ChatDetailViewModelTest {
             messages = listOf(msg1, msg2, msg3)
         )
 
-        assertTrue(transcript.contains("سجل محادثة: أحمد مصطفى (BUSINESS)"))
+        assertTrue(transcript.contains("سجل محادثة: أحمد مصطفى"))
         assertTrue(transcript.contains("المتجر: متجر التجربة"))
         assertTrue(transcript.contains("تاريخ التصدير: "))
-        assertTrue(transcript.contains("نطاق التصدير: All Time (كامل المحادثة)"))
+        assertTrue(transcript.contains("نطاق التصدير: كامل المحادثة"))
         assertTrue(transcript.contains(ChatDetailViewModel.TRANSCRIPT_DIVIDER))
 
         // Customer message
         assertTrue(transcript.contains("العميل: السلام عليكم"))
         // AI bot message
-        assertTrue(transcript.contains("مساعد المبيعات (AI): وعليكم السلام يا فندم! 📷 صورة المنتج"))
+        assertTrue(transcript.contains("مساعد المبيعات: وعليكم السلام يا فندم! 📷 صورة المنتج"))
         // Manual merchant message
-        assertTrue(transcript.contains("التاجر (Manual): تم يا فندم شرفتنا."))
+        assertTrue(transcript.contains("التاجر: تم يا فندم شرفتنا."))
     }
 
     @Test
@@ -403,11 +403,11 @@ class ChatDetailViewModelTest {
             chatHistoryDao.getMessagesSince("أحمد مصطفى", "BUSINESS", 0L)
         }
         assertTrue(receivedExport != null)
-        assertTrue(receivedExport!!.contains("سجل محادثة: أحمد مصطفى (BUSINESS)"))
+        assertTrue(receivedExport!!.contains("سجل محادثة: أحمد مصطفى"))
         assertTrue(receivedExport!!.contains("المتجر: متجر التجربة"))
         assertTrue(receivedExport!!.contains("العميل: السلام عليكم"))
-        assertTrue(receivedExport!!.contains("مساعد المبيعات (AI): وعليكم السلام يا فندم! 📷 صورة المنتج"))
-        assertTrue(receivedExport!!.contains("التاجر (Manual): تم يا فندم شرفتنا."))
+        assertTrue(receivedExport!!.contains("مساعد المبيعات: وعليكم السلام يا فندم! 📷 صورة المنتج"))
+        assertTrue(receivedExport!!.contains("التاجر: تم يا فندم شرفتنا."))
     }
 
     @Test

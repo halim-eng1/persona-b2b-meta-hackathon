@@ -95,12 +95,12 @@ class ChatExportFormatterTest {
             messages = messages
         )
 
-        assertTrue(transcript.contains("سجل محادثة: كريم (BUSINESS)"))
+        assertTrue(transcript.contains("سجل محادثة: كريم"))
         assertTrue(transcript.contains("المتجر: متجر الأناقة"))
-        assertTrue(transcript.contains("All Time (كامل المحادثة)"))
+        assertTrue(transcript.contains("كامل المحادثة"))
         assertTrue(transcript.contains(ChatExportFormatter.TRANSCRIPT_DIVIDER))
         assertTrue(transcript.contains("العميل: مرحبا، هل المنتج متوفر؟"))
-        assertTrue(transcript.contains("سارة (AI): نعم متوفر بسعر 100 ج.م"))
-        assertTrue(transcript.contains("التاجر (Manual): تم إرسال الرابط"))
+        assertTrue(transcript.contains("سارة: نعم متوفر بسعر 100 ج.م"))
+        assertTrue(transcript.contains("التاجر: تم إرسال الرابط"))
     }
 }

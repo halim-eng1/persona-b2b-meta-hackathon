@@ -745,12 +745,13 @@ class ReplyGenerationRepositoryImplTest {
         assertEquals(
             listOf(
                 "nvidia/nemotron-3-ultra-550b-a55b",
-                "nvidia/nemotron-3.5-bolt-e4b"
+                "nvidia/nemotron-3.5-bolt-e4b",
+                "nvidia/nemotron-3.5-lightning-30b-a3b"
             ),
             ReplyGenerationRepositoryImpl.NVIDIA_TEXT_MODELS
         )
         assertEquals(
-            listOf("openai/gpt-oss-120b", "openai/gpt-oss-20b"),
+            listOf("openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"),
             ReplyGenerationRepositoryImpl.GROQ_MODELS
         )
         assertEquals(
