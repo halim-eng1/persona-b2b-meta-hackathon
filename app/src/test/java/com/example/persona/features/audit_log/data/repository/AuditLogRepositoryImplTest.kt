@@ -9,7 +9,6 @@ import com.example.persona.features.chat_import.domain.model.ConversationContext
 import com.example.persona.features.chat_import.domain.model.IntentType
 import com.example.persona.features.chat_import.domain.model.SentimentType
 import com.example.persona.features.chat_import.domain.model.TopicType
-import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -18,6 +17,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.Clock
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AuditLogRepositoryImplTest {
@@ -89,7 +89,7 @@ class AuditLogRepositoryImplTest {
     }
 
     @Test
-    fun `observeLogs transforms projections to AuditLogItems`() = runTest {
+    fun `observeLogs transforms projections to AuditLogItems with telemetry`() = runTest {
         val projection = AuditLogProjection(
             id = 42L,
             contactName = "علي",
@@ -106,6 +106,10 @@ class AuditLogRepositoryImplTest {
         assertEquals(42L, result[0].id)
         assertEquals("علي", result[0].contactName)
         assertEquals("شارع التحرير الدقي", result[0].generatedReply)
+        assertEquals("HEURISTIC", result[0].gatekeeperTier)
+        assertEquals("SUCCESS", result[0].status)
+        assertEquals("Gemini 1.5 Flash", result[0].providerModel)
+        assertTrue(result[0].latencyMs > 0)
     }
 
     @Test

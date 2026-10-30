@@ -1,47 +1,28 @@
 package com.example.persona.features.home.presentation
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.persona.features.home.presentation.components.AutoReplyMasterToggleCard
-import com.example.persona.features.home.presentation.components.HomeOverviewRow
-import com.example.persona.features.home.presentation.components.RecentActivityRow
+import com.example.persona.features.home.presentation.components.*
 
 @Composable
 fun HomeScreen(
@@ -49,10 +30,27 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToAuditLog: () -> Unit,
     onNavigateToChat: (contactName: String, sourceClass: String) -> Unit,
+    onNavigateToOrders: () -> Unit = {},
+    onNavigateToKnowledge: () -> Unit = onNavigateToImport,
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var showEmergencyDialog by remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshHealth()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Box(
         modifier = modifier
@@ -80,37 +78,72 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Dashboard",
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
-                )
-                IconButton(onClick = onNavigateToSettings) {
-                    Icon(imageVector = Icons.Default.Settings, contentDescription = "Settings")
+                Column {
+                    Text(
+                        text = "لوحة التحكم",
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = "Persona B2B — مركز القيادة والمتابعة",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(
+                    onClick = onNavigateToSettings,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Settings, contentDescription = "الإعدادات")
                 }
             }
 
-            // ── Section: Master Toggle ────────────────────────────────────────
+            // ── Section 1: System Health Diagnostic Banner ────────────────────
+            SystemHealthCard(
+                health = state.systemHealth,
+                onOpenSettings = { viewModel.openNotificationSettings(context) },
+                onRestartService = { viewModel.restartService() }
+            )
+
+            // ── Section 2: Human Takeover (HITL) Alert Center ─────────────────
+            UrgentAttentionBanner(
+                pendingCount = state.pendingAttentionCount,
+                waitingCustomers = state.waitingCustomers,
+                onCustomerClick = onNavigateToChat
+            )
+
+            // ── Section 3: Master Toggle ──────────────────────────────────────
             AutoReplyMasterToggleCard(
                 isEnabled = state.isAutoReplyEnabled,
                 onToggle = { viewModel.setAutoReplyEnabled(it) }
             )
 
-            // ── Section: Quick Stats ──────────────────────────────────────────
+            // ── Section 4: Daily B2B Operational Metrics Flight Deck ──────────
             Text(
-                text = "OVERVIEW",
+                text = "مؤشرات التشغيل اليومية (DAILY B2B METRICS)",
                 style = MaterialTheme.typography.labelSmall.copy(
-                    letterSpacing = 1.2.sp,
-                    fontWeight = FontWeight.SemiBold
+                    letterSpacing = 1.1.sp,
+                    fontWeight = FontWeight.Bold
                 ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            HomeOverviewRow(
-                totalRepliesSent = state.totalRepliesSent,
-                knowledgeChunkCount = state.knowledgeChunkCount
+            B2BOperationalMetricsHub(
+                todayOrders = state.todayOrdersCount,
+                pendingRevenue = state.todayPendingRevenue,
+                waitingCount = state.waitingCustomersCount,
+                todayReplies = state.todayRepliesCount,
+                totalReplies = state.totalRepliesSent
             )
 
-            // ── Section: Import CTA ───────────────────────────────────────────
+            // ── Section 5: Quick Action Deck ──────────────────────────────────
+            QuickActionsSection(
+                onNavigateToKnowledge = onNavigateToKnowledge,
+                onNavigateToImport = onNavigateToImport,
+                onNavigateToOrders = onNavigateToOrders,
+                onEmergencyStop = { showEmergencyDialog = true }
+            )
+
+            // ── Section 6: Knowledge Base Empty Prompt ────────────────────────
             if (state.knowledgeChunkCount == 0) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -125,38 +158,33 @@ fun HomeScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Populate Your Knowledge Base",
+                            text = "كتالوج وقاعدة بيانات المتجر فارغة",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Import a Markdown/Text document to train your on-device vector search model.",
+                            text = "أضف منتجاتك أو استورد محادثات الواتساب القديمة لتدريب المساعد على الأسعار وسياسات الشحن.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
-                            onClick = onNavigateToImport,
+                            onClick = onNavigateToKnowledge,
                             shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            ),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.heightIn(min = 48.dp),
                             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "Import Knowledge Base", fontWeight = FontWeight.Bold)
+                            Text(text = "إضافة معرفة ومنتجات للمتجر", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
 
-            // ── Section: Recent Activity ──────────────────────────────────────
+            // ── Section 7: Recent Activity ────────────────────────────────────
             if (state.recentActivity.isNotEmpty()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -164,19 +192,20 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "RECENT ACTIVITY",
+                        text = "آخر العمليات والردود (RECENT ACTIVITY)",
                         style = MaterialTheme.typography.labelSmall.copy(
-                            letterSpacing = 1.2.sp,
-                            fontWeight = FontWeight.SemiBold
+                            letterSpacing = 1.1.sp,
+                            fontWeight = FontWeight.Bold
                         ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     TextButton(
                         onClick = onNavigateToAuditLog,
+                        modifier = Modifier.heightIn(min = 48.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = "View All / Audit Log",
+                            text = "عرض الكل في سجل التدقيق",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                         )
                     }
@@ -185,9 +214,7 @@ fun HomeScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
                     Column(modifier = Modifier.padding(4.dp)) {
@@ -210,20 +237,18 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(72.dp)) // FAB clearance
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // ── FAB ───────────────────────────────────────────────────────────────
-        ExtendedFloatingActionButton(
-            onClick = onNavigateToImport,
-            icon = { Icon(imageVector = Icons.Default.Add, contentDescription = null) },
-            text = { Text(text = "Import Chat") },
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-        )
+        // ── Emergency Stop Confirmation Dialog ────────────────────────────────
+        if (showEmergencyDialog) {
+            EmergencyStopDialog(
+                onConfirm = {
+                    showEmergencyDialog = false
+                    viewModel.emergencyKillSwitch()
+                },
+                onDismiss = { showEmergencyDialog = false }
+            )
+        }
     }
 }

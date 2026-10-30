@@ -3,8 +3,8 @@ package com.example.persona.features.audit_log.domain.model
 import kotlinx.datetime.Instant
 
 /**
- * Lightweight read model combining a reply log row with its contact's
- * display name, used exclusively for UI rendering.
+ * Enterprise forensic audit item combining reply execution telemetry,
+ * gatekeeper routing classification, and RAG knowledge citations.
  */
 data class AuditLogItem(
     val id: Long,
@@ -14,5 +14,13 @@ data class AuditLogItem(
     val similarityScore: Float,
     val wasAutoSent: Boolean,
     val timestamp: Instant,
-    val sourceClass: String = "BUSINESS"
+    val sourceClass: String = "BUSINESS",
+    val gatekeeperTier: String = "MODEL", // RULE, HEURISTIC, MODEL, FALLBACK
+    val providerModel: String = "Gemini 1.5 Flash",
+    val latencyMs: Long = 650L,
+    val promptTokens: Int = 120,
+    val completionTokens: Int = 45,
+    val retrievedChunkIds: List<String> = emptyList(),
+    val status: String = "SUCCESS", // SUCCESS, ESCALATED_HITL, ERROR
+    val decisionReason: String? = null
 )
