@@ -1542,6 +1542,40 @@ class AutoReplyOrchestratorRagTest {
     }
 
     @Test
+    fun `when global auto-reply is disabled and contact is paused even if override is true, reply is suppressed`() = runBlocking {
+        val prefsRepo: UserPreferencesRepository = mockk(relaxed = true) {
+            coEvery { isAutoReplyEnabledSync() } returns false
+        }
+        val convDao: ConversationMetadataDao = mockk(relaxed = true) {
+            coEvery { getConversation(any(), any()) } returns com.example.persona.core.database.entity.ConversationMetadataEntity(
+                contactName = "Halim•",
+                sourceClass = "BUSINESS",
+                isAiPaused = true,
+                isAiOverrideEnabled = true
+            )
+        }
+        val replyGen: ReplyGenerationRepository = mockk(relaxed = true)
+        val orchestrator = createTestOrchestrator(
+            prefsRepository = prefsRepo,
+            conversationMetadataDao = convDao,
+            replyGenerationRepository = replyGen
+        )
+
+        val notification = WhatsAppNotification(
+            title = "Halim•",
+            text = "انت هنا صح ؟",
+            postTime = 1000L,
+            notificationKey = "key_halim_paused_override",
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+
+        orchestrator.processNotificationSequentially(notification)
+
+        // Reply generation must be suppressed because contact is paused after manual reply
+        coVerify(exactly = 0) { replyGen.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `order_action normalization maps variations to canonical actions`() {
         assertEquals("CANCEL", OrderIngestionManager.normalizeOrderAction("CANCEL_ORDER"))
         assertEquals("CANCEL", OrderIngestionManager.normalizeOrderAction("CANCEL"))

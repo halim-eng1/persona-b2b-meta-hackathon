@@ -10,8 +10,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.R
 import com.example.persona.ui.theme.chatColors
 
 // Removed per user directive. Do not restore quick reply suggestion chips.
@@ -48,7 +50,7 @@ fun ChatComposerBar(
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = 8.dp),
-                    placeholder = { Text("اكتب رداً يدوياً للعميل...", color = chatColors.statusIdle) },
+                    placeholder = { Text(stringResource(R.string.chat_composer_placeholder), color = chatColors.statusIdle) },
                     maxLines = 4,
                     shape = RoundedCornerShape(24.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -80,7 +82,7 @@ fun ChatComposerBar(
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send",
+                            contentDescription = stringResource(R.string.common_send),
                             tint = if (inputText.isNotBlank()) chatColors.onSurface else chatColors.statusIdle
                         )
                     }

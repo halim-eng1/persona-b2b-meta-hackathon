@@ -52,7 +52,7 @@ class ChatImportViewModel @Inject constructor(
         val text = _uiState.value.directInputText.trim()
         if (text.isBlank()) {
             _uiState.update {
-                it.copy(directIndexError = "يرجى لصق نص المعرفة أولاً (Knowledge text cannot be blank)")
+                it.copy(directIndexError = "يرجى لصق نص المعرفة أولاً")
             }
             return
         }
@@ -60,7 +60,7 @@ class ChatImportViewModel @Inject constructor(
         val kRepo = knowledgeRepository
         if (kRepo == null) {
             _uiState.update {
-                it.copy(directIndexError = "محرك المعرفة غير مهيأ (Knowledge repository not initialized)")
+                it.copy(directIndexError = "محرك المعرفة غير مهيأ")
             }
             return
         }

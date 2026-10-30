@@ -23,9 +23,9 @@ class FormatCourierManifestUseCase @Inject constructor() {
 
         val codBalance = order.totalAmount + order.shippingFee
         if (codBalance > 0.0) {
-            appendLine("المطلوب تحصيله (COD): ${EgyptianOrderUtils.formatMoney(codBalance)} ج.م (شامل الشحن)")
+            appendLine("المطلوب تحصيله عند الاستلام: ${EgyptianOrderUtils.formatMoney(codBalance)} ج.م (شامل الشحن)")
         } else {
-            appendLine("المطلوب تحصيله (COD): مدفوع مسبقاً / 0.00 ج.م")
+            appendLine("المطلوب تحصيله عند الاستلام: مدفوع مسبقاً / 0.00 ج.م")
         }
 
         val orderNotes = order.customNotes?.takeIf { it.isNotBlank() }

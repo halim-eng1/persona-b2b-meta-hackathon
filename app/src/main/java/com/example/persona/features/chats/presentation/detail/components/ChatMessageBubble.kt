@@ -9,10 +9,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.R
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.chats.presentation.detail.ChatMessageUiModel
 import com.example.persona.ui.theme.chatColors
@@ -95,7 +97,7 @@ fun MessageBubble(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (message.senderType == "MERCHANT_MANUAL") "You (Manual)" else botName,
+                                text = if (message.senderType == "MERCHANT_MANUAL") stringResource(R.string.chat_sender_you_manual) else botName,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
@@ -127,13 +129,13 @@ fun MessageBubble(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Mic,
-                                    contentDescription = "تسجيل صوتي",
+                                    contentDescription = stringResource(R.string.chat_media_voice_desc),
                                     tint = chatColors.accentText,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "تسجيل صوتي مفرغ",
+                                    text = stringResource(R.string.chat_media_voice_transcribed),
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                     color = chatColors.neutral
                                 )
@@ -159,7 +161,7 @@ fun MessageBubble(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Media attached — view in WhatsApp app",
+                                    text = stringResource(R.string.chat_media_attached_hint),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = chatColors.neutral
                                 )
@@ -198,7 +200,7 @@ fun MessageBubble(
                                 "SENDING" -> {
                                     Icon(
                                         imageVector = Icons.Default.Schedule,
-                                        contentDescription = "Sending",
+                                        contentDescription = stringResource(R.string.chat_status_sending),
                                         tint = chatColors.onBubbleSubtle,
                                         modifier = Modifier.size(12.dp)
                                     )
@@ -206,7 +208,7 @@ fun MessageBubble(
                                 "SENT" -> {
                                     Icon(
                                         imageVector = Icons.Default.Check,
-                                        contentDescription = "Sent",
+                                        contentDescription = stringResource(R.string.chat_status_sent),
                                         tint = chatColors.delivered,
                                         modifier = Modifier.size(14.dp)
                                     )
@@ -214,7 +216,7 @@ fun MessageBubble(
                                 "QUEUED" -> {
                                     Icon(
                                         imageVector = Icons.Default.HourglassBottom,
-                                        contentDescription = "Queued",
+                                        contentDescription = stringResource(R.string.chat_status_queued),
                                         tint = chatColors.statusPaused,
                                         modifier = Modifier.size(12.dp)
                                     )
@@ -222,7 +224,7 @@ fun MessageBubble(
                                 "FAILED" -> {
                                     Icon(
                                         imageVector = Icons.Default.Error,
-                                        contentDescription = "Failed",
+                                        contentDescription = stringResource(R.string.chat_status_failed),
                                         tint = chatColors.failed,
                                         modifier = Modifier.size(14.dp)
                                     )
@@ -251,7 +253,7 @@ fun MessageBubble(
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Retry", color = chatColors.failed, style = MaterialTheme.typography.labelSmall)
+                        Text(text = stringResource(R.string.chat_action_retry), color = chatColors.failed, style = MaterialTheme.typography.labelSmall)
                     }
 
                     TextButton(
@@ -265,7 +267,7 @@ fun MessageBubble(
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Open in WhatsApp", color = chatColors.accentText, style = MaterialTheme.typography.labelSmall)
+                        Text(text = stringResource(R.string.chat_action_open_in_whatsapp), color = chatColors.accentText, style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

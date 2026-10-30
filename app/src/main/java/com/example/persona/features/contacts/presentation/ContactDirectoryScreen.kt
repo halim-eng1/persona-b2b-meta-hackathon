@@ -14,10 +14,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.persona.R
 import com.example.persona.core.database.entity.ContactEntity
 import com.example.persona.core.database.entity.ContactTag
 import com.example.persona.features.contacts.presentation.components.ContactCard
@@ -42,7 +44,7 @@ fun ContactDirectoryScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "دليل العملاء (CRM)",
+                        text = stringResource(R.string.contacts_crm_title),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                     )
                 },
@@ -51,7 +53,7 @@ fun ContactDirectoryScreen(
                         IconButton(onClick = onNavigateBack) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "رجوع"
+                                contentDescription = stringResource(R.string.common_back)
                             )
                         }
                     }

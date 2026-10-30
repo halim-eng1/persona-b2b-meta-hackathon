@@ -6,8 +6,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.persona.R
 import com.example.persona.core.database.entity.FailedQueryEntity
 
 @Composable
@@ -23,7 +25,7 @@ fun AnswerFailedQueryDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "إضافة إجابة معتمدة لسؤال العميل",
+                text = stringResource(R.string.knowledge_answer_query_title),
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleMedium
             )
@@ -45,8 +47,9 @@ fun AnswerFailedQueryDialog(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+                        val name = query.contactDisplayName.ifBlank { "WhatsApp" }
                         Text(
-                            text = "سؤال العميل (${query.contactDisplayName.ifBlank { "عميل واتساب" }}):",
+                            text = stringResource(R.string.knowledge_answer_query_customer_prefix, name),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -62,8 +65,8 @@ fun AnswerFailedQueryDialog(
                 OutlinedTextField(
                     value = answerText,
                     onValueChange = { answerText = it },
-                    label = { Text("إجابة المتجر المعتمدة") },
-                    placeholder = { Text("اكتب الإجابة الرسمية التي سيتعلمها البوت للرد مستقبلاً...") },
+                    label = { Text(stringResource(R.string.knowledge_answer_query_label)) },
+                    placeholder = { Text(stringResource(R.string.knowledge_answer_query_placeholder)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     minLines = 3,
@@ -76,7 +79,7 @@ fun AnswerFailedQueryDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "تصنيف كعرض ترويجي مؤقت",
+                        text = stringResource(R.string.knowledge_answer_query_is_offer),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -94,7 +97,7 @@ fun AnswerFailedQueryDialog(
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.defaultMinSize(minHeight = 48.dp)
             ) {
-                Text("اعتماد الإجابة وتحديث المعرفة")
+                Text(stringResource(R.string.knowledge_answer_query_confirm_btn))
             }
         },
         dismissButton = {
@@ -103,7 +106,7 @@ fun AnswerFailedQueryDialog(
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.defaultMinSize(minHeight = 48.dp)
             ) {
-                Text("إلغاء")
+                Text(stringResource(R.string.common_cancel))
             }
         }
     )

@@ -80,7 +80,7 @@ fun SystemMaintenanceSection(
 
         // ── Permissions Health Check ──────────────────────────────────────────
         PreferenceSection(
-            title = "فحص سلامة النظام والصلاحيات (Permissions Health Check)",
+            title = "فحص سلامة النظام والصلاحيات",
             subtitle = "مراجعة فورية لحالة الأذونات الحيوية لضمان عدم توقف الرد الآلي في الخلفية."
         ) {
             HealthItemRow(
@@ -96,7 +96,7 @@ fun SystemMaintenanceSection(
                 missingText = "غير مستثناة (قد يتوقف التطبيق بعد قفل الشاشة)"
             )
             HealthItemRow(
-                title = "التشغيل التلقائي مع فتح الهاتف (Auto-Start)",
+                title = "التشغيل التلقائي مع فتح الهاتف",
                 isOk = state.isAutoStartConfirmed,
                 okText = "مؤكد ومفعل",
                 missingText = "في انتظار التأكيد"
@@ -123,7 +123,7 @@ fun SystemMaintenanceSection(
 
         // ── Encrypted Local Backup & Restore ──────────────────────────────────
         PreferenceSection(
-            title = "النسخ الاحتياطي المحلي واستعادة البيانات (Backup & Restore)",
+            title = "النسخ الاحتياطي المحلي واستعادة البيانات",
             subtitle = "تصدير تفضيلات المتجر وقاعدة المعرفة مشفرة محلياً أو استعادتها عند تغيير الهاتف."
         ) {
             Row(
@@ -154,7 +154,7 @@ fun SystemMaintenanceSection(
 
         // ── Cache Cleaner ─────────────────────────────────────────────────────
         PreferenceSection(
-            title = "صيانة الذاكرة المؤقتة (Cache Cleaner)",
+            title = "صيانة الذاكرة المؤقتة",
             subtitle = "مسح الملفات المؤقتة وسجلات الفحص السريعة لتحرير مساحة التخزين."
         ) {
             OutlinedButton(
@@ -167,7 +167,7 @@ fun SystemMaintenanceSection(
             ) {
                 Icon(Icons.Default.CleaningServices, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("مسح الذاكرة المؤقتة (Clear Cache)")
+                Text("مسح الذاكرة المؤقتة")
             }
         }
     }

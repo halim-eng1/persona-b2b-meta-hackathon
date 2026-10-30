@@ -28,7 +28,7 @@ class ExportBulkManifestUseCase @Inject constructor(
         appendLine("إجمالي عدد الطرود: ${orders.size}")
         val totalCod = orders.sumOf { it.totalAmount + it.shippingFee }
         val formattedCod = EgyptianOrderUtils.formatMoney(totalCod)
-        appendLine("إجمالي مبالغ التحصيل المطلوبة (COD): $formattedCod ج.م")
+        appendLine("إجمالي مبالغ التحصيل المطلوبة عند الاستلام: $formattedCod ج.م")
         appendLine("════════════════════════════════")
         appendLine()
 

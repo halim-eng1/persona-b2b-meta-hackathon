@@ -1,5 +1,6 @@
 package com.example.persona.navigation
 
+import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Home
@@ -8,6 +9,7 @@ import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
+import com.example.persona.R
 import com.example.persona.core.debug.DebugFlags
 
 /**
@@ -16,31 +18,31 @@ import com.example.persona.core.debug.DebugFlags
  */
 enum class TopLevelDestination(
     val screen: Screen,
-    val label: String,
+    @StringRes val labelResId: Int,
     val icon: ImageVector,
     val hasBadge: Boolean = false,
     val isEnabled: Boolean = true
 ) {
     HOME(
         screen = Screen.Home,
-        label = "الرئيسية",
+        labelResId = R.string.nav_home,
         icon = Icons.Default.Home
     ),
     CHATS(
         screen = Screen.Chats,
-        label = "المحادثات",
+        labelResId = R.string.nav_conversations,
         icon = Icons.Default.ChatBubble,
         hasBadge = true,
         isEnabled = DebugFlags.ENABLE_CHATS_TAB
     ),
     ORDERS(
         screen = Screen.Orders,
-        label = "الطلبات",
+        labelResId = R.string.nav_orders,
         icon = Icons.Default.ShoppingBag
     ),
     KNOWLEDGE(
         screen = Screen.KnowledgeManagement,
-        label = "قاعدة المعرفة",
+        labelResId = R.string.nav_knowledge,
         icon = Icons.Default.Info
     );
 

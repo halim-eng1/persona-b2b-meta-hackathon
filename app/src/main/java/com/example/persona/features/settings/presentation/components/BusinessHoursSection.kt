@@ -66,7 +66,7 @@ fun BusinessHoursSection(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // ── Business Hours Schedule ───────────────────────────────────────────
         PreferenceSection(
-            title = "مواعيد العمل والجدول الزمني (Business Hours Schedule)",
+            title = "مواعيد العمل والجدول الزمني",
             subtitle = "حدد أوقات دوام المتجر ليقوم الروبوت بالرد برسالة مخصصة خارج ساعات العمل."
         ) {
             PreferenceSwitchRow(
@@ -149,11 +149,11 @@ fun BusinessHoursSection(
 
         // ── Privacy & Blacklist ───────────────────────────────────────────────
         PreferenceSection(
-            title = "الخصوصية وقائمة الحظر (Privacy & Blacklist)",
+            title = "الخصوصية وقائمة الحظر",
             subtitle = "منع الروبوت من التفاعل مع مجموعات واتساب أو أرقام معينة (مثل الأهل أو الموردين)."
         ) {
             PreferenceSwitchRow(
-                title = "تجاهل مجموعات واتساب (Ignore Groups)",
+                title = "تجاهل مجموعات واتساب",
                 subtitle = "عدم الرد إطلاقاً داخل المحادثات الجماعية لحماية الخصوصية وتوفير الرصيد.",
                 checked = state.ignoreWhatsAppGroups,
                 onCheckedChange = onIgnoreGroupsChange

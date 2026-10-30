@@ -14,8 +14,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.persona.R
 import com.example.persona.core.database.entity.OrderStatus
 
 @Composable
@@ -36,7 +38,7 @@ fun OrderCardActions(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // ── Row 1: Secondary actions ("ملاحظة", "بوليصة", "تعديل") + Overflow Menu (⋮) ──
+        // ── Row 1: Secondary actions (Note, Waybill, Edit) + Overflow Menu (⋮) ──
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -52,14 +54,14 @@ fun OrderCardActions(
                 contentPadding = PaddingValues(horizontal = 6.dp)
             ) {
                 Text(
-                    text = "ملاحظة",
+                    text = stringResource(R.string.order_action_note),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
                 )
                 if (hasMerchantNote) {
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = "ملاحظة مسجلة",
+                        contentDescription = stringResource(R.string.order_action_note_recorded),
                         modifier = Modifier.size(14.dp)
                     )
                 }
@@ -76,12 +78,12 @@ fun OrderCardActions(
             ) {
                 Icon(
                     imageVector = Icons.Default.ContentCopy,
-                    contentDescription = "بوليصة الشحن",
+                    contentDescription = stringResource(R.string.order_action_waybill_desc),
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "بوليصة",
+                    text = stringResource(R.string.order_action_waybill),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
                 )
             }
@@ -98,12 +100,12 @@ fun OrderCardActions(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "تعديل الطلب",
+                        contentDescription = stringResource(R.string.order_action_edit_desc),
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "تعديل",
+                        text = stringResource(R.string.order_action_edit),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
                     )
                 }
@@ -141,7 +143,7 @@ fun OrderCardActions(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "بدء التجهيز",
+                        text = stringResource(R.string.order_status_start_prep),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
@@ -163,7 +165,7 @@ fun OrderCardActions(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "تسليم للمندوب",
+                        text = stringResource(R.string.order_status_handover_courier),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
@@ -185,7 +187,7 @@ fun OrderCardActions(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "تم التسليم",
+                        text = stringResource(R.string.order_status_mark_delivered),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
@@ -209,7 +211,7 @@ fun OrderCardActions(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "تم التسليم بنجاح",
+                                text = stringResource(R.string.order_status_delivered_success),
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = OrderGreen
                             )
@@ -228,7 +230,7 @@ fun OrderCardActions(
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Text(
-                            text = "طلب ملغي",
+                            text = stringResource(R.string.order_status_cancelled_badge),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = OrderRed
                         )
@@ -246,7 +248,7 @@ fun OrderCardActions(
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Text(
-                            text = "شحنة مرتجعة",
+                            text = stringResource(R.string.order_status_returned_badge),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = OrderBrown
                         )

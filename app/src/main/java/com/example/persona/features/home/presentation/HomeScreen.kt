@@ -21,10 +21,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.persona.R
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -86,11 +88,11 @@ fun HomeScreen(
             ) {
                 Column {
                     Text(
-                        text = "لوحة التحكم",
+                        text = stringResource(R.string.home_dashboard_title),
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = "Persona B2B — مركز القيادة والمتابعة",
+                        text = stringResource(R.string.home_dashboard_subtitle),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -99,7 +101,7 @@ fun HomeScreen(
                     onClick = onNavigateToSettings,
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Settings, contentDescription = "الإعدادات")
+                    Icon(imageVector = Icons.Default.Settings, contentDescription = stringResource(R.string.nav_settings))
                 }
             }
 
@@ -163,7 +165,7 @@ fun HomeScreen(
 
             // ── Section 4: Daily B2B Operational Metrics Flight Deck ──────────
             Text(
-                text = "مؤشرات التشغيل اليومية (DAILY B2B METRICS)",
+                text = stringResource(R.string.daily_metrics_title),
                 style = MaterialTheme.typography.labelSmall.copy(
                     letterSpacing = 0.sp,
                     fontWeight = FontWeight.Bold
@@ -202,13 +204,13 @@ fun HomeScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "كتالوج وقاعدة بيانات المتجر فارغة",
+                            text = stringResource(R.string.home_empty_knowledge_title),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "أضف منتجاتك أو استورد محادثات الواتساب القديمة لتدريب المساعد على الأسعار وسياسات الشحن.",
+                            text = stringResource(R.string.home_empty_knowledge_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
                         )
@@ -222,7 +224,7 @@ fun HomeScreen(
                         ) {
                             Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "إضافة معرفة ومنتجات للمتجر", fontWeight = FontWeight.Bold)
+                            Text(text = stringResource(R.string.home_btn_add_knowledge), fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -236,7 +238,7 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "آخر العمليات والردود (RECENT ACTIVITY)",
+                        text = stringResource(R.string.home_recent_activity_title),
                         style = MaterialTheme.typography.labelSmall.copy(
                             letterSpacing = 0.sp,
                             fontWeight = FontWeight.Bold
@@ -249,7 +251,7 @@ fun HomeScreen(
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = "عرض الكل في سجل التدقيق",
+                            text = stringResource(R.string.home_view_all_audit_log),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                         )
                     }

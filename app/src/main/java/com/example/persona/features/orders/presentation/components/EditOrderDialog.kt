@@ -279,7 +279,7 @@ fun EditOrderDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "إجمالي التحصيل (COD): ${EgyptianOrderUtils.formatMoney(codTotal)} ج.م (شامل الشحن)",
+                            text = "إجمالي التحصيل عند الاستلام: ${EgyptianOrderUtils.formatMoney(codTotal)} ج.م (شامل الشحن)",
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                             color = OrderGreen
                         )

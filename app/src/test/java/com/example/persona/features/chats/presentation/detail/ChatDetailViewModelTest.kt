@@ -182,6 +182,25 @@ class ChatDetailViewModelTest {
     }
 
     @Test
+    fun `onManualTakeover pauses AI, disables override, and cancels in-flight turn`() = runTest(testDispatcher) {
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        advanceUntilIdle()
+
+        viewModel.onManualTakeover()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { conversationMetadataDao.setAiPaused("أحمد مصطفى", "BUSINESS", true) }
+        coVerify(exactly = 1) { conversationMetadataDao.setAiOverrideEnabled("أحمد مصطفى", "BUSINESS", false) }
+        verify(exactly = 1) { sendManualReplyUseCase.cancelInFlightTurn("أحمد مصطفى") }
+    }
+
+    @Test
     fun `sendMessage clears input and dispatches to SendManualReplyUseCase`() = runTest(testDispatcher) {
         coEvery {
             sendManualReplyUseCase("أحمد مصطفى", "BUSINESS", "سعر المنتج 150 جنيه")

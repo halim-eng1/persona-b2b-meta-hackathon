@@ -3,30 +3,328 @@
 
     <!-- ── Orchestrator: Tier A short-circuit templates ─────────────────────── -->
     <!-- Greeting response (shown when ContextDetector classifies query as GREETING) -->
-    <string name="greeting_template_default">أهلاً بك في متجرنا! كيف يمكننا مساعدتك اليوم؟ 🥰</string>
+    <string name="greeting_template_default">Welcome to our store! How can we help you today? 🥰</string>
 
     <!-- Farewell / closing response (shown when ContextDetector classifies query as CLOSING) -->
-    <string name="farewell_template_default">سعدنا بخدمتك! لو عندك أي استفسار آخر، لا تتردد في مراسلتنا. 🌟</string>
+    <string name="farewell_template_default">Glad to serve you! If you have any further questions, feel free to message us. 🌟</string>
 
     <!-- ── Orchestrator: Tier B HITL fallback templates ─────────────────────── -->
     <!-- Holding message sent to the customer when RAG confidence is below threshold -->
-    <string name="hitl_holding_message">تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏</string>
+    <string name="hitl_holding_message">One moment please, a customer support representative will be with you shortly to assist you! 🙏</string>
 
     <!-- Notification title for the HITL alarm shown to the business owner -->
-    <string name="hitl_alarm_title">⚠️ تنبيه: عميل يحتاج مساعدة فورية</string>
+    <string name="hitl_alarm_title">⚠️ Alert: Customer needs immediate assistance</string>
 
     <!-- Notification body for the HITL alarm -->
-    <string name="hitl_alarm_body">لم يتمكن المساعد الآلي من الإجابة على استفسار العميل. يرجى المتابعة يدوياً.</string>
+    <string name="hitl_alarm_body">The automated assistant could not answer the customer\'s inquiry. Please follow up manually.</string>
 
     <!-- ── Orchestrator: Media fallback message ──────────────────────────────── -->
     <!-- Sent when the incoming notification contains media (image/video/audio) -->
-    <string name="media_fallback_message">عفواً، لا يمكنني معالجة الوسائط. يرجى كتابة استفسارك في رسالة نصية.</string>
+    <string name="media_fallback_message">Sorry, I cannot process media attachments. Please type your inquiry as a text message.</string>
+
+    <!-- Fallback when model produces blank reply -->
+    <string name="blank_reply_fallback_template">I am here and listening, but please let us know how we can assist you with our products today? 💙</string>
+
+    <!-- ── Common Actions & Labels ─────────────────────────────────────────────── -->
+    <string name="common_save">Save</string>
+    <string name="common_close">Close</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_delete_all">Delete All</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_add">Add</string>
+    <string name="common_edit">Edit</string>
+    <string name="common_send">Send</string>
+    <string name="common_all">All</string>
+    <string name="common_back">Back</string>
+
+    <!-- ── Home & Dashboard ────────────────────────────────────────────────────── -->
+    <string name="home_dashboard_title">Dashboard</string>
+    <string name="home_dashboard_subtitle">Persona B2B — Command &amp; Operations Center</string>
+    <string name="home_recent_activity_title">Recent Operations &amp; Replies</string>
+    <string name="home_view_all_audit_log">View All in Audit Log</string>
+    <string name="home_empty_knowledge_title">Store Catalog &amp; Database is Empty</string>
+    <string name="home_empty_knowledge_desc">Add your products or import old WhatsApp chats to train the assistant on prices and shipping policies.</string>
+    <string name="home_btn_add_knowledge">Add Store Knowledge &amp; Products</string>
+    <string name="home_stat_today_orders">Today\'s Orders</string>
+    <string name="home_stat_pending_revenue">Pending Revenue</string>
+    <string name="home_stat_waiting_customers">Waiting Customers</string>
+    <string name="home_stat_bot_replies">Bot Replies Today</string>
+    <string name="home_stat_total_prefix">Total: %d</string>
+    <string name="home_action_catalog">Product Catalog</string>
+    <string name="home_action_import">Import Chats</string>
+    <string name="home_action_orders">Order Fulfillment</string>
+    <string name="home_action_contacts">CRM Contacts</string>
 
     <!-- ── Knowledge Management UI ────────────────────────────────────────────── -->
-    <string name="knowledge_management_title">إدارة قاعدة المعرفة</string>
-    <string name="knowledge_add_hint">أضف معلومة أو عرضاً جديداً...</string>
-    <string name="knowledge_source_core">ملف مستورد</string>
-    <string name="knowledge_source_manual">إدخال يدوي</string>
-    <string name="knowledge_source_offer">عرض مؤقت</string>
-    <string name="knowledge_empty_state">لا توجد معلومات في قاعدة المعرفة بعد.\nاستورد ملف Markdown أو أضف إدخالاً يدوياً.</string>
+    <string name="knowledge_management_title">Knowledge Base</string>
+    <string name="knowledge_add_hint">Add a new offer or business fact...</string>
+    <string name="knowledge_source_core">Imported File</string>
+    <string name="knowledge_source_manual">Manual Entry</string>
+    <string name="knowledge_source_offer">Temporary Offer</string>
+    <string name="knowledge_empty_state">No facts in the knowledge base yet.\nImport a Markdown file or add an entry manually.</string>
+    <string name="knowledge_clear_confirm_title">Clear Knowledge Base?</string>
+    <string name="knowledge_clear_confirm_message">Are you sure you want to delete all stored facts and chunks? You can import a new file or re-enter the catalog.</string>
+    <string name="knowledge_tab_catalog">Catalog &amp; Knowledge</string>
+    <string name="knowledge_tab_pending_queries">Pending Inquiries</string>
+    <string name="knowledge_search_placeholder">Search products and policies...</string>
+    <string name="knowledge_search_clear">Clear search</string>
+    <string name="knowledge_search_no_results">No matching results found.</string>
+    <string name="knowledge_filter_all">All</string>
+    <string name="knowledge_filter_product">Products</string>
+    <string name="knowledge_filter_policy">Policies &amp; Shipping</string>
+    <string name="knowledge_filter_offer">Temporary Offers</string>
+    <string name="knowledge_catalog_items_count">Catalog Items (%d)</string>
+    <string name="knowledge_hitl_inbox_title">Inquiries requiring merchant attention</string>
+    <string name="knowledge_hitl_empty">Great! No pending inquiries from customers.</string>
+    <string name="bot_simulator_fab">Bot Simulator</string>
+    <string name="knowledge_edit_dialog_title">Edit Fact / Product</string>
+    <string name="knowledge_edit_section_label">Section: %s</string>
+    <string name="knowledge_edit_text_label">Fact text or product specifications</string>
+    <string name="knowledge_edit_save_button">Save &amp; Update Vector</string>
+    <string name="knowledge_delete_dialog_title">Delete this fact?</string>
+    <string name="knowledge_delete_dialog_message">Are you sure you want to delete this chunk? Its semantic embedding will be removed and the bot won\'t use it for replies.</string>
+    <string name="knowledge_delete_confirm_btn">Delete Permanently</string>
+    <string name="knowledge_answer_query_title">Add Approved Answer to Customer Query</string>
+    <string name="knowledge_answer_query_customer_prefix">Customer Question (%s):</string>
+    <string name="knowledge_answer_query_label">Store Official Answer</string>
+    <string name="knowledge_answer_query_placeholder">Write the official answer the bot will learn for future replies...</string>
+    <string name="knowledge_answer_query_is_offer">Classify as temporary promotional offer</string>
+    <string name="knowledge_answer_query_confirm_btn">Approve Answer &amp; Update Knowledge</string>
+    <string name="knowledge_input_mode_catalog">Structured Product (Catalog)</string>
+    <string name="knowledge_input_mode_free_text">Free Text or Policy</string>
+    <string name="knowledge_input_product_name_label">Product or Service Name</string>
+    <string name="knowledge_input_product_name_placeholder">e.g. Cotton Oversized Sweatshirt</string>
+    <string name="knowledge_input_price_label">Price (EGP)</string>
+    <string name="knowledge_input_variations_label">Sizes &amp; Colors</string>
+    <string name="knowledge_input_variations_placeholder">Black, Navy / L, XL</string>
+    <string name="knowledge_input_category_label">Category:</string>
+    <string name="knowledge_input_in_stock">In Stock</string>
+    <string name="knowledge_input_out_of_stock">Out of Stock</string>
+    <string name="knowledge_input_btn_add_to_catalog">Add to Store</string>
+
+    <!-- ── Orders & Manifest ──────────────────────────────────────────────────── -->
+    <string name="order_action_note">Note</string>
+    <string name="order_action_note_recorded">Note recorded</string>
+    <string name="order_action_waybill">Waybill</string>
+    <string name="order_action_waybill_desc">Shipping Waybill</string>
+    <string name="order_action_edit">Edit</string>
+    <string name="order_action_edit_desc">Edit Order</string>
+    <string name="order_status_start_prep">Start Preparation</string>
+    <string name="order_status_handover_courier">Handover to Courier</string>
+    <string name="order_status_mark_delivered">Mark Delivered</string>
+    <string name="order_status_delivered_success">Delivered Successfully</string>
+    <string name="order_status_cancelled_badge">Order Cancelled</string>
+    <string name="order_status_returned_badge">Returned Order</string>
+    <string name="order_status_pending">Pending</string>
+    <string name="order_status_in_prep">In Preparation</string>
+    <string name="order_status_shipped">With Courier 🚚</string>
+    <string name="order_status_delivered">Delivered</string>
+    <string name="order_status_cancelled">Cancelled</string>
+
+    <!-- ── Bot Simulator & Reasoning Traces ───────────────────────────────────── -->
+    <string name="sim_header_title">Smart WhatsApp Bot Simulator</string>
+    <string name="sim_header_subtitle">Online • Testing Sandbox</string>
+    <string name="sim_btn_new_chat">New Chat</string>
+    <string name="sim_btn_close">Close</string>
+    <string name="sim_welcome_title">Welcome to AI Bot Simulator!</string>
+    <string name="sim_welcome_desc">Start by typing a simulated customer message, choose a sample query above, or attach an image / voice note to test the full reasoning and retrieval pipeline.</string>
+    <string name="sim_media_image_title">Image attached for vision analysis</string>
+    <string name="sim_media_image_subtitle">Multimodal vision pass will be triggered</string>
+    <string name="sim_media_audio_title">Voice note attached</string>
+    <string name="sim_media_audio_subtitle">Audio will be transcribed automatically via ASR</string>
+    <string name="sim_media_clear">Remove attachment</string>
+    <string name="sim_action_pick_image">Attach image</string>
+    <string name="sim_action_pick_audio">Attach voice note</string>
+    <string name="sim_input_placeholder_media">Add a caption (optional)...</string>
+    <string name="sim_input_placeholder_text">Type customer message...</string>
+    <string name="sim_voice_note_label">Voice Note</string>
+    <string name="sim_typing_indicator">Assistant is analyzing message and retrieving facts...</string>
+    <string name="sim_media_preview_desc">Attachment preview</string>
+    <string name="sim_sample_query_1">How much is the oversized t-shirt?</string>
+    <string name="sim_sample_query_2">What are shipping fees to Cairo and Giza?</string>
+    <string name="sim_sample_query_3">I want to order 2 black t-shirts to Nasr City 01012345678</string>
+    <string name="sim_sample_query_4">Are exchanges or returns available?</string>
+    <string name="sim_sample_query_5">I want to cancel the order</string>
+    <string name="sim_sample_query_6">What payment methods are accepted?</string>
+
+    <string name="trace_thinking_steps">⚡ Reasoning &amp; Decision Steps (took %s s)</string>
+    <string name="trace_intent_title">Detected Intent</string>
+    <string name="trace_asr_title">Voice Transcription</string>
+    <string name="trace_vision_title">Visual Image Analysis</string>
+    <string name="trace_rag_title">Retrieved Catalog Chunks</string>
+    <string name="trace_rag_match_format">%1$d chunks (match: %2$d%%)</string>
+    <string name="trace_rag_empty">This intent did not require knowledge base retrieval.</string>
+    <string name="trace_rag_expand">Preview retrieved chunks (%d) ▼</string>
+    <string name="trace_rag_collapse">Hide chunks ▲</string>
+    <string name="trace_requery_title">Semantic Re-Query</string>
+    <string name="trace_requery_active">Triggered (Pass 2)</string>
+    <string name="trace_requery_inactive">Not required (Direct)</string>
+    <string name="trace_llm_title">Responding Model</string>
+    <string name="trace_order_action_title">Order Action</string>
+    <string name="trace_order_details_header">Auto-extracted order details:</string>
+    <string name="trace_order_customer_name">Customer Name: %s</string>
+    <string name="trace_order_customer_phone">Phone: %s</string>
+    <string name="trace_order_address">Address: %s</string>
+    <string name="trace_order_products">Products: %s</string>
+    <string name="trace_order_total">Total: %s EGP</string>
+    <string name="trace_order_notes">Notes: %s</string>
+    <string name="trace_order_none">No order details extracted from this response.</string>
+    <string name="trace_system_prompt_title">Full System Prompt</string>
+    <string name="trace_prompt_expand">Preview prompt (%d chars) ▼</string>
+    <string name="trace_prompt_collapse">Hide prompt ▲</string>
+    <string name="trace_prompt_preview_header">System Prompt Preview:</string>
+    <string name="trace_copy_prompt">Copy Prompt</string>
+    <string name="trace_chunk_default_header">Store Fact</string>
+    <string name="trace_chunk_accuracy">%d%% accuracy</string>
+    <string name="trace_chunk_expand">Show full text ▼</string>
+    <string name="trace_chunk_collapse">Hide details ▲</string>
+
+    <!-- ── Navigation ──────────────────────────────────────────────────────────── -->
+    <string name="nav_home">Home</string>
+    <string name="nav_conversations">Conversations</string>
+    <string name="nav_orders">Orders</string>
+    <string name="nav_knowledge">Knowledge Base</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- ── Key Titles (Eliminated Hybrid Strings) ──────────────────────────────── -->
+    <string name="daily_metrics_title">Daily Operating Metrics</string>
+    <string name="quick_actions_title">Quick Actions</string>
+    <string name="bot_simulator_title">Bot Simulator</string>
+
+    <!-- ── Settings Screen & Tabs ──────────────────────────────────────────────── -->
+    <string name="settings_title">Store &amp; Bot Settings</string>
+    <string name="settings_subtitle">Manage AI engines, store identity, security, and WhatsApp routing</string>
+
+    <string name="settings_tab_ai">AI Engines</string>
+    <string name="settings_tab_identity">Store Identity</string>
+    <string name="settings_tab_hours">Business Hours</string>
+    <string name="settings_tab_routing">WhatsApp Routing</string>
+    <string name="settings_tab_maintenance">Maintenance &amp; Security</string>
+
+    <!-- ── Settings AI Engines Section ─────────────────────────────────────────── -->
+    <string name="settings_ai_priority_title">AI Provider Priority Chain</string>
+    <string name="settings_ai_priority_subtitle">Order provider fallback; if the primary engine fails or depletes balance, the next engine takes over automatically.</string>
+    <string name="settings_ai_keys_count">%d registered API keys</string>
+    <string name="settings_ai_provider_guide_btn">Key Guide ℹ️</string>
+    <string name="settings_ai_manage_provider_title">Keys &amp; Models for Selected Provider</string>
+    <string name="settings_ai_manage_provider_subtitle">Select a provider to manage unlimited API keys and supported models.</string>
+    <string name="settings_ai_keys_for_provider">API Keys for %s</string>
+    <string name="settings_ai_keys_subtitle">Add multiple API keys with live connection test for each key.</string>
+    <string name="settings_ai_guide_title">How to get API Key for %s</string>
+    <string name="settings_ai_cloudflare_account_id_title">Cloudflare Account ID</string>
+    <string name="settings_ai_cloudflare_account_id_subtitle">Required for Workers AI models in addition to API token</string>
+    <string name="settings_ai_no_keys">No API keys registered for this provider yet. Default keys will be used if configured.</string>
+    <string name="settings_ai_key_label">Key #%d</string>
+    <string name="settings_ai_status_untested">Not tested yet</string>
+    <string name="settings_ai_status_checking">Testing connection...</string>
+    <string name="settings_ai_ping_btn">Test Connection</string>
+    <string name="settings_ai_add_key_label">Add new API key</string>
+    <string name="settings_ai_models_title">AI Models for %s</string>
+    <string name="settings_ai_models_subtitle">Reorder models, remove unused ones, or add a custom model identifier.</string>
+    <string name="settings_ai_add_model_label">Add custom model identifier</string>
+    <string name="guide_portal_link_label">Official Portal URL:</string>
+    <string name="guide_steps_header">Steps to obtain API key:</string>
+    <string name="guide_copy_prompt_btn">Ask AI for Guidance</string>
+
+    <!-- ── Language Preference ────────────────────────────────────────────────── -->
+    <string name="settings_language_title">App Language</string>
+    <string name="settings_language_subtitle">Choose display language and interface layout direction</string>
+    <string name="language_arabic">العربية</string>
+    <string name="language_arabic_sub">Arabic (RTL)</string>
+    <string name="language_english">English</string>
+    <string name="language_english_sub">English (LTR)</string>
+
+    <!-- ── Store Identity Section ─────────────────────────────────────────────── -->
+    <string name="settings_store_identity_title">Store &amp; Bot Identity</string>
+    <string name="settings_store_identity_subtitle">Configure bot name and store brand for automated AI responses</string>
+    <string name="settings_bot_name_label">Customer Support Representative Name</string>
+    <string name="settings_bot_name_placeholder">e.g. Sarah / Sales Assistant</string>
+    <string name="settings_store_name_label">Store or Brand Name</string>
+    <string name="settings_store_name_placeholder">e.g. Elegance Boutique / Our Store</string>
+
+    <!-- ── AI Persona Tone Section ────────────────────────────────────────────── -->
+    <string name="settings_persona_tone_title">Bot Persona Tone</string>
+    <string name="settings_persona_tone_subtitle">Choose the style and dialect the bot uses with WhatsApp customers</string>
+
+    <!-- ── Response Templates Section ─────────────────────────────────────────── -->
+    <string name="settings_templates_title">Quick Response Templates</string>
+    <string name="settings_templates_subtitle">Custom greetings and closing messages for conversations</string>
+    <string name="settings_greeting_template_label">Greeting Message Template</string>
+    <string name="settings_farewell_template_label">Farewell Message Template</string>
+
+    <!-- ── Timing & Delays Section ────────────────────────────────────────────── -->
+    <string name="settings_timing_title">Response Timing &amp; Delays</string>
+    <string name="settings_timing_subtitle">Adjust delays between responses to simulate natural human typing</string>
+    <string name="settings_reply_delay_label">Reply Delay (Seconds)</string>
+    <string name="settings_reply_delay_hint">Gives the customer the natural feel of a person reading and replying</string>
+
+    <!-- ── Match Sensitivity & Cooldown ───────────────────────────────────────── -->
+    <string name="settings_sensitivity_title">Match Sensitivity</string>
+    <string name="settings_sensitivity_subtitle">Control similarity threshold required for knowledge base auto-replies</string>
+    <string name="settings_cooldown_title">Cooldown Duration</string>
+    <string name="settings_cooldown_subtitle">Minimum waiting time before sending another automated reply to the same chat</string>
+
+    <!-- ── Chat Detail & TopBar ────────────────────────────────────────────────── -->
+    <string name="chat_composer_placeholder">Type a manual reply to customer...</string>
+    <string name="chat_active_exception_badge">Active (Individual Exception)</string>
+    <string name="chat_status_ready">● Ready • </string>
+    <string name="chat_status_awaiting">○ Awaiting notification</string>
+    <string name="chat_status_ai_paused_global">Global auto-reply is paused</string>
+    <string name="chat_status_ai_paused">Auto-reply is paused</string>
+    <string name="chat_open_whatsapp">Open chat in WhatsApp</string>
+    <string name="chat_more_options">More Options</string>
+    <string name="chat_resolve_attention">Resolve Attention</string>
+    <string name="chat_export_chat">Export Chat</string>
+    <string name="chat_clear_chat">Clear Chat</string>
+    <string name="chat_attention_alert_banner">⚠️ Alert: Customer needs human assistance</string>
+    <string name="chat_ai_paused_banner_global">Global auto-reply is paused — tap to activate exception for this chat</string>
+    <string name="chat_ai_paused_banner_single">Auto-reply paused for this chat — tap to resume</string>
+    <string name="chat_active_order_banner">Active Order: %s</string>
+    <string name="chat_order_cod_amount">%1$d EGP (COD)</string>
+    <string name="chat_load_older_messages">Load older messages (%1$d of %2$d)</string>
+    <string name="chat_message_copied_toast">Message copied to clipboard</string>
+    <string name="chat_sender_you_manual">You (Manual)</string>
+    <string name="chat_media_voice_desc">Voice note</string>
+    <string name="chat_media_voice_transcribed">Transcribed Voice Note</string>
+    <string name="chat_media_attached_hint">Media attached — view in WhatsApp app</string>
+    <string name="chat_status_sending">Sending</string>
+    <string name="chat_status_sent">Sent</string>
+    <string name="chat_status_queued">Queued</string>
+    <string name="chat_status_failed">Failed</string>
+    <string name="chat_action_retry">Retry</string>
+    <string name="chat_action_open_in_whatsapp">Open in WhatsApp</string>
+    <string name="chat_whatsapp_open_failed_toast">Could not open WhatsApp app</string>
+    <string name="chat_share_chooser_title">Share Chat History</string>
+    <string name="chat_share_open_failed_toast">Could not open share menu</string>
+    <string name="export_chat_dialog_title">Export Chat</string>
+    <string name="export_chat_dialog_prompt">Select time range for chat history export:</string>
+    <string name="export_chat_dialog_confirm">Export &amp; Share</string>
+    <string name="clear_chat_dialog_title">Clear Chat History</string>
+    <string name="clear_chat_dialog_warning">Selected messages will be permanently deleted from local memory.</string>
+    <string name="clear_chat_dialog_confirm">Clear</string>
+    <string name="export_range_all_time">All Time</string>
+    <string name="export_range_today">Today</string>
+    <string name="export_range_last_two_hours">Last 2 Hours</string>
+    <string name="export_range_all_time_sub">All recorded messages</string>
+    <string name="export_range_today_sub">Messages from today</string>
+    <string name="export_range_last_two_hours_sub">Messages from the last 2 hours</string>
+    <string name="clear_range_last_hour">Last Hour</string>
+    <string name="clear_range_last_two_hours">Last 2 Hours</string>
+    <string name="clear_range_today">Today</string>
+    <string name="clear_range_all_time">All Time</string>
+
+    <!-- ── Studio / Chat Import ────────────────────────────────────────────────── -->
+    <string name="chat_import_studio_title">Knowledge Studio</string>
+    <string name="chat_import_prompt_generator_title">AI Prompt Generator</string>
+    <string name="chat_import_direct_text_title">Direct Text &amp; Policies</string>
+
+    <!-- ── CRM & Contacts ──────────────────────────────────────────────────────── -->
+    <string name="contacts_crm_title">Customer Directory</string>
+    <string name="contacts_crm_tag_label">Customer Category:</string>
+
+    <!-- ── Audit Log ──────────────────────────────────────────────────────────── -->
+    <string name="audit_log_rule_tier">Rule Engine</string>
+    <string name="audit_log_hitl_escalation">Human Escalation</string>
+    <string name="audit_log_tokens_badge">Tokens</string>
+    <string name="audit_log_rag_citations">Retrieved Knowledge Citations:</string>
 </resources>

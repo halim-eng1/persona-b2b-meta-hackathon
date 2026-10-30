@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.R
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.chats.presentation.detail.ReplyCapability
 import com.example.persona.ui.theme.chatColors
@@ -77,7 +79,7 @@ fun CompactChatTopBar(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.common_back),
                     tint = chatColors.onSurface
                 )
             }
@@ -106,7 +108,7 @@ fun CompactChatTopBar(
                     .clip(RoundedCornerShape(8.dp))
                     .clickable(
                         role = Role.Button,
-                        onClickLabel = "Export Chat (تصدير المحادثة)",
+                        onClickLabel = stringResource(R.string.chat_export_chat),
                         onClick = onExportChat
                     )
                     .padding(vertical = 4.dp, horizontal = 4.dp),
@@ -177,7 +179,7 @@ fun CompactChatTopBar(
                         }
                         !isGlobalAutoReplyEnabled && isAiOverrideEnabled -> {
                             Text(
-                                text = "نشط (استثناء فردي) • ",
+                                text = "${stringResource(R.string.chat_active_exception_badge)} • ",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                 color = subtitleColor
                             )
@@ -194,7 +196,7 @@ fun CompactChatTopBar(
                         }
                         replyCapability == ReplyCapability.READY_VIA_NOTIFICATION -> {
                             Text(
-                                text = "● Ready • ",
+                                text = stringResource(R.string.chat_status_ready),
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                 color = subtitleColor
                             )
@@ -211,14 +213,14 @@ fun CompactChatTopBar(
                         }
                         !effectiveAiActive -> {
                             Text(
-                                text = if (!isGlobalAutoReplyEnabled) "الرد الآلي متوقف عاماً" else "الرد الآلي متوقف",
+                                text = if (!isGlobalAutoReplyEnabled) stringResource(R.string.chat_status_ai_paused_global) else stringResource(R.string.chat_status_ai_paused),
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                 color = subtitleColor
                             )
                         }
                         else -> {
                             Text(
-                                text = "○ Awaiting notification",
+                                text = stringResource(R.string.chat_status_awaiting),
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                 color = subtitleColor
                             )
@@ -269,7 +271,7 @@ fun CompactChatTopBar(
 
                     if (!isGlobalAutoReplyEnabled && isAiOverrideEnabled) {
                         Text(
-                            text = "نشط (استثناء فردي)",
+                            text = stringResource(R.string.chat_active_exception_badge),
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
@@ -290,7 +292,7 @@ fun CompactChatTopBar(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Chat,
-                            contentDescription = "فتح المحادثة في واتساب",
+                            contentDescription = stringResource(R.string.chat_open_whatsapp),
                             tint = Color(0xFF25D366),
                             modifier = Modifier.size(24.dp)
                         )
@@ -305,7 +307,7 @@ fun CompactChatTopBar(
                     ) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "خيارات إضافية (More options)",
+                            contentDescription = stringResource(R.string.chat_more_options),
                             tint = chatColors.onSurface
                         )
                     }
@@ -319,7 +321,7 @@ fun CompactChatTopBar(
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        text = "حل التنبيه (Resolve Attention)",
+                                        text = stringResource(R.string.chat_resolve_attention),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.Bold
@@ -341,7 +343,7 @@ fun CompactChatTopBar(
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    text = "Export Chat (تصدير المحادثة)",
+                                    text = stringResource(R.string.chat_export_chat),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = chatColors.onSurface
                                 )
@@ -361,7 +363,7 @@ fun CompactChatTopBar(
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    text = "مسح المحادثة (Clear Chat)",
+                                    text = stringResource(R.string.chat_clear_chat),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.error
                                 )

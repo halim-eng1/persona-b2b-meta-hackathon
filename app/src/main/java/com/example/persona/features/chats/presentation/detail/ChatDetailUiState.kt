@@ -1,5 +1,7 @@
 package com.example.persona.features.chats.presentation.detail
 
+import androidx.annotation.StringRes
+import com.example.persona.R
 import com.example.persona.core.data.repository.UserPreferencesRepository
 
 enum class ReplyCapability {
@@ -8,28 +10,36 @@ enum class ReplyCapability {
 }
 
 enum class ExportTimeRange(
+    @StringRes val titleResId: Int,
+    @StringRes val subtitleResId: Int,
     val titleArabic: String,
     val titleEnglish: String,
     val subtitle: String,
     val exportLabel: String
 ) {
     ALL_TIME(
+        titleResId = R.string.export_range_all_time,
+        subtitleResId = R.string.export_range_all_time_sub,
         titleArabic = "كامل المحادثة",
         titleEnglish = "All Time",
-        subtitle = "All Time • كافة الرسائل المسجلة",
-        exportLabel = "All Time (كامل المحادثة)"
+        subtitle = "All Time",
+        exportLabel = "All Time"
     ),
     TODAY(
+        titleResId = R.string.export_range_today,
+        subtitleResId = R.string.export_range_today_sub,
         titleArabic = "محادثة اليوم",
         titleEnglish = "Today",
-        subtitle = "Today • رسائل اليوم",
-        exportLabel = "Today (محادثة اليوم)"
+        subtitle = "Today",
+        exportLabel = "Today"
     ),
     LAST_TWO_HOURS(
+        titleResId = R.string.export_range_last_two_hours,
+        subtitleResId = R.string.export_range_last_two_hours_sub,
         titleArabic = "آخر ساعتين",
         titleEnglish = "Last 2 Hours",
-        subtitle = "Last 2 Hours • آخر ساعتين",
-        exportLabel = "Last 2 Hours (آخر ساعتين)"
+        subtitle = "Last 2 Hours",
+        exportLabel = "Last 2 Hours"
     )
 }
 

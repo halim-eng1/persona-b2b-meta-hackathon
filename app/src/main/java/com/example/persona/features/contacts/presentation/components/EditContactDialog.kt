@@ -7,8 +7,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.persona.R
 import com.example.persona.core.database.entity.ContactEntity
 import com.example.persona.core.database.entity.ContactTag
 
@@ -48,7 +50,7 @@ fun EditContactDialog(
 
                 // Tag selection
                 Text(
-                    text = "تصنيف العميل (CRM Tag):",
+                    text = stringResource(R.string.contacts_crm_tag_label),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                 )
                 Row(

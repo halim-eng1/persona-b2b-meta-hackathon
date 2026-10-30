@@ -301,6 +301,8 @@ class ChatDetailViewModel @Inject constructor(
                     conversationMetadataDao.setAiOverrideEnabled(contactName, sourceClass, newOverride)
                     if (newOverride) {
                         conversationMetadataDao.setAiPaused(contactName, sourceClass, false)
+                    } else {
+                        conversationMetadataDao.setAiPaused(contactName, sourceClass, true)
                     }
                 } else {
                     conversationMetadataDao.upsert(
@@ -308,11 +310,23 @@ class ChatDetailViewModel @Inject constructor(
                             contactName = contactName,
                             sourceClass = sourceClass,
                             isAiOverrideEnabled = newOverride,
-                            isAiPaused = false
+                            isAiPaused = !newOverride
                         )
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * Called when the merchant takes manual control (e.g. opens WhatsApp manually or interacts directly).
+     * Unconditionally pauses AI, cancels override, and aborts any active in-flight AI generation.
+     */
+    fun onManualTakeover() {
+        viewModelScope.launch {
+            conversationMetadataDao.setAiPaused(contactName, sourceClass, true)
+            conversationMetadataDao.setAiOverrideEnabled(contactName, sourceClass, false)
+            sendManualReplyUseCase.cancelInFlightTurn(contactName)
         }
     }
 

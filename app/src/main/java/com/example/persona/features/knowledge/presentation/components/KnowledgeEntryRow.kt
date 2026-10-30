@@ -31,13 +31,13 @@ fun KnowledgeEntryRow(
             onDismissRequest = { showDeleteConfirmation = false },
             title = {
                 Text(
-                    text = "حذف هذه المعلومة؟",
+                    text = stringResource(R.string.knowledge_delete_dialog_title),
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
-                    text = "هل أنت متأكد من حذف هذا المقطع من قاعدة المعرفة؟ سيتم مسح المتجه الدلالي المقابل ولن يتمكن البوت من استخدامه للرد."
+                    text = stringResource(R.string.knowledge_delete_dialog_message)
                 )
             },
             confirmButton = {
@@ -52,7 +52,7 @@ fun KnowledgeEntryRow(
                     ),
                     modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                 ) {
-                    Text("حذف نهائي")
+                    Text(stringResource(R.string.knowledge_delete_confirm_btn))
                 }
             },
             dismissButton = {
@@ -60,7 +60,7 @@ fun KnowledgeEntryRow(
                     onClick = { showDeleteConfirmation = false },
                     modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                 ) {
-                    Text("إلغاء")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )
@@ -143,7 +143,7 @@ fun KnowledgeEntryRow(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "تعديل",
+                        contentDescription = stringResource(R.string.common_edit),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -154,7 +154,7 @@ fun KnowledgeEntryRow(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "حذف",
+                        contentDescription = stringResource(R.string.common_delete),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }

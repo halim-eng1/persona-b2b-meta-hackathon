@@ -54,6 +54,12 @@ class SendManualReplyUseCase @Inject constructor(
         private const val TAG = "SendManualReplyUseCase"
     }
 
+    fun cancelInFlightTurn(contactName: String) {
+        try {
+            autoReplyOrchestratorLazy.get()?.cancelInFlightTurn(contactName)
+        } catch (_: Exception) {}
+    }
+
     suspend operator fun invoke(
         contactName: String,
         sourceClass: String,
@@ -93,12 +99,13 @@ class SendManualReplyUseCase @Inject constructor(
             chatHistoryDao.insert(optimisticEntity)
         }
 
-        // 3. Human-AI race guard: unconditionally pause AI for this contact when merchant sends a manual reply.
+        // 3. Human-AI race guard: unconditionally pause AI and disable override for this contact when merchant takes manual action (reply or retry).
         // Note: This is an intentional manual merchant takeover (distinct from automated HITL escalation
         // which respects the merchant's `auto_pause_on_hitl` preference).
         conversationMetadataDao.setAiPaused(contactName, sourceClass, true)
+        conversationMetadataDao.setAiOverrideEnabled(contactName, sourceClass, false)
 
-        // 4. Update conversation metadata snippet and timestamp, preserving isAiPaused = true
+        // 4. Update conversation metadata snippet and timestamp, preserving isAiPaused = true and isAiOverrideEnabled = false
         conversationMetadataDao.recordMessageTurn(
             contactName = contactName,
             sourceClass = sourceClass,
@@ -107,7 +114,8 @@ class SendManualReplyUseCase @Inject constructor(
             timestamp = now,
             notificationKey = null,
             incrementUnread = false,
-            isAiPaused = true
+            isAiPaused = true,
+            isAiOverrideEnabled = false
         )
 
         // 5. Dispatch via DirectReplyExecutionUseCase

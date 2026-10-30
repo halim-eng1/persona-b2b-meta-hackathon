@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.persona.R
 import com.example.persona.features.chats.presentation.detail.components.AiThinkingIndicatorBubble
 import com.example.persona.features.chats.presentation.detail.components.ChatComposerBar
 import com.example.persona.features.chats.presentation.detail.components.ClearChatDialog
@@ -88,13 +90,13 @@ fun ChatDetailScreen(
                     try {
                         val sendIntent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, "سجل محادثة ${state.contactName}")
+                            putExtra(Intent.EXTRA_SUBJECT, "${context.getString(R.string.chat_share_chooser_title)}: ${state.contactName}")
                             putExtra(Intent.EXTRA_TEXT, exportText)
                         }
-                        context.startActivity(Intent.createChooser(sendIntent, "مشاركة سجل المحادثة"))
+                        context.startActivity(Intent.createChooser(sendIntent, context.getString(R.string.chat_share_chooser_title)))
                     } catch (e: Exception) {
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar("تعذر فتح قائمة المشاركة")
+                            snackbarHostState.showSnackbar(context.getString(R.string.chat_share_open_failed_toast))
                         }
                     }
                 }
@@ -187,6 +189,7 @@ fun ChatDetailScreen(
             onNavigateBack = onNavigateBack,
             onToggleAi = { viewModel.toggleAiActive() },
             onOpenWhatsApp = {
+                viewModel.onManualTakeover()
                 WhatsAppLauncher.openChat(
                     context = context,
                     phoneNumber = state.contactPhoneNumber,
@@ -224,7 +227,7 @@ fun ChatDetailScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "⚠️ تنبيه: العميل بحاجة لتدخل بشري",
+                            text = stringResource(R.string.chat_attention_alert_banner),
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onErrorContainer
@@ -241,7 +244,7 @@ fun ChatDetailScreen(
                         modifier = Modifier.heightIn(min = 48.dp)
                     ) {
                         Text(
-                            text = "حل التنبيه",
+                            text = stringResource(R.string.chat_resolve_attention),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                         )
                     }
@@ -276,9 +279,9 @@ fun ChatDetailScreen(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = if (!state.isGlobalAutoReplyEnabled)
-                            "الرد الآلي العام متوقف — اضغط لتفعيل استثناء لهذه المحادثة"
+                            stringResource(R.string.chat_ai_paused_banner_global)
                         else
-                            "الرد الآلي متوقف لهذه المحادثة — اضغط للاستئناف",
+                            stringResource(R.string.chat_ai_paused_banner_single),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Medium,
                             color = chatColors.onSurface
@@ -318,15 +321,23 @@ fun ChatDetailScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
+                                val statusLabel = when (order.status.uppercase()) {
+                                    "PENDING" -> stringResource(R.string.order_status_pending)
+                                    "CONFIRMED", "IN_PREPARATION" -> stringResource(R.string.order_status_in_prep)
+                                    "SHIPPED" -> stringResource(R.string.order_status_shipped)
+                                    "DELIVERED" -> stringResource(R.string.order_status_delivered)
+                                    "CANCELLED" -> stringResource(R.string.order_status_cancelled)
+                                    else -> order.status
+                                }
                                 Text(
-                                    text = "طلب نشط: ${formatOrderStatusArabic(order.status)}",
+                                    text = stringResource(R.string.chat_active_order_banner, statusLabel),
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer
                                     )
                                 )
                                 Text(
-                                    text = "${order.totalAmount.toInt()} ج.م (COD)",
+                                    text = stringResource(R.string.chat_order_cod_amount, order.totalAmount.toInt()),
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.primary
@@ -379,7 +390,11 @@ fun ChatDetailScreen(
                                 modifier = Modifier.heightIn(min = 48.dp)
                             ) {
                                 Text(
-                                    text = "تحميل رسائل أقدم (${state.messages.size} من ${state.totalMessageCount})",
+                                    text = stringResource(
+                                        R.string.chat_load_older_messages,
+                                        state.messages.size,
+                                        state.totalMessageCount
+                                    ),
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
@@ -403,6 +418,7 @@ fun ChatDetailScreen(
                         botName = state.botName,
                         onRetry = { viewModel.retryMessage(msg.id, msg.text) },
                         onOpenWhatsApp = {
+                            viewModel.onManualTakeover()
                             val pkg = state.fallbackTargetPackage
                                 ?: if (state.sourceClass.uppercase() == "BUSINESS") "com.whatsapp.w4b" else "com.whatsapp"
                             openWhatsAppFallback(
@@ -473,15 +489,6 @@ fun ChatDetailScreen(
     }
 }
 
-private fun formatOrderStatusArabic(status: String): String = when (status.uppercase()) {
-    "PENDING" -> "قيد الانتظار"
-    "CONFIRMED", "IN_PREPARATION" -> "قيد التجهيز"
-    "SHIPPED" -> "مع المندوب 🚚"
-    "DELIVERED" -> "تم التسليم"
-    "CANCELLED" -> "ملغي"
-    else -> status
-}
-
 private fun openWhatsAppFallback(
     context: Context,
     snackbarHostState: SnackbarHostState,
@@ -495,7 +502,8 @@ private fun openWhatsAppFallback(
         try {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             clipboard.setPrimaryClip(ClipData.newPlainText("WhatsApp Reply", text))
-            coroutineScope.launch { snackbarHostState.showSnackbar("تم نسخ الرسالة إلى الحافظة") }
+            val copiedMsg = context.getString(R.string.chat_message_copied_toast)
+            coroutineScope.launch { snackbarHostState.showSnackbar(copiedMsg) }
         } catch (_: Exception) {}
 
         val opened = WhatsAppLauncher.openChat(
@@ -505,7 +513,8 @@ private fun openWhatsAppFallback(
             preferBusiness = (packageName == "com.whatsapp.w4b")
         )
         if (!opened) {
-            coroutineScope.launch { snackbarHostState.showSnackbar("تعذر فتح تطبيق واتساب") }
+            val failedMsg = context.getString(R.string.chat_whatsapp_open_failed_toast)
+            coroutineScope.launch { snackbarHostState.showSnackbar(failedMsg) }
         }
     }
 }

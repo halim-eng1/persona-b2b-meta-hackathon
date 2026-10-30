@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.persona.R
 import com.example.persona.features.audit_log.domain.model.AuditLogItem
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -177,7 +179,13 @@ fun AuditLogScreen(
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    listOf("ALL" to "الكل", "RULE" to "قواعد (Rule)", "HEURISTIC" to "سياقي", "MODEL" to "نموذج ذكي", "FALLBACK" to "احتياطي").forEach { (tierKey, label) ->
+                    listOf(
+                        "ALL" to stringResource(R.string.common_all),
+                        "RULE" to stringResource(R.string.audit_log_rule_tier),
+                        "HEURISTIC" to "سياقي",
+                        "MODEL" to "نموذج ذكي",
+                        "FALLBACK" to "احتياطي"
+                    ).forEach { (tierKey, label) ->
                         FilterChip(
                             selected = state.selectedTier == tierKey,
                             onClick = { viewModel.onTierSelected(tierKey) },
@@ -221,7 +229,12 @@ fun AuditLogScreen(
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    listOf("ALL" to "الكل", "SUCCESS" to "ناجح", "ESCALATED_HITL" to "تحويل بشري (HITL)", "ERROR" to "خطأ").forEach { (statusKey, label) ->
+                    listOf(
+                        "ALL" to stringResource(R.string.common_all),
+                        "SUCCESS" to "ناجح",
+                        "ESCALATED_HITL" to stringResource(R.string.audit_log_hitl_escalation),
+                        "ERROR" to "خطأ"
+                    ).forEach { (statusKey, label) ->
                         FilterChip(
                             selected = state.selectedStatus == statusKey,
                             onClick = { viewModel.onStatusSelected(statusKey) },
@@ -568,7 +581,7 @@ private fun AuditLogCard(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        TelemetryBadge(label = "الرموز (Tokens)", value = "إدخال: ${item.promptTokens} | إخراج: ${item.completionTokens}")
+                        TelemetryBadge(label = stringResource(R.string.audit_log_tokens_badge), value = "إدخال: ${item.promptTokens} | إخراج: ${item.completionTokens}")
                         TelemetryBadge(label = "سرعة الاستجابة", value = "${item.latencyMs} ملي ثانية")
                     }
 
@@ -601,7 +614,7 @@ private fun AuditLogCard(
                         ) {
                             Column(modifier = Modifier.padding(8.dp)) {
                                 Text(
-                                    text = "شواهد قاعدة المعرفة المسترجعة (RAG Citations):",
+                                    text = stringResource(R.string.audit_log_rag_citations),
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.tertiary
                                 )

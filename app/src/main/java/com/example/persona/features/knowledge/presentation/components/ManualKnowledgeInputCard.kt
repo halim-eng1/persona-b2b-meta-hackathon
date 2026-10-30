@@ -71,7 +71,7 @@ fun ManualKnowledgeInputCard(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(Icons.Default.Inventory2, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Text("منتج مهيكل (كتالوج)", fontSize = 13.sp, fontWeight = if (inputMode == 0) FontWeight.Bold else FontWeight.Normal)
+                            Text(stringResource(R.string.knowledge_input_mode_catalog), fontSize = 13.sp, fontWeight = if (inputMode == 0) FontWeight.Bold else FontWeight.Normal)
                         }
                     }
                 )
@@ -84,7 +84,7 @@ fun ManualKnowledgeInputCard(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(Icons.Default.TextFields, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Text("نص حر أو سياسة", fontSize = 13.sp, fontWeight = if (inputMode == 1) FontWeight.Bold else FontWeight.Normal)
+                            Text(stringResource(R.string.knowledge_input_mode_free_text), fontSize = 13.sp, fontWeight = if (inputMode == 1) FontWeight.Bold else FontWeight.Normal)
                         }
                     }
                 )
@@ -95,8 +95,8 @@ fun ManualKnowledgeInputCard(
                 OutlinedTextField(
                     value = productName,
                     onValueChange = { productName = it },
-                    label = { Text("اسم المنتج أو الخدمة") },
-                    placeholder = { Text("مثال: سويت شيرت أوفر سايز قطن") },
+                    label = { Text(stringResource(R.string.knowledge_input_product_name_label)) },
+                    placeholder = { Text(stringResource(R.string.knowledge_input_product_name_placeholder)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
@@ -113,7 +113,7 @@ fun ManualKnowledgeInputCard(
                                 priceEgp = it
                             }
                         },
-                        label = { Text("السعر (ج.م)") },
+                        label = { Text(stringResource(R.string.knowledge_input_price_label)) },
                         placeholder = { Text("350") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f),
@@ -124,8 +124,8 @@ fun ManualKnowledgeInputCard(
                     OutlinedTextField(
                         value = variations,
                         onValueChange = { variations = it },
-                        label = { Text("المقاسات والألوان") },
-                        placeholder = { Text("أسود، كحلي / L, XL") },
+                        label = { Text(stringResource(R.string.knowledge_input_variations_label)) },
+                        placeholder = { Text(stringResource(R.string.knowledge_input_variations_placeholder)) },
                         modifier = Modifier.weight(1.5f),
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true
@@ -135,7 +135,7 @@ fun ManualKnowledgeInputCard(
                 // Category Chips
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "التصنيف:",
+                        text = stringResource(R.string.knowledge_input_category_label),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -164,7 +164,7 @@ fun ManualKnowledgeInputCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = if (inStock) "متوفر بالمخزن" else "نفد من المخزن",
+                            text = if (inStock) stringResource(R.string.knowledge_input_in_stock) else stringResource(R.string.knowledge_input_out_of_stock),
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (inStock) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                             fontWeight = FontWeight.Medium
@@ -209,7 +209,7 @@ fun ManualKnowledgeInputCard(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "إضافة للمتجر", fontWeight = FontWeight.Bold)
+                            Text(text = stringResource(R.string.knowledge_input_btn_add_to_catalog), fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -266,7 +266,7 @@ fun ManualKnowledgeInputCard(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "إضافة", fontWeight = FontWeight.Bold)
+                            Text(text = stringResource(R.string.common_add), fontWeight = FontWeight.Bold)
                         }
                     }
                 }

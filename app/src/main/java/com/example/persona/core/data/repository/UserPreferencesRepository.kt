@@ -102,6 +102,10 @@ class UserPreferencesRepository @Inject constructor(
         // ── Auto-Start Onboarding Confirmation ─────────────────────────────────
         val KEY_AUTO_START_CONFIRMED = booleanPreferencesKey("is_auto_start_confirmed")
 
+        // ── App Language & Locale ──────────────────────────────────────────────
+        val KEY_APP_LANGUAGE = stringPreferencesKey("app_language")
+        const val DEFAULT_APP_LANGUAGE = "ar"
+
         // ── Business Hours & Blacklist ────────────────────────────────────────
         val KEY_BUSINESS_HOURS_ENABLED = booleanPreferencesKey("business_hours_enabled")
         val KEY_BUSINESS_HOURS_DAYS = stringPreferencesKey("business_hours_days")
@@ -133,22 +137,17 @@ class UserPreferencesRepository @Inject constructor(
             ModelProviders.NARA
         )
 
-        val DEFAULT_PROVIDER_MODELS = mapOf(
-            ModelProviders.QWEN to listOf("qwen-max-latest", "qwen-plus", "qwen-turbo"),
-            ModelProviders.GEMINI to listOf("gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash"),
-            ModelProviders.GROQ to listOf("llama-3.3-70b-versatile", "whisper-large-v3", "mixtral-8x7b-32768"),
-            ModelProviders.NVIDIA to listOf("meta/llama-3.1-70b-instruct", "mistralai/mixtral-8x22b-instruct-v0.1"),
-            ModelProviders.OPENROUTER to listOf("anthropic/claude-3.5-sonnet", "openai/gpt-4o", "deepseek/deepseek-chat"),
-            ModelProviders.CLOUDFLARE to listOf("@cf/meta/llama-3.1-8b-instruct", "@cf/meta/llama-3.1-70b-instruct"),
-            ModelProviders.LIQUID to listOf("liquid-lfm-40b", "liquid-lfm-7b"),
-            ModelProviders.NARA to listOf("nara-arabic-base", "nara-chat")
-        )
+        val DEFAULT_PROVIDER_MODELS = ModelProviders.DEFAULT_MODELS
     }
 
     // ── Flows ─────────────────────────────────────────────────────────────────
 
     val isAutoReplyEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[KEY_AUTO_REPLY_ENABLED] ?: false
+    }
+
+    val appLanguageFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
     }
 
     val stylePreferences: Flow<StylePreferences> = dataStore.data.map { prefs ->
@@ -219,6 +218,18 @@ class UserPreferencesRepository @Inject constructor(
 
     val nvidiaApiKeyFlow: Flow<String?> = secureCredentialsRepository.nvidiaApiKeyFlow
     val qwenApiKeyFlow: Flow<String?> = secureCredentialsRepository.qwenApiKeyFlow
+
+    val cloudflareAccountIdFlow: Flow<String> = secureCredentialsRepository.cloudflareAccountIdFlow.map {
+        it?.takeIf { id -> id.isNotBlank() } ?: secureCredentialsRepository.getCloudflareAccountId()
+    }
+
+    fun getCloudflareAccountId(): String = secureCredentialsRepository.getCloudflareAccountId()
+
+    suspend fun getCloudflareAccountIdSync(): String = secureCredentialsRepository.getCloudflareAccountId()
+
+    suspend fun setCloudflareAccountId(accountId: String?) {
+        secureCredentialsRepository.setCloudflareAccountId(accountId)
+    }
 
     // ── AutoStart Confirmation Persistence ─────────────────────────────────────
 
@@ -428,6 +439,12 @@ class UserPreferencesRepository @Inject constructor(
         dataStore.edit { prefs -> prefs[KEY_AUTO_REPLY_ENABLED] = enabled }
     }
 
+    suspend fun setAppLanguage(lang: String) {
+        dataStore.edit { prefs ->
+            prefs[KEY_APP_LANGUAGE] = lang.trim().lowercase()
+        }
+    }
+
     suspend fun setStylePreferences(stylePreferences: StylePreferences) {
         dataStore.edit { prefs ->
             prefs[KEY_PERSONA_TONE] = stylePreferences.personaTone.name
@@ -511,6 +528,9 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun isAutoReplyEnabledSync(): Boolean =
         dataStore.data.first()[KEY_AUTO_REPLY_ENABLED] ?: false
+
+    suspend fun getAppLanguageSync(): String =
+        dataStore.data.first()[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
 
     suspend fun getStylePreferencesSync(): StylePreferences {
         val prefs = dataStore.data.first()

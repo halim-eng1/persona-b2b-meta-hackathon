@@ -20,10 +20,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.R
 import com.example.persona.features.audit_log.domain.model.AuditLogItem
 import com.example.persona.ui.components.AvatarShape
 import com.example.persona.ui.components.PersonaAvatar
@@ -321,14 +323,14 @@ fun B2BOperationalMetricsHub(
                 modifier = Modifier.weight(1f),
                 icon = Icons.AutoMirrored.Filled.ReceiptLong,
                 value = todayOrders.toString(),
-                label = "طلبات اليوم",
+                label = stringResource(R.string.home_stat_today_orders),
                 iconTint = MaterialTheme.colorScheme.primary
             )
             StatCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.MonetizationOn,
-                value = "${pendingRevenue.coerceAtLeast(0.0).roundToInt()} ج.م",
-                label = "إيرادات قيد التجهيز",
+                value = "${pendingRevenue.coerceAtLeast(0.0).roundToInt()} EGP",
+                label = stringResource(R.string.home_stat_pending_revenue),
                 iconTint = MaterialTheme.colorScheme.tertiary
             )
         }
@@ -340,15 +342,15 @@ fun B2BOperationalMetricsHub(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.SupportAgent,
                 value = waitingCount.toString(),
-                label = "عملاء في الانتظار",
+                label = stringResource(R.string.home_stat_waiting_customers),
                 iconTint = if (waitingCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
             )
             StatCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.SmartToy,
                 value = todayReplies.toString(),
-                label = "ردود البوت اليوم",
-                subLabel = "إجمالي: $totalReplies",
+                label = stringResource(R.string.home_stat_bot_replies),
+                subLabel = stringResource(R.string.home_stat_total_prefix, totalReplies),
                 iconTint = MaterialTheme.colorScheme.primary
             )
         }
@@ -375,7 +377,7 @@ fun QuickActionsSection(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                text = "الإجراءات السريعة (Quick Actions)",
+                text = stringResource(R.string.quick_actions_title),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -387,13 +389,13 @@ fun QuickActionsSection(
                 QuickActionButton(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.AddShoppingCart,
-                    label = "كتالوج المنتجات",
+                    label = stringResource(R.string.home_action_catalog),
                     onClick = onNavigateToKnowledge
                 )
                 QuickActionButton(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.CloudDownload,
-                    label = "استيراد محادثات",
+                    label = stringResource(R.string.home_action_import),
                     onClick = onNavigateToImport
                 )
             }
@@ -405,13 +407,13 @@ fun QuickActionsSection(
                 QuickActionButton(
                     modifier = Modifier.weight(1f),
                     icon = Icons.AutoMirrored.Filled.ReceiptLong,
-                    label = "تجهيز الطلبات",
+                    label = stringResource(R.string.home_action_orders),
                     onClick = onNavigateToOrders
                 )
                 QuickActionButton(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.People,
-                    label = "دليل العملاء CRM",
+                    label = stringResource(R.string.home_action_contacts),
                     onClick = onNavigateToContacts
                 )
             }

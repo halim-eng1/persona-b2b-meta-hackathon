@@ -371,13 +371,13 @@ class AutoReplyOrchestrator @Inject constructor(
             incrementUnread = true
         )
 
-        // 2. Gate check: allowed if Global is ON and not individually paused, OR if explicitly overridden ON for this specific chat
+        // 2. Gate check: allowed if not individually paused AND (Global is ON or explicitly overridden ON for this specific chat)
         val isGlobalAutoReplyEnabled = prefsRepository.isAutoReplyEnabledSync()
         val convMeta = conversationMetadataDao.getConversation(processed.contactName, sourceClassStr)
         val isContactPaused = convMeta?.isAiPaused == true
         val isContactOverride = convMeta?.isAiOverrideEnabled == true
 
-        val isAutoReplyAllowedForContact = (isGlobalAutoReplyEnabled && !isContactPaused) || (!isGlobalAutoReplyEnabled && isContactOverride)
+        val isAutoReplyAllowedForContact = !isContactPaused && (isGlobalAutoReplyEnabled || isContactOverride)
         if (!isAutoReplyAllowedForContact) {
             PersonaLogger.d(
                 PersonaLogTags.ORCHESTRATOR,
@@ -539,13 +539,13 @@ class AutoReplyOrchestrator @Inject constructor(
 
         // 4. Sequential single-embedding pipeline is executed at Step 11 to prevent ONNX lock contention.
 
-        // 5. Execution gatekeeper: allowed if Global is ON and not individually paused, OR if explicitly overridden ON for this specific chat
+        // 5. Execution gatekeeper: allowed if not individually paused AND (Global is ON or explicitly overridden ON for this specific chat)
         val isGlobalAutoReplyEnabled = prefsRepository.isAutoReplyEnabledSync()
         val convMeta = conversationMetadataDao.getConversation(processed.contactName, sourceClassStr)
         val isContactPaused = convMeta?.isAiPaused == true
         val isContactOverride = convMeta?.isAiOverrideEnabled == true
 
-        val isAutoReplyAllowedForContact = (isGlobalAutoReplyEnabled && !isContactPaused) || (!isGlobalAutoReplyEnabled && isContactOverride)
+        val isAutoReplyAllowedForContact = !isContactPaused && (isGlobalAutoReplyEnabled || isContactOverride)
         if (!isAutoReplyAllowedForContact) {
             PersonaLogger.d(
                 PersonaLogTags.ORCHESTRATOR,
@@ -1144,7 +1144,7 @@ class AutoReplyOrchestrator @Inject constructor(
             val isPreExecGlobalOn = prefsRepository.isAutoReplyEnabledSync()
             val isPreExecPaused = preExecConv?.isAiPaused == true
             val isPreExecOverride = preExecConv?.isAiOverrideEnabled == true
-            val isPreExecAllowed = (isPreExecGlobalOn && !isPreExecPaused) || (!isPreExecGlobalOn && isPreExecOverride)
+            val isPreExecAllowed = !isPreExecPaused && (isPreExecGlobalOn || isPreExecOverride)
             if (!isPreExecAllowed) {
                 Log.i(TAG, "AI auto-reply turn aborted before execution: suppressed for ${processed.contactName} (Global=$isPreExecGlobalOn, Paused=$isPreExecPaused, Override=$isPreExecOverride)")
                 return
@@ -1248,7 +1248,7 @@ class AutoReplyOrchestrator @Inject constructor(
         val isPreExecGlobalOn = prefsRepository.isAutoReplyEnabledSync()
         val isPreExecPaused = preExecConv?.isAiPaused == true
         val isPreExecOverride = preExecConv?.isAiOverrideEnabled == true
-        val isPreExecAllowed = (isPreExecGlobalOn && !isPreExecPaused) || (!isPreExecGlobalOn && isPreExecOverride)
+        val isPreExecAllowed = !isPreExecPaused && (isPreExecGlobalOn || isPreExecOverride)
         if (!isPreExecAllowed) {
             Log.i(TAG, "Immediate AI reply aborted before execution: suppressed for ${processed.contactName} (Global=$isPreExecGlobalOn, Paused=$isPreExecPaused, Override=$isPreExecOverride)")
             return

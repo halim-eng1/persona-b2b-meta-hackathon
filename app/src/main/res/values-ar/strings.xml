@@ -1,0 +1,330 @@
+<resources>
+    <string name="app_name">Persona B2B</string>
+
+    <!-- ── Orchestrator: Tier A short-circuit templates ─────────────────────── -->
+    <!-- Greeting response (shown when ContextDetector classifies query as GREETING) -->
+    <string name="greeting_template_default">أهلاً بك في متجرنا! كيف يمكننا مساعدتك اليوم؟ 🥰</string>
+
+    <!-- Farewell / closing response (shown when ContextDetector classifies query as CLOSING) -->
+    <string name="farewell_template_default">سعدنا بخدمتك! لو عندك أي استفسار آخر، لا تتردد في مراسلتنا. 🌟</string>
+
+    <!-- ── Orchestrator: Tier B HITL fallback templates ─────────────────────── -->
+    <!-- Holding message sent to the customer when RAG confidence is below threshold -->
+    <string name="hitl_holding_message">تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏</string>
+
+    <!-- Notification title for the HITL alarm shown to the business owner -->
+    <string name="hitl_alarm_title">⚠️ تنبيه: عميل يحتاج مساعدة فورية</string>
+
+    <!-- Notification body for the HITL alarm -->
+    <string name="hitl_alarm_body">لم يتمكن المساعد الآلي من الإجابة على استفسار العميل. يرجى المتابعة يدوياً.</string>
+
+    <!-- ── Orchestrator: Media fallback message ──────────────────────────────── -->
+    <!-- Sent when the incoming notification contains media (image/video/audio) -->
+    <string name="media_fallback_message">عفواً، لا يمكنني معالجة الوسائط. يرجى كتابة استفسارك في رسالة نصية.</string>
+
+    <!-- Fallback when model produces blank reply -->
+    <string name="blank_reply_fallback_template">أنا معاك وسامعك كويس يا فندم، بس قولّي نقدر نجهزلك إيه النهارده من منتجاتنا؟ 💙</string>
+
+    <!-- ── Common Actions & Labels ─────────────────────────────────────────────── -->
+    <string name="common_save">حفظ</string>
+    <string name="common_close">إغلاق</string>
+    <string name="common_delete">حذف</string>
+    <string name="common_delete_all">حذف الكل</string>
+    <string name="common_cancel">إلغاء</string>
+    <string name="common_add">إضافة</string>
+    <string name="common_edit">تعديل</string>
+    <string name="common_send">إرسال</string>
+    <string name="common_all">الكل</string>
+    <string name="common_back">رجوع</string>
+
+    <!-- ── Home & Dashboard ────────────────────────────────────────────────────── -->
+    <string name="home_dashboard_title">لوحة التحكم</string>
+    <string name="home_dashboard_subtitle">Persona B2B — مركز القيادة والمتابعة</string>
+    <string name="home_recent_activity_title">آخر العمليات والردود</string>
+    <string name="home_view_all_audit_log">عرض الكل في سجل التدقيق</string>
+    <string name="home_empty_knowledge_title">كتالوج وقاعدة بيانات المتجر فارغة</string>
+    <string name="home_empty_knowledge_desc">أضف منتجاتك أو استورد محادثات الواتساب القديمة لتدريب المساعد على الأسعار وسياسات الشحن.</string>
+    <string name="home_btn_add_knowledge">إضافة معرفة ومنتجات للمتجر</string>
+    <string name="home_stat_today_orders">طلبات اليوم</string>
+    <string name="home_stat_pending_revenue">إيرادات قيد التجهيز</string>
+    <string name="home_stat_waiting_customers">عملاء في الانتظار</string>
+    <string name="home_stat_bot_replies">ردود البوت اليوم</string>
+    <string name="home_stat_total_prefix">إجمالي: %d</string>
+    <string name="home_action_catalog">كتالوج المنتجات</string>
+    <string name="home_action_import">استيراد محادثات</string>
+    <string name="home_action_orders">تجهيز الطلبات</string>
+    <string name="home_action_contacts">دليل العملاء CRM</string>
+
+    <!-- ── Knowledge Management UI ────────────────────────────────────────────── -->
+    <string name="knowledge_management_title">إدارة قاعدة المعرفة</string>
+    <string name="knowledge_add_hint">أضف معلومة أو عرضاً جديداً...</string>
+    <string name="knowledge_source_core">ملف مستورد</string>
+    <string name="knowledge_source_manual">إدخال يدوي</string>
+    <string name="knowledge_source_offer">عرض مؤقت</string>
+    <string name="knowledge_empty_state">لا توجد معلومات في قاعدة المعرفة بعد.\nاستورد ملف Markdown أو أضف إدخالاً يدوياً.</string>
+    <string name="knowledge_clear_confirm_title">مسح قاعدة المعرفة بالكامل؟</string>
+    <string name="knowledge_clear_confirm_message">هل أنت متأكد من حذف جميع المقاطع والبيانات المخزنة؟ ستتمكن من استيراد ملف جديد بالكامل أو إعادة إدخال الكتالوج.</string>
+    <string name="knowledge_tab_catalog">كتالوج المتجر والمعرفة</string>
+    <string name="knowledge_tab_pending_queries">الاستفسارات المعلقة</string>
+    <string name="knowledge_search_placeholder">بحث في المنتجات والسياسات...</string>
+    <string name="knowledge_search_clear">مسح البحث</string>
+    <string name="knowledge_search_no_results">لا توجد نتائج مطابقة لبحثك.</string>
+    <string name="knowledge_filter_all">الكل</string>
+    <string name="knowledge_filter_product">المنتجات</string>
+    <string name="knowledge_filter_policy">السياسات والشحن</string>
+    <string name="knowledge_filter_offer">عروض مؤقتة</string>
+    <string name="knowledge_catalog_items_count">عناصر الكتالوج (%d)</string>
+    <string name="knowledge_hitl_inbox_title">صندوق الاستفسارات التي عجز عنها المساعد الآلي</string>
+    <string name="knowledge_hitl_empty">رائع! لا توجد أي استفسارات معلقة من الزبائن.</string>
+    <string name="bot_simulator_fab">محاكي البوت</string>
+    <string name="knowledge_edit_dialog_title">تعديل معلومة / منتج</string>
+    <string name="knowledge_edit_section_label">القسم: %s</string>
+    <string name="knowledge_edit_text_label">نص المعلومة أو مواصفات المنتج</string>
+    <string name="knowledge_edit_save_button">حفظ وتحديث المتجه</string>
+    <string name="knowledge_delete_dialog_title">حذف هذه المعلومة؟</string>
+    <string name="knowledge_delete_dialog_message">هل أنت متأكد من حذف هذا المقطع من قاعدة المعرفة؟ سيتم مسح المتجه الدلالي المقابل ولن يتمكن البوت من استخدامه للرد.</string>
+    <string name="knowledge_delete_confirm_btn">حذف نهائي</string>
+    <string name="knowledge_answer_query_title">إضافة إجابة معتمدة لسؤال العميل</string>
+    <string name="knowledge_answer_query_customer_prefix">سؤال العميل (%s):</string>
+    <string name="knowledge_answer_query_label">إجابة المتجر المعتمدة</string>
+    <string name="knowledge_answer_query_placeholder">اكتب الإجابة الرسمية التي سيتعلمها البوت للرد مستقبلاً...</string>
+    <string name="knowledge_answer_query_is_offer">تصنيف كعرض ترويجي مؤقت</string>
+    <string name="knowledge_answer_query_confirm_btn">اعتماد الإجابة وتحديث المعرفة</string>
+    <string name="knowledge_input_mode_catalog">منتج مهيكل (كتالوج)</string>
+    <string name="knowledge_input_mode_free_text">نص حر أو سياسة</string>
+    <string name="knowledge_input_product_name_label">اسم المنتج أو الخدمة</string>
+    <string name="knowledge_input_product_name_placeholder">مثال: سويت شيرت أوفر سايز قطن</string>
+    <string name="knowledge_input_price_label">السعر (ج.م)</string>
+    <string name="knowledge_input_variations_label">المقاسات والألوان</string>
+    <string name="knowledge_input_variations_placeholder">أسود، كحلي / L, XL</string>
+    <string name="knowledge_input_category_label">التصنيف:</string>
+    <string name="knowledge_input_in_stock">متوفر بالمخزن</string>
+    <string name="knowledge_input_out_of_stock">نفد من المخزن</string>
+    <string name="knowledge_input_btn_add_to_catalog">إضافة للمتجر</string>
+
+    <!-- ── Orders & Manifest ──────────────────────────────────────────────────── -->
+    <string name="order_action_note">ملاحظة</string>
+    <string name="order_action_note_recorded">ملاحظة مسجلة</string>
+    <string name="order_action_waybill">بوليصة</string>
+    <string name="order_action_waybill_desc">بوليصة الشحن</string>
+    <string name="order_action_edit">تعديل</string>
+    <string name="order_action_edit_desc">تعديل الطلب</string>
+    <string name="order_status_start_prep">بدء التجهيز</string>
+    <string name="order_status_handover_courier">تسليم للمندوب</string>
+    <string name="order_status_mark_delivered">تم التسليم</string>
+    <string name="order_status_delivered_success">تم التسليم بنجاح</string>
+    <string name="order_status_cancelled_badge">طلب ملغي</string>
+    <string name="order_status_returned_badge">شحنة مرتجعة</string>
+    <string name="order_status_pending">قيد الانتظار</string>
+    <string name="order_status_in_prep">قيد التجهيز</string>
+    <string name="order_status_shipped">مع المندوب 🚚</string>
+    <string name="order_status_delivered">تم التسليم</string>
+    <string name="order_status_cancelled">ملغي</string>
+
+    <!-- ── Bot Simulator & Reasoning Traces ───────────────────────────────────── -->
+    <string name="sim_header_title">محاكي بوت واتساب الذكي</string>
+    <string name="sim_header_subtitle">متصل الآن • بيئة الاختبار والمحاكاة</string>
+    <string name="sim_btn_new_chat">محادثة جديدة</string>
+    <string name="sim_btn_close">إغلاق</string>
+    <string name="sim_welcome_title">مرحباً بك في محاكي المساعد الآلي!</string>
+    <string name="sim_welcome_desc">ابدأ بكتابة رسالة عميل افتراضية، أو اختر أحد الأسئلة السريعة أعلاه، أو أرفق صورة منتج / رسالة صوتية لاختبار مسار التفكير والاسترجاع كاملاً.</string>
+    <string name="sim_media_image_title">صورة مرفقة للتحليل البصري</string>
+    <string name="sim_media_image_subtitle">سيتم تفعيل مسار الرؤية البصرية</string>
+    <string name="sim_media_audio_title">تسجيل صوتي مرفق</string>
+    <string name="sim_media_audio_subtitle">سيتم تفريغ الصوت آلياً عبر محرك ASR</string>
+    <string name="sim_media_clear">إلغاء المرفق</string>
+    <string name="sim_action_pick_image">اختيار صورة</string>
+    <string name="sim_action_pick_audio">اختيار تسجيل صوتي</string>
+    <string name="sim_input_placeholder_media">أضف تعليقاً على المرفق (اختياري)...</string>
+    <string name="sim_input_placeholder_text">اكتب رسالة العميل الافتراضية...</string>
+    <string name="sim_voice_note_label">تسجيل صوتي</string>
+    <string name="sim_typing_indicator">المساعد يحلل الرسالة ويسترجع البيانات...</string>
+    <string name="sim_media_preview_desc">معاينة المرفق</string>
+    <string name="sim_sample_query_1">بكام التيشيرت الأوفر سايز؟</string>
+    <string name="sim_sample_query_2">مصاريف الشحن للقاهرة والجيزة كام؟</string>
+    <string name="sim_sample_query_3">عايز أطلب 2 تيشيرت أسود لمدينة نصر 01012345678</string>
+    <string name="sim_sample_query_4">هل متاح استبدال أو استرجاع؟</string>
+    <string name="sim_sample_query_5">عايز ألغي الأوردر</string>
+    <string name="sim_sample_query_6">طرق الدفع المتاحة إيه؟</string>
+
+    <string name="trace_thinking_steps">⚡ خطوات التفكير والقرار (استغرق %s ثانية)</string>
+    <string name="trace_intent_title">النية المكتشفة</string>
+    <string name="trace_asr_title">تفريغ الصوت</string>
+    <string name="trace_vision_title">تحليل الصورة البصري</string>
+    <string name="trace_rag_title">المقاطع المسترجعة من الكتالوج</string>
+    <string name="trace_rag_match_format">%1$d مقاطع (تطابق: %2$d%%)</string>
+    <string name="trace_rag_empty">لم تتطلب النية استرجاع مقاطع من قاعدة المعرفة.</string>
+    <string name="trace_rag_expand">معاينة المقاطع المسترجعة (%d) ▼</string>
+    <string name="trace_rag_collapse">إخفاء المقاطع ▲</string>
+    <string name="trace_requery_title">إعادة البحث الدلالي</string>
+    <string name="trace_requery_active">مفعلة (جولة ثانية)</string>
+    <string name="trace_requery_inactive">غير مطلوبة (مباشر)</string>
+    <string name="trace_llm_title">النموذج المستجيب</string>
+    <string name="trace_order_action_title">إجراء الطلب</string>
+    <string name="trace_order_details_header">تفاصيل الطلب المستخرج آلياً:</string>
+    <string name="trace_order_customer_name">اسم العميل: %s</string>
+    <string name="trace_order_customer_phone">رقم الهاتف: %s</string>
+    <string name="trace_order_address">العنوان: %s</string>
+    <string name="trace_order_products">المنتجات: %s</string>
+    <string name="trace_order_total">الإجمالي: %s ج.م</string>
+    <string name="trace_order_notes">ملاحظات: %s</string>
+    <string name="trace_order_none">لم يتم اكتشاف تفاصيل طلب مستخرج في هذا الرد.</string>
+    <string name="trace_system_prompt_title">برومبت النظام الكامل</string>
+    <string name="trace_prompt_expand">معاينة البرومبت (%d حرف) ▼</string>
+    <string name="trace_prompt_collapse">إخفاء البرومبت ▲</string>
+    <string name="trace_prompt_preview_header">معاينة برومبت النظام:</string>
+    <string name="trace_copy_prompt">نسخ البرومبت</string>
+    <string name="trace_chunk_default_header">معلومة متجر</string>
+    <string name="trace_chunk_accuracy">%d%% دقة</string>
+    <string name="trace_chunk_expand">عرض النص كاملاً ▼</string>
+    <string name="trace_chunk_collapse">إخفاء التفاصيل ▲</string>
+
+    <!-- ── Navigation ──────────────────────────────────────────────────────────── -->
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_conversations">المحادثات</string>
+    <string name="nav_orders">الطلبات</string>
+    <string name="nav_knowledge">قاعدة المعرفة</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <!-- ── Key Titles (Eliminated Hybrid Strings) ──────────────────────────────── -->
+    <string name="daily_metrics_title">مؤشرات التشغيل اليومية</string>
+    <string name="quick_actions_title">الإجراءات السريعة</string>
+    <string name="bot_simulator_title">محاكي ردود البوت</string>
+
+    <!-- ── Settings Screen & Tabs ──────────────────────────────────────────────── -->
+    <string name="settings_title">إعدادات المتجر والروبوت</string>
+    <string name="settings_subtitle">إدارة محركات الذكاء الاصطناعي، الهوية، الأمان والتوجيه</string>
+
+    <string name="settings_tab_ai">الذكاء الاصطناعي</string>
+    <string name="settings_tab_identity">هوية المتجر</string>
+    <string name="settings_tab_hours">مواعيد العمل</string>
+    <string name="settings_tab_routing">توجيه واتساب</string>
+    <string name="settings_tab_maintenance">الصيانة والأمان</string>
+
+    <!-- ── Settings AI Engines Section ─────────────────────────────────────────── -->
+    <string name="settings_ai_priority_title">سلسلة أولويات مزودي الذكاء الاصطناعي</string>
+    <string name="settings_ai_priority_subtitle">رتّب أولوية المزودين؛ في حال تعثر المزود الأول أو نفاد رصيده يتم الانتقال تلقائياً للمزود التالي.</string>
+    <string name="settings_ai_keys_count">%d مفتاح API مسجل</string>
+    <string name="settings_ai_provider_guide_btn">شرح الاستخراج ℹ️</string>
+    <string name="settings_ai_manage_provider_title">إدارة المفاتيح والنماذج للمزود المختار</string>
+    <string name="settings_ai_manage_provider_subtitle">اختر المزود لإضافة عدد غير محدود من المفاتيح والنماذج المدعومة.</string>
+    <string name="settings_ai_keys_for_provider">مفاتيح الـ API لمزود %s</string>
+    <string name="settings_ai_keys_subtitle">يمكنك إضافة مفاتيح متعددة مع فحص اتصال كل مفتاح بشكل مباشر.</string>
+    <string name="settings_ai_guide_title">دليل الحصول على المفتاح لمزود %s</string>
+    <string name="settings_ai_cloudflare_account_id_title">معرّف حساب كلاودفلير</string>
+    <string name="settings_ai_cloudflare_account_id_subtitle">مطلوب لتشغيل نماذج Workers AI بجانب رمز الـ API</string>
+    <string name="settings_ai_no_keys">لا توجد مفاتيح مسجلة لهذا المزود حتى الآن. سيتم استخدام المفاتيح الافتراضية إذا توفرت.</string>
+    <string name="settings_ai_key_label">مفتاح #%d</string>
+    <string name="settings_ai_status_untested">لم يتم الفحص بعد</string>
+    <string name="settings_ai_status_checking">جارٍ فحص الاتصال...</string>
+    <string name="settings_ai_ping_btn">فحص الاتصال</string>
+    <string name="settings_ai_add_key_label">إضافة مفتاح API جديد</string>
+    <string name="settings_ai_models_title">نماذج الذكاء الاصطناعي لمزود %s</string>
+    <string name="settings_ai_models_subtitle">يمكنك تعديل ترتيب النماذج، حذف النماذج غير المرغوبة، أو إضافة كود نموذج مخصص.</string>
+    <string name="settings_ai_add_model_label">إضافة كود نموذج مخصص</string>
+    <string name="guide_portal_link_label">رابط المنصة الرسمي:</string>
+    <string name="guide_steps_header">خطوات الحصول على المفتاح:</string>
+    <string name="guide_copy_prompt_btn">اجعل الذكاء الاصطناعي يرشدك</string>
+
+    <!-- ── Language Preference ────────────────────────────────────────────────── -->
+    <string name="settings_language_title">لغة التطبيق</string>
+    <string name="settings_language_subtitle">اختر لغة واجهة التطبيق واتجاه العرض</string>
+    <string name="language_arabic">العربية</string>
+    <string name="language_arabic_sub">العربية (RTL)</string>
+    <string name="language_english">English</string>
+    <string name="language_english_sub">الإنجليزية (LTR)</string>
+
+    <!-- ── Store Identity Section ─────────────────────────────────────────────── -->
+    <string name="settings_store_identity_title">هوية المتجر وممثل خدمة العملاء</string>
+    <string name="settings_store_identity_subtitle">حدد اسم البوت واسم المتجر أو العلامة التجارية لاستخدامهما في ردود الذكاء الاصطناعي</string>
+    <string name="settings_bot_name_label">اسم ممثل خدمة العملاء</string>
+    <string name="settings_bot_name_placeholder">مثال: سارة / مساعد المبيعات</string>
+    <string name="settings_store_name_label">اسم المتجر أو العلامة التجارية</string>
+    <string name="settings_store_name_placeholder">مثال: متجر الأناقة / متجرنا</string>
+
+    <!-- ── AI Persona Tone Section ────────────────────────────────────────────── -->
+    <string name="settings_persona_tone_title">شخصية ونبرة الرد للروبوت</string>
+    <string name="settings_persona_tone_subtitle">اختر الأسلوب واللهجة التي يتحدث بها البوت مع زبائنك في واتساب</string>
+
+    <!-- ── Response Templates Section ─────────────────────────────────────────── -->
+    <string name="settings_templates_title">قوالب الردود السريعة</string>
+    <string name="settings_templates_subtitle">رسائل مخصصة للتحية والترحيب الأولي أو ختام المحادثة</string>
+    <string name="settings_greeting_template_label">قالب رسالة الترحيب</string>
+    <string name="settings_farewell_template_label">قالب رسالة الختام</string>
+
+    <!-- ── Timing & Delays Section ────────────────────────────────────────────── -->
+    <string name="settings_timing_title">توقيت الردود وسرعة التفاعل</string>
+    <string name="settings_timing_subtitle">ضبط فترة الانتظار بين الردود لمحاكاة الكتابة البشرية الطبيعية</string>
+    <string name="settings_reply_delay_label">تأخير الرد بالثواني</string>
+    <string name="settings_reply_delay_hint">يمنح العميل إحساساً بأن شخصاً حقيقياً يقرأ ويكتب الرد</string>
+
+    <!-- ── Match Sensitivity & Cooldown ───────────────────────────────────────── -->
+    <string name="settings_sensitivity_title">حساسية المطابقة للأسئلة</string>
+    <string name="settings_sensitivity_subtitle">التحكم في مدى دقة التطابق المطلوبة مع قاعدة المعرفة للرد التلقائي</string>
+    <string name="settings_cooldown_title">فترة التهدئة بين الرسائل</string>
+    <string name="settings_cooldown_subtitle">أقل وقت انتظار مسموح به قبل إعادة الرد تلقائياً على نفس المحادثة</string>
+
+    <!-- ── Chat Detail & TopBar ────────────────────────────────────────────────── -->
+    <string name="chat_composer_placeholder">اكتب رداً يدوياً للعميل...</string>
+    <string name="chat_active_exception_badge">نشط (استثناء فردي)</string>
+    <string name="chat_status_ready">● جاهز • </string>
+    <string name="chat_status_awaiting">○ بانتظار الإشعارات</string>
+    <string name="chat_status_ai_paused_global">الرد الآلي متوقف عاماً</string>
+    <string name="chat_status_ai_paused">الرد الآلي متوقف</string>
+    <string name="chat_open_whatsapp">فتح المحادثة في واتساب</string>
+    <string name="chat_more_options">خيارات إضافية</string>
+    <string name="chat_resolve_attention">حل التنبيه</string>
+    <string name="chat_export_chat">تصدير المحادثة</string>
+    <string name="chat_clear_chat">مسح المحادثة</string>
+    <string name="chat_attention_alert_banner">⚠️ تنبيه: العميل بحاجة لتدخل بشري</string>
+    <string name="chat_ai_paused_banner_global">الرد الآلي العام متوقف — اضغط لتفعيل استثناء لهذه المحادثة</string>
+    <string name="chat_ai_paused_banner_single">الرد الآلي متوقف لهذه المحادثة — اضغط للاستئناف</string>
+    <string name="chat_active_order_banner">طلب نشط: %s</string>
+    <string name="chat_order_cod_amount">%1$d ج.م (دفع عند الاستلام)</string>
+    <string name="chat_load_older_messages">تحميل رسائل أقدم (%1$d من %2$d)</string>
+    <string name="chat_message_copied_toast">تم نسخ الرسالة إلى الحافظة</string>
+    <string name="chat_sender_you_manual">أنت (يدوي)</string>
+    <string name="chat_media_voice_desc">تسجيل صوتي</string>
+    <string name="chat_media_voice_transcribed">تسجيل صوتي مفرغ</string>
+    <string name="chat_media_attached_hint">مرفق وسائط — افتح تطبيق واتساب للعرض</string>
+    <string name="chat_status_sending">جارٍ الإرسال</string>
+    <string name="chat_status_sent">تم الإرسال</string>
+    <string name="chat_status_queued">في قائمة الانتظار</string>
+    <string name="chat_status_failed">فشل الإرسال</string>
+    <string name="chat_action_retry">إعادة المحاولة</string>
+    <string name="chat_action_open_in_whatsapp">فتح في واتساب</string>
+    <string name="chat_whatsapp_open_failed_toast">تعذر فتح تطبيق واتساب</string>
+    <string name="chat_share_chooser_title">مشاركة سجل المحادثة</string>
+    <string name="chat_share_open_failed_toast">تعذر فتح قائمة المشاركة</string>
+    <string name="export_chat_dialog_title">تصدير المحادثة</string>
+    <string name="export_chat_dialog_prompt">اختر النطاق الزمني لسجل المحادثة المراد تصديره:</string>
+    <string name="export_chat_dialog_confirm">تصدير ومشاركة</string>
+    <string name="clear_chat_dialog_title">مسح سجل المحادثة</string>
+    <string name="clear_chat_dialog_warning">سيتم حذف الرسائل المحددة نهائياً من الذاكرة المحلية.</string>
+    <string name="clear_chat_dialog_confirm">مسح</string>
+    <string name="export_range_all_time">كامل المحادثة</string>
+    <string name="export_range_today">محادثة اليوم</string>
+    <string name="export_range_last_two_hours">آخر ساعتين</string>
+    <string name="export_range_all_time_sub">كافة الرسائل المسجلة</string>
+    <string name="export_range_today_sub">رسائل اليوم</string>
+    <string name="export_range_last_two_hours_sub">رسائل آخر ساعتين</string>
+    <string name="clear_range_last_hour">آخر ساعة</string>
+    <string name="clear_range_last_two_hours">آخر ساعتين</string>
+    <string name="clear_range_today">اليوم</string>
+    <string name="clear_range_all_time">كامل المحادثة</string>
+
+    <!-- ── Studio / Chat Import ────────────────────────────────────────────────── -->
+    <string name="chat_import_studio_title">استوديو استخراج وتدريب المعرفة</string>
+    <string name="chat_import_prompt_generator_title">مولد أوامر الذكاء الاصطناعي</string>
+    <string name="chat_import_direct_text_title">فهرسة النصوص والسياسات مباشرة</string>
+
+    <!-- ── CRM & Contacts ──────────────────────────────────────────────────────── -->
+    <string name="contacts_crm_title">دليل العملاء</string>
+    <string name="contacts_crm_tag_label">تصنيف العميل:</string>
+
+    <!-- ── Audit Log ──────────────────────────────────────────────────────────── -->
+    <string name="audit_log_rule_tier">قواعد النظام</string>
+    <string name="audit_log_hitl_escalation">تصعيد بشري</string>
+    <string name="audit_log_tokens_badge">التوكنز</string>
+    <string name="audit_log_rag_citations">المقاطع الأكثر دلالة في الرد:</string>
+</resources>

@@ -13,11 +13,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.R
 import com.example.persona.features.chats.presentation.detail.ExportTimeRange
 import com.example.persona.ui.theme.chatColors
 
@@ -51,7 +53,7 @@ fun ExportChatDialog(
         },
         title = {
             Text(
-                text = "تصدير المحادثة (Export Chat)",
+                text = stringResource(R.string.export_chat_dialog_title),
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
@@ -69,7 +71,7 @@ fun ExportChatDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "اختر النطاق الزمني لسجل المحادثة المراد تصديره:",
+                    text = stringResource(R.string.export_chat_dialog_prompt),
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
                     color = chatColors.onSurface.copy(alpha = 0.8f)
                 )
@@ -111,14 +113,14 @@ fun ExportChatDialog(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "${range.titleEnglish} (${range.titleArabic})",
+                                    text = stringResource(range.titleResId),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
                                     ),
                                     color = chatColors.onSurface
                                 )
                                 Text(
-                                    text = range.subtitle,
+                                    text = stringResource(range.subtitleResId),
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                     color = chatColors.neutral
                                 )
@@ -144,7 +146,7 @@ fun ExportChatDialog(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "تصدير ومشاركة",
+                    text = stringResource(R.string.export_chat_dialog_confirm),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
                 )
             }
@@ -154,7 +156,7 @@ fun ExportChatDialog(
                 onClick = onDismissRequest
             ) {
                 Text(
-                    text = "إلغاء",
+                    text = stringResource(R.string.common_cancel),
                     style = MaterialTheme.typography.labelLarge,
                     color = chatColors.neutral
                 )

@@ -37,7 +37,7 @@ class SystemAlertNotificationHandler @Inject constructor(
 
     fun createAlertNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "تنبيهات النظام ومفاتيح التشغيل (System & Key Alerts)"
+            val name = "تنبيهات النظام ومفاتيح التشغيل"
             val descriptionText = "تنبيهات فورية عند نفاد رصيد المفاتيح أو عزل مزودي الذكاء الاصطناعي"
             val importance = NotificationManager.IMPORTANCE_HIGH
             val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)

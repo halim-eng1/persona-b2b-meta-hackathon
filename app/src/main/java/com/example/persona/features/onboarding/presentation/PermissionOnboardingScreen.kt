@@ -214,7 +214,7 @@ fun PermissionOnboardingScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "تنبيه لمستخدمي أندرويد 13 فما فوق (Restricted Setting)",
+                                    text = "تنبيه لمستخدمي أندرويد 13 فما فوق",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.error
@@ -222,10 +222,10 @@ fun PermissionOnboardingScreen(
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "إذا كان زر تفعيل الإشعارات معطلاً باللون الرمادي أو ظهرت رسالة أمان (Restricted setting):\n" +
+                                text = "إذا كان زر تفعيل الإشعارات معطلاً باللون الرمادي أو ظهرت رسالة أمان بالإعدادات المقيدة:\n" +
                                         "1. اضغط على الزر بالأسفل لفتح «معلومات التطبيق».\n" +
                                         "2. اضغط على القائمة (الثلاث نقاط ⋮) في أعلى الشاشة.\n" +
-                                        "3. اختر «السماح بالإعدادات المقيدة» (Allow restricted settings).\n" +
+                                        "3. اختر «السماح بالإعدادات المقيدة».\n" +
                                         "4. ارجع هنا وفعّل صلاحية قراءة الإشعارات.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -237,7 +237,7 @@ fun PermissionOnboardingScreen(
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("فتح معلومات التطبيق (App Info)")
+                                Text("فتح معلومات التطبيق")
                             }
                         }
                     }
@@ -245,7 +245,7 @@ fun PermissionOnboardingScreen(
 
                 // ── Step 1: Notification Access (Always Required) ─────────────
                 PermissionCard(
-                    title = "قراءة إشعارات واتساب (Notification Access)",
+                    title = "قراءة إشعارات واتساب",
                     description = "مطلوبة لاكتشاف وقراءة الرسائل الواردة من تطبيق واتساب واقتراح أو إرسال الردود التلقائية الذكية.",
                     isGranted = state.isNotificationListenerGranted,
                     isActiveStep = wizardState.currentStep is OnboardingStep.NotificationAccess,
@@ -258,7 +258,7 @@ fun PermissionOnboardingScreen(
 
                 // ── Step 2: Ignore Battery Optimizations (Always Required) ────
                 PermissionCard(
-                    title = "استثناء توفير البطارية (Battery Optimization)",
+                    title = "استثناء توفير البطارية",
                     description = "يمنع نظام أندرويد من إيقاف أو قتل خدمة الرد الآلي في الخلفية عندما يكون الهاتف في وضع الاستعداد أو الشاشة مغلقة.",
                     isGranted = state.isBatteryOptimizationIgnored,
                     isActiveStep = wizardState.currentStep is OnboardingStep.BatteryOptimization,
@@ -271,7 +271,7 @@ fun PermissionOnboardingScreen(
                 if (state.isPostNotificationsRequired) {
                     Spacer(modifier = Modifier.height(16.dp))
                     PermissionCard(
-                        title = "إشعارات شريط الحالة (Post Notifications)",
+                        title = "إشعارات شريط الحالة",
                         description = "مطلوبة لعرض حالة تشغيل محرك الذكاء الاصطناعي وتنبيهات التدخل البشري العاجلة.",
                         isGranted = state.isPostNotificationsGranted,
                         isActiveStep = wizardState.currentStep is OnboardingStep.PostNotifications,
@@ -342,7 +342,7 @@ fun PermissionOnboardingScreen(
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("فتح إعدادات التشغيل التلقائي (Auto-Start)")
+                                Text("فتح إعدادات التشغيل التلقائي")
                             }
 
                             Spacer(modifier = Modifier.height(12.dp))

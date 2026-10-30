@@ -37,23 +37,23 @@ fun AppRoutingSection(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // ── WhatsApp App Routing ──────────────────────────────────────────────
         PreferenceSection(
-            title = "توجيه تطبيقات واتساب (WhatsApp App Routing)",
+            title = "توجيه تطبيقات واتساب",
             subtitle = "حدد أي من تطبيقات واتساب المثبتة على هاتفك يجب على Persona مراقبتها والرد عليها."
         ) {
             PreferenceSwitchRow(
-                title = "تطبيق واتساب الأساسي (WhatsApp)",
+                title = "تطبيق واتساب الأساسي",
                 subtitle = "com.whatsapp (النسخة العادية)",
                 checked = state.listenMainApp,
                 onCheckedChange = onListenMainAppChange
             )
             PreferenceSwitchRow(
-                title = "واتساب للأعمال (WhatsApp Business)",
+                title = "واتساب للأعمال",
                 subtitle = "com.whatsapp.w4b (نسخة الأعمال التجارية)",
                 checked = state.listenBusinessApp,
                 onCheckedChange = onListenBusinessAppChange
             )
             PreferenceSwitchRow(
-                title = "التطبيق المستنسخ / الشريحة الثانية (Dual App / Cloned)",
+                title = "التطبيق المستنسخ / الشريحة الثانية",
                 subtitle = "مراقبة النسخة المستنسخة في واجهات شاومي وسامسونج وغيرها",
                 checked = state.listenCloneApp,
                 onCheckedChange = onListenCloneAppChange
@@ -62,7 +62,7 @@ fun AppRoutingSection(
 
         // ── WhatsApp Media & Voice Notes Access ────────────────────────────────
         PreferenceSection(
-            title = "الوصول لوسائط ورسائل واتساب الصوتية (Storage Access)",
+            title = "الوصول لوسائط ورسائل واتساب الصوتية",
             subtitle = "يتيح قراءة الصور والرسائل الصوتية الواردة ومعالجتها بنماذج الذكاء الاصطناعي محلياً."
         ) {
             Row(
@@ -72,7 +72,7 @@ fun AppRoutingSection(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "صلاحية الوصول لكافة الملفات (Manage Storage)",
+                        text = "صلاحية الوصول لكافة الملفات",
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
@@ -110,7 +110,7 @@ fun AppRoutingSection(
 
         // ── Human Takeover & Safety (HITL) ────────────────────────────────────
         PreferenceSection(
-            title = "التدخل البشري وأمان المحادثة (Human Takeover & Safety)",
+            title = "التدخل البشري وأمان المحادثة",
             subtitle = "التحكم في آلية إيقاف الروبوت فور طلب العميل التحدث مع شخص بشري."
         ) {
             PreferenceSwitchRow(
@@ -125,7 +125,7 @@ fun AppRoutingSection(
             OutlinedTextField(
                 value = state.hitlHoldingMessage,
                 onValueChange = onHitlHoldingMessageChange,
-                label = { Text("رسالة الانتظار عند التحويل البشري (HITL Holding Message)") },
+                label = { Text("رسالة الانتظار عند التحويل البشري") },
                 placeholder = { Text(UserPreferencesRepository.DEFAULT_HITL_HOLDING_MESSAGE) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2
@@ -134,13 +134,13 @@ fun AppRoutingSection(
 
         // ── System Fallback Messages ──────────────────────────────────────────
         PreferenceSection(
-            title = "رسائل الطوارئ والاحتياط (System Fallback Messages)",
+            title = "رسائل الطوارئ والاحتياط",
             subtitle = "الرسائل التي يرسلها النظام عند تعذر معالجة الوسائط أو عدم توفر رد ذكاء اصطناعي."
         ) {
             OutlinedTextField(
                 value = state.mediaFallbackMessage,
                 onValueChange = onMediaFallbackMessageChange,
-                label = { Text("رسالة تعذر معالجة الوسائط (Media Fallback)") },
+                label = { Text("رسالة تعذر معالجة الوسائط") },
                 placeholder = { Text(UserPreferencesRepository.DEFAULT_MEDIA_FALLBACK_MESSAGE) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2

@@ -62,7 +62,7 @@ fun OrderCardDetails(
                     Column {
                         val formattedTotal = EgyptianOrderUtils.formatMoney(codTotal)
                         Text(
-                            text = "المطلوب تحصيله (COD): $formattedTotal ج.م",
+                            text = "المطلوب تحصيله عند الاستلام: $formattedTotal ج.م",
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                             color = OrderGreen
                         )

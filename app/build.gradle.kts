@@ -152,6 +152,15 @@ android {
         val resolvedCfApiToken = resolveSecret("CLOUDFLARE_API_TOKEN") ?: resolveSecret("CloudFlare_API_TOKEN") ?: ""
         buildConfigField("String", "CLOUDFLARE_ACCOUNT_ID", "\"$resolvedCfAccountId\"")
         buildConfigField("String", "CLOUDFLARE_API_TOKEN", "\"$resolvedCfApiToken\"")
+
+        val resolvedNaraKey = resolveSecret("NARA_ROUTER_API_KEY") ?: resolveSecret("NARA_API_KEY") ?: ""
+        buildConfigField("String", "NARA_ROUTER_API_KEY", "\"$resolvedNaraKey\"")
+
+        val resolvedDashScopeKey = resolveSecret("DASHSCOPE_API_KEY") ?: resolvedQwenKey
+        buildConfigField("String", "DASHSCOPE_API_KEY", "\"$resolvedDashScopeKey\"")
+
+        val resolvedGroqKey2 = resolveSecret("GROQ_API_KEY_2") ?: resolveSecret("GROQ_API_KEY_V2") ?: ""
+        buildConfigField("String", "GROQ_API_KEY_2", "\"$resolvedGroqKey2\"")
     }
 
     buildTypes {

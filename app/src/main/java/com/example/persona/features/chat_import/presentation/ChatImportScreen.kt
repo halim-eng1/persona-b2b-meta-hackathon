@@ -32,10 +32,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.persona.R
 import kotlinx.coroutines.launch
 
 const val BUSINESS_KNOWLEDGE_PROMPT = """أنت خبير ومستشار استراتيجي لبناء قواعد المعرفة المتقدمة (Enterprise Knowledge Base Architect) لأنظمة الذكاء الاصطناعي وخدمة العملاء في تطبيق persona-B2B.
@@ -174,7 +176,7 @@ fun ChatImportScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "بناء واستيراد قاعدة المعرفة (Studio)",
+                            text = stringResource(R.string.chat_import_studio_title),
                             style = MaterialTheme.typography.titleLarge,
                             color = Color.White,
                             fontWeight = FontWeight.Bold
@@ -210,7 +212,7 @@ fun ChatImportScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "🤖 أنشئ ملف المعرفة بالذكاء الاصطناعي (AI Prompt Generator)",
+                            text = "🤖 ${stringResource(R.string.chat_import_prompt_generator_title)}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -295,7 +297,7 @@ fun ChatImportScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "✍️ لصق المعرفة وحفظها مباشرة (Direct Text)",
+                            text = "✍️ ${stringResource(R.string.chat_import_direct_text_title)}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -303,7 +305,7 @@ fun ChatImportScreen(
                     }
 
                     Text(
-                        text = "الصق نص المعرفة المنسق بالماركداون أو النص العادي ليتم تقطيعه وتوليد التضمينات الشعاعية (Embeddings) محلياً على جهازك دون الحاجة لحفظ أو رفع ملفات:",
+                        text = "الصق نص المعرفة المنسق بالماركداون أو النص العادي ليتم تقطيعه وتوليد التضمينات الشعاعية محلياً على جهازك دون الحاجة لحفظ أو رفع ملفات:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

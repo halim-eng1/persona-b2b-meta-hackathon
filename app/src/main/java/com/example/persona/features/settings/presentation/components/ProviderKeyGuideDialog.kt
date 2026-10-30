@@ -45,9 +45,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.R
 import com.example.persona.features.settings.domain.repository.ModelProviders
 
 data class ProviderGuideDetails(
@@ -274,7 +276,7 @@ fun ProviderKeyGuideDialog(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "رابط المنصة الرسمي:",
+                                text = stringResource(R.string.guide_portal_link_label),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -303,7 +305,7 @@ fun ProviderKeyGuideDialog(
 
                 // Step by step instructions
                 Text(
-                    text = "خطوات الحصول على المفتاح:",
+                    text = stringResource(R.string.guide_steps_header),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -392,7 +394,7 @@ fun ProviderKeyGuideDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "🤖 اجعل الذكاء الاصطناعي يرشدك (Copy AI Guide Prompt)",
+                        text = stringResource(R.string.guide_copy_prompt_btn),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -404,7 +406,7 @@ fun ProviderKeyGuideDialog(
                 onClick = onDismissRequest,
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("إغلاق")
+                Text(stringResource(R.string.common_close))
             }
         }
     )

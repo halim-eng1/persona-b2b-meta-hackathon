@@ -82,18 +82,18 @@ class ChatExportFormatter @Inject constructor() {
     ): String {
         val exportDateStr = formatExportTimestamp(exportTimestampMs)
         val lines = mutableListOf<String>()
-        lines.add("سجل محادثة: $contactName ($sourceClass)")
+        lines.add("سجل محادثة: $contactName")
         lines.add("المتجر: $storeName")
         lines.add("تاريخ التصدير: $exportDateStr")
-        lines.add("نطاق التصدير: ${range.exportLabel}")
+        lines.add("نطاق التصدير: ${range.titleArabic}")
         lines.add(TRANSCRIPT_DIVIDER)
 
         for (msg in messages) {
             val timeStr = formatExportTimestamp(msg.timestamp)
             val senderLabel = when {
                 msg.isFromUser || msg.senderType.equals("CUSTOMER", ignoreCase = true) -> "العميل"
-                msg.senderType.equals("MERCHANT_MANUAL", ignoreCase = true) -> "التاجر (Manual)"
-                else -> "$botName (AI)"
+                msg.senderType.equals("MERCHANT_MANUAL", ignoreCase = true) -> "التاجر"
+                else -> botName
             }
             lines.add("[$timeStr] $senderLabel: ${msg.messageText}")
         }

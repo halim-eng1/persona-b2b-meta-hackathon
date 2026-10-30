@@ -694,7 +694,7 @@ class KnowledgeManagementViewModel @Inject constructor(
         val isHitl = finalParsedResponse?.action.equals("HITL", ignoreCase = true)
         val finalReply = finalParsedResponse?.finalReplyText?.takeIf { it.isNotBlank() }
             ?: when {
-                isHitl -> "⚠️ تم توجيه الاستفسار للمراجعة البشرية (HITL) لعدم توفر رد مؤكد أو لحاجة الإجراء لتدخل يدوي."
+                isHitl -> "⚠️ تم توجيه الاستفسار للمراجعة البشرية لعدم توفر رد مؤكد أو لحاجة الإجراء لتدخل يدوي."
                 candidates.isNotEmpty() -> candidates.first().chunkText
                 else -> "لم يتم العثور على معلومات كافية للإجابة في كتالوج المتجر."
             }

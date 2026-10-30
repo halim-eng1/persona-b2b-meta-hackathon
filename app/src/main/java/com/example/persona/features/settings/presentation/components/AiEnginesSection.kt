@@ -51,11 +51,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.R
 import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.presentation.ProviderConfigState
 import com.example.persona.features.settings.presentation.SettingsUiState
@@ -89,8 +91,8 @@ fun AiEnginesSection(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // ── 1. Provider Priority Chain ─────────────────────────────────────────
         PreferenceSection(
-            title = "سلسلة أولويات مزودي الذكاء الاصطناعي (AI Provider Priority)",
-            subtitle = "رتّب أولوية المزودين؛ في حال تعثر المزود الأول أو نفاد رصيده يتم الانتقال تلقائياً للمزود التالي."
+            title = stringResource(R.string.settings_ai_priority_title),
+            subtitle = stringResource(R.string.settings_ai_priority_subtitle)
         ) {
             state.providerOrder.forEachIndexed { index, provider ->
                 Card(
@@ -136,7 +138,7 @@ fun AiEnginesSection(
                                 )
                                 val keyCount = state.providerConfigs[provider]?.keys?.size ?: 0
                                 Text(
-                                    text = "$keyCount مفتاح API مسجل",
+                                    text = stringResource(R.string.settings_ai_keys_count, keyCount),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -150,7 +152,7 @@ fun AiEnginesSection(
                             ) {
                                 Icon(
                                     Icons.Default.Info,
-                                    contentDescription = "دليل المفتاح",
+                                    contentDescription = stringResource(R.string.settings_ai_provider_guide_btn),
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -177,8 +179,8 @@ fun AiEnginesSection(
 
         // ── 2. Provider Selector Chips ─────────────────────────────────────────
         PreferenceSection(
-            title = "إدارة المفاتيح والنماذج للمزود المختار",
-            subtitle = "اختر المزود لإضافة عدد غير محدود من المفاتيح والنماذج المدعومة."
+            title = stringResource(R.string.settings_ai_manage_provider_title),
+            subtitle = stringResource(R.string.settings_ai_manage_provider_subtitle)
         ) {
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -194,11 +196,11 @@ fun AiEnginesSection(
                             {
                                 Icon(
                                     imageVector = Icons.Default.Info,
-                                    contentDescription = "دليل المفتاح",
+                                    contentDescription = stringResource(R.string.settings_ai_provider_guide_btn),
                                     modifier = Modifier
                                         .size(16.dp)
                                         .clickable { showGuideDialogForProvider = provider }
-                                )
+                                }
                             }
                         } else null
                     )
@@ -208,8 +210,8 @@ fun AiEnginesSection(
 
         // ── 3. API Keys Management ─────────────────────────────────────────────
         PreferenceSection(
-            title = "مفاتيح الـ API لمزود (${selectedProvider.uppercase()})",
-            subtitle = "يمكنك إضافة مفاتيح متعددة مع فحص اتصال كل مفتاح بشكل مباشر."
+            title = stringResource(R.string.settings_ai_keys_for_provider, selectedProvider.uppercase()),
+            subtitle = stringResource(R.string.settings_ai_keys_subtitle)
         ) {
             // Guide bar with Info button
             Row(
@@ -228,7 +230,7 @@ fun AiEnginesSection(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "دليل الحصول على المفتاح لمزود ${selectedProvider.uppercase()}",
+                        text = stringResource(R.string.settings_ai_guide_title, selectedProvider.uppercase()),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -241,7 +243,7 @@ fun AiEnginesSection(
                 ) {
                     Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("شرح الاستخراج ℹ️", fontSize = 11.sp)
+                    Text(stringResource(R.string.settings_ai_provider_guide_btn), fontSize = 11.sp)
                 }
             }
 
@@ -258,13 +260,13 @@ fun AiEnginesSection(
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Text(
-                            text = "معرّف حساب كلاودفلير (Cloudflare Account ID)",
+                            text = stringResource(R.string.settings_ai_cloudflare_account_id_title),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.secondary
                         )
                         Text(
-                            text = "مطلوب لتشغيل نماذج Workers AI بجانب رمز الـ API (API Token)",
+                            text = stringResource(R.string.settings_ai_cloudflare_account_id_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -282,7 +284,7 @@ fun AiEnginesSection(
                                     accountIdInput = it
                                     onSaveCloudflareAccountId(it)
                                 },
-                                label = { Text("Cloudflare Account ID") },
+                                label = { Text(stringResource(R.string.settings_ai_cloudflare_account_id_title)) },
                                 placeholder = { Text("e.g. 9c2036eda99b642789288ba8cf9cd4c5") },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f)
@@ -292,7 +294,7 @@ fun AiEnginesSection(
                                 onClick = { onSaveCloudflareAccountId(accountIdInput) },
                                 shape = RoundedCornerShape(12.dp)
                             ) {
-                                Text("حفظ")
+                                Text(stringResource(R.string.common_save))
                             }
                         }
                     }
@@ -301,7 +303,7 @@ fun AiEnginesSection(
 
             if (config.keys.isEmpty()) {
                 Text(
-                    text = "لا توجد مفاتيح مسجلة لهذا المزود حتى الآن. سيتم استخدام المفاتيح الافتراضية إذا توفرت.",
+                    text = stringResource(R.string.settings_ai_no_keys),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 4.dp)
@@ -328,7 +330,7 @@ fun AiEnginesSection(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "مفتاح #${keyIndex + 1}",
+                                        text = stringResource(R.string.settings_ai_key_label, keyIndex + 1),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.Bold
@@ -376,7 +378,7 @@ fun AiEnginesSection(
                                 when (verificationState) {
                                     is VerificationState.Idle -> {
                                         Text(
-                                            text = "لم يتم الفحص بعد",
+                                            text = stringResource(R.string.settings_ai_status_untested),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -386,7 +388,7 @@ fun AiEnginesSection(
                                             CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
-                                                text = "جارٍ فحص الاتصال...",
+                                                text = stringResource(R.string.settings_ai_status_checking),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
@@ -424,7 +426,7 @@ fun AiEnginesSection(
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                 ) {
-                                    Text("فحص الاتصال (Ping)", fontSize = 12.sp)
+                                    Text(stringResource(R.string.settings_ai_ping_btn), fontSize = 12.sp)
                                 }
                             }
                         }
@@ -442,7 +444,7 @@ fun AiEnginesSection(
                 OutlinedTextField(
                     value = newKeyInput,
                     onValueChange = { newKeyInput = it },
-                    label = { Text("إضافة مفتاح API جديد") },
+                    label = { Text(stringResource(R.string.settings_ai_add_key_label)) },
                     placeholder = { Text("sk-...") },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
@@ -459,15 +461,15 @@ fun AiEnginesSection(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Add")
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("إضافة")
+                    Text(stringResource(R.string.common_add))
                 }
             }
         }
 
         // ── 4. Provider Models Management ──────────────────────────────────────
         PreferenceSection(
-            title = "نماذج الذكاء الاصطناعي لمزود (${selectedProvider.uppercase()})",
-            subtitle = "يمكنك تعديل ترتيب النماذج، حذف النماذج غير المرغوبة، أو إضافة كود نموذج مخصص."
+            title = stringResource(R.string.settings_ai_models_title, selectedProvider.uppercase()),
+            subtitle = stringResource(R.string.settings_ai_models_subtitle)
         ) {
             config.models.forEachIndexed { modelIdx, modelName ->
                 Card(
@@ -529,7 +531,7 @@ fun AiEnginesSection(
                 OutlinedTextField(
                     value = newModelInput,
                     onValueChange = { newModelInput = it },
-                    label = { Text("إضافة كود نموذج مخصص") },
+                    label = { Text(stringResource(R.string.settings_ai_add_model_label)) },
                     placeholder = { Text("e.g. qwen3.8-flash / deepseek-v4.1-flash") },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
@@ -546,7 +548,7 @@ fun AiEnginesSection(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Add Model")
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("إضافة")
+                    Text(stringResource(R.string.common_add))
                 }
             }
         }

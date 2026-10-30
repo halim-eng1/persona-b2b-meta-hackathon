@@ -135,7 +135,8 @@ interface ConversationMetadataDao {
         timestamp: Long,
         notificationKey: String? = null,
         incrementUnread: Boolean = false,
-        isAiPaused: Boolean? = null
+        isAiPaused: Boolean? = null,
+        isAiOverrideEnabled: Boolean? = null
     ) {
         val existing = getConversation(contactName, sourceClass)
         if (existing == null) {
@@ -144,6 +145,7 @@ interface ConversationMetadataDao {
                     contactName = contactName,
                     sourceClass = sourceClass,
                     isAiPaused = isAiPaused ?: false,
+                    isAiOverrideEnabled = isAiOverrideEnabled ?: false,
                     needsHumanAttention = false,
                     lastNotificationKey = notificationKey,
                     lastMessageText = messageText,
@@ -160,7 +162,8 @@ interface ConversationMetadataDao {
                     lastMessageTimestamp = timestamp,
                     lastNotificationKey = notificationKey ?: existing.lastNotificationKey,
                     unreadCount = if (incrementUnread) existing.unreadCount + 1 else existing.unreadCount,
-                    isAiPaused = isAiPaused ?: existing.isAiPaused
+                    isAiPaused = isAiPaused ?: existing.isAiPaused,
+                    isAiOverrideEnabled = isAiOverrideEnabled ?: existing.isAiOverrideEnabled
                 )
             )
         }

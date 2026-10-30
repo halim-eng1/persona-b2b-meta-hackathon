@@ -32,11 +32,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.persona.R
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.knowledge.presentation.model.SimulatorMediaType
 import com.example.persona.features.knowledge.presentation.model.SimulatorMessage
@@ -88,12 +90,12 @@ fun BotSimulatorDialog(
     }
 
     val quickSampleQueries = listOf(
-        "بكام التيشيرت الأوفر سايز؟",
-        "مصاريف الشحن للقاهرة والجيزة كام؟",
-        "عايز أطلب 2 تيشيرت أسود لمدينة نصر 01012345678",
-        "هل متاح استبدال أو استرجاع؟",
-        "عايز ألغي الأوردر",
-        "طرق الدفع المتاحة إيه؟"
+        stringResource(R.string.sim_sample_query_1),
+        stringResource(R.string.sim_sample_query_2),
+        stringResource(R.string.sim_sample_query_3),
+        stringResource(R.string.sim_sample_query_4),
+        stringResource(R.string.sim_sample_query_5),
+        stringResource(R.string.sim_sample_query_6)
     )
 
     // Scroll to bottom when message arrives
@@ -174,12 +176,12 @@ fun BotSimulatorDialog(
 
                             Column {
                                 Text(
-                                    text = "محاكي بوت واتساب الذكي",
+                                    text = stringResource(R.string.sim_header_title),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "متصل الآن (Online) • بيئة الاختبار والمحاكاة",
+                                    text = stringResource(R.string.sim_header_subtitle),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Color(0xFF2E7D32),
                                     fontWeight = FontWeight.SemiBold
@@ -191,7 +193,7 @@ fun BotSimulatorDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            // "محادثة جديدة" (New Chat) Button
+                            // "New Chat" Button
                             FilledTonalButton(
                                 onClick = onClearHistory,
                                 shape = RoundedCornerShape(10.dp),
@@ -205,7 +207,7 @@ fun BotSimulatorDialog(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "محادثة جديدة",
+                                    text = stringResource(R.string.sim_btn_new_chat),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -217,7 +219,7 @@ fun BotSimulatorDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "إغلاق"
+                                    contentDescription = stringResource(R.string.sim_btn_close)
                                 )
                             }
                         }
@@ -317,13 +319,13 @@ fun BotSimulatorDialog(
                             }
                             Spacer(modifier = Modifier.height(14.dp))
                             Text(
-                                text = "مرحباً بك في محاكي المساعد الآلي!",
+                                text = stringResource(R.string.sim_welcome_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "ابدأ بكتابة رسالة عميل افتراضية، أو اختر أحد الأسئلة السريعة أعلاه، أو أرفق صورة منتج / رسالة صوتية لاختبار مسار التفكير والاسترجاع كاملاً.",
+                                text = stringResource(R.string.sim_welcome_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -376,12 +378,12 @@ fun BotSimulatorDialog(
                                     )
                                     Column {
                                         Text(
-                                            text = "صورة مرفقة للتحليل البصري",
+                                            text = stringResource(R.string.sim_media_image_title),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "سيتم تفعيل Multimodal Vision Pass",
+                                            text = stringResource(R.string.sim_media_image_subtitle),
                                             style = MaterialTheme.typography.bodySmall,
                                             fontSize = 10.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -404,12 +406,12 @@ fun BotSimulatorDialog(
                                     }
                                     Column {
                                         Text(
-                                            text = "تسجيل صوتي مرفق (Voice Note)",
+                                            text = stringResource(R.string.sim_media_audio_title),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "سيتم تفريغ الصوت آلياً عبر محرك ASR",
+                                            text = stringResource(R.string.sim_media_audio_subtitle),
                                             style = MaterialTheme.typography.bodySmall,
                                             fontSize = 10.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -424,7 +426,7 @@ fun BotSimulatorDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "إلغاء المرفق",
+                                    contentDescription = stringResource(R.string.sim_media_clear),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -452,7 +454,7 @@ fun BotSimulatorDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Image,
-                                contentDescription = "اختيار صورة",
+                                contentDescription = stringResource(R.string.sim_action_pick_image),
                                 tint = if (selectedMediaType == SimulatorMediaType.IMAGE) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
@@ -469,7 +471,7 @@ fun BotSimulatorDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Mic,
-                                contentDescription = "اختيار تسجيل صوتي",
+                                contentDescription = stringResource(R.string.sim_action_pick_audio),
                                 tint = if (selectedMediaType == SimulatorMediaType.AUDIO) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
@@ -484,7 +486,7 @@ fun BotSimulatorDialog(
                             onValueChange = { if (it.length <= 2000) inputText = it },
                             placeholder = {
                                 Text(
-                                    text = if (selectedMediaUri != null) "أضف تعليقاً على المرفق (اختياري)..." else "اكتب رسالة العميل الافتراضية...",
+                                    text = if (selectedMediaUri != null) stringResource(R.string.sim_input_placeholder_media) else stringResource(R.string.sim_input_placeholder_text),
                                     fontSize = 13.sp
                                 )
                             },
@@ -518,7 +520,7 @@ fun BotSimulatorDialog(
                             } else {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Send,
-                                    contentDescription = "إرسال",
+                                    contentDescription = stringResource(R.string.common_send),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -605,7 +607,7 @@ private fun ChatMessageItem(message: SimulatorMessage) {
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Text(
-                                    text = "تسجيل صوتي (Voice Note)",
+                                    text = stringResource(R.string.sim_voice_note_label),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -656,7 +658,7 @@ private fun BotTypingIndicator() {
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = "المساعد يحلل الرسالة ويسترجع البيانات...",
+                    text = stringResource(R.string.sim_typing_indicator),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -693,7 +695,7 @@ fun SimulatorMediaThumbnail(
     if (bitmap != null) {
         Image(
             bitmap = bitmap.asImageBitmap(),
-            contentDescription = "معاينة المرفق",
+            contentDescription = stringResource(R.string.sim_media_preview_desc),
             modifier = modifier.clip(RoundedCornerShape(8.dp)),
             contentScale = ContentScale.Crop
         )

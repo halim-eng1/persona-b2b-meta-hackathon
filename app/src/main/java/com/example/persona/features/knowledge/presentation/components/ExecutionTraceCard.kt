@@ -24,12 +24,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.R
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.knowledge.presentation.model.ExecutionTrace
 import java.util.Locale
@@ -78,7 +80,7 @@ fun ExecutionTraceCard(
                     modifier = Modifier.size(14.dp)
                 )
                 Text(
-                    text = "⚡ خطوات التفكير والقرار (استغرق $seconds ثانية)",
+                    text = stringResource(R.string.trace_thinking_steps, seconds),
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -112,21 +114,21 @@ fun ExecutionTraceCard(
                     modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // 1. 🎯 النية المكتشفة (Intent)
+                    // 1. 🎯 Detected Intent
                     TraceStepRow(
                         icon = "🎯",
-                        title = "النية المكتشفة (Intent)",
+                        title = stringResource(R.string.trace_intent_title),
                         badgeText = trace.intent.name,
                         badgeColor = MaterialTheme.colorScheme.primaryContainer,
                         badgeTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        detail = "${trace.intent.name} عبر ${trace.intentSourceTier} (${trace.intentLatencyMs}ms، ثقة ${(trace.intentConfidence * 100).toInt()}%)"
+                        detail = "${trace.intent.name} • ${trace.intentSourceTier} (${trace.intentLatencyMs}ms, ${(trace.intentConfidence * 100).toInt()}%)"
                     )
 
                     // Optional ASR info if audio
                     if (!trace.asrTranscription.isNullOrBlank()) {
                         TraceStepRow(
                             icon = "🎙️",
-                            title = "تفريغ الصوت (Voice ASR)",
+                            title = stringResource(R.string.trace_asr_title),
                             badgeText = "FunASR / Whisper",
                             badgeColor = MaterialTheme.colorScheme.tertiaryContainer,
                             badgeTextColor = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -138,7 +140,7 @@ fun ExecutionTraceCard(
                     if (!trace.visionDescription.isNullOrBlank()) {
                         TraceStepRow(
                             icon = "👁️",
-                            title = "تحليل الصورة البصري (Vision)",
+                            title = stringResource(R.string.trace_vision_title),
                             badgeText = "Multimodal Pass",
                             badgeColor = MaterialTheme.colorScheme.secondaryContainer,
                             badgeTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -146,7 +148,7 @@ fun ExecutionTraceCard(
                         )
                     }
 
-                    // 2. 📚 المقاطع المسترجعة من الكتالوج (RAG)
+                    // 2. 📚 Retrieved Catalog Chunks
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -159,7 +161,7 @@ fun ExecutionTraceCard(
                             ) {
                                 Text(text = "📚", fontSize = 14.sp)
                                 Text(
-                                    text = "المقاطع المسترجعة من الكتالوج (RAG)",
+                                    text = stringResource(R.string.trace_rag_title),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -169,7 +171,11 @@ fun ExecutionTraceCard(
                                 color = MaterialTheme.colorScheme.secondaryContainer
                             ) {
                                 Text(
-                                    text = "${trace.ragCandidates.size} مقاطع (تطابق: ${(trace.ragBestScore * 100).toInt()}%)",
+                                    text = stringResource(
+                                        R.string.trace_rag_match_format,
+                                        trace.ragCandidates.size,
+                                        (trace.ragBestScore * 100).toInt()
+                                    ),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -180,7 +186,11 @@ fun ExecutionTraceCard(
 
                         if (trace.ragCandidates.isNotEmpty()) {
                             Text(
-                                text = if (isRagExpanded) "إخفاء المقاطع ▲" else "معاينة المقاطع المسترجعة (${trace.ragCandidates.size}) ▼",
+                                text = if (isRagExpanded) {
+                                    stringResource(R.string.trace_rag_collapse)
+                                } else {
+                                    stringResource(R.string.trace_rag_expand, trace.ragCandidates.size)
+                                },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold,
@@ -202,46 +212,50 @@ fun ExecutionTraceCard(
                             }
                         } else {
                             Text(
-                                text = "لم تتطلب النية استرجاع مقاطع من قاعدة المعرفة.",
+                                text = stringResource(R.string.trace_rag_empty),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
 
-                    // 3. 🔄 إعادة البحث (RE_QUERY)
+                    // 3. 🔄 Re-Query
                     TraceStepRow(
                         icon = "🔄",
-                        title = "إعادة البحث الدلالي (RE_QUERY)",
-                        badgeText = if (trace.reQueryTriggered) "مفعلة (Pass 2)" else "غير مطلوبة (Direct)",
+                        title = stringResource(R.string.trace_requery_title),
+                        badgeText = if (trace.reQueryTriggered) {
+                            stringResource(R.string.trace_requery_active)
+                        } else {
+                            stringResource(R.string.trace_requery_inactive)
+                        },
                         badgeColor = if (trace.reQueryTriggered) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface,
                         badgeTextColor = if (trace.reQueryTriggered) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         detail = if (trace.reQueryTriggered) {
                             buildString {
-                                append("تم تفعيل جولة بحث ثانية بنجاح.")
+                                append("Pass 2 re-query executed.")
                                 if (!trace.reQueryKeyword.isNullOrBlank()) {
-                                    append("\n• الكلمات المنقحة: ${trace.reQueryKeyword}")
+                                    append("\n• Query: ${trace.reQueryKeyword}")
                                 }
                                 if (trace.reQueryCandidates.isNotEmpty()) {
-                                    append("\n• المقاطع المسترجعة بالجولة الثانية: ${trace.reQueryCandidates.size}")
+                                    append("\n• Chunks retrieved: ${trace.reQueryCandidates.size}")
                                 }
                             }
                         } else {
-                            "تم الرد في الجولة الأولى مباشرة دون الحاجة لحلقة استرجاع ثانية."
+                            "Direct response without second pass retrieval."
                         }
                     )
 
-                    // 4. 🧠 النموذج المستجيب (LLM)
+                    // 4. 🧠 Responding Model (LLM)
                     TraceStepRow(
                         icon = "🧠",
-                        title = "النموذج المستجيب (LLM)",
+                        title = stringResource(R.string.trace_llm_title),
                         badgeText = trace.llmAction,
                         badgeColor = MaterialTheme.colorScheme.primaryContainer,
                         badgeTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        detail = "${trace.llmProvider} (${trace.llmLatencyMs}ms) • الإجراء النهائي: ${trace.llmAction}"
+                        detail = "${trace.llmProvider} (${trace.llmLatencyMs}ms) • Action: ${trace.llmAction}"
                     )
 
-                    // 5. 📦 إجراء الطلب (Order Action)
+                    // 5. 📦 Order Action
                     val orderActionColor = when (trace.orderAction) {
                         "CREATE" -> Color(0xFF2E7D32)
                         "UPDATE" -> Color(0xFFF57F17)
@@ -260,7 +274,7 @@ fun ExecutionTraceCard(
                             ) {
                                 Text(text = "📦", fontSize = 14.sp)
                                 Text(
-                                    text = "إجراء الطلب (Order Action)",
+                                    text = stringResource(R.string.trace_order_action_title),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -298,46 +312,48 @@ fun ExecutionTraceCard(
                                     verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Text(
-                                        text = "📋 تفاصيل الطلب المستخرج آلياً:",
+                                        text = stringResource(R.string.trace_order_details_header),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = orderActionColor
                                     )
                                     if (!order.customerName.isNullOrBlank()) {
                                         Text(
-                                            text = "👤 اسم العميل: ${order.customerName}",
+                                            text = stringResource(R.string.trace_order_customer_name, order.customerName),
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
                                     if (!order.customerPhone.isNullOrBlank()) {
                                         Text(
-                                            text = "📞 رقم الهاتف: ${order.customerPhone}",
+                                            text = stringResource(R.string.trace_order_customer_phone, order.customerPhone),
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
                                     if (!order.deliveryAddress.isNullOrBlank()) {
+                                        val addr = "${order.deliveryAddress}${if (!order.governorate.isNullOrBlank()) " (${order.governorate})" else ""}"
                                         Text(
-                                            text = "📍 العنوان: ${order.deliveryAddress}${if (!order.governorate.isNullOrBlank()) " (${order.governorate})" else ""}",
+                                            text = stringResource(R.string.trace_order_address, addr),
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
                                     if (!order.orderDetails.isNullOrBlank()) {
                                         Text(
-                                            text = "🛍️ المنتجات: ${order.orderDetails}",
+                                            text = stringResource(R.string.trace_order_products, order.orderDetails),
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
                                     if (order.totalAmount != null) {
                                         val totalWithShipping = order.totalAmount!! + (order.shippingFee ?: 0.0)
+                                        val totalText = "${order.totalAmount} ${if (order.shippingFee != null) "(+ ${order.shippingFee} shipping = $totalWithShipping)" else ""}"
                                         Text(
-                                            text = "💰 الإجمالي: ${order.totalAmount} ج.م ${if (order.shippingFee != null) "(+ ${order.shippingFee} ج.م شحن = $totalWithShipping ج.م)" else ""}",
+                                            text = stringResource(R.string.trace_order_total, totalText),
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
                                     if (!order.customNotes.isNullOrBlank()) {
                                         Text(
-                                            text = "📝 ملاحظات: ${order.customNotes}",
+                                            text = stringResource(R.string.trace_order_notes, order.customNotes),
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
@@ -345,14 +361,14 @@ fun ExecutionTraceCard(
                             }
                         } else {
                             Text(
-                                text = "لم يتم اكتشاف تفاصيل طلب مستخرج في هذا الرد.",
+                                text = stringResource(R.string.trace_order_none),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
 
-                    // 6. 📄 البرومبت المرسل (System Prompt)
+                    // 6. 📄 System Prompt
                     if (trace.systemPrompt.isNotBlank()) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(
@@ -366,13 +382,17 @@ fun ExecutionTraceCard(
                                 ) {
                                     Text(text = "📄", fontSize = 14.sp)
                                     Text(
-                                        text = "البرومبت المرسل (System Prompt)",
+                                        text = stringResource(R.string.trace_system_prompt_title),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
                                 Text(
-                                    text = if (isPromptExpanded) "إخفاء البرومبت ▲" else "معاينة البرومبت (${trace.systemPrompt.length} حرف) ▼",
+                                    text = if (isPromptExpanded) {
+                                        stringResource(R.string.trace_prompt_collapse)
+                                    } else {
+                                        stringResource(R.string.trace_prompt_expand, trace.systemPrompt.length)
+                                    },
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold,
@@ -400,7 +420,7 @@ fun ExecutionTraceCard(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                text = "System Prompt Preview:",
+                                                text = stringResource(R.string.trace_prompt_preview_header),
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.secondary
@@ -413,7 +433,7 @@ fun ExecutionTraceCard(
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.ContentCopy,
-                                                    contentDescription = "نسخ البرومبت",
+                                                    contentDescription = stringResource(R.string.trace_copy_prompt),
                                                     modifier = Modifier.size(14.dp),
                                                     tint = MaterialTheme.colorScheme.primary
                                                 )
@@ -518,7 +538,7 @@ private fun CandidateChunkItem(idx: Int, candidate: RetrievalCandidate) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "#${idx + 1} ${candidate.headerContext ?: "معلومة متجر"}",
+                    text = "#${idx + 1} ${candidate.headerContext ?: stringResource(R.string.trace_chunk_default_header)}",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -527,7 +547,7 @@ private fun CandidateChunkItem(idx: Int, candidate: RetrievalCandidate) {
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 Text(
-                    text = "${(candidate.similarityScore * 100).toInt()}% دقة",
+                    text = stringResource(R.string.trace_chunk_accuracy, (candidate.similarityScore * 100).toInt()),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -542,7 +562,11 @@ private fun CandidateChunkItem(idx: Int, candidate: RetrievalCandidate) {
             )
             if (candidate.chunkText.length > 180) {
                 Text(
-                    text = if (isChunkExpanded) "إخفاء التفاصيل ▲" else "عرض النص كاملاً ▼",
+                    text = if (isChunkExpanded) {
+                        stringResource(R.string.trace_chunk_collapse)
+                    } else {
+                        stringResource(R.string.trace_chunk_expand)
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,

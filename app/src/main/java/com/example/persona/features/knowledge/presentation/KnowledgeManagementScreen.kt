@@ -54,13 +54,13 @@ fun KnowledgeManagementScreen(
             onDismissRequest = { showClearConfirmationDialog = false },
             title = {
                 Text(
-                    text = "مسح قاعدة المعرفة بالكامل؟",
+                    text = stringResource(R.string.knowledge_clear_confirm_title),
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
-                    text = "هل أنت متأكد من حذف جميع المقاطع والبيانات المخزنة؟ ستتمكن من استيراد ملف جديد بالكامل أو إعادة إدخال الكتالوج."
+                    text = stringResource(R.string.knowledge_clear_confirm_message)
                 )
             },
             confirmButton = {
@@ -75,7 +75,7 @@ fun KnowledgeManagementScreen(
                     ),
                     modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                 ) {
-                    Text("حذف الكل")
+                    Text(stringResource(R.string.common_delete_all))
                 }
             },
             dismissButton = {
@@ -83,7 +83,7 @@ fun KnowledgeManagementScreen(
                     onClick = { showClearConfirmationDialog = false },
                     modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                 ) {
-                    Text("إلغاء")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )
@@ -169,7 +169,7 @@ fun KnowledgeManagementScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.DeleteSweep,
-                        contentDescription = "مسح قاعدة المعرفة بالكامل",
+                        contentDescription = stringResource(R.string.knowledge_clear_confirm_title),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -190,7 +190,7 @@ fun KnowledgeManagementScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "كتالوج المتجر والمعرفة",
+                                text = stringResource(R.string.knowledge_tab_catalog),
                                 fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
                             )
                             if (state.entries.isNotEmpty()) {
@@ -213,7 +213,7 @@ fun KnowledgeManagementScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "الاستفسارات المعلقة",
+                                text = stringResource(R.string.knowledge_tab_pending_queries),
                                 fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
                             )
                             if (state.unansweredQueries.isNotEmpty()) {
@@ -249,9 +249,13 @@ fun KnowledgeManagementScreen(
                     OutlinedTextField(
                         value = state.searchQuery,
                         onValueChange = { viewModel.onSearchQueryChanged(it) },
-                        placeholder = { Text("بحث في المنتجات والسياسات...") },
+                        placeholder = { Text(stringResource(R.string.knowledge_search_placeholder)) },
                         leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = "بحث", modifier = Modifier.size(20.dp))
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = stringResource(R.string.knowledge_search_placeholder),
+                                modifier = Modifier.size(20.dp)
+                            )
                         },
                         trailingIcon = {
                             if (state.searchQuery.isNotBlank()) {
@@ -259,7 +263,10 @@ fun KnowledgeManagementScreen(
                                     onClick = { viewModel.onSearchQueryChanged("") },
                                     modifier = Modifier.size(48.dp)
                                 ) {
-                                    Icon(Icons.Default.Clear, contentDescription = "مسح البحث")
+                                    Icon(
+                                        Icons.Default.Clear,
+                                        contentDescription = stringResource(R.string.knowledge_search_clear)
+                                    )
                                 }
                             }
                         },
@@ -274,10 +281,10 @@ fun KnowledgeManagementScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         val filters = listOf(
-                            "ALL" to "الكل",
-                            "PRODUCT" to "المنتجات",
-                            "POLICY" to "السياسات والشحن",
-                            "OFFER" to "عروض مؤقتة"
+                            "ALL" to stringResource(R.string.knowledge_filter_all),
+                            "PRODUCT" to stringResource(R.string.knowledge_filter_product),
+                            "POLICY" to stringResource(R.string.knowledge_filter_policy),
+                            "OFFER" to stringResource(R.string.knowledge_filter_offer)
                         )
                         items(filters) { (key, label) ->
                             FilterChip(
@@ -295,7 +302,7 @@ fun KnowledgeManagementScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "عناصر الكتالوج (${state.filteredEntries.size})",
+                            text = stringResource(R.string.knowledge_catalog_items_count, state.filteredEntries.size),
                             style = MaterialTheme.typography.labelMedium.copy(
                                 letterSpacing = 0.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -326,7 +333,7 @@ fun KnowledgeManagementScreen(
                                 )
                                 Text(
                                     text = if (state.searchQuery.isNotBlank())
-                                        "لا توجد نتائج مطابقة لبحثك."
+                                        stringResource(R.string.knowledge_search_no_results)
                                     else
                                         stringResource(R.string.knowledge_empty_state),
                                     style = MaterialTheme.typography.bodyMedium,
@@ -360,7 +367,7 @@ fun KnowledgeManagementScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = "صندوق الاستفسارات التي عجز عنها المساعد الآلي",
+                        text = stringResource(R.string.knowledge_hitl_inbox_title),
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.SemiBold
                         ),
@@ -386,7 +393,7 @@ fun KnowledgeManagementScreen(
                                     modifier = Modifier.size(48.dp)
                                 )
                                 Text(
-                                    text = "رائع! لا توجد أي استفسارات معلقة من الزبائن.",
+                                    text = stringResource(R.string.knowledge_hitl_empty),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
@@ -429,7 +436,7 @@ fun KnowledgeManagementScreen(
             },
             text = {
                 Text(
-                    text = "محاكي البوت",
+                    text = stringResource(R.string.bot_simulator_fab),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
                 )
