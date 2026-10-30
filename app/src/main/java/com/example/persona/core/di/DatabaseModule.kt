@@ -68,4 +68,9 @@ object DatabaseModule {
     @Singleton
     fun provideConversationMetadataDao(db: PersonaDatabase): ConversationMetadataDao =
         db.conversationMetadataDao()
+
+    @Provides
+    @Singleton
+    fun provideContactDao(db: PersonaDatabase): ContactDao =
+        db.contactDao()
 }

@@ -3,6 +3,7 @@ package com.example.persona.features.chats.domain.usecase
 import com.example.persona.core.database.dao.ChatHistoryDao
 import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.entity.ChatHistoryEntity
+import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
 import com.example.persona.features.auto_reply.domain.usecase.DirectReplyExecutionUseCase
 import com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResult
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
@@ -10,6 +11,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -164,5 +166,29 @@ class SendManualReplyUseCaseTest {
         assertEquals("PendingIntent exception", failedResult.reason)
 
         coVerify(exactly = 1) { chatHistoryDao.updateDeliveryStatus(101L, "FAILED") }
+    }
+
+    @Test
+    fun `manual reply cancels in-flight turn in AutoReplyOrchestrator`() = runTest(testDispatcher) {
+        val orchestrator = mockk<AutoReplyOrchestrator>(relaxed = true)
+        val testUseCase = SendManualReplyUseCase(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            directReplyExecutionUseCase = directReplyExecutionUseCase,
+            embeddingEngine = embeddingEngine,
+            scope = testScope,
+            autoReplyOrchestrator = orchestrator
+        )
+
+        coEvery { chatHistoryDao.insert(any()) } returns 55L
+        coEvery { directReplyExecutionUseCase.execute(any(), any(), any(), any()) } returns ReplyExecutionResult.Success
+
+        testUseCase.invoke(
+            contactName = "كريم",
+            sourceClass = "BUSINESS",
+            replyText = "أهلاً كريم"
+        )
+
+        verify(exactly = 1) { orchestrator.cancelInFlightTurn("كريم") }
     }
 }

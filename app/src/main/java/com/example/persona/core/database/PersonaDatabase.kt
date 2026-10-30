@@ -23,9 +23,10 @@ import com.example.persona.core.database.entity.*
         ReplyQueueEntity::class,
         ChatHistoryEntity::class,
         OrderEntity::class,
-        ConversationMetadataEntity::class
+        ConversationMetadataEntity::class,
+        ContactEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -38,4 +39,5 @@ abstract class PersonaDatabase : RoomDatabase() {
     abstract fun chatHistoryDao(): ChatHistoryDao
     abstract fun orderDao(): OrderDao
     abstract fun conversationMetadataDao(): ConversationMetadataDao
+    abstract fun contactDao(): ContactDao
 }

@@ -147,9 +147,61 @@ object DatabaseMigrations {
         }
     }
 
+    /**
+     * v9 → v10:
+     *  - Extends `orders_table` with `customer_phone`, `total_amount`, `shipping_fee`, `cancellation_reason`, `governorate`.
+     *  - Extends `chat_history` with `media_file_path`.
+     *  - Creates `contacts_table` with indices for CRM contact management.
+     */
+    val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // 1. Extend orders_table
+            db.execSQL("ALTER TABLE `orders_table` ADD COLUMN `customer_phone` TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE `orders_table` ADD COLUMN `total_amount` REAL NOT NULL DEFAULT 0.0")
+            db.execSQL("ALTER TABLE `orders_table` ADD COLUMN `shipping_fee` REAL NOT NULL DEFAULT 0.0")
+            db.execSQL("ALTER TABLE `orders_table` ADD COLUMN `cancellation_reason` TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE `orders_table` ADD COLUMN `governorate` TEXT DEFAULT NULL")
+
+            // 2. Extend chat_history
+            db.execSQL("ALTER TABLE `chat_history` ADD COLUMN `media_file_path` TEXT DEFAULT NULL")
+
+            // 3. Create contacts_table
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `contacts_table` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`contact_name` TEXT NOT NULL, " +
+                    "`phone_number` TEXT NOT NULL DEFAULT '', " +
+                    "`notes` TEXT NOT NULL DEFAULT '', " +
+                    "`tag` TEXT NOT NULL DEFAULT 'REGULAR', " +
+                    "`total_orders` INTEGER NOT NULL DEFAULT 0, " +
+                    "`total_spent` REAL NOT NULL DEFAULT 0.0, " +
+                    "`last_active_timestamp` INTEGER NOT NULL DEFAULT 0)"
+            )
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `index_contacts_table_contact_name` " +
+                    "ON `contacts_table` (`contact_name`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_contacts_table_phone_number` " +
+                    "ON `contacts_table` (`phone_number`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_contacts_table_tag` " +
+                    "ON `contacts_table` (`tag`)"
+            )
+
+            // 4. Backfill contacts_table from existing conversations
+            db.execSQL(
+                "INSERT OR IGNORE INTO `contacts_table` (`contact_name`, `last_active_timestamp`) " +
+                    "SELECT `contact_name`, MAX(`timestamp`) FROM `chat_history` GROUP BY `contact_name`"
+            )
+        }
+    }
+
     /** All migration paths, registered via `.addMigrations(...)` in DatabaseModule. */
     val ALL_MIGRATIONS: Array<Migration> = arrayOf(
         MIGRATION_7_8,
-        MIGRATION_8_9
+        MIGRATION_8_9,
+        MIGRATION_9_10
     )
 }

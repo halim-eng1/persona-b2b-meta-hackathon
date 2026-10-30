@@ -508,4 +508,124 @@ class ChatDetailViewModelTest {
             conversationMetadataDao.deleteConversation(any(), any())
         }
     }
+
+    @Test
+    fun `resolveAttention directly clears needsHumanAttention flag`() = runTest(testDispatcher) {
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        advanceUntilIdle()
+
+        viewModel.resolveAttention()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            conversationMetadataDao.setNeedsHumanAttention("أحمد مصطفى", "BUSINESS", false)
+        }
+    }
+
+    @Test
+    fun `voice note message strips raw prompt tag and marks isVoiceNote true`() = runTest(testDispatcher) {
+        val voiceMsg = ChatHistoryEntity(
+            id = 10L,
+            contactName = "أحمد مصطفى",
+            sourceClass = "BUSINESS",
+            messageText = "[رسالة صوتية من العميل]: عايز أعرف تفاصيل المقاس واللون",
+            isFromUser = true,
+            timestamp = 5000L,
+            senderType = "CUSTOMER"
+        )
+        every { chatHistoryDao.observeMessagesForContact("أحمد مصطفى", "BUSINESS") } returns flowOf(listOf(voiceMsg))
+
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(1, state.messages.size)
+        assertEquals("عايز أعرف تفاصيل المقاس واللون", state.messages[0].text)
+        assertTrue(state.messages[0].isVoiceNote)
+    }
+
+    @Test
+    fun `message windowing limits initial display to 50 and loadMoreMessages expands limit`() = runTest(testDispatcher) {
+        val manyMessages = (1..60).map { i ->
+            ChatHistoryEntity(
+                id = i.toLong(),
+                contactName = "أحمد مصطفى",
+                sourceClass = "BUSINESS",
+                messageText = "رسالة رقم $i",
+                isFromUser = i % 2 == 0,
+                timestamp = i * 1000L,
+                senderType = "CUSTOMER"
+            )
+        }
+        every { chatHistoryDao.observeMessagesForContact("أحمد مصطفى", "BUSINESS") } returns flowOf(manyMessages)
+
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        val stateBefore = viewModel.uiState.value
+        assertEquals(50, stateBefore.messages.size)
+        assertTrue(stateBefore.hasMoreMessages)
+        assertEquals(60, stateBefore.totalMessageCount)
+        assertEquals("رسالة رقم 60", stateBefore.messages.last().text)
+
+        viewModel.loadMoreMessages()
+        advanceUntilIdle()
+
+        val stateAfter = viewModel.uiState.value
+        assertEquals(60, stateAfter.messages.size)
+        assertFalse(stateAfter.hasMoreMessages)
+    }
+
+    @Test
+    fun `active order is mapped and exposed in uiState`() = runTest(testDispatcher) {
+        val orderDao = mockk<com.example.persona.core.database.dao.OrderDao>(relaxed = true)
+        val activeOrder = com.example.persona.core.database.entity.OrderEntity(
+            id = 501L,
+            contactName = "أحمد مصطفى",
+            status = "IN_PREPARATION",
+            orderDetails = "2x قميص كلاسيك مقاس L",
+            totalAmount = 650.0,
+            deliveryAddress = "المعادي، القاهرة"
+        )
+        every { orderDao.observeAllOrders() } returns flowOf(listOf(activeOrder))
+
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository,
+            orderDao = orderDao
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        val summary = state.activeOrder
+        org.junit.Assert.assertNotNull(summary)
+        assertEquals(501L, summary?.id)
+        assertEquals("IN_PREPARATION", summary?.status)
+        assertEquals("2x قميص كلاسيك مقاس L", summary?.orderDetails)
+        assertEquals(650.0, summary?.totalAmount ?: 0.0, 0.01)
+    }
 }

@@ -7,6 +7,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
@@ -19,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -40,8 +43,11 @@ fun CompactChatTopBar(
     isAiPaused: Boolean,
     botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
     isAiGenerating: Boolean = false,
+    needsHumanAttention: Boolean = false,
     onNavigateBack: () -> Unit,
     onToggleAi: () -> Unit,
+    onOpenWhatsApp: (() -> Unit)? = null,
+    onResolveAttention: (() -> Unit)? = null,
     onExportChat: () -> Unit = {},
     onClearChat: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -64,7 +70,7 @@ fun CompactChatTopBar(
         ) {
             IconButton(
                 onClick = onNavigateBack,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -236,10 +242,26 @@ fun CompactChatTopBar(
 
                 Spacer(modifier = Modifier.width(2.dp))
 
+                // 1-Tap WhatsApp button
+                if (onOpenWhatsApp != null) {
+                    IconButton(
+                        onClick = onOpenWhatsApp,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Chat,
+                            contentDescription = "فتح المحادثة في واتساب",
+                            tint = Color(0xFF25D366),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(2.dp))
+                }
+
                 Box {
                     IconButton(
                         onClick = { menuExpanded = true },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
@@ -253,6 +275,29 @@ fun CompactChatTopBar(
                         onDismissRequest = { menuExpanded = false },
                         modifier = Modifier.background(chatColors.surface)
                     ) {
+                        if (needsHumanAttention && onResolveAttention != null) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "حل التنبيه (Resolve Attention)",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onResolveAttention()
+                                }
+                            )
+                        }
                         DropdownMenuItem(
                             text = {
                                 Text(

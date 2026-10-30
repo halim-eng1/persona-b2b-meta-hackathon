@@ -106,8 +106,40 @@ fun MessageBubble(
                         Spacer(modifier = Modifier.height(2.dp))
                     }
 
-                    // Media placeholder indicator if inbound message contains media
-                    if (message.hasMediaIndicator) {
+                    val isVoice = message.isVoiceNote || message.text.contains("[رسالة صوتية من العميل]")
+                    val cleanText = message.text
+                        .replace("[رسالة صوتية من العميل]:", "")
+                        .replace("[رسالة صوتية من العميل]", "")
+                        .trim()
+
+                    // Voice note transcribed indicator
+                    if (isVoice) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = chatColors.mediaChip,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Mic,
+                                    contentDescription = "تسجيل صوتي",
+                                    tint = chatColors.accentText,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "تسجيل صوتي مفرغ",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = chatColors.neutral
+                                )
+                            }
+                        }
+                    } else if (message.hasMediaIndicator) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = chatColors.mediaChip,
@@ -135,12 +167,12 @@ fun MessageBubble(
                         }
                     }
 
-                    // Message text. ContentOrRtls picks the paragraph direction from the
+                    // Message text. ContentOrRtl picks the paragraph direction from the
                     // first strong directional character, so mixed Arabic/English content
                     // (brand names, product names, specs) keeps correct word order and
                     // punctuation placement regardless of the LTR root layout.
                     Text(
-                        text = message.text,
+                        text = cleanText,
                         style = MaterialTheme.typography.bodyMedium.copy(
                             textDirection = TextDirection.ContentOrRtl
                         ),

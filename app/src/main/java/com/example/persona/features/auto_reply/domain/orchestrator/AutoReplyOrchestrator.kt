@@ -48,6 +48,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -102,10 +103,8 @@ class AutoReplyOrchestrator @Inject constructor(
 
         fun setContactProcessing(contactName: String, isProcessing: Boolean) {
             val key = contactName.trim().lowercase()
-            _activeProcessingContacts.value = if (isProcessing) {
-                _activeProcessingContacts.value + key
-            } else {
-                _activeProcessingContacts.value - key
+            _activeProcessingContacts.update { current ->
+                if (isProcessing) current + key else current - key
             }
         }
 
@@ -218,6 +217,38 @@ class AutoReplyOrchestrator @Inject constructor(
             if (job.isActive) {
                 Log.i(TAG, "Cancelling in-flight processing job for contactKey: $contactKey")
                 job.cancel()
+            }
+        }
+    }
+
+    /**
+     * Cancels any in-flight AI turn, active job, or debounce buffer for [contactName].
+     * Invoked when the merchant sends a manual reply or manually pauses AI.
+     */
+    fun cancelInFlightTurn(contactName: String) {
+        val trimmed = contactName.trim().lowercase()
+        setContactProcessing(contactName, false)
+
+        // Cancel matching active processing jobs
+        activeContactJobs.entries.filter { (key, _) ->
+            val k = key.lowercase()
+            k.endsWith("_$trimmed") || k == trimmed
+        }.forEach { (key, job) ->
+            if (job.isActive) {
+                Log.i(TAG, "Cancelling in-flight turn job for $key")
+                job.cancel()
+            }
+            activeContactJobs.remove(key)
+        }
+
+        // Cancel pending debounce turn
+        debounceBuffer.entries.filter { (key, _) ->
+            val k = key.lowercase()
+            k.endsWith("_$trimmed") || k == trimmed
+        }.forEach { (key, turn) ->
+            synchronized(debounceLock) {
+                turn.debounceJob?.cancel()
+                debounceBuffer.remove(key)
             }
         }
     }
@@ -1094,6 +1125,14 @@ class AutoReplyOrchestrator @Inject constructor(
             if (!rawNotification.isPrePersisted && stylePrefs.replyDelaySeconds > 0) {
                 delay(stylePrefs.replyDelaySeconds * 1000L)
             }
+
+            // Pre-execution abort check: re-verify merchant hasn't paused AI for this contact
+            val preExecConv = conversationMetadataDao.getConversation(processed.contactName, processed.sourceClass.name)
+            if (preExecConv?.isAiPaused == true) {
+                Log.i(TAG, "AI auto-reply turn aborted before execution: AI paused by merchant for ${processed.contactName}")
+                return
+            }
+
             val executionResult = directReplyExecutionUseCase.execute(
                 processed.notificationKey,
                 styledReplyText,
@@ -1188,6 +1227,12 @@ class AutoReplyOrchestrator @Inject constructor(
     }
 
     private suspend fun sendImmediateReply(processed: ProcessedNotification, text: String) {
+        val preExecConv = conversationMetadataDao.getConversation(processed.contactName, processed.sourceClass.name)
+        if (preExecConv?.isAiPaused == true) {
+            Log.i(TAG, "Immediate AI reply aborted before execution: AI paused by merchant for ${processed.contactName}")
+            return
+        }
+
         val executionResult = directReplyExecutionUseCase.execute(
             processed.notificationKey,
             text,

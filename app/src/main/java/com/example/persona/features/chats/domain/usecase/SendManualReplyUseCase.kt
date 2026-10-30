@@ -7,9 +7,11 @@ import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.core.di.ApplicationScope
 import com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener
+import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
 import com.example.persona.features.auto_reply.domain.usecase.DirectReplyExecutionUseCase
 import com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResult
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
+import dagger.Lazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,8 +30,26 @@ class SendManualReplyUseCase @Inject constructor(
     private val conversationMetadataDao: ConversationMetadataDao,
     private val directReplyExecutionUseCase: DirectReplyExecutionUseCase,
     private val embeddingEngine: EmbeddingEngine,
-    @ApplicationScope private val scope: CoroutineScope
+    @ApplicationScope private val scope: CoroutineScope,
+    private val autoReplyOrchestratorLazy: Lazy<AutoReplyOrchestrator>
 ) {
+    // Secondary constructor for testing and backwards-compatibility
+    constructor(
+        chatHistoryDao: ChatHistoryDao,
+        conversationMetadataDao: ConversationMetadataDao,
+        directReplyExecutionUseCase: DirectReplyExecutionUseCase,
+        embeddingEngine: EmbeddingEngine,
+        scope: CoroutineScope,
+        autoReplyOrchestrator: AutoReplyOrchestrator? = null
+    ) : this(
+        chatHistoryDao = chatHistoryDao,
+        conversationMetadataDao = conversationMetadataDao,
+        directReplyExecutionUseCase = directReplyExecutionUseCase,
+        embeddingEngine = embeddingEngine,
+        scope = scope,
+        autoReplyOrchestratorLazy = Lazy { autoReplyOrchestrator ?: error("No orchestrator provided") }
+    )
+
     companion object {
         private const val TAG = "SendManualReplyUseCase"
     }
@@ -42,6 +62,13 @@ class SendManualReplyUseCase @Inject constructor(
     ): ManualReplyResult {
         val trimmedText = replyText.trim()
         val now = System.currentTimeMillis()
+
+        // 0. Cancel any in-flight AI turn in AutoReplyOrchestrator immediately
+        try {
+            autoReplyOrchestratorLazy.get()?.cancelInFlightTurn(contactName)
+        } catch (e: Exception) {
+            // Safe fallback when orchestrator is not provided in unit tests
+        }
 
         // 1. Suppress self-reply echo in notification listener
         WhatsAppNotificationListener.registerMerchantReply(contactName, trimmedText)

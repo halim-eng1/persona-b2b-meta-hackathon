@@ -90,7 +90,11 @@ data class ChatHistoryEntity(
 
     /** Read receipt flag for merchant CRM view. 1 = read, 0 = unread. */
     @ColumnInfo(name = "is_read", defaultValue = "0")
-    val isRead: Boolean = false
+    val isRead: Boolean = false,
+
+    /** Local disk path or URI for media file attached to this message, if any. */
+    @ColumnInfo(name = "media_file_path")
+    val mediaFilePath: String? = null
 ) {
     // FloatArray breaks structural equality — override explicitly.
     override fun equals(other: Any?): Boolean {
@@ -106,7 +110,8 @@ data class ChatHistoryEntity(
             sourceClass == other.sourceClass &&
             senderType == other.senderType &&
             deliveryStatus == other.deliveryStatus &&
-            isRead == other.isRead
+            isRead == other.isRead &&
+            mediaFilePath == other.mediaFilePath
     }
 
     override fun hashCode(): Int {
@@ -121,6 +126,7 @@ data class ChatHistoryEntity(
         result = 31 * result + senderType.hashCode()
         result = 31 * result + deliveryStatus.hashCode()
         result = 31 * result + isRead.hashCode()
+        result = 31 * result + (mediaFilePath?.hashCode() ?: 0)
         return result
     }
 }

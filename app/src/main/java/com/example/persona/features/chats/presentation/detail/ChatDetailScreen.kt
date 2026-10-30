@@ -1,6 +1,5 @@
 package com.example.persona.features.chats.presentation.detail
 
-import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -16,8 +15,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.PauseCircle
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +31,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -177,16 +180,74 @@ fun ChatDetailScreen(
             isAiPaused = state.isAiPaused,
             botName = state.botName,
             isAiGenerating = state.isAiGenerating,
+            needsHumanAttention = state.needsHumanAttention,
             onNavigateBack = onNavigateBack,
             onToggleAi = { viewModel.toggleAiPaused() },
+            onOpenWhatsApp = {
+                WhatsAppLauncher.openChat(
+                    context = context,
+                    phoneNumber = state.contactPhoneNumber,
+                    contactName = state.contactName,
+                    preferBusiness = (state.sourceClass.uppercase() == "BUSINESS")
+                )
+            },
+            onResolveAttention = { viewModel.resolveAttention() },
             onExportChat = { showExportDialog = true },
             onClearChat = { showClearChatDialog = true }
         )
 
-        // In-chat banner when AI is paused. Interactive: carries a button role, a tap
-        // label, and a state description so TalkBack announces affordance + state, and
-        // a 48dp minimum touch target (the content row is shorter than that).
-        AnimatedVisibility(visible = state.isAiPaused) {
+        // Resolve Attention Banner (when customer requested human or triggered HITL)
+        AnimatedVisibility(visible = state.needsHumanAttention) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                color = MaterialTheme.colorScheme.errorContainer
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "⚠️ تنبيه: العميل بحاجة لتدخل بشري",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = { viewModel.resolveAttention() },
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.heightIn(min = 48.dp)
+                    ) {
+                        Text(
+                            text = "حل التنبيه",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+            }
+        }
+
+        // In-chat banner when AI is paused
+        AnimatedVisibility(visible = state.isAiPaused && !state.needsHumanAttention) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -211,7 +272,7 @@ fun ChatDetailScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "AI Auto-Reply paused for this chat — Tap to Resume",
+                        text = "الرد الآلي متوقف لهذه المحادثة — اضغط للاستئناف",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Medium,
                             color = chatColors.onSurface
@@ -221,8 +282,69 @@ fun ChatDetailScreen(
             }
         }
 
-        // Messages Stream. The snackbar overlays the bottom of the list instead of taking
-        // layout space in the Column, so feedback never compresses the stream or shifts it.
+        // Sticky Active Order Banner
+        AnimatedVisibility(visible = state.activeOrder != null) {
+            state.activeOrder?.let { order ->
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                    tonalElevation = 2.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocalShipping,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "طلب نشط: ${formatOrderStatusArabic(order.status)}",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                )
+                                Text(
+                                    text = "${order.totalAmount.toInt()} ج.م (COD)",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                )
+                            }
+                            if (order.orderDetails.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = order.orderDetails,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Messages Stream
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -236,6 +358,29 @@ fun ChatDetailScreen(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Windowing / Pagination header: Load older messages
+                if (state.hasMoreMessages) {
+                    item(key = "load_more_messages_btn") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            OutlinedButton(
+                                onClick = { viewModel.loadMoreMessages() },
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                                modifier = Modifier.heightIn(min = 48.dp)
+                            ) {
+                                Text(
+                                    text = "تحميل رسائل أقدم (${state.messages.size} من ${state.totalMessageCount})",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
+                }
+
                 itemsIndexed(
                     items = state.messages,
                     key = { _, msg -> msg.id }
@@ -254,7 +399,15 @@ fun ChatDetailScreen(
                         onOpenWhatsApp = {
                             val pkg = state.fallbackTargetPackage
                                 ?: if (state.sourceClass.uppercase() == "BUSINESS") "com.whatsapp.w4b" else "com.whatsapp"
-                            openWhatsAppFallback(context, snackbarHostState, coroutineScope, pkg, msg.text)
+                            openWhatsAppFallback(
+                                context = context,
+                                snackbarHostState = snackbarHostState,
+                                coroutineScope = coroutineScope,
+                                phoneNumber = state.contactPhoneNumber,
+                                contactName = state.contactName,
+                                packageName = pkg,
+                                text = msg.text
+                            )
                         }
                     )
                 }
@@ -304,7 +457,7 @@ fun ChatDetailScreen(
             )
         }
 
-        // Composer Bar (Root layout already handles imePadding)
+        // Composer Bar with Quick Reply Chips
         ChatComposerBar(
             inputText = state.inputText,
             isSending = state.isSending,
@@ -314,47 +467,39 @@ fun ChatDetailScreen(
     }
 }
 
+private fun formatOrderStatusArabic(status: String): String = when (status.uppercase()) {
+    "PENDING" -> "قيد الانتظار"
+    "CONFIRMED", "IN_PREPARATION" -> "قيد التجهيز"
+    "SHIPPED" -> "مع المندوب 🚚"
+    "DELIVERED" -> "تم التسليم"
+    "CANCELLED" -> "ملغي"
+    else -> status
+}
+
 private fun openWhatsAppFallback(
     context: Context,
     snackbarHostState: SnackbarHostState,
     coroutineScope: CoroutineScope,
+    phoneNumber: String?,
+    contactName: String,
     packageName: String,
     text: String
 ) {
-    // Feedback is fire-and-forget: showSnackbar suspends until the snackbar is dismissed
-    // (~4s at Short duration), so awaiting it before startActivity would delay the
-    // WhatsApp launch by that long. Child coroutines keep the snackbar visible without
-    // blocking the launch. There are no suspension points before startActivity, so the
-    // screen scope being cancelled (e.g. the user navigating back) can no longer
-    // interrupt the launch sequence either.
-    fun report(message: String) {
-        coroutineScope.launch { snackbarHostState.showSnackbar(message) }
-    }
-
     coroutineScope.launch {
         try {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             clipboard.setPrimaryClip(ClipData.newPlainText("WhatsApp Reply", text))
-            report("Message copied to clipboard")
-        } catch (_: Exception) {
-            // Some OEMs restrict background clipboard access — report the actual failure
-            // instead of blaming WhatsApp. Opening the chat is still useful.
-            report("Could not copy the reply to the clipboard")
-        }
+            coroutineScope.launch { snackbarHostState.showSnackbar("تم نسخ الرسالة إلى الحافظة") }
+        } catch (_: Exception) {}
 
-        try {
-            val intent = context.packageManager.getLaunchIntentForPackage(packageName)
-                ?: context.packageManager.getLaunchIntentForPackage("com.whatsapp")
-            if (intent != null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
-            } else {
-                report("WhatsApp app not found on device")
-            }
-        } catch (_: ActivityNotFoundException) {
-            report("Could not open WhatsApp")
-        } catch (_: Exception) {
-            report("Could not open WhatsApp")
+        val opened = WhatsAppLauncher.openChat(
+            context = context,
+            phoneNumber = phoneNumber,
+            contactName = contactName,
+            preferBusiness = (packageName == "com.whatsapp.w4b")
+        )
+        if (!opened) {
+            coroutineScope.launch { snackbarHostState.showSnackbar("تعذر فتح تطبيق واتساب") }
         }
     }
 }

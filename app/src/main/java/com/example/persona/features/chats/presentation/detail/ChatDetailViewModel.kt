@@ -5,11 +5,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.dao.ChatHistoryDao
+import com.example.persona.core.database.dao.ContactDao
 import com.example.persona.core.database.dao.ConversationMetadataDao
+import com.example.persona.core.database.dao.OrderDao
 import com.example.persona.core.database.entity.ChatHistoryEntity
 import com.example.persona.features.auto_reply.data.service.NotificationActionCache
 import com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener
 import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
+import com.example.persona.features.chats.domain.usecase.DismissHitlAttentionUseCase
 import com.example.persona.features.chats.domain.usecase.ManualReplyResult
 import com.example.persona.features.chats.domain.usecase.SendManualReplyUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,7 +31,10 @@ class ChatDetailViewModel @Inject constructor(
     private val sendManualReplyUseCase: SendManualReplyUseCase,
     savedStateHandle: SavedStateHandle,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val chatExportFormatter: ChatExportFormatter = ChatExportFormatter()
+    private val chatExportFormatter: ChatExportFormatter = ChatExportFormatter(),
+    private val orderDao: OrderDao? = null,
+    private val contactDao: ContactDao? = null,
+    private val dismissHitlAttentionUseCase: DismissHitlAttentionUseCase? = null
 ) : ViewModel() {
 
     val contactName: String = savedStateHandle["contactName"] ?: ""
@@ -48,6 +54,13 @@ class ChatDetailViewModel @Inject constructor(
 
     private val _uiEvents = Channel<ChatDetailUiEvent>(Channel.BUFFERED)
     val uiEvents: Flow<ChatDetailUiEvent> = _uiEvents.receiveAsFlow()
+
+    private val _messageLimit = MutableStateFlow(50)
+    val messageLimit: StateFlow<Int> = _messageLimit.asStateFlow()
+
+    fun loadMoreMessages() {
+        _messageLimit.value += 50
+    }
 
     private data class InputState(
         val text: String,
@@ -73,19 +86,63 @@ class ChatDetailViewModel @Inject constructor(
         AiPersonaState(botName, isGenerating)
     }
 
+    private val activeOrderFlow: Flow<ActiveOrderSummary?> = if (orderDao != null) {
+        orderDao.observeAllOrders().map { allOrders ->
+            val matching = allOrders.firstOrNull { order ->
+                order.contactName.equals(contactName, ignoreCase = true) &&
+                    order.status !in listOf("SHIPPED", "CANCELLED", "RETURNED", "DELIVERED")
+            }
+            matching?.let {
+                ActiveOrderSummary(
+                    id = it.id,
+                    status = it.status,
+                    orderDetails = it.orderDetails ?: "تفاصيل الطلب غير مسجلة",
+                    totalAmount = it.totalAmount,
+                    deliveryAddress = it.deliveryAddress
+                )
+            }
+        }
+    } else {
+        flowOf(null)
+    }
+
+    private val contactPhoneFlow: Flow<String?> = if (contactDao != null) {
+        contactDao.observeAllContacts().map { contacts ->
+            contacts.firstOrNull { it.contactName.equals(contactName, ignoreCase = true) }?.phoneNumber
+                ?.takeIf { it.isNotBlank() }
+        }
+    } else {
+        flowOf(null)
+    }
+
+    private val _secondaryChatState = combine(
+        _replyCapability,
+        _inputState,
+        _aiPersonaState,
+        activeOrderFlow,
+        contactPhoneFlow
+    ) { capability, input, persona, order, phone ->
+        Triple(capability, input, persona) to (order to phone)
+    }
+
     val uiState: StateFlow<ChatDetailUiState> = combine(
         chatHistoryDao.observeMessagesForContact(contactName, sourceClass),
         conversationMetadataDao.observeAllConversations(),
-        _replyCapability,
-        _inputState,
-        _aiPersonaState
-    ) { rawMessages, allConversations, capability, inputState, personaState ->
+        _secondaryChatState,
+        _messageLimit
+    ) { rawMessages, allConversations, (triplet, orderAndPhone), limit ->
+        val (capability, inputState, personaState) = triplet
+        val (activeOrder, contactPhone) = orderAndPhone
+
         val convMeta = allConversations.firstOrNull {
             it.contactName.equals(contactName, ignoreCase = true) &&
                 it.sourceClass.equals(sourceClass, ignoreCase = true)
         }
 
-        val uiMessages = rawMessages.map { it.toUiModel() }
+        val totalCount = rawMessages.size
+        val hasMore = totalCount > limit
+        val windowed = if (hasMore) rawMessages.takeLast(limit) else rawMessages
+        val uiMessages = windowed.map { it.toUiModel() }
 
         ChatDetailUiState(
             contactName = contactName,
@@ -98,7 +155,11 @@ class ChatDetailViewModel @Inject constructor(
             isSending = inputState.isSending,
             fallbackTargetPackage = inputState.fallbackPkg,
             botName = personaState.botName,
-            isAiGenerating = personaState.isAiGenerating
+            isAiGenerating = personaState.isAiGenerating,
+            activeOrder = activeOrder,
+            contactPhoneNumber = contactPhone,
+            hasMoreMessages = hasMore,
+            totalMessageCount = totalCount
         )
     }.stateIn(
         scope = viewModelScope,
@@ -170,6 +231,20 @@ class ChatDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Directly clears the [needsHumanAttention] flag without requiring an active notification.
+     */
+    fun resolveAttention() {
+        viewModelScope.launch {
+            val useCase = dismissHitlAttentionUseCase
+            if (useCase != null) {
+                useCase(contactName, sourceClass)
+            } else {
+                conversationMetadataDao.setNeedsHumanAttention(contactName, sourceClass, false)
+            }
+        }
+    }
+
     fun sendMessage() {
         val text = _inputText.value.trim()
         if (text.isBlank() || _isSending.value) return
@@ -213,18 +288,24 @@ class ChatDetailViewModel @Inject constructor(
     private fun ChatHistoryEntity.toUiModel(): ChatMessageUiModel {
         val timeStr = formatTime(timestamp)
         val dateHeaderStr = formatDateHeader(timestamp)
+        val isVoice = messageText.contains("[رسالة صوتية من العميل]") || messageText.contains("🎤")
+        val cleanText = messageText
+            .replace("[رسالة صوتية من العميل]:", "")
+            .replace("[رسالة صوتية من العميل]", "")
+            .trim()
         val hasMedia = isMediaMessage(messageText)
 
         return ChatMessageUiModel(
             id = id,
-            text = messageText,
+            text = cleanText,
             isFromUser = isFromUser,
             senderType = senderType,
             deliveryStatus = deliveryStatus,
             timestampMs = timestamp,
             formattedTime = timeStr,
             dateHeader = dateHeaderStr,
-            hasMediaIndicator = hasMedia
+            hasMediaIndicator = hasMedia,
+            isVoiceNote = isVoice
         )
     }
 
@@ -232,10 +313,10 @@ class ChatDetailViewModel @Inject constructor(
         val lower = text.lowercase()
         return lower.contains("📷") ||
             lower.contains("🎤") ||
-            lower.contains("photo") ||
             lower.contains("voice message") ||
-            lower.contains("صورة") ||
-            lower.contains("رسالة صوتية")
+            lower.startsWith("photo") ||
+            lower.startsWith("صورة:") ||
+            lower.startsWith("فيديو:")
     }
 
     private fun formatTime(timestampMs: Long): String {
@@ -293,7 +374,7 @@ class ChatDetailViewModel @Inject constructor(
 
     /**
      * Clears messages for this contact in the chosen [range].
-     * Executes delete on [ChatHistoryDao] so messages disappear immediately from the screen.
+     * Preserves conversation metadata and AI paused flag instead of hard deletion.
      */
     fun clearChat(
         range: ClearChatTimeRange,

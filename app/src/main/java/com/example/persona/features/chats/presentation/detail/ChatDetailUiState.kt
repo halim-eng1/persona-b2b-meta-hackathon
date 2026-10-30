@@ -33,6 +33,14 @@ enum class ExportTimeRange(
     )
 }
 
+data class ActiveOrderSummary(
+    val id: Long,
+    val status: String,
+    val orderDetails: String,
+    val totalAmount: Double,
+    val deliveryAddress: String? = null
+)
+
 data class ChatMessageUiModel(
     val id: Long,
     val text: String,
@@ -42,7 +50,8 @@ data class ChatMessageUiModel(
     val timestampMs: Long,
     val formattedTime: String,
     val dateHeader: String,
-    val hasMediaIndicator: Boolean
+    val hasMediaIndicator: Boolean,
+    val isVoiceNote: Boolean = false
 )
 
 data class ChatDetailUiState(
@@ -56,5 +65,9 @@ data class ChatDetailUiState(
     val isSending: Boolean = false,
     val fallbackTargetPackage: String? = null,
     val botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
-    val isAiGenerating: Boolean = false
+    val isAiGenerating: Boolean = false,
+    val activeOrder: ActiveOrderSummary? = null,
+    val contactPhoneNumber: String? = null,
+    val hasMoreMessages: Boolean = false,
+    val totalMessageCount: Int = 0
 )
