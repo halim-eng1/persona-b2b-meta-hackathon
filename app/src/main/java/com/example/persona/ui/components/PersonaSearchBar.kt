@@ -22,14 +22,14 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Standardized search field with Egyptian Arabic RTL support, animated clear button,
- * and adaptive Material 3 surface styling.
+ * accessible 48x48dp touch targets, and adaptive Material 3 surface styling.
  */
 @Composable
 fun PersonaSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    placeholder: String = "Search...",
+    placeholder: String = "بحث...",
     onClear: () -> Unit = { onQueryChange("") },
     onSearch: ((String) -> Unit)? = null,
     enabled: Boolean = true
@@ -55,7 +55,7 @@ fun PersonaSearchBar(
         leadingIcon = {
             Icon(
                 imageVector = Icons.Default.Search,
-                contentDescription = "Search",
+                contentDescription = "بحث",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
@@ -69,7 +69,7 @@ fun PersonaSearchBar(
                 IconButton(onClick = onClear) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Clear search query",
+                        contentDescription = "مسح نص البحث",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )

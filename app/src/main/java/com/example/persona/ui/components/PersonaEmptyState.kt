@@ -14,7 +14,7 @@ import com.example.persona.ui.theme.PersonaTheme
 
 /**
  * Standardized empty / zero state layout with illustration/icon, title, subtitle,
- * and optional call-to-action button.
+ * and optional call-to-action button (with WCAG AA >= 48dp height).
  */
 @Composable
 fun PersonaEmptyState(
@@ -79,9 +79,10 @@ fun PersonaEmptyState(
                 Spacer(modifier = Modifier.height(spacing.lg))
                 Button(
                     onClick = onAction,
-                    shape = MaterialTheme.shapes.medium
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.heightIn(min = 48.dp)
                 ) {
-                    Text(text = actionLabel)
+                    Text(text = actionLabel, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

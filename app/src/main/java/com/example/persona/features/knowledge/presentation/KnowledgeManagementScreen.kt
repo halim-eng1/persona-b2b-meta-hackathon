@@ -307,7 +307,7 @@ fun KnowledgeManagementScreen(
                         Text(
                             text = "عناصر الكتالوج (${state.filteredEntries.size})",
                             style = MaterialTheme.typography.labelMedium.copy(
-                                letterSpacing = 1.sp,
+                                letterSpacing = 0.sp,
                                 fontWeight = FontWeight.SemiBold
                             ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant

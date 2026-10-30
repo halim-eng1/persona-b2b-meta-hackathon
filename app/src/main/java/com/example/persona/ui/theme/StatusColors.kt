@@ -6,7 +6,7 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * Semantic color roles for domain order and operation statuses.
- * Adapts between light and dark appearances while preserving WCAG AA contrast.
+ * Adapts between light and dark appearances while preserving WCAG AA contrast (>= 4.5:1).
  */
 @Immutable
 data class StatusColors(
@@ -29,40 +29,40 @@ data class StatusColors(
 )
 
 fun darkStatusColors(): StatusColors = StatusColors(
-    pending = PersonaPrimitives.Amber400,
-    pendingContainer = PersonaPrimitives.Amber400.copy(alpha = 0.15f),
-    inPreparation = PersonaPrimitives.Blue500,
-    inPreparationContainer = PersonaPrimitives.Blue500.copy(alpha = 0.15f),
-    shipping = PersonaPrimitives.Indigo400,
-    shippingContainer = PersonaPrimitives.Indigo400.copy(alpha = 0.15f),
-    completed = PersonaPrimitives.Emerald400,
-    completedContainer = PersonaPrimitives.Emerald400.copy(alpha = 0.15f),
-    cancelled = PersonaPrimitives.Red400,
-    cancelledContainer = PersonaPrimitives.Red400.copy(alpha = 0.15f),
-    returned = PersonaPrimitives.Brown400,
-    returnedContainer = PersonaPrimitives.Brown400.copy(alpha = 0.15f),
-    success = PersonaPrimitives.Emerald400,
-    successContainer = PersonaPrimitives.Emerald400.copy(alpha = 0.15f),
-    warning = PersonaPrimitives.Amber400,
-    warningContainer = PersonaPrimitives.Amber400.copy(alpha = 0.15f)
+    pending = Color(0xFFFBBF24), // Amber 400
+    pendingContainer = Color(0xFF78350F).copy(alpha = 0.35f),
+    inPreparation = Color(0xFF60A5FA), // Blue 400
+    inPreparationContainer = Color(0xFF1E3A8A).copy(alpha = 0.35f),
+    shipping = Color(0xFF818CF8), // Indigo 400
+    shippingContainer = Color(0xFF312E81).copy(alpha = 0.35f),
+    completed = Color(0xFF34D399), // Emerald 400
+    completedContainer = Color(0xFF064E3B).copy(alpha = 0.35f),
+    cancelled = Color(0xFFF87171), // Red 400
+    cancelledContainer = Color(0xFF7F1D1D).copy(alpha = 0.35f),
+    returned = Color(0xFFA1887F), // Brown 400
+    returnedContainer = Color(0xFF3E2723).copy(alpha = 0.35f),
+    success = Color(0xFF34D399),
+    successContainer = Color(0xFF064E3B).copy(alpha = 0.35f),
+    warning = Color(0xFFFBBF24),
+    warningContainer = Color(0xFF78350F).copy(alpha = 0.35f)
 )
 
 fun lightStatusColors(): StatusColors = StatusColors(
-    pending = Color(0xFFD97706),
+    pending = Color(0xFFB45309), // Amber 700 - Contrast against #FEF3C7 is >= 4.5:1
     pendingContainer = Color(0xFFFEF3C7),
-    inPreparation = Color(0xFF2563EB),
+    inPreparation = Color(0xFF1D4ED8), // Blue 700 - Contrast against #DBEAFE is >= 4.5:1
     inPreparationContainer = Color(0xFFDBEAFE),
-    shipping = Color(0xFF4F46E5),
+    shipping = Color(0xFF4338CA), // Indigo 700 - Contrast against #E0E7FF is >= 4.5:1
     shippingContainer = Color(0xFFE0E7FF),
-    completed = Color(0xFF059669),
+    completed = Color(0xFF047857), // Emerald 700 - Contrast against #D1FAE5 is >= 4.5:1
     completedContainer = Color(0xFFD1FAE5),
-    cancelled = Color(0xFFDC2626),
+    cancelled = Color(0xFFB91C1C), // Red 700 - Contrast against #FEE2E2 is >= 4.5:1
     cancelledContainer = Color(0xFFFEE2E2),
-    returned = Color(0xFF78350F),
+    returned = Color(0xFF78350F), // Amber 900 - Contrast against #F3E8E2 is >= 4.5:1
     returnedContainer = Color(0xFFF3E8E2),
-    success = Color(0xFF059669),
+    success = Color(0xFF047857),
     successContainer = Color(0xFFD1FAE5),
-    warning = Color(0xFFD97706),
+    warning = Color(0xFFB45309),
     warningContainer = Color(0xFFFEF3C7)
 )
 

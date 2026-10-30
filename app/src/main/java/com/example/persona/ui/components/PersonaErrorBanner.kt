@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Standardized dismissible error banner supporting retry/action callbacks.
+ * WCAG 2.1 AA compliant: Dismiss button and action buttons strictly enforce >= 48dp touch targets.
  */
 @Composable
 fun PersonaErrorBanner(
@@ -33,7 +34,7 @@ fun PersonaErrorBanner(
         ) {
             Icon(
                 imageVector = Icons.Default.Warning,
-                contentDescription = "Error",
+                contentDescription = "تحذير خطأ",
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(20.dp)
             )
@@ -45,17 +46,23 @@ fun PersonaErrorBanner(
                 modifier = Modifier.weight(1f)
             )
             if (!actionLabel.isNullOrBlank() && onAction != null) {
-                TextButton(onClick = onAction) {
+                TextButton(
+                    onClick = onAction,
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
                     Text(text = actionLabel, color = MaterialTheme.colorScheme.error)
                 }
             }
             if (onDismiss != null) {
-                IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(48.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Dismiss error",
+                        contentDescription = "إغلاق التنبيه",
                         tint = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }

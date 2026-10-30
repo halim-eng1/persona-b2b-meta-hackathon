@@ -12,6 +12,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.ui.components.formatBadgeCount
@@ -69,10 +70,10 @@ fun BottomNavBar(
                                 }
                             }
                         ) {
-                            Icon(destination.icon, contentDescription = destination.label)
+                            Icon(destination.icon, contentDescription = null)
                         }
                     } else {
-                        Icon(destination.icon, contentDescription = destination.label)
+                        Icon(destination.icon, contentDescription = null)
                     }
                 },
                 label = {
@@ -86,12 +87,18 @@ fun BottomNavBar(
                 },
                 selected = isSelected,
                 onClick = {
-                    navController.navigate(destination.screen) {
-                        popUpTo(Screen.Home) {
-                            saveState = true
+                    if (isSelected) {
+                        // P1 Fix: Re-selecting active tab pops to that tab's root destination
+                        navController.popBackStack(destination.screen, inclusive = false)
+                    } else {
+                        // P1 Fix: Dynamic start destination resolution instead of hardcoded Screen.Home
+                        navController.navigate(destination.screen) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
                         }
-                        launchSingleTop = true
-                        restoreState = true
                     }
                 }
             )

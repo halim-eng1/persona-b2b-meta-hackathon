@@ -32,6 +32,7 @@ fun HomeScreen(
     onNavigateToChat: (contactName: String, sourceClass: String) -> Unit,
     onNavigateToOrders: () -> Unit = {},
     onNavigateToKnowledge: () -> Unit = onNavigateToImport,
+    onNavigateToContacts: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
@@ -121,7 +122,7 @@ fun HomeScreen(
             Text(
                 text = "مؤشرات التشغيل اليومية (DAILY B2B METRICS)",
                 style = MaterialTheme.typography.labelSmall.copy(
-                    letterSpacing = 1.1.sp,
+                    letterSpacing = 0.sp,
                     fontWeight = FontWeight.Bold
                 ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -140,7 +141,8 @@ fun HomeScreen(
                 onNavigateToKnowledge = onNavigateToKnowledge,
                 onNavigateToImport = onNavigateToImport,
                 onNavigateToOrders = onNavigateToOrders,
-                onEmergencyStop = { showEmergencyDialog = true }
+                onEmergencyStop = { showEmergencyDialog = true },
+                onNavigateToContacts = onNavigateToContacts
             )
 
             // ── Section 6: Knowledge Base Empty Prompt ────────────────────────
@@ -194,7 +196,7 @@ fun HomeScreen(
                     Text(
                         text = "آخر العمليات والردود (RECENT ACTIVITY)",
                         style = MaterialTheme.typography.labelSmall.copy(
-                            letterSpacing = 1.1.sp,
+                            letterSpacing = 0.sp,
                             fontWeight = FontWeight.Bold
                         ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -4,16 +4,13 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import com.example.persona.features.onboarding.data.PermissionChecker
-import javax.inject.Inject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
@@ -22,14 +19,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.persona.features.onboarding.data.PermissionChecker
 import com.example.persona.navigation.BottomNavBar
 import com.example.persona.navigation.PersonaNavGraph
 import com.example.persona.navigation.Screen
 import com.example.persona.navigation.TopLevelDestination
 import com.example.persona.ui.theme.PersonaTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -48,9 +48,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) {
-            handleIntent(intent)
-        }
+
+        // P0 Fix: Do NOT skip handleIntent on process death (savedInstanceState != null)
+        handleIntent(intent)
 
         setContent {
             PersonaTheme {
@@ -62,7 +62,18 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(pendingDeepLinkContact) {
                     pendingDeepLinkContact?.let { (contact, source) ->
-                        navController.navigate(Screen.ChatDetail(contact, source))
+                        val currentContact = currentBackStackEntry?.arguments?.getString("contactName")
+                        val isAlreadyOnSameChat = currentDestination?.hasRoute(Screen.ChatDetail::class) == true &&
+                            currentContact == contact
+
+                        if (!isAlreadyOnSameChat) {
+                            navController.navigate(Screen.ChatDetail(contact, source)) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                            }
+                        }
                         pendingDeepLinkContact = null
                     }
                 }

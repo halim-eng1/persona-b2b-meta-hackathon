@@ -38,15 +38,30 @@ private val DefaultAvatarTints = listOf(
 
 /**
  * Extracts a 1 or 2 letter uppercase monogram from [name].
- * Correctly extracts initials from multi-word names (e.g. "Ahmed Hassan" -> "AH")
- * and handles Arabic or mixed scripts safely.
+ * Correctly handles:
+ * - Multi-word Latin names (e.g. "Ahmed Hassan" -> "AH")
+ * - Compound Arabic names with prefixes like "عبد الله" -> "عل" or "أبو بكر" -> "أب"
+ * - Single-word Arabic/Latin names safely
  */
 fun extractMonogram(name: String, letterCount: Int = 2): String {
     val clean = name.trim()
     if (clean.isEmpty()) return "?"
     val words = clean.split("\\s+".toRegex()).filter { it.isNotEmpty() }
+
+    val compoundPrefixes = setOf("عبد", "أبو", "ابو", "أم", "ام", "آل", "ابن", "بن")
     return if (words.size >= 2 && letterCount >= 2) {
-        (words[0].take(1) + words[1].take(1)).uppercase()
+        val firstWord = words[0]
+        val secondWord = words[1]
+        if (firstWord in compoundPrefixes) {
+            val secondCore = if (secondWord.startsWith("ال") && secondWord.length > 2) {
+                secondWord.substring(2)
+            } else {
+                secondWord
+            }
+            (firstWord.take(1) + secondCore.take(1)).uppercase()
+        } else {
+            (firstWord.take(1) + secondWord.take(1)).uppercase()
+        }
     } else {
         clean.take(letterCount).uppercase()
     }
@@ -97,7 +112,7 @@ fun PersonaAvatar(
         modifier = modifier
             .size(size)
             .semantics(mergeDescendants = true) {
-                this.contentDescription = "Avatar for $name"
+                this.contentDescription = "صورة رمزية لـ $name"
             }
     ) {
         Box(

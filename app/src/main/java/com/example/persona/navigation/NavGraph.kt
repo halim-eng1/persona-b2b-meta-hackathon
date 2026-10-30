@@ -1,12 +1,7 @@
 package com.example.persona.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -19,6 +14,7 @@ import com.example.persona.features.chat_import.presentation.ChatImportScreen
 import com.example.persona.features.chat_import.presentation.ChatImportViewModel
 import com.example.persona.features.chats.presentation.detail.ChatDetailScreen
 import com.example.persona.features.chats.presentation.list.ChatsListScreen
+import com.example.persona.features.contacts.presentation.ContactDirectoryScreen
 import com.example.persona.features.home.presentation.HomeScreen
 import com.example.persona.features.knowledge.presentation.KnowledgeManagementScreen
 import com.example.persona.features.onboarding.presentation.PermissionOnboardingScreen
@@ -39,7 +35,7 @@ fun PersonaNavGraph(
         composable<Screen.Home> {
             HomeScreen(
                 onNavigateToImport = {
-                    navController.navigate(Screen.ChatImport)
+                    navController.navigate(Screen.ChatImportGraph)
                 },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings)
@@ -49,6 +45,15 @@ fun PersonaNavGraph(
                 },
                 onNavigateToChat = { contactName, sourceClass ->
                     navController.navigate(Screen.ChatDetail(contactName, sourceClass))
+                },
+                onNavigateToOrders = {
+                    navController.navigate(Screen.Orders)
+                },
+                onNavigateToKnowledge = {
+                    navController.navigate(Screen.KnowledgeManagement)
+                },
+                onNavigateToContacts = {
+                    navController.navigate(Screen.Contacts)
                 }
             )
         }
@@ -81,6 +86,16 @@ fun PersonaNavGraph(
             SettingsScreen()
         }
 
+        // ── CRM Contacts Directory ────────────────────────────────────────────
+        composable<Screen.Contacts> {
+            ContactDirectoryScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToChat = { contact, source ->
+                    navController.navigate(Screen.ChatDetail(contact, source))
+                }
+            )
+        }
+
         // ── Full-screen destinations (no bottom bar) ──────────────────────────
         composable<Screen.ChatDetail> {
             ChatDetailScreen(
@@ -88,8 +103,25 @@ fun PersonaNavGraph(
             )
         }
 
+        // ── Mandatory Permission / Onboarding Flow ───────────────────────────
         composable<Screen.Onboarding> {
-            PlaceholderScreen(name = "Onboarding")
+            PermissionOnboardingScreen(
+                onComplete = {
+                    navController.navigate(Screen.Home) {
+                        popUpTo(Screen.Onboarding) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable<Screen.PermissionSetup> {
+            PermissionOnboardingScreen(
+                onComplete = {
+                    navController.navigate(Screen.Home) {
+                        popUpTo(Screen.PermissionSetup) { inclusive = true }
+                    }
+                }
+            )
         }
 
         // ── Nested Chat Import Flow ───────────────────────────────────────────
@@ -136,32 +168,5 @@ fun PersonaNavGraph(
                 )
             }
         }
-
-        composable<Screen.PermissionSetup> {
-            PermissionOnboardingScreen(
-                onComplete = {
-                    navController.navigate(Screen.Home) {
-                        popUpTo(Screen.PermissionSetup) { inclusive = true }
-                    }
-                }
-            )
-        }
-    }
-}
-
-@Composable
-private fun PlaceholderScreen(
-    name: String,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = name,
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
     }
 }

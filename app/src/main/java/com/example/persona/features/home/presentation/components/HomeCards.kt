@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -24,6 +25,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.persona.features.audit_log.domain.model.AuditLogItem
+import com.example.persona.ui.components.AvatarShape
+import com.example.persona.ui.components.PersonaAvatar
 import com.example.persona.features.home.presentation.SystemHealthStatus
 import com.example.persona.features.home.presentation.WaitingCustomer
 import kotlinx.datetime.TimeZone
@@ -316,7 +319,7 @@ fun B2BOperationalMetricsHub(
         ) {
             StatCard(
                 modifier = Modifier.weight(1f),
-                icon = Icons.Default.ReceiptLong,
+                icon = Icons.AutoMirrored.Filled.ReceiptLong,
                 value = todayOrders.toString(),
                 label = "طلبات اليوم",
                 iconTint = MaterialTheme.colorScheme.primary
@@ -358,6 +361,7 @@ fun QuickActionsSection(
     onNavigateToImport: () -> Unit,
     onNavigateToOrders: () -> Unit,
     onEmergencyStop: () -> Unit,
+    onNavigateToContacts: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -400,19 +404,26 @@ fun QuickActionsSection(
             ) {
                 QuickActionButton(
                     modifier = Modifier.weight(1f),
-                    icon = Icons.Default.ReceiptLong,
+                    icon = Icons.AutoMirrored.Filled.ReceiptLong,
                     label = "تجهيز الطلبات",
                     onClick = onNavigateToOrders
                 )
                 QuickActionButton(
                     modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Dangerous,
-                    label = "إيقاف طوارئ",
-                    tint = MaterialTheme.colorScheme.error,
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                    onClick = onEmergencyStop
+                    icon = Icons.Default.People,
+                    label = "دليل العملاء CRM",
+                    onClick = onNavigateToContacts
                 )
             }
+
+            QuickActionButton(
+                modifier = Modifier.fillMaxWidth(),
+                icon = Icons.Default.Dangerous,
+                label = "إيقاف طوارئ للرد الآلي",
+                tint = MaterialTheme.colorScheme.error,
+                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                onClick = onEmergencyStop
+            )
         }
     }
 }
@@ -581,19 +592,13 @@ fun RecentActivityRow(
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-            modifier = Modifier.size(36.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Text(
-                    text = item.contactName.take(2).uppercase(),
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
+        PersonaAvatar(
+            name = item.contactName,
+            size = 36.dp,
+            shape = AvatarShape.ROUNDED,
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        )
 
         Spacer(modifier = Modifier.width(12.dp))
 

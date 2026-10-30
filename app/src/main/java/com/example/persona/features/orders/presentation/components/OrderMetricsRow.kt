@@ -18,13 +18,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.persona.features.orders.domain.EgyptianOrderUtils
 import com.example.persona.features.orders.presentation.OrderFilter
+import com.example.persona.ui.theme.PersonaTheme
 
-val OrderAmber = Color(0xFFFFB300)
-val OrderBlue = Color(0xFF3B82F6)
-val OrderIndigo = Color(0xFF6366F1)
-val OrderGreen = Color(0xFF10B981)
-val OrderRed = Color(0xFFEF4444)
-val OrderBrown = Color(0xFFA1887F)
+// WCAG 2.1 AA compliant status colors (>= 4.5:1 contrast against light background)
+val OrderAmber = Color(0xFFB45309)
+val OrderBlue = Color(0xFF1D4ED8)
+val OrderIndigo = Color(0xFF4338CA)
+val OrderGreen = Color(0xFF047857)
+val OrderRed = Color(0xFFB91C1C)
+val OrderBrown = Color(0xFF78350F)
 
 @Composable
 fun OrderMetricsRow(
@@ -37,6 +39,8 @@ fun OrderMetricsRow(
     selectedFilter: OrderFilter = OrderFilter.ALL,
     onFilterClick: (OrderFilter) -> Unit = {}
 ) {
+    val statusColors = PersonaTheme.statusColors
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -47,14 +51,14 @@ fun OrderMetricsRow(
         MetricChip(
             count = pendingCount,
             label = "جديد",
-            color = OrderAmber,
+            color = statusColors.pending,
             isSelected = selectedFilter == OrderFilter.PENDING,
             onClick = { onFilterClick(OrderFilter.PENDING) }
         )
         MetricChip(
             count = inPreparationCount,
             label = "قيد التجهيز",
-            color = OrderBlue,
+            color = statusColors.inPreparation,
             isSelected = selectedFilter == OrderFilter.IN_PREPARATION,
             onClick = { onFilterClick(OrderFilter.IN_PREPARATION) }
         )
@@ -62,7 +66,7 @@ fun OrderMetricsRow(
             MetricChip(
                 count = shippingCount,
                 label = "جاري التوصيل",
-                color = OrderIndigo,
+                color = statusColors.shipping,
                 isSelected = selectedFilter == OrderFilter.SHIPPING_IN_PROGRESS,
                 onClick = { onFilterClick(OrderFilter.SHIPPING_IN_PROGRESS) }
             )
@@ -70,7 +74,7 @@ fun OrderMetricsRow(
         MetricChip(
             count = completedCount,
             label = "تم التسليم",
-            color = OrderGreen,
+            color = statusColors.completed,
             isSelected = selectedFilter == OrderFilter.COMPLETED,
             onClick = { onFilterClick(OrderFilter.COMPLETED) }
         )
@@ -91,14 +95,14 @@ fun OrderMetricsRow(
                         modifier = Modifier
                             .size(10.dp)
                             .clip(RoundedCornerShape(5.dp))
-                            .background(OrderGreen)
+                            .background(statusColors.completed)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
                         Text(
                             text = "$formatted ج.م",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = OrderGreen
+                            color = statusColors.completed
                         )
                         Text(
                             text = "تحصيل معروض",

@@ -14,6 +14,7 @@ sealed class Screen {
     @Serializable data object KnowledgeManagement : Screen()
 
     // Additional full destinations
+    @Serializable data object Contacts : Screen()
     @Serializable data object AuditLog : Screen()
     @Serializable data object Settings : Screen()
     @Serializable data object Onboarding : Screen()

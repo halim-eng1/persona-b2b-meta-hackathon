@@ -46,6 +46,7 @@ fun PersonaStatusBadge(
 
 /**
  * Order-specific status pill resolving colors from [PersonaTheme.statusColors].
+ * Employs authentic Egyptian commercial Arabic labels.
  */
 @Composable
 fun PersonaOrderStatusBadge(
@@ -54,12 +55,12 @@ fun PersonaOrderStatusBadge(
 ) {
     val statusColors = PersonaTheme.statusColors
     val (container, content, label) = when (status) {
-        OrderStatus.PENDING -> Triple(statusColors.pendingContainer, statusColors.pending, "Pending")
-        OrderStatus.IN_PREPARATION -> Triple(statusColors.inPreparationContainer, statusColors.inPreparation, "Preparing")
-        OrderStatus.SHIPPING_IN_PROGRESS -> Triple(statusColors.shippingContainer, statusColors.shipping, "Shipping")
-        OrderStatus.SHIPPED -> Triple(statusColors.completedContainer, statusColors.completed, "Shipped")
-        OrderStatus.CANCELLED -> Triple(statusColors.cancelledContainer, statusColors.cancelled, "Cancelled")
-        OrderStatus.RETURNED -> Triple(statusColors.returnedContainer, statusColors.returned, "Returned")
+        OrderStatus.PENDING -> Triple(statusColors.pendingContainer, statusColors.pending, "قيد الانتظار")
+        OrderStatus.IN_PREPARATION -> Triple(statusColors.inPreparationContainer, statusColors.inPreparation, "قيد التجهيز")
+        OrderStatus.SHIPPING_IN_PROGRESS -> Triple(statusColors.shippingContainer, statusColors.shipping, "جاري الشحن")
+        OrderStatus.SHIPPED -> Triple(statusColors.completedContainer, statusColors.completed, "تم الشحن")
+        OrderStatus.CANCELLED -> Triple(statusColors.cancelledContainer, statusColors.cancelled, "ملغي")
+        OrderStatus.RETURNED -> Triple(statusColors.returnedContainer, statusColors.returned, "مرتجع")
     }
 
     PersonaStatusBadge(
@@ -107,7 +108,7 @@ fun PersonaUnreadBadge(
         containerColor = containerColor,
         contentColor = contentColor,
         modifier = modifier.semantics {
-            contentDescription = "$count unread items"
+            contentDescription = "$count رسائل غير مقروءة"
         }
     ) {
         Text(

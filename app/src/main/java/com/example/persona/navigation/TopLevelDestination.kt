@@ -23,24 +23,24 @@ enum class TopLevelDestination(
 ) {
     HOME(
         screen = Screen.Home,
-        label = "Home",
+        label = "الرئيسية",
         icon = Icons.Default.Home
     ),
     CHATS(
         screen = Screen.Chats,
-        label = "Chats",
+        label = "المحادثات",
         icon = Icons.Default.ChatBubble,
         hasBadge = true,
         isEnabled = DebugFlags.ENABLE_CHATS_TAB
     ),
     ORDERS(
         screen = Screen.Orders,
-        label = "Orders",
+        label = "الطلبات",
         icon = Icons.Default.ShoppingBag
     ),
     KNOWLEDGE(
         screen = Screen.KnowledgeManagement,
-        label = "Knowledge",
+        label = "قاعدة المعرفة",
         icon = Icons.Default.Info
     );
 
