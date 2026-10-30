@@ -65,6 +65,10 @@ class ChatImportViewModel @Inject constructor(
             return
         }
 
+        if (_uiState.value.isDirectIndexing) {
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update {
                 it.copy(

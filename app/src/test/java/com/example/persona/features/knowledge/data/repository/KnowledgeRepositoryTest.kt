@@ -119,4 +119,40 @@ class KnowledgeRepositoryTest {
         assertTrue(ready)
         coVerify(exactly = 1) { vectorIndexer.ensureReady() }
     }
+
+    @Test
+    fun `ingestMarkdownDocument returns failure when text is blank`() = runTest {
+        val result = repository.ingestMarkdownDocument("   ")
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+    }
+
+    @Test
+    fun `ingestMarkdownDocument parses chunks indexes vectors and inserts chunks`() = runTest {
+        val markdown = """
+            # Store Info
+            Our store operates from Cairo.
+
+            # Shipping
+            Shipping costs 50 EGP across all provinces.
+        """.trimIndent()
+
+        coEvery { vectorIndexer.ensureReady() } returns true
+        coEvery { vectorIndexer.indexVector(any(), any()) } returns true
+
+        val result = repository.ingestMarkdownDocument(markdown)
+        assertTrue(result.isSuccess)
+        val count = result.getOrNull() ?: 0
+        assertTrue(count >= 2)
+        coVerify(atLeast = 2) { businessKnowledgeDao.insertChunk(any()) }
+    }
+
+    @Test
+    fun `ingestMarkdownDocument returns failure when vector indexer fails or throws`() = runTest {
+        coEvery { vectorIndexer.ensureReady() } throws IllegalStateException("ONNX model corrupted")
+
+        val result = repository.ingestMarkdownDocument("# Title\nSome content")
+        assertTrue(result.isFailure)
+        assertEquals("ONNX model corrupted", result.exceptionOrNull()?.message)
+    }
 }

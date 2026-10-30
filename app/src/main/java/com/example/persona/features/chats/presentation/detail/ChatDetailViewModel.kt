@@ -281,12 +281,16 @@ class ChatDetailViewModel @Inject constructor(
                 val newPaused = !currentPaused
                 if (existing != null) {
                     conversationMetadataDao.setAiPaused(contactName, sourceClass, newPaused)
+                    if (newPaused) {
+                        conversationMetadataDao.setAiOverrideEnabled(contactName, sourceClass, false)
+                    }
                 } else {
                     conversationMetadataDao.upsert(
                         com.example.persona.core.database.entity.ConversationMetadataEntity(
                             contactName = contactName,
                             sourceClass = sourceClass,
-                            isAiPaused = newPaused
+                            isAiPaused = newPaused,
+                            isAiOverrideEnabled = false
                         )
                     )
                 }
@@ -295,12 +299,16 @@ class ChatDetailViewModel @Inject constructor(
                 val newOverride = !currentOverride
                 if (existing != null) {
                     conversationMetadataDao.setAiOverrideEnabled(contactName, sourceClass, newOverride)
+                    if (newOverride) {
+                        conversationMetadataDao.setAiPaused(contactName, sourceClass, false)
+                    }
                 } else {
                     conversationMetadataDao.upsert(
                         com.example.persona.core.database.entity.ConversationMetadataEntity(
                             contactName = contactName,
                             sourceClass = sourceClass,
-                            isAiOverrideEnabled = newOverride
+                            isAiOverrideEnabled = newOverride,
+                            isAiPaused = false
                         )
                     )
                 }

@@ -172,4 +172,21 @@ class ChatImportViewModelTest {
         assertEquals("", state.directInputText)
         assertNull(state.directIndexError)
     }
+
+    @Test
+    fun ingestDirectText_whenAlreadyIndexing_doesNotLaunchSecondJob() = runTest {
+        val mockKnowledgeRepo = mockk<com.example.persona.features.knowledge.data.repository.KnowledgeRepository>()
+        coEvery { mockKnowledgeRepo.ingestMarkdownDocument(any(), any(), any(), any()) } returns Result.success(1)
+
+        val vm = ChatImportViewModel(
+            startImportUseCase = startImportUseCase,
+            repository = repository,
+            knowledgeRepository = mockKnowledgeRepo
+        )
+
+        vm.onDirectInputTextChanged("Valid Text")
+        vm.ingestDirectText()
+
+        coVerify(exactly = 1) { mockKnowledgeRepo.ingestMarkdownDocument(any(), any(), any(), any()) }
+    }
 }

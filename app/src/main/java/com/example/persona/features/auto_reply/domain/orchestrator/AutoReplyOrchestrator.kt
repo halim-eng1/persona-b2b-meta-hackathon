@@ -377,7 +377,7 @@ class AutoReplyOrchestrator @Inject constructor(
         val isContactPaused = convMeta?.isAiPaused == true
         val isContactOverride = convMeta?.isAiOverrideEnabled == true
 
-        val isAutoReplyAllowedForContact = (isGlobalAutoReplyEnabled && !isContactPaused) || isContactOverride
+        val isAutoReplyAllowedForContact = (isGlobalAutoReplyEnabled && !isContactPaused) || (!isGlobalAutoReplyEnabled && isContactOverride)
         if (!isAutoReplyAllowedForContact) {
             PersonaLogger.d(
                 PersonaLogTags.ORCHESTRATOR,
@@ -545,7 +545,7 @@ class AutoReplyOrchestrator @Inject constructor(
         val isContactPaused = convMeta?.isAiPaused == true
         val isContactOverride = convMeta?.isAiOverrideEnabled == true
 
-        val isAutoReplyAllowedForContact = (isGlobalAutoReplyEnabled && !isContactPaused) || isContactOverride
+        val isAutoReplyAllowedForContact = (isGlobalAutoReplyEnabled && !isContactPaused) || (!isGlobalAutoReplyEnabled && isContactOverride)
         if (!isAutoReplyAllowedForContact) {
             PersonaLogger.d(
                 PersonaLogTags.ORCHESTRATOR,
@@ -1144,7 +1144,7 @@ class AutoReplyOrchestrator @Inject constructor(
             val isPreExecGlobalOn = prefsRepository.isAutoReplyEnabledSync()
             val isPreExecPaused = preExecConv?.isAiPaused == true
             val isPreExecOverride = preExecConv?.isAiOverrideEnabled == true
-            val isPreExecAllowed = (isPreExecGlobalOn && !isPreExecPaused) || isPreExecOverride
+            val isPreExecAllowed = (isPreExecGlobalOn && !isPreExecPaused) || (!isPreExecGlobalOn && isPreExecOverride)
             if (!isPreExecAllowed) {
                 Log.i(TAG, "AI auto-reply turn aborted before execution: suppressed for ${processed.contactName} (Global=$isPreExecGlobalOn, Paused=$isPreExecPaused, Override=$isPreExecOverride)")
                 return
@@ -1248,7 +1248,7 @@ class AutoReplyOrchestrator @Inject constructor(
         val isPreExecGlobalOn = prefsRepository.isAutoReplyEnabledSync()
         val isPreExecPaused = preExecConv?.isAiPaused == true
         val isPreExecOverride = preExecConv?.isAiOverrideEnabled == true
-        val isPreExecAllowed = (isPreExecGlobalOn && !isPreExecPaused) || isPreExecOverride
+        val isPreExecAllowed = (isPreExecGlobalOn && !isPreExecPaused) || (!isPreExecGlobalOn && isPreExecOverride)
         if (!isPreExecAllowed) {
             Log.i(TAG, "Immediate AI reply aborted before execution: suppressed for ${processed.contactName} (Global=$isPreExecGlobalOn, Paused=$isPreExecPaused, Override=$isPreExecOverride)")
             return
