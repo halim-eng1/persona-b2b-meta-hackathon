@@ -358,6 +358,52 @@ class PromptContextBuilderTest {
         }
     }
 
+    @Test
+    fun `text-only bot invariant fake media ban is present in all prompt variants and tones`() {
+        val expectedInvariant = "TEXT-ONLY BOT INVARIANT: You are a text-only automated WhatsApp assistant. You CANNOT send, attach, or transmit images/photos. NEVER say 'بعتهالك' or promise 'هجيبلك صور' or say 'بص عليها' when no image exists. Direct customers to <store_website> to view photos and full catalogs."
+
+        assertTrue(PromptContextBuilder.SECTION_3_WITTY_EGYPTIAN.contains(expectedInvariant))
+        assertTrue(PromptContextBuilder.SECTION_3_STANDARD_POLITE.contains(expectedInvariant))
+
+        val firstWitty = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val firstPolite = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
+        val finalWitty = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val finalPolite = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
+        val banterWitty = PromptContextBuilder.buildMicroBanterPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val banterPolite = PromptContextBuilder.buildMicroBanterPrompt(tone = PersonaTone.STANDARD_POLITE)
+
+        for (prompt in listOf(firstWitty, firstPolite, finalWitty, finalPolite, banterWitty, banterPolite)) {
+            assertTrue("Prompt must contain text-only invariant", prompt.contains(expectedInvariant))
+        }
+    }
+
+    @Test
+    fun `buildMicroBanterPrompt includes dynamic store_specialty and RE_QUERY schema and directives`() {
+        val customTopics = listOf("هوديز قطن 850 جرام", "تيشيرتات مبرمجين", "مجات سيراميك")
+        val promptWithTopics = PromptContextBuilder.buildMicroBanterPrompt(
+            storeName = "Velo Store",
+            storeTopics = customTopics
+        )
+
+        assertTrue(promptWithTopics.contains("<store_specialty>"))
+        assertTrue(promptWithTopics.contains("Velo Store specializes exclusively in the following categories and topics:"))
+        assertTrue(promptWithTopics.contains("- هوديز قطن 850 جرام"))
+        assertTrue(promptWithTopics.contains("- تيشيرتات مبرمجين"))
+        assertTrue(promptWithTopics.contains("- مجات سيراميك"))
+        assertTrue(promptWithTopics.contains("STRICT BOUNDARY: Answer strictly within these listed categories."))
+
+        val defaultPrompt = PromptContextBuilder.buildMicroBanterPrompt(storeName = "Velo Store")
+        assertTrue(defaultPrompt.contains("<store_specialty>"))
+        assertTrue(defaultPrompt.contains("STRICT BOUNDARY: Answer on behalf of Velo Store strictly within verified store offerings. NEVER invent products, inventory, or categories not officially offered by Velo Store."))
+
+        // Schema assertions
+        assertTrue(defaultPrompt.contains("\"action\": \"REPLY\" | \"RE_QUERY\""))
+        assertTrue(defaultPrompt.contains("\"refined_search_keyword\": \"2-4 formal Arabic search keywords if customer asks about catalog/products, or null\""))
+
+        // Directive assertions
+        assertTrue(defaultPrompt.contains("output \"action\": \"RE_QUERY\" with 2–4 formal Arabic keywords in refined_search_keyword to look up the catalog."))
+    }
+
     private fun extractSection(fullText: String, startHeader: String, endHeader: String): String {
         return fullText.substringAfter(startHeader).substringBefore(endHeader).trim()
     }

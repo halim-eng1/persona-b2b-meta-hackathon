@@ -432,8 +432,23 @@ class AutoReplyOrchestrator @Inject constructor(
             val (decision, resolvedTier) = if (isImagePresent) {
                 DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 1.0f, latencyMs = 0L) to "FastPath: Image Present"
             } else {
+                val lastAssistantText = runCatching {
+                    chatHistoryDao.getRecentMessagesExceptForSource(
+                        contactName = effectiveProcessed.contactName,
+                        sourceClass = sourceClassStr,
+                        excludeId = insertedId,
+                        limit = 6
+                    ).firstOrNull { !it.isFromUser }?.messageText?.trim() ?: ""
+                }.getOrDefault("")
+
+                val gatekeeperInput = if (lastAssistantText.isNotBlank()) {
+                    "[الرد السابق]: $lastAssistantText\n[رسالة العميل]: $queryTextForEmbedding"
+                } else {
+                    queryTextForEmbedding
+                }
+
                 val cfIntent = runCatching {
-                    cloudflareClefClient.decide(queryTextForEmbedding, timeoutMs = 1150L)
+                    cloudflareClefClient.decide(gatekeeperInput, timeoutMs = 1150L)
                 }.onFailure { e ->
                     Log.w(TAG, "Gatekeeper Tier 1 (Cloudflare Clef) threw exception: ${e.message}")
                 }.getOrNull()
@@ -443,7 +458,7 @@ class AutoReplyOrchestrator @Inject constructor(
                     DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Tier 1: Cloudflare Clef"
                 } else {
                     val liquidIntent = runCatching {
-                        liquidDecisionClient.decide(queryTextForEmbedding, timeoutMs = 800L)
+                        liquidDecisionClient.decide(gatekeeperInput, timeoutMs = 800L)
                     }.onFailure { e ->
                         Log.w(TAG, "Gatekeeper Tier 2 (Liquid AI) threw exception: ${e.message}")
                     }.getOrNull()
@@ -559,6 +574,11 @@ class AutoReplyOrchestrator @Inject constructor(
             val effectiveAction = when {
                 normalizedAction == "HITL" -> "HITL"
                 isImagePresent -> "RE_QUERY"
+                normalizedAction == "REPLY" && !agenticResponse.refinedSearchKeyword.isNullOrBlank() -> {
+                    PersonaLogger.w(TAG, "Auto-promoting REPLY to RE_QUERY due to non-blank search keyword: ${agenticResponse.refinedSearchKeyword}")
+                    Log.w(TAG, "Auto-promoting REPLY to RE_QUERY due to non-blank search keyword: ${agenticResponse.refinedSearchKeyword}")
+                    "RE_QUERY"
+                }
                 normalizedAction == "RE_QUERY" && agenticResponse.refinedSearchKeyword.isNullOrBlank() && !agenticResponse.finalReplyText.isNullOrBlank() -> "REPLY"
                 else -> normalizedAction
             }

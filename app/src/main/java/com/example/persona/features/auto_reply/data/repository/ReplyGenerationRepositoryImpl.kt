@@ -364,7 +364,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 PromptContextBuilder.buildMicroBanterPrompt(
                     botName = botName,
                     storeName = storeName,
-                    tone = tone
+                    tone = tone,
+                    storeTopics = storeTopics
                 )
             }
             InboundIntent.ORDER_STATUS -> {
