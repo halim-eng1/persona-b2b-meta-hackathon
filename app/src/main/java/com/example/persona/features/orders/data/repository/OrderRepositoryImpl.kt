@@ -28,7 +28,14 @@ class OrderRepositoryImpl @Inject constructor(
             PersonaLogTags.DATABASE,
             "Orders: creating manual order contact=${order.contactName} amount=${order.totalAmount}"
         )
-        return orderDao.insert(order)
+        val orderToInsert = if (order.id == 0L) {
+            val maxId = orderDao.getMaxOrderId() ?: 99100L
+            val nextId = maxOf(99101L, maxId + 1L)
+            order.copy(id = nextId)
+        } else {
+            order
+        }
+        return orderDao.insert(orderToInsert)
     }
 
     override suspend fun updateOrder(

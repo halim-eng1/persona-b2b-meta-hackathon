@@ -360,7 +360,7 @@ fun QuickActionsSection(
     onNavigateToKnowledge: () -> Unit,
     onNavigateToImport: () -> Unit,
     onNavigateToOrders: () -> Unit,
-    onEmergencyStop: () -> Unit,
+    onEmergencyStop: (() -> Unit)? = null,
     onNavigateToContacts: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -415,15 +415,6 @@ fun QuickActionsSection(
                     onClick = onNavigateToContacts
                 )
             }
-
-            QuickActionButton(
-                modifier = Modifier.fillMaxWidth(),
-                icon = Icons.Default.Dangerous,
-                label = "إيقاف طوارئ للرد الآلي",
-                tint = MaterialTheme.colorScheme.error,
-                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                onClick = onEmergencyStop
-            )
         }
     }
 }

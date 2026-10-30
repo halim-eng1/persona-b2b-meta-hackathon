@@ -41,6 +41,7 @@ data class WaitingCustomer(
 
 data class HomeUiState(
     val isAutoReplyEnabled: Boolean = false,
+    val isServiceRunning: Boolean = false,
     val systemHealth: SystemHealthStatus = SystemHealthStatus.PAUSED,
     val pendingAttentionCount: Int = 0,
     val waitingCustomers: List<WaitingCustomer> = emptyList(),
@@ -87,9 +88,10 @@ class HomeViewModel @Inject constructor(
 
     private val autoReplyHealthFlow = combine(
         userPreferencesRepository.isAutoReplyEnabled,
+        WhatsAppNotificationListener.isConnectedFlow,
         _healthRefreshTrigger
-    ) { isEnabled, _ ->
-        isEnabled
+    ) { isEnabled, isConnected, _ ->
+        Pair(isEnabled, isConnected)
     }
 
     /**
@@ -164,10 +166,14 @@ class HomeViewModel @Inject constructor(
         metricsFlow,
         businessKnowledgeDao.observeChunkCount(),
         recentLogsFlow
-    ) { isEnabled, (attentionCount, waitingCustomers), metrics, chunkCount, recentLogs ->
+    ) { healthData, attentionData, metrics, chunkCount, recentLogs ->
+        val (isEnabled, isConnected) = healthData
+        val (attentionCount, waitingCustomers) = attentionData
+        val running = try { serviceAliveChecker() } catch (_: Throwable) { isConnected }
         val health = computeSystemHealth(isEnabled)
         HomeUiState(
             isAutoReplyEnabled = isEnabled,
+            isServiceRunning = running,
             systemHealth = health,
             pendingAttentionCount = attentionCount.coerceAtLeast(0),
             waitingCustomers = waitingCustomers,
@@ -225,6 +231,18 @@ class HomeViewModel @Inject constructor(
     fun emergencyKillSwitch() {
         viewModelScope.launch {
             toggleAutoReplyUseCase(false)
+        }
+    }
+
+    fun refreshSystemHealth() {
+        refreshHealth()
+    }
+
+    fun isNotificationPermissionGranted(): Boolean {
+        return try {
+            permissionChecker.isNotificationListenerEnabled()
+        } catch (_: Throwable) {
+            false
         }
     }
 

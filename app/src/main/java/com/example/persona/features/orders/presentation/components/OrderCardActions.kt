@@ -32,12 +32,97 @@ fun OrderCardActions(
 ) {
     val orderStatus = OrderStatus.fromString(status)
 
-    Row(
+    Column(
         modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Primary state advancement button (Kanban progression)
+        // ── Row 1: Secondary actions ("ملاحظة", "بوليصة", "تعديل") + Overflow Menu (⋮) ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Note edit button
+            OutlinedButton(
+                onClick = onEditNote,
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(42.dp),
+                contentPadding = PaddingValues(horizontal = 6.dp)
+            ) {
+                Text(
+                    text = "ملاحظة",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+                if (hasMerchantNote) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "ملاحظة مسجلة",
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+
+            // Courier 1-tap copy manifest button
+            OutlinedButton(
+                onClick = { onCopyCourierManifest?.invoke() },
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(42.dp),
+                contentPadding = PaddingValues(horizontal = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = "بوليصة الشحن",
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "بوليصة",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+            }
+
+            // Edit order button (for manual corrections)
+            if (onEditOrder != null) {
+                OutlinedButton(
+                    onClick = onEditOrder,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(42.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "تعديل الطلب",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "تعديل",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                }
+            }
+
+            // Full status selector dropdown (⋮)
+            OrderStatusMenuButton(
+                currentStatus = status,
+                onSelected = { selected ->
+                    if (selected == OrderStatus.CANCELLED && onCancelOrder != null) {
+                        onCancelOrder()
+                    } else {
+                        onStatusSelected(selected)
+                    }
+                }
+            )
+        }
+
+        // ── Row 2: Primary status progression button spanning FULL WIDTH ──
         when (orderStatus) {
             OrderStatus.PENDING -> {
                 Button(
@@ -45,19 +130,19 @@ fun OrderCardActions(
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = OrderBlue),
                     modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "بدء التجهيز",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
             }
@@ -67,19 +152,19 @@ fun OrderCardActions(
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = OrderIndigo),
                     modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.LocalShipping,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "تسليم للمندوب",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
             }
@@ -89,19 +174,19 @@ fun OrderCardActions(
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = OrderGreen),
                     modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.DoneAll,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "تم التسليم",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
             }
@@ -111,8 +196,8 @@ fun OrderCardActions(
                     color = OrderGreen.copy(alpha = 0.15f),
                     border = BorderStroke(1.dp, OrderGreen.copy(alpha = 0.4f)),
                     modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp)
+                        .fillMaxWidth()
+                        .height(48.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -120,12 +205,12 @@ fun OrderCardActions(
                                 imageVector = Icons.Default.DoneAll,
                                 contentDescription = null,
                                 tint = OrderGreen,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(20.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "تم التسليم بنجاح",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = OrderGreen
                             )
                         }
@@ -138,13 +223,13 @@ fun OrderCardActions(
                     color = OrderRed.copy(alpha = 0.12f),
                     border = BorderStroke(1.dp, OrderRed.copy(alpha = 0.35f)),
                     modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp)
+                        .fillMaxWidth()
+                        .height(48.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Text(
                             text = "طلب ملغي",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = OrderRed
                         )
                     }
@@ -156,91 +241,18 @@ fun OrderCardActions(
                     color = OrderBrown.copy(alpha = 0.15f),
                     border = BorderStroke(1.dp, OrderBrown.copy(alpha = 0.4f)),
                     modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp)
+                        .fillMaxWidth()
+                        .height(48.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Text(
                             text = "شحنة مرتجعة",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = OrderBrown
                         )
                     }
                 }
             }
         }
-
-        // Edit order button (for manual corrections)
-        if (onEditOrder != null) {
-            OutlinedButton(
-                onClick = onEditOrder,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.heightIn(min = 48.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "تعديل الطلب",
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "تعديل",
-                    style = MaterialTheme.typography.labelMedium
-                )
-            }
-        }
-
-        // Courier 1-tap copy manifest button
-        OutlinedButton(
-            onClick = { onCopyCourierManifest?.invoke() },
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.heightIn(min = 48.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.ContentCopy,
-                contentDescription = "بوليصة الشحن",
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "بوليصة",
-                style = MaterialTheme.typography.labelMedium
-            )
-        }
-
-        // Note edit button
-        OutlinedButton(
-            onClick = onEditNote,
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.heightIn(min = 48.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp)
-        ) {
-            Text(
-                text = "ملاحظة",
-                style = MaterialTheme.typography.labelMedium
-            )
-            if (hasMerchantNote) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "ملاحظة مسجلة",
-                    modifier = Modifier.size(14.dp)
-                )
-            }
-        }
-
-        // Full status selector dropdown
-        OrderStatusMenuButton(
-            currentStatus = status,
-            onSelected = { selected ->
-                if (selected == OrderStatus.CANCELLED && onCancelOrder != null) {
-                    onCancelOrder()
-                } else {
-                    onStatusSelected(selected)
-                }
-            }
-        )
     }
 }

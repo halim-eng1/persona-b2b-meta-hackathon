@@ -33,6 +33,13 @@ interface OrderDao {
      * ABORT conflict strategy (default) is intentional — duplicate PK inserts should fail
      * loudly rather than silently overwriting existing order data.
      */
+    /**
+     * Returns the maximum order ID currently in the database, or null if empty.
+     * Used to calculate 5-digit order numbers starting at #99101.
+     */
+    @Query("SELECT MAX(id) FROM orders_table")
+    suspend fun getMaxOrderId(): Long?
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entity: OrderEntity): Long
 

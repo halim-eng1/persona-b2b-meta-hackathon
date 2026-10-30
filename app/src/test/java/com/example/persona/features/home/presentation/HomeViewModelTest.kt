@@ -106,6 +106,7 @@ class HomeViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertTrue(state.isAutoReplyEnabled)
+        assertTrue(state.isServiceRunning)
         assertEquals(SystemHealthStatus.ACTIVE, state.systemHealth)
         assertEquals(42, state.totalRepliesSent)
         assertEquals(15, state.knowledgeChunkCount)
@@ -348,6 +349,26 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertEquals(SystemHealthStatus.ACTIVE, viewModel.uiState.value.systemHealth)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `refreshSystemHealth triggers immediate re-evaluation and reflects permission and service status`() = runTest(testDispatcher) {
+        every { permissionChecker.isNotificationListenerEnabled() } returns false
+
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        assertEquals(SystemHealthStatus.PERMISSION_MISSING, viewModel.uiState.value.systemHealth)
+
+        // User grants permission in OS settings and returns to app
+        every { permissionChecker.isNotificationListenerEnabled() } returns true
+        viewModel.refreshSystemHealth()
+        advanceUntilIdle()
+
+        assertEquals(SystemHealthStatus.ACTIVE, viewModel.uiState.value.systemHealth)
+        assertTrue(viewModel.isNotificationPermissionGranted())
 
         collectJob.cancel()
     }

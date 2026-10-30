@@ -1,5 +1,11 @@
 package com.example.persona.features.home.presentation
 
+import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.os.Build
+import android.service.notification.NotificationListenerService
+import android.widget.Toast
+import com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -39,12 +45,11 @@ fun HomeScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var showEmergencyDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.refreshHealth()
+                viewModel.refreshSystemHealth()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -102,7 +107,45 @@ fun HomeScreen(
             SystemHealthCard(
                 health = state.systemHealth,
                 onOpenSettings = { viewModel.openNotificationSettings(context) },
-                onRestartService = { viewModel.restartService() }
+                onRestartService = {
+                    if (!viewModel.isNotificationPermissionGranted()) {
+                        viewModel.openNotificationSettings(context)
+                    } else {
+                        try {
+                            val componentName = ComponentName(
+                                context,
+                                WhatsAppNotificationListener::class.java
+                            )
+                            val pm = context.packageManager
+                            pm.setComponentEnabledSetting(
+                                componentName,
+                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                                PackageManager.DONT_KILL_APP
+                            )
+                            pm.setComponentEnabledSetting(
+                                componentName,
+                                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                                PackageManager.DONT_KILL_APP
+                            )
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                NotificationListenerService.requestRebind(componentName)
+                            }
+                            viewModel.restartService()
+                            viewModel.refreshSystemHealth()
+                            Toast.makeText(
+                                context,
+                                "تمت إعادة تشغيل خدمة الإشعارات بنجاح",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } catch (e: Exception) {
+                            Toast.makeText(
+                                context,
+                                "تعذر إعادة تشغيل الخدمة: ${e.message}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
             )
 
             // ── Section 2: Human Takeover (HITL) Alert Center ─────────────────
@@ -141,7 +184,6 @@ fun HomeScreen(
                 onNavigateToKnowledge = onNavigateToKnowledge,
                 onNavigateToImport = onNavigateToImport,
                 onNavigateToOrders = onNavigateToOrders,
-                onEmergencyStop = { showEmergencyDialog = true },
                 onNavigateToContacts = onNavigateToContacts
             )
 
@@ -242,15 +284,5 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // ── Emergency Stop Confirmation Dialog ────────────────────────────────
-        if (showEmergencyDialog) {
-            EmergencyStopDialog(
-                onConfirm = {
-                    showEmergencyDialog = false
-                    viewModel.emergencyKillSwitch()
-                },
-                onDismiss = { showEmergencyDialog = false }
-            )
-        }
     }
 }
