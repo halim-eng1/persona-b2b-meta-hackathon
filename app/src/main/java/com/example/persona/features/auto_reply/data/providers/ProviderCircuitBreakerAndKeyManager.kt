@@ -52,6 +52,8 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
         val DEFAULT_GROQ_MODELS = GroqClient.GROQ_MODELS
         val DEFAULT_OPENROUTER_MODELS = OpenRouterClient.OPENROUTER_FAILOVER_MODELS
         val DEFAULT_NARA_MODELS = NaraRouterClient.NARA_TEXT_MODELS
+        val DEFAULT_CLOUDFLARE_MODELS = listOf("@cf/cloudflare/clef-flash", "@cf/cloudflare/clef-omni")
+        val DEFAULT_LIQUID_MODELS = listOf("d1:latest", "d1")
 
         val DEFAULT_CASCADE_ORDER = listOf(
             PROVIDER_QWEN,
@@ -117,6 +119,8 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
         initModelsForProvider(PROVIDER_GROQ, DEFAULT_GROQ_MODELS)
         initModelsForProvider(PROVIDER_OPENROUTER, DEFAULT_OPENROUTER_MODELS)
         initModelsForProvider(PROVIDER_NARA, DEFAULT_NARA_MODELS)
+        initModelsForProvider(PROVIDER_CLOUDFLARE, DEFAULT_CLOUDFLARE_MODELS)
+        initModelsForProvider(PROVIDER_LIQUID, DEFAULT_LIQUID_MODELS)
     }
 
     private fun initModelsForProvider(providerId: String, defaults: List<String>) {
@@ -286,6 +290,8 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
             PROVIDER_GROQ -> DEFAULT_GROQ_MODELS
             PROVIDER_OPENROUTER -> DEFAULT_OPENROUTER_MODELS
             PROVIDER_NARA -> DEFAULT_NARA_MODELS
+            PROVIDER_CLOUDFLARE -> DEFAULT_CLOUDFLARE_MODELS
+            PROVIDER_LIQUID -> DEFAULT_LIQUID_MODELS
             else -> emptyList()
         }
     }

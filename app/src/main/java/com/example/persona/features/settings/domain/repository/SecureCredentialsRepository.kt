@@ -18,6 +18,52 @@ object ModelProviders {
     val ALL = listOf(QWEN, GEMINI, GROQ, NVIDIA, OPENROUTER, CLOUDFLARE, LIQUID, NARA)
 
     fun normalize(provider: String): String = provider.trim().lowercase()
+
+    val DEFAULT_MODELS: Map<String, List<String>> = mapOf(
+        QWEN to listOf(
+            "deepseek-v4.1-flash",
+            "qwen3.8-max",
+            "deepseek-v4-pro-0813",
+            "qwen3.8-flash",
+            "qwen3.7-plus",
+            "qwen3.7-flash",
+            "qwen3.6-flash",
+            "qwen3.5-flash",
+            "qwen3-coder-flash",
+            "qwen3.6-27b"
+        ),
+        GEMINI to listOf(
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite",
+            "gemini-3.8-flash"
+        ),
+        NVIDIA to listOf(
+            "nvidia/nemotron-3-ultra-550b-a55b",
+            "nvidia/nemotron-3.5-bolt-e4b",
+            "nvidia/nemotron-3.5-lightning-30b-a3b"
+        ),
+        GROQ to listOf(
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "qwen/qwen3.8-27b"
+        ),
+        OPENROUTER to listOf(
+            "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "liquid/lfm-2.5-2.6b:free",
+            "openrouter/free"
+        ),
+        NARA to listOf(
+            "laguna-s-2.1"
+        ),
+        CLOUDFLARE to listOf(
+            "@cf/cloudflare/clef-flash",
+            "@cf/cloudflare/clef-omni"
+        ),
+        LIQUID to listOf(
+            "d1:latest",
+            "d1"
+        )
+    )
 }
 
 /**
@@ -51,6 +97,21 @@ interface SecureCredentialsRepository {
      * Observes the list of API keys for [provider] as a reactive flow.
      */
     fun getApiKeysFlow(provider: String): Flow<List<String>>
+
+    /**
+     * Returns the configured Cloudflare Account ID, falling back to [com.example.persona.BuildConfig.CLOUDFLARE_ACCOUNT_ID].
+     */
+    fun getCloudflareAccountId(): String
+
+    /**
+     * Updates the configured Cloudflare Account ID.
+     */
+    fun setCloudflareAccountId(accountId: String?)
+
+    /**
+     * Observes the Cloudflare Account ID as a reactive flow.
+     */
+    val cloudflareAccountIdFlow: Flow<String?>
 
     // ── Convenience backward-compatibility wrappers ───────────────────────────
     fun getNvidiaApiKey(): String

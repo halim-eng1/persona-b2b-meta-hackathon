@@ -6,6 +6,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.util.Log
+import com.example.persona.BuildConfig
 import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -38,6 +39,7 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
         private const val GCM_TAG_LENGTH = 128
 
         private const val PREF_PREFIX_PROVIDER_KEYS = "enc_keys_"
+        private const val PREF_KEY_CLOUDFLARE_ACCOUNT_ID = "enc_cloudflare_account_id"
         private const val LEGACY_KEY_NVIDIA = "enc_nvidia_api_key"
         private const val LEGACY_KEY_QWEN = "enc_qwen_api_key"
     }
@@ -55,11 +57,21 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
     // Flow cache for providers
     private val providerFlows = ConcurrentHashMap<String, MutableStateFlow<List<String>>>()
 
+    // Flow for Cloudflare Account ID
+    private val cloudflareAccountIdFlowInternal = MutableStateFlow<String?>(null)
+    override val cloudflareAccountIdFlow: Flow<String?> = cloudflareAccountIdFlowInternal.asStateFlow()
+
     init {
+        // Seed any missing credentials from BuildConfig / secrets.properties
+        seedFromBuildConfig()
+
         // Pre-warm flows for standard providers
         ModelProviders.ALL.forEach { provider ->
             getOrCreateFlow(provider).value = getApiKeys(provider)
         }
+
+        // Initialize Cloudflare Account ID
+        cloudflareAccountIdFlowInternal.value = getCloudflareAccountId()
     }
 
     private fun getOrCreateFlow(provider: String): MutableStateFlow<List<String>> {
@@ -93,6 +105,15 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
                     keys = listOf(legacy)
                     setApiKeys(norm, keys)
                 }
+            }
+        }
+
+        // If keys are STILL empty, seed from BuildConfig without overwriting existing
+        if (keys.isEmpty()) {
+            val buildConfigSeeds = getBuildConfigSeedKeys(norm)
+            if (buildConfigSeeds.isNotEmpty()) {
+                keys = buildConfigSeeds
+                setApiKeys(norm, keys)
             }
         }
 
@@ -135,6 +156,108 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
         val flow = getOrCreateFlow(norm)
         flow.value = getApiKeys(norm)
         return flow.asStateFlow()
+    }
+
+    // ── Cloudflare Account ID Management ──────────────────────────────────────
+
+    override fun getCloudflareAccountId(): String {
+        val stored = readCredential(PREF_KEY_CLOUDFLARE_ACCOUNT_ID).trim()
+        if (stored.isNotBlank()) {
+            cloudflareAccountIdFlowInternal.value = stored
+            return stored
+        }
+
+        val buildConfigFallback = getBuildConfigString("CLOUDFLARE_ACCOUNT_ID").trim()
+        if (buildConfigFallback.isNotBlank()) {
+            // Seed into secure storage so it is persisted
+            writeCredential(PREF_KEY_CLOUDFLARE_ACCOUNT_ID, buildConfigFallback)
+            cloudflareAccountIdFlowInternal.value = buildConfigFallback
+            return buildConfigFallback
+        }
+
+        cloudflareAccountIdFlowInternal.value = ""
+        return ""
+    }
+
+    override fun setCloudflareAccountId(accountId: String?) {
+        val trimmed = accountId?.trim().orEmpty()
+        writeCredential(PREF_KEY_CLOUDFLARE_ACCOUNT_ID, trimmed)
+        cloudflareAccountIdFlowInternal.value = trimmed.ifBlank { getCloudflareAccountId() }
+    }
+
+    // ── BuildConfig Seeding ───────────────────────────────────────────────────
+
+    private fun seedFromBuildConfig() {
+        ModelProviders.ALL.forEach { provider ->
+            val norm = ModelProviders.normalize(provider)
+            val stored = readCredential(prefKey(norm))
+            val existing = deserializeKeys(stored)
+            if (existing.isEmpty()) {
+                val seeds = getBuildConfigSeedKeys(norm)
+                if (seeds.isNotEmpty()) {
+                    setApiKeys(norm, seeds)
+                }
+            }
+        }
+
+        val currentCfId = readCredential(PREF_KEY_CLOUDFLARE_ACCOUNT_ID).trim()
+        if (currentCfId.isBlank()) {
+            val cfIdSeed = getBuildConfigString("CLOUDFLARE_ACCOUNT_ID").trim()
+            if (cfIdSeed.isNotBlank()) {
+                writeCredential(PREF_KEY_CLOUDFLARE_ACCOUNT_ID, cfIdSeed)
+            }
+        }
+    }
+
+    private fun getBuildConfigSeedKeys(provider: String): List<String> {
+        val rawCandidates = when (ModelProviders.normalize(provider)) {
+            ModelProviders.QWEN -> listOf(
+                getBuildConfigString("QWEN_API_KEY"),
+                getBuildConfigString("DASHSCOPE_API_KEY")
+            )
+            ModelProviders.GEMINI -> listOf(
+                getBuildConfigString("GEMINI_API_KEY"),
+                getBuildConfigString("GEMINI_API_KEY_2"),
+                getBuildConfigString("GEMINI_API_KEY_V2")
+            )
+            ModelProviders.NVIDIA -> listOf(
+                getBuildConfigString("NVIDIA_API_KEY")
+            )
+            ModelProviders.GROQ -> listOf(
+                getBuildConfigString("GROQ_API_KEY"),
+                getBuildConfigString("GROQ_API_KEY_2"),
+                getBuildConfigString("GROQ_API_KEY_V2")
+            )
+            ModelProviders.OPENROUTER -> listOf(
+                getBuildConfigString("OPENROUTER_API_KEY"),
+                getBuildConfigString("OPENROUTER_API_KEY_V2")
+            )
+            ModelProviders.CLOUDFLARE -> listOf(
+                getBuildConfigString("CLOUDFLARE_API_TOKEN")
+            )
+            ModelProviders.LIQUID -> listOf(
+                getBuildConfigString("LIQUID_API_KEY"),
+                getBuildConfigString("LIQUID_API_KEY_2"),
+                getBuildConfigString("LIQUD_API_KEY"),
+                getBuildConfigString("LIQUD_API_KEY_V2")
+            )
+            ModelProviders.NARA -> listOf(
+                getBuildConfigString("NARA_ROUTER_API_KEY")
+            )
+            else -> emptyList()
+        }
+
+        return rawCandidates
+            .map { it.trim() }
+            .filter { it.isNotBlank() && !it.contains("placeholder", ignoreCase = true) }
+            .distinct()
+    }
+
+    private fun getBuildConfigString(fieldName: String): String {
+        return runCatching {
+            val field = BuildConfig::class.java.getField(fieldName)
+            (field.get(null) as? String)?.trim().orEmpty()
+        }.getOrDefault("")
     }
 
     // ── Convenience backward-compatibility wrappers ───────────────────────────
@@ -284,9 +407,14 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
     }
 
     private fun serializeKeys(keys: List<String>): String {
-        val array = JSONArray()
-        keys.forEach { array.put(it) }
-        return array.toString()
+        return try {
+            val array = JSONArray()
+            keys.forEach { array.put(it) }
+            val json = array.toString()
+            if (!json.isNullOrBlank() && json != "null") json else keys.joinToString("\n")
+        } catch (_: Throwable) {
+            keys.joinToString("\n")
+        }
     }
 
     private fun deserializeKeys(raw: String): List<String> {
@@ -295,10 +423,10 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
             val array = JSONArray(raw)
             val list = mutableListOf<String>()
             for (i in 0 until array.length()) {
-                val str = array.getString(i).trim()
-                if (str.isNotEmpty()) list.add(str)
+                val str = (array.optString(i) ?: array.opt(i)?.toString()).orEmpty().trim()
+                if (str.isNotEmpty() && str != "null") list.add(str)
             }
-            list
+            if (list.isNotEmpty()) list else raw.lines().map { it.trim() }.filter { it.isNotEmpty() }
         } catch (_: Throwable) {
             // Support newline-delimited or single string fallback
             raw.lines().map { it.trim() }.filter { it.isNotEmpty() }

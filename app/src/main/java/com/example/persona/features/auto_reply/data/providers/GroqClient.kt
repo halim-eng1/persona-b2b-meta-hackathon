@@ -44,7 +44,8 @@ class GroqClient @Inject constructor(
         val VISION_GROQ_MODELS = listOf("qwen/qwen3.8-27b")
         val GROQ_MODELS = listOf(
             "openai/gpt-oss-120b",
-            "openai/gpt-oss-20b"
+            "openai/gpt-oss-20b",
+            "qwen/qwen3.8-27b"
         )
 
         private val jsonParser = Json {

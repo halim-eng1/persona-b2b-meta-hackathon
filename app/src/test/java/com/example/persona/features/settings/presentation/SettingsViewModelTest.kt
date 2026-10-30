@@ -35,10 +35,14 @@ class SettingsViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private val autoPauseFlow = MutableStateFlow(false)
+    private val appLanguageFlow = MutableStateFlow("ar")
+    private val cloudflareAccountIdFlow = MutableStateFlow("")
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        every { userPreferencesRepository.appLanguageFlow } returns appLanguageFlow
+        every { userPreferencesRepository.cloudflareAccountIdFlow } returns cloudflareAccountIdFlow
         every { userPreferencesRepository.stylePreferences } returns flowOf(
             StylePreferences(StyleProfile.CASUAL, 0.75f, 5, 2)
         )
@@ -295,12 +299,118 @@ class SettingsViewModelTest {
         advanceUntilIdle()
         coVerify(exactly = 1) { userPreferencesRepository.addProviderModel(ModelProviders.GEMINI, "gemini-ultra-custom") }
 
-        viewModel.removeProviderModel(ModelProviders.GEMINI, "gemini-1.5-flash")
+        viewModel.removeProviderModel(ModelProviders.GEMINI, "gemini-3.8-flash")
         advanceUntilIdle()
-        coVerify(exactly = 1) { userPreferencesRepository.removeProviderModel(ModelProviders.GEMINI, "gemini-1.5-flash") }
+        coVerify(exactly = 1) { userPreferencesRepository.removeProviderModel(ModelProviders.GEMINI, "gemini-3.8-flash") }
 
-        viewModel.moveModelUp(ModelProviders.GEMINI, "gemini-2.5-pro")
+        viewModel.moveModelUp(ModelProviders.GEMINI, "gemini-3.5-flash-lite")
         advanceUntilIdle()
         coVerify(atLeast = 1) { userPreferencesRepository.setProviderModels(ModelProviders.GEMINI, any()) }
+    }
+
+    @Test
+    fun `default appLanguage in uiState is ar and setAppLanguage updates repository`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        assertEquals("ar", viewModel.uiState.value.appLanguage)
+
+        viewModel.setAppLanguage("en")
+        advanceUntilIdle()
+
+        assertEquals("en", viewModel.uiState.value.appLanguage)
+        coVerify { userPreferencesRepository.setAppLanguage("en") }
+    }
+
+    @Test
+    fun `when appLanguageFlow emits new language, uiState updates`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        assertEquals("ar", viewModel.uiState.value.appLanguage)
+
+        appLanguageFlow.value = "en"
+        advanceUntilIdle()
+
+        assertEquals("en", viewModel.uiState.value.appLanguage)
+    }
+
+    @Test
+    fun `cloudflareAccountId updates uiState and delegates to repository`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        viewModel.setCloudflareAccountId("cf-account-abc-123")
+        advanceUntilIdle()
+
+        assertEquals("cf-account-abc-123", viewModel.uiState.value.cloudflareAccountId)
+        coVerify(exactly = 1) { userPreferencesRepository.setCloudflareAccountId("cf-account-abc-123") }
+    }
+
+    @Test
+    fun `when cloudflareAccountIdFlow emits, uiState updates`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        cloudflareAccountIdFlow.value = "incoming-cf-id-456"
+        advanceUntilIdle()
+
+        assertEquals("incoming-cf-id-456", viewModel.uiState.value.cloudflareAccountId)
+    }
+
+    @Test
+    fun `exact production models are configured across all 8 providers`() {
+        val models = UserPreferencesRepository.DEFAULT_PROVIDER_MODELS
+
+        assertEquals(
+            listOf(
+                "deepseek-v4.1-flash",
+                "qwen3.8-max",
+                "deepseek-v4-pro-0813",
+                "qwen3.8-flash",
+                "qwen3.7-plus",
+                "qwen3.7-flash",
+                "qwen3.6-flash",
+                "qwen3.5-flash",
+                "qwen3-coder-flash",
+                "qwen3.6-27b"
+            ),
+            models[ModelProviders.QWEN]
+        )
+
+        assertEquals(
+            listOf("gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.8-flash"),
+            models[ModelProviders.GEMINI]
+        )
+
+        assertEquals(
+            listOf("nvidia/nemotron-3-ultra-550b-a55b", "nvidia/nemotron-3.5-bolt-e4b", "nvidia/nemotron-3.5-lightning-30b-a3b"),
+            models[ModelProviders.NVIDIA]
+        )
+
+        assertEquals(
+            listOf("openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"),
+            models[ModelProviders.GROQ]
+        )
+
+        assertEquals(
+            listOf("nvidia/nemotron-3-ultra-550b-a55b:free", "liquid/lfm-2.5-2.6b:free", "openrouter/free"),
+            models[ModelProviders.OPENROUTER]
+        )
+
+        assertEquals(
+            listOf("laguna-s-2.1"),
+            models[ModelProviders.NARA]
+        )
+
+        assertEquals(
+            listOf("@cf/cloudflare/clef-flash", "@cf/cloudflare/clef-omni"),
+            models[ModelProviders.CLOUDFLARE]
+        )
+
+        assertEquals(
+            listOf("d1:latest", "d1"),
+            models[ModelProviders.LIQUID]
+        )
     }
 }

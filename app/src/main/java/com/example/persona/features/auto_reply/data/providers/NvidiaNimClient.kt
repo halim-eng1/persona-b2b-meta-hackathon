@@ -47,7 +47,8 @@ class NvidiaNimClient @Inject constructor(
         )
         val NVIDIA_TEXT_MODELS = listOf(
             "nvidia/nemotron-3-ultra-550b-a55b",
-            "nvidia/nemotron-3.5-bolt-e4b"
+            "nvidia/nemotron-3.5-bolt-e4b",
+            "nvidia/nemotron-3.5-lightning-30b-a3b"
         )
 
         private val jsonParser = Json {

@@ -1,14 +1,29 @@
 package com.example.persona.features.settings.presentation.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.persona.R
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.settings.presentation.SettingsUiState
 import com.example.persona.features.settings.presentation.ThresholdLevel
@@ -24,27 +39,54 @@ fun StoreIdentitySection(
     onReplyDelayChange: (String) -> Unit,
     onGreetingTemplateChange: (String) -> Unit,
     onFarewellTemplateChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLanguageChange: (String) -> Unit = {}
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // ── App Language Preference ───────────────────────────────────────────
+        PreferenceSection(
+            title = stringResource(R.string.settings_language_title),
+            subtitle = stringResource(R.string.settings_language_subtitle)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                LanguageOptionCard(
+                    title = stringResource(R.string.language_arabic),
+                    subtitle = stringResource(R.string.language_arabic_sub),
+                    isSelected = state.appLanguage == "ar",
+                    onClick = { onLanguageChange("ar") },
+                    modifier = Modifier.weight(1f)
+                )
+                LanguageOptionCard(
+                    title = stringResource(R.string.language_english),
+                    subtitle = stringResource(R.string.language_english_sub),
+                    isSelected = state.appLanguage == "en",
+                    onClick = { onLanguageChange("en") },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
         // ── Bot & Store Brand Identity ────────────────────────────────────────
         PreferenceSection(
-            title = "هوية المتجر وممثل خدمة العملاء (Store & Bot Identity)",
-            subtitle = "حدد اسم البوت واسم المتجر أو العلامة التجارية لاستخدامهما في ردود الذكاء الاصطناعي."
+            title = stringResource(R.string.settings_store_identity_title),
+            subtitle = stringResource(R.string.settings_store_identity_subtitle)
         ) {
             OutlinedTextField(
                 value = state.botName,
                 onValueChange = onBotNameChange,
-                label = { Text("اسم ممثل خدمة العملاء (Bot Name)") },
-                placeholder = { Text("مثال: سارة / مساعد المبيعات") },
+                label = { Text(stringResource(R.string.settings_bot_name_label)) },
+                placeholder = { Text(stringResource(R.string.settings_bot_name_placeholder)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 value = state.storeName,
                 onValueChange = onStoreNameChange,
-                label = { Text("اسم المتجر أو العلامة التجارية (Store Name)") },
-                placeholder = { Text("مثال: متجر الأناقة / متجرنا") },
+                label = { Text(stringResource(R.string.settings_store_name_label)) },
+                placeholder = { Text(stringResource(R.string.settings_store_name_placeholder)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -52,8 +94,8 @@ fun StoreIdentitySection(
 
         // ── AI Persona Tone ───────────────────────────────────────────────────
         PreferenceSection(
-            title = "شخصية ونبرة الرد للروبوت (AI Persona Tone)",
-            subtitle = "اختر الأسلوب واللهجة التي يتحدث بها البوت مع زبائنك في واتساب."
+            title = stringResource(R.string.settings_persona_tone_title),
+            subtitle = stringResource(R.string.settings_persona_tone_subtitle)
         ) {
             PersonaTone.entries.forEach { tone ->
                 PersonaToneCard(
@@ -66,22 +108,22 @@ fun StoreIdentitySection(
 
         // ── Response Templates ────────────────────────────────────────────────
         PreferenceSection(
-            title = "قوالب الردود السريعة (Response Templates)",
-            subtitle = "رسائل مخصصة للتحية والترحيب الأولي أو ختام المحادثة."
+            title = stringResource(R.string.settings_templates_title),
+            subtitle = stringResource(R.string.settings_templates_subtitle)
         ) {
             OutlinedTextField(
                 value = state.greetingTemplate,
                 onValueChange = onGreetingTemplateChange,
-                label = { Text("قالب رسالة الترحيب (Greeting Template)") },
-                placeholder = { Text("أهلاً بحضرتك يا فندم! نورت متجرنا، إزاي نقدر نساعدك النهارده؟") },
+                label = { Text(stringResource(R.string.settings_greeting_template_label)) },
+                placeholder = { Text(stringResource(R.string.greeting_template_default)) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2
             )
             OutlinedTextField(
                 value = state.farewellTemplate,
                 onValueChange = onFarewellTemplateChange,
-                label = { Text("قالب رسالة الختام (Farewell Template)") },
-                placeholder = { Text("سعدنا جداً بخدمتك يا فندم، وتحت أمرك في أي وقت! مع السلامة وبنتمنالك يوم سعيد 💙") },
+                label = { Text(stringResource(R.string.settings_farewell_template_label)) },
+                placeholder = { Text(stringResource(R.string.farewell_template_default)) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2
             )
@@ -89,13 +131,13 @@ fun StoreIdentitySection(
 
         // ── Reply Delay & Cooldown ────────────────────────────────────────────
         PreferenceSection(
-            title = "توقيت الردود وسرعة التفاعل (Timing & Delays)",
-            subtitle = "ضبط فترة الانتظار بين الردود لمحاكاة الكتابة البشرية الطبيعية."
+            title = stringResource(R.string.settings_timing_title),
+            subtitle = stringResource(R.string.settings_timing_subtitle)
         ) {
             OutlinedTextField(
                 value = state.replyDelayInput,
                 onValueChange = onReplyDelayChange,
-                label = { Text("تأخير الرد بالثواني (Reply Delay in Seconds)") },
+                label = { Text(stringResource(R.string.settings_reply_delay_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 isError = state.replyDelayError != null,
@@ -106,7 +148,7 @@ fun StoreIdentitySection(
                             color = MaterialTheme.colorScheme.error
                         )
                     } else {
-                        Text("يمنح العميل إحساساً بأن شخصاً حقيقياً يقرأ ويكتب الرد.")
+                        Text(stringResource(R.string.settings_reply_delay_hint))
                     }
                 }
             )
@@ -114,8 +156,8 @@ fun StoreIdentitySection(
 
         // ── Match Sensitivity ─────────────────────────────────────────────────
         PreferenceSection(
-            title = "حساسية المطابقة للأسئلة (Match Sensitivity)",
-            subtitle = "التحكم في مدى دقة التطابق المطلوبة مع قاعدة المعرفة للرد التلقائي."
+            title = stringResource(R.string.settings_sensitivity_title),
+            subtitle = stringResource(R.string.settings_sensitivity_subtitle)
         ) {
             ThresholdLevel.entries.forEach { level ->
                 ThresholdOption(
@@ -128,14 +170,64 @@ fun StoreIdentitySection(
 
         // ── Cooldown Duration ─────────────────────────────────────────────────
         PreferenceSection(
-            title = "فترة التهدئة بين الرسائل (Cooldown Duration)",
-            subtitle = "أقل وقت انتظار مسموح به قبل إعادة الرد تلقائياً على نفس المحادثة."
+            title = stringResource(R.string.settings_cooldown_title),
+            subtitle = stringResource(R.string.settings_cooldown_subtitle)
         ) {
             listOf(0, 1, 5, 10, 30).forEach { mins ->
                 CooldownOption(
                     mins = mins,
                     isSelected = state.cooldownMins == mins,
                     onSelect = { onCooldownChange(mins) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun LanguageOptionCard(
+    title: String,
+    subtitle: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .selectable(
+                selected = isSelected,
+                onClick = onClick,
+                role = Role.RadioButton
+            ),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(
+            width = if (isSelected) 2.dp else 1.dp,
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surface
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(
+                selected = isSelected,
+                onClick = null,
+                colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

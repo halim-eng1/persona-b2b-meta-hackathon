@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -39,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,6 +48,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.persona.R
 import com.example.persona.features.onboarding.data.AutoStartHelper
 import com.example.persona.features.onboarding.presentation.PermissionIntentDispatcher
 import com.example.persona.features.settings.presentation.components.AiEnginesSection
@@ -90,7 +93,7 @@ fun SettingsScreen(
                 )
             )
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             // ── Top Bar Header ────────────────────────────────────────────────
             Surface(
                 color = MaterialTheme.colorScheme.surface,
@@ -119,11 +122,11 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "إعدادات المتجر والروبوت (Settings)",
+                            text = stringResource(R.string.settings_title),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            text = "إدارة محركات الذكاء الاصطناعي، الهوية، الأمان والتوجيه",
+                            text = stringResource(R.string.settings_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -133,11 +136,11 @@ fun SettingsScreen(
 
             // ── Categorized Tabs ──────────────────────────────────────────────
             val tabs = listOf(
-                "الذكاء الاصطناعي" to Icons.Default.Psychology,
-                "هوية المتجر" to Icons.Default.Store,
-                "مواعيد العمل" to Icons.Default.Schedule,
-                "توجيه واتساب" to Icons.Default.Chat,
-                "الصيانة والأمان" to Icons.Default.Build
+                stringResource(R.string.settings_tab_ai) to Icons.Default.Psychology,
+                stringResource(R.string.settings_tab_identity) to Icons.Default.Store,
+                stringResource(R.string.settings_tab_hours) to Icons.Default.Schedule,
+                stringResource(R.string.settings_tab_routing) to Icons.Default.Chat,
+                stringResource(R.string.settings_tab_maintenance) to Icons.Default.Build
             )
 
             ScrollableTabRow(
@@ -182,13 +185,15 @@ fun SettingsScreen(
                                 onAddProviderModel = { provider, model -> viewModel.addProviderModel(provider, model) },
                                 onRemoveProviderModel = { provider, model -> viewModel.removeProviderModel(provider, model) },
                                 onMoveModelUp = { provider, model -> viewModel.moveModelUp(provider, model) },
-                                onMoveModelDown = { provider, model -> viewModel.moveModelDown(provider, model) }
+                                onMoveModelDown = { provider, model -> viewModel.moveModelDown(provider, model) },
+                                onSaveCloudflareAccountId = { viewModel.setCloudflareAccountId(it) }
                             )
                         }
                         1 -> {
                             // Section 2: Store Identity & Bot Persona
                             StoreIdentitySection(
                                 state = state,
+                                onLanguageChange = { viewModel.setAppLanguage(it) },
                                 onBotNameChange = { viewModel.setBotName(it) },
                                 onStoreNameChange = { viewModel.setStoreName(it) },
                                 onPersonaToneChange = { viewModel.setPersonaTone(it) },

@@ -1,8 +1,12 @@
 package com.example.persona.features.settings.data.repository
 
+import android.content.Context
+import android.content.SharedPreferences
+import com.example.persona.BuildConfig
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -101,7 +105,21 @@ class SecureCredentialsRepositoryTest {
     }
 
     @Test
-    fun `UserPreferencesRepository delegates API keys to secure repository`() = runTest {
+    fun `Cloudflare Account ID can be updated and falls back to BuildConfig`() = runTest {
+        val defaultFallback = BuildConfig.CLOUDFLARE_ACCOUNT_ID
+        assertEquals(defaultFallback, secureCredentialsRepository.getCloudflareAccountId())
+
+        secureCredentialsRepository.setCloudflareAccountId("custom-cf-account-987")
+        assertEquals("custom-cf-account-987", secureCredentialsRepository.getCloudflareAccountId())
+        assertEquals("custom-cf-account-987", secureCredentialsRepository.cloudflareAccountIdFlow.first())
+
+        // Reset/blank falls back to BuildConfig
+        secureCredentialsRepository.setCloudflareAccountId(null)
+        assertEquals(defaultFallback, secureCredentialsRepository.getCloudflareAccountId())
+    }
+
+    @Test
+    fun `UserPreferencesRepository delegates API keys and Cloudflare Account ID to secure repository`() = runTest {
         val mockDataStore = mockk<androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>>(relaxed = true)
         val userPrefs = UserPreferencesRepository(
             dataStore = mockDataStore,
@@ -115,5 +133,37 @@ class SecureCredentialsRepositoryTest {
         userPrefs.setQwenApiKey("qwen-secured-token")
         assertEquals("qwen-secured-token", userPrefs.getQwenApiKeySync())
         assertEquals("qwen-secured-token", userPrefs.qwenApiKeyFlow.first())
+
+        userPrefs.setCloudflareAccountId("cf-account-id-12345")
+        assertEquals("cf-account-id-12345", userPrefs.getCloudflareAccountId())
+        assertEquals("cf-account-id-12345", userPrefs.getCloudflareAccountIdSync())
+        assertEquals("cf-account-id-12345", userPrefs.cloudflareAccountIdFlow.first())
+    }
+
+    @Test
+    fun `SecureCredentialsRepositoryImpl seeds from BuildConfig without overwriting existing merchant keys`() = runTest {
+        val mockPrefs = mockk<SharedPreferences>(relaxed = true)
+        val mockEditor = mockk<SharedPreferences.Editor>(relaxed = true)
+        every { mockPrefs.edit() } returns mockEditor
+        every { mockEditor.putString(any(), any()) } returns mockEditor
+        every { mockEditor.remove(any()) } returns mockEditor
+
+        val mockContext = mockk<Context>(relaxed = true)
+        every { mockContext.getSharedPreferences(any(), any()) } returns mockPrefs
+
+        val repo = SecureCredentialsRepositoryImpl(mockContext)
+
+        // Verifying Cloudflare Account ID reads fallback when not set
+        val defaultCf = BuildConfig.CLOUDFLARE_ACCOUNT_ID
+        assertEquals(defaultCf, repo.getCloudflareAccountId())
+
+        // Custom merchant keys are preserved and not overwritten
+        repo.setApiKeys(ModelProviders.QWEN, listOf("custom-merchant-qwen-key"))
+        assertEquals(listOf("custom-merchant-qwen-key"), repo.getApiKeys(ModelProviders.QWEN))
+
+        // Updating merchant Cloudflare Account ID works and does not revert to fallback
+        repo.setCloudflareAccountId("merchant-custom-cf-account-id")
+        assertEquals("merchant-custom-cf-account-id", repo.getCloudflareAccountId())
+        assertEquals("merchant-custom-cf-account-id", repo.cloudflareAccountIdFlow.first())
     }
 }

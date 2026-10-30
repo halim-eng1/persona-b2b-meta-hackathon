@@ -63,10 +63,14 @@ data class SettingsUiState(
     // ── Tab selection (0: AI Engines, 1: Store Persona, 2: Hours & Blacklist, 3: App Routing, 4: Maintenance)
     val selectedTab: Int = 0,
 
+    // ── App Language & Locale ("ar" or "en")
+    val appLanguage: String = UserPreferencesRepository.DEFAULT_APP_LANGUAGE,
+
     // ── 1. AI Engines, Keys & Models
     val providerOrder: List<String> = UserPreferencesRepository.DEFAULT_PROVIDER_ORDER,
     val providerConfigs: Map<String, ProviderConfigState> = emptyMap(),
     val selectedProviderForEdit: String = ModelProviders.QWEN,
+    val cloudflareAccountId: String = "",
 
     // ── 2. Store Identity & Bot Persona
     val botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
@@ -233,6 +237,20 @@ class SettingsViewModel @Inject constructor(
                 }
             }.collect {}
         }
+
+        // Group 5: App Language & Localization
+        viewModelScope.launch {
+            userPreferencesRepository.appLanguageFlow.collect { lang ->
+                _uiState.update { it.copy(appLanguage = lang) }
+            }
+        }
+
+        // Group 6: Cloudflare Account ID
+        viewModelScope.launch {
+            userPreferencesRepository.cloudflareAccountIdFlow.collect { cfAccountId ->
+                _uiState.update { it.copy(cloudflareAccountId = cfAccountId) }
+            }
+        }
     }
 
     fun selectTab(tabIndex: Int) {
@@ -254,6 +272,10 @@ class SettingsViewModel @Inject constructor(
     fun refreshProviderConfig(provider: String) {
         val norm = ModelProviders.normalize(provider)
         val keys = secureCredentialsRepository.getApiKeys(norm)
+        if (norm == ModelProviders.CLOUDFLARE) {
+            val cfId = secureCredentialsRepository.getCloudflareAccountId()
+            _uiState.update { it.copy(cloudflareAccountId = cfId) }
+        }
         viewModelScope.launch {
             val models = userPreferencesRepository.getProviderModelsSync(norm)
             _uiState.update { s ->
@@ -304,6 +326,15 @@ class SettingsViewModel @Inject constructor(
         refreshProviderConfig(norm)
     }
 
+    fun setCloudflareAccountId(id: String) {
+        val trimmed = id.trim()
+        secureCredentialsRepository.setCloudflareAccountId(trimmed)
+        _uiState.update { it.copy(cloudflareAccountId = trimmed) }
+        viewModelScope.launch {
+            userPreferencesRepository.setCloudflareAccountId(trimmed)
+        }
+    }
+
     fun testConnection(provider: String, key: String) {
         val norm = ModelProviders.normalize(provider)
         val trimmed = key.trim()
@@ -336,6 +367,10 @@ class SettingsViewModel @Inject constructor(
                 ModelProviders.GROQ -> "https://api.groq.com/openai/v1/models"
                 ModelProviders.OPENROUTER -> "https://openrouter.ai/api/v1/auth/key"
                 ModelProviders.NVIDIA -> "https://integrate.api.nvidia.com/v1/models"
+                ModelProviders.CLOUDFLARE -> {
+                    val accId = _uiState.value.cloudflareAccountId.ifBlank { secureCredentialsRepository.getCloudflareAccountId() }
+                    if (accId.isNotBlank()) "https://api.cloudflare.com/client/v4/accounts/$accId/ai/models/search" else null
+                }
                 else -> null
             }
 
@@ -418,6 +453,14 @@ class SettingsViewModel @Inject constructor(
     }
 
     // ── 2. Store Identity & Bot Persona Operations ────────────────────────────
+
+    fun setAppLanguage(language: String) {
+        val sanitized = language.trim().lowercase()
+        _uiState.update { it.copy(appLanguage = sanitized) }
+        viewModelScope.launch {
+            userPreferencesRepository.setAppLanguage(sanitized)
+        }
+    }
 
     fun setPersonaTone(tone: PersonaTone) {
         _uiState.update { it.copy(personaTone = tone) }

@@ -14,10 +14,12 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class InMemorySecureCredentialsRepository(
     initialNvidiaApiKey: String? = null,
-    initialQwenApiKey: String? = null
+    initialQwenApiKey: String? = null,
+    private val defaultCloudflareAccountId: String? = null
 ) : SecureCredentialsRepository {
 
     private val providerKeyStore = ConcurrentHashMap<String, MutableStateFlow<List<String>>>()
+    private val cloudflareAccountIdState = MutableStateFlow<String?>(null)
 
     init {
         ModelProviders.ALL.forEach { provider ->
@@ -28,6 +30,9 @@ class InMemorySecureCredentialsRepository(
         }
         if (!initialQwenApiKey.isNullOrBlank()) {
             setQwenApiKey(initialQwenApiKey)
+        }
+        if (!defaultCloudflareAccountId.isNullOrBlank()) {
+            cloudflareAccountIdState.value = defaultCloudflareAccountId
         }
     }
 
@@ -68,6 +73,20 @@ class InMemorySecureCredentialsRepository(
         val norm = ModelProviders.normalize(provider)
         return getOrCreateFlow(norm).asStateFlow()
     }
+
+    override fun getCloudflareAccountId(): String {
+        val current = cloudflareAccountIdState.value
+        if (!current.isNullOrBlank()) return current
+        if (!defaultCloudflareAccountId.isNullOrBlank()) return defaultCloudflareAccountId
+        return runCatching { com.example.persona.BuildConfig.CLOUDFLARE_ACCOUNT_ID }.getOrDefault("")
+    }
+
+    override fun setCloudflareAccountId(accountId: String?) {
+        val trimmed = accountId?.trim()?.takeIf { it.isNotBlank() }
+        cloudflareAccountIdState.value = trimmed
+    }
+
+    override val cloudflareAccountIdFlow: Flow<String?> = cloudflareAccountIdState.asStateFlow()
 
     override fun getNvidiaApiKey(): String =
         getApiKeys(ModelProviders.NVIDIA).firstOrNull().orEmpty()

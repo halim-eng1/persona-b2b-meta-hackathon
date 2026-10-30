@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -73,7 +75,8 @@ fun AiEnginesSection(
     onRemoveProviderModel: (String, String) -> Unit,
     onMoveModelUp: (String, String) -> Unit,
     onMoveModelDown: (String, String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onSaveCloudflareAccountId: (String) -> Unit = {}
 ) {
     val selectedProvider = state.selectedProviderForEdit
     val config = state.providerConfigs[selectedProvider] ?: ProviderConfigState(provider = selectedProvider)
@@ -81,6 +84,7 @@ fun AiEnginesSection(
     var newKeyInput by remember(selectedProvider) { mutableStateOf("") }
     var newModelInput by remember(selectedProvider) { mutableStateOf("") }
     val visibleKeys = remember { mutableStateMapOf<String, Boolean>() }
+    var showGuideDialogForProvider by remember { mutableStateOf<String?>(null) }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // ── 1. Provider Priority Chain ─────────────────────────────────────────
@@ -139,7 +143,18 @@ fun AiEnginesSection(
                             }
                         }
 
-                        Row {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = { showGuideDialogForProvider = provider },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = "دليل المفتاح",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                             IconButton(
                                 onClick = { onMoveProviderUp(provider) },
                                 enabled = index > 0,
@@ -174,7 +189,18 @@ fun AiEnginesSection(
                     FilterChip(
                         selected = provider == selectedProvider,
                         onClick = { onSelectProvider(provider) },
-                        label = { Text(provider.uppercase()) }
+                        label = { Text(provider.uppercase()) },
+                        trailingIcon = if (provider == selectedProvider) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "دليل المفتاح",
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clickable { showGuideDialogForProvider = provider }
+                                )
+                            }
+                        } else null
                     )
                 }
             }
@@ -185,6 +211,94 @@ fun AiEnginesSection(
             title = "مفاتيح الـ API لمزود (${selectedProvider.uppercase()})",
             subtitle = "يمكنك إضافة مفاتيح متعددة مع فحص اتصال كل مفتاح بشكل مباشر."
         ) {
+            // Guide bar with Info button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "دليل الحصول على المفتاح لمزود ${selectedProvider.uppercase()}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                OutlinedButton(
+                    onClick = { showGuideDialogForProvider = selectedProvider },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                ) {
+                    Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("شرح الاستخراج ℹ️", fontSize = 11.sp)
+                }
+            }
+
+            // Dedicated Cloudflare Account ID Field
+            if (selectedProvider == ModelProviders.CLOUDFLARE) {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "معرّف حساب كلاودفلير (Cloudflare Account ID)",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        Text(
+                            text = "مطلوب لتشغيل نماذج Workers AI بجانب رمز الـ API (API Token)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        var accountIdInput by remember(state.cloudflareAccountId) {
+                            mutableStateOf(state.cloudflareAccountId)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = accountIdInput,
+                                onValueChange = {
+                                    accountIdInput = it
+                                    onSaveCloudflareAccountId(it)
+                                },
+                                label = { Text("Cloudflare Account ID") },
+                                placeholder = { Text("e.g. 9c2036eda99b642789288ba8cf9cd4c5") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = { onSaveCloudflareAccountId(accountIdInput) },
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("حفظ")
+                            }
+                        }
+                    }
+                }
+            }
+
             if (config.keys.isEmpty()) {
                 Text(
                     text = "لا توجد مفاتيح مسجلة لهذا المزود حتى الآن. سيتم استخدام المفاتيح الافتراضية إذا توفرت.",
@@ -308,7 +422,7 @@ fun AiEnginesSection(
                                     onClick = { onTestApiKey(selectedProvider, apiKey) },
                                     enabled = verificationState !is VerificationState.Checking,
                                     shape = RoundedCornerShape(8.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                 ) {
                                     Text("فحص الاتصال (Ping)", fontSize = 12.sp)
                                 }
@@ -416,7 +530,7 @@ fun AiEnginesSection(
                     value = newModelInput,
                     onValueChange = { newModelInput = it },
                     label = { Text("إضافة كود نموذج مخصص") },
-                    placeholder = { Text("e.g. qwen-max-latest / gemini-2.5-flash") },
+                    placeholder = { Text("e.g. qwen3.8-flash / deepseek-v4.1-flash") },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
@@ -436,5 +550,13 @@ fun AiEnginesSection(
                 }
             }
         }
+    }
+
+    // Provider How to Get API Key Dialog
+    showGuideDialogForProvider?.let { provider ->
+        ProviderKeyGuideDialog(
+            provider = provider,
+            onDismissRequest = { showGuideDialogForProvider = null }
+        )
     }
 }
