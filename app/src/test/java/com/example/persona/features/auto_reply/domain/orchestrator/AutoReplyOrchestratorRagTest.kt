@@ -1084,4 +1084,203 @@ class AutoReplyOrchestratorRagTest {
             )
         }
     }
+
+    @Test
+    fun `coalesceNotifications combines multiple rapid notifications preserving image path and chronological order`() {
+        val orchestrator = createTestOrchestrator()
+        val now = System.currentTimeMillis()
+
+        val n1 = WhatsAppNotification(
+            title = "Halim",
+            text = "التيشيرت مقطوع من الكتف",
+            postTime = now - 2000L,
+            notificationKey = "key_1",
+            sourceClass = NotificationSourceClass.BUSINESS,
+            mediaFilePath = "/storage/emulated/0/WhatsApp/Media/torn_shirt.jpg"
+        )
+        val n2 = WhatsAppNotification(
+            title = "Halim",
+            text = "[رسالة صوتية من العميل]: أنا ما ليش فيه أنا عايز فلوسه",
+            postTime = now - 1000L,
+            notificationKey = "key_2",
+            sourceClass = NotificationSourceClass.BUSINESS,
+            mediaFilePath = null
+        )
+        val n3 = WhatsAppNotification(
+            title = "Halim",
+            text = "اتصرفوا بسرعة",
+            postTime = now,
+            notificationKey = "key_3",
+            sourceClass = NotificationSourceClass.BUSINESS,
+            mediaFilePath = null
+        )
+
+        val batch = listOf(n1, n2, n3)
+        val insertedIds = listOf(101L, 102L, 103L)
+
+        val coalesced = orchestrator.coalesceNotifications(batch, insertedIds)
+
+        assertEquals("key_3", coalesced.notificationKey)
+        assertEquals("/storage/emulated/0/WhatsApp/Media/torn_shirt.jpg", coalesced.mediaFilePath)
+        assertTrue(coalesced.isPrePersisted)
+        assertEquals(insertedIds, coalesced.burstMessageIds)
+        assertTrue(coalesced.text.contains("التيشيرت مقطوع من الكتف"))
+        assertTrue(coalesced.text.contains("[رسالة صوتية من العميل]: أنا ما ليش فيه أنا عايز فلوسه"))
+        assertTrue(coalesced.text.contains("اتصرفوا بسرعة"))
+        assertFalse(coalesced.isVoiceTranscriptionFailed)
+    }
+
+    @Test
+    fun `enqueueInboundNotification immediately records message to chatHistory and metadata for zero data loss`() = runBlocking {
+        val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
+        val convMetadataDao = mockk<ConversationMetadataDao>(relaxed = true)
+        val prefsRepo = mockk<UserPreferencesRepository>(relaxed = true)
+        val processor = mockk<NotificationProcessorImpl>()
+        coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
+        coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(replyDelaySeconds = 0)
+        coEvery { chatHistoryDao.insert(any()) } returns 555L
+
+        val processed = ProcessedNotification(
+            contactName = "طارق",
+            originalText = "مساء الخير، الأوردر وصل؟",
+            normalizedText = "مساء الخير، الأوردر وصل؟",
+            notificationKey = "key_immed_1",
+            postTime = 12345678L,
+            context = mockk(relaxed = true),
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+        coEvery { processor.process(any()) } returns processed
+
+        val orchestrator = createTestOrchestrator(
+            processor = processor,
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = convMetadataDao,
+            prefsRepository = prefsRepo
+        )
+
+        val notification = WhatsAppNotification(
+            title = "طارق",
+            text = "مساء الخير، الأوردر وصل؟",
+            postTime = 12345678L,
+            notificationKey = "key_immed_1",
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+
+        orchestrator.enqueueInboundNotification(notification)
+
+        coVerify(exactly = 1) {
+            chatHistoryDao.insert(match {
+                it.contactName == "طارق" &&
+                it.messageText == "مساء الخير، الأوردر وصل؟" &&
+                it.isFromUser &&
+                it.timestamp == 12345678L
+            })
+        }
+
+        coVerify(exactly = 1) {
+            convMetadataDao.recordMessageTurn(
+                contactName = "طارق",
+                sourceClass = "BUSINESS",
+                messageText = "مساء الخير، الأوردر وصل؟",
+                senderType = "CUSTOMER",
+                timestamp = 12345678L,
+                notificationKey = "key_immed_1",
+                incrementUnread = true
+            )
+        }
+    }
+
+    @Test
+    fun `processNotificationSequentially filters out burstMessageIds from assembled chatHistory to prevent duplicate turns`() = runBlocking {
+        val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
+        val replyRepo = mockk<ReplyGenerationRepository>(relaxed = true)
+        val prefsRepo = mockk<UserPreferencesRepository>(relaxed = true)
+        val processor = mockk<NotificationProcessorImpl>()
+        coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
+        coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0, replyDelaySeconds = 0)
+
+        val processed = ProcessedNotification(
+            contactName = "عميل الباقة",
+            originalText = "رسالة أولى في الباقة\nرسالة ثانية في الباقة",
+            normalizedText = "رسالة أولى في الباقة\nرسالة ثانية في الباقة",
+            notificationKey = "key_burst_final",
+            postTime = 2500L,
+            context = mockk(relaxed = true),
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+        coEvery { processor.process(any()) } returns processed
+
+        // Previous history in DB includes burst messages (IDs 201, 202) and an older message (ID 200)
+        val olderMessage = ChatHistoryEntity(
+            id = 200L,
+            contactName = "عميل الباقة",
+            messageText = "سؤال قديم من أمس",
+            isFromUser = true,
+            timestamp = 1000L
+        )
+        val burstMessage1 = ChatHistoryEntity(
+            id = 201L,
+            contactName = "عميل الباقة",
+            messageText = "رسالة أولى في الباقة",
+            isFromUser = true,
+            timestamp = 2000L
+        )
+        val burstMessage2 = ChatHistoryEntity(
+            id = 202L,
+            contactName = "عميل الباقة",
+            messageText = "رسالة ثانية في الباقة",
+            isFromUser = true,
+            timestamp = 2500L
+        )
+
+        coEvery {
+            chatHistoryDao.getRecentMessagesExceptForSource(
+                contactName = "عميل الباقة",
+                sourceClass = any(),
+                excludeId = any(),
+                limit = any()
+            )
+        } returns listOf(burstMessage2, burstMessage1, olderMessage)
+
+        coEvery { replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+            """{"action":"REPLY","final_reply_text":"تم استلام جميع رسائلكم وسنقوم بالرد فورا"}"""
+
+        val orchestrator = createTestOrchestrator(
+            processor = processor,
+            chatHistoryDao = chatHistoryDao,
+            replyGenerationRepository = replyRepo,
+            prefsRepository = prefsRepo
+        )
+
+        val coalescedNotification = WhatsAppNotification(
+            title = "عميل الباقة",
+            text = "رسالة أولى في الباقة\nرسالة ثانية في الباقة",
+            postTime = 2500L,
+            notificationKey = "key_burst_final",
+            sourceClass = NotificationSourceClass.BUSINESS,
+            isPrePersisted = true,
+            burstMessageIds = listOf(201L, 202L)
+        )
+
+        orchestrator.processNotificationSequentially(coalescedNotification)
+
+        // Verify that replyRepo.generateReply received chatHistory containing only olderMessage (ID 200),
+        // and excluded burstMessage1 (201) and burstMessage2 (202)
+        coVerify(exactly = 1) {
+            replyRepo.generateReply(
+                notification = any(),
+                candidates = any(),
+                isOngoingConversation = any(),
+                chatHistory = match { history ->
+                    history.any { it.id == 200L } && history.none { it.id == 201L || it.id == 202L }
+                },
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = any(),
+                lastOrder = any(),
+                orderStatusCounts = any(),
+                inboundIntent = any()
+            )
+        }
+    }
 }

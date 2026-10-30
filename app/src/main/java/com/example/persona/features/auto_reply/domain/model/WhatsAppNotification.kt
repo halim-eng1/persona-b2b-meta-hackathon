@@ -26,5 +26,7 @@ data class WhatsAppNotification(
     val extraMessages: List<ExtraMessage> = emptyList(),
     val sourceClass: NotificationSourceClass = NotificationSourceClass.UNKNOWN,
     val mediaFilePath: String? = null,
-    val isVoiceTranscriptionFailed: Boolean = false
+    val isVoiceTranscriptionFailed: Boolean = false,
+    val isPrePersisted: Boolean = false,
+    val burstMessageIds: List<Long> = emptyList()
 )

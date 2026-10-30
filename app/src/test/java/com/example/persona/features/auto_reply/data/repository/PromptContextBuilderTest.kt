@@ -404,6 +404,83 @@ class PromptContextBuilderTest {
         assertTrue(defaultPrompt.contains("output \"action\": \"RE_QUERY\" with 2–4 formal Arabic keywords in refined_search_keyword to look up the catalog."))
     }
 
+    @Test
+    fun `filterAndPairChatHistory preserves an entire rapid burst of 8 consecutive customer messages as a single turn without dropping the root complaint`() {
+        val now = 10_000_000L
+        val burstMessages = listOf(
+            "حد يرد يا جماعة",
+            "مستني ردكم",
+            "اتصرفوا",
+            "واخد فلوسي",
+            "أنا عايز ارجعه",
+            "والخامات نص كم",
+            "والطباعة مش واضحة",
+            "التيشيرت مقطوع من الكم" // Root complaint, earliest in burst
+        )
+
+        // Stored in DB descending by timestamp
+        val historyDesc = burstMessages.mapIndexed { index, text ->
+            ChatHistoryEntity(
+                id = (8 - index).toLong(),
+                contactName = "Halim",
+                messageText = text,
+                isFromUser = true,
+                timestamp = now - (index * 1000L)
+            )
+        }
+
+        val filtered = PromptContextBuilder.filterAndPairChatHistory(historyDesc, nowMs = now)
+
+        assertEquals("All 8 messages in the user burst must be preserved", 8, filtered.size)
+        assertEquals("The earliest root complaint must be first in chronological order", "التيشيرت مقطوع من الكم", filtered[0].messageText)
+        assertEquals("The latest burst message must be last in chronological order", "حد يرد يا جماعة", filtered[7].messageText)
+    }
+
+    @Test
+    fun `filterAndPairChatHistory preserves multi-turn dialogue with previous assistant turns`() {
+        val now = 10_000_000L
+        val historyDesc = listOf(
+            ChatHistoryEntity(id = 6L, contactName = "c", messageText = "عايز أعرف الميعاد", isFromUser = true, timestamp = now - 100L),
+            ChatHistoryEntity(id = 5L, contactName = "c", messageText = "فين الشحنة؟", isFromUser = true, timestamp = now - 200L),
+            ChatHistoryEntity(id = 4L, contactName = "c", messageText = "الطلب اتأخر", isFromUser = true, timestamp = now - 300L),
+            ChatHistoryEntity(id = 3L, contactName = "c", messageText = "وعليكم السلام يا فندم، أقدر أساعدك إزاي؟", isFromUser = false, timestamp = now - 1000L),
+            ChatHistoryEntity(id = 2L, contactName = "c", messageText = "السلام عليكم", isFromUser = true, timestamp = now - 2000L)
+        )
+
+        val filtered = PromptContextBuilder.filterAndPairChatHistory(historyDesc, nowMs = now)
+
+        assertEquals(5, filtered.size)
+        assertEquals("السلام عليكم", filtered[0].messageText)
+        assertEquals("وعليكم السلام يا فندم، أقدر أساعدك إزاي؟", filtered[1].messageText)
+        assertEquals("الطلب اتأخر", filtered[2].messageText)
+        assertEquals("عايز أعرف الميعاد", filtered[4].messageText)
+    }
+
+    @Test
+    fun `Section 3 in both tones includes pragmatic colloquial metaphor decoding for Egyptian expressions`() {
+        val witty = PromptContextBuilder.getSection3Prompt(PersonaTone.WITTY_EGYPTIAN)
+        val polite = PromptContextBuilder.getSection3Prompt(PersonaTone.STANDARD_POLITE)
+
+        for (section3 in listOf(witty, polite)) {
+            assertTrue("Must include pragmatic semantics heading", section3.contains("PRAGMATIC SEMANTICS & COLLOQUIAL METAPHORS"))
+            assertTrue("Must explain 'نص كم' idiom", section3.contains("نص كم"))
+            assertTrue("Must prohibit literal product specification mapping", section3.contains("NEVER interpret them literally as physical product attributes"))
+            assertTrue("Must mention quality descriptors", section3.contains("أي كلام") && section3.contains("مضروب"))
+        }
+    }
+
+    @Test
+    fun `Section 4 in both first and final pass includes multi-topic synthesis prioritizing high-stakes containment`() {
+        val firstPass = PromptContextBuilder.buildFirstPassSystemPrompt()
+        val finalPass = PromptContextBuilder.buildFinalPassSystemPrompt()
+
+        for (prompt in listOf(firstPass, finalPass)) {
+            assertTrue("Must include multi-topic synthesis rule", prompt.contains("MULTI-TOPIC SYNTHESIS & ESCALATION PRIORITY"))
+            assertTrue("Must prioritize high-stakes financial/damage containment", prompt.contains("ALWAYS prioritize containment of the highest-stakes issue"))
+            assertTrue("Must acknowledge physical evidence", prompt.contains("Explicitly acknowledge any visible physical evidence"))
+        }
+    }
+
     private fun extractSection(fullText: String, startHeader: String, endHeader: String): String {
         return fullText.substringAfter(startHeader).substringBefore(endHeader).trim()
     }

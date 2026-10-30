@@ -180,6 +180,16 @@ class AutoReplyOrchestrator @Inject constructor(
     // Session tracker for greeting suppression (last auto-reply timestamp per sender)
     private val lastReplyTimestamps = ConcurrentHashMap<String, Long>()
 
+    internal data class BufferedTurn(
+        val notifications: MutableList<WhatsAppNotification> = mutableListOf(),
+        val insertedIds: MutableList<Long> = mutableListOf(),
+        var debounceJob: kotlinx.coroutines.Job? = null,
+        val firstArrivalMs: Long = System.currentTimeMillis()
+    )
+
+    private val debounceBuffer = ConcurrentHashMap<String, BufferedTurn>()
+    private val debounceLock = Any()
+
     private var isCollecting = false
 
     init {
@@ -205,27 +215,23 @@ class AutoReplyOrchestrator @Inject constructor(
         }
         scope.launch {
             incomingMessageDispatcher.notifications.collect { notification ->
-                receivedNotifications.add(notification)
-                while (receivedNotifications.size > MAX_CONTEXT_QUEUE_SIZE) {
-                    receivedNotifications.poll()
-                }
-                val cutOff = System.currentTimeMillis() - 10 * 60 * 1000L
-                receivedNotifications.removeIf { it.postTime < cutOff }
-
-                channel.send(notification)
+                enqueueInboundNotification(notification)
             }
         }
         Log.i(TAG, "AutoReplyOrchestrator started listening to IncomingMessageDispatcher")
     }
 
-    internal suspend fun processNotificationSequentially(rawNotification: WhatsAppNotification) {
-        // 1. Pre-process notification FIRST
-        val processed = processor.process(rawNotification)
+    internal suspend fun enqueueInboundNotification(notification: WhatsAppNotification) {
+        receivedNotifications.add(notification)
+        while (receivedNotifications.size > MAX_CONTEXT_QUEUE_SIZE) {
+            receivedNotifications.poll()
+        }
+        val cutOff = System.currentTimeMillis() - 10 * 60 * 1000L
+        receivedNotifications.removeIf { it.postTime < cutOff }
+
+        // 1. Immediate persistence for zero data loss & live UI responsiveness
+        val processed = processor.process(notification)
         val sourceClassStr = processed.sourceClass.name
-
-        Log.i(PersonaLogTags.LLM, "📩 Incoming message from [${processed.contactName}] ($sourceClassStr): \"${processed.originalText}\"")
-
-        // 2. Persist inbound message immediately to chat_history
         val chatHistoryEntity = ChatHistoryEntity(
             contactName = processed.contactName,
             messageText = processed.originalText,
@@ -239,9 +245,8 @@ class AutoReplyOrchestrator @Inject constructor(
             isRead = false
         )
         val insertedId = chatHistoryDao.insert(chatHistoryEntity)
-        Log.d(TAG, "Chat history row inserted for contact=${processed.contactName}, id=$insertedId")
+        Log.d(TAG, "Chat history row inserted immediately for contact=${processed.contactName}, id=$insertedId")
 
-        // 3. Upsert conversation_metadata for the live inbox
         conversationMetadataDao.recordMessageTurn(
             contactName = processed.contactName,
             sourceClass = sourceClassStr,
@@ -251,6 +256,152 @@ class AutoReplyOrchestrator @Inject constructor(
             notificationKey = processed.notificationKey,
             incrementUnread = true
         )
+
+        // 2. Gate check: if auto-reply is disabled or AI is paused, do not schedule reply
+        if (!prefsRepository.isAutoReplyEnabledSync()) {
+            PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Notification captured, auto-reply OFF")
+            return
+        }
+        val convMeta = conversationMetadataDao.getConversation(processed.contactName, sourceClassStr)
+        if (convMeta?.isAiPaused == true) {
+            PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Notification captured, AI paused for contact")
+            return
+        }
+
+        // 3. Sliding Debounce Window
+        val stylePrefs = prefsRepository.getStylePreferencesSync()
+        val delaySec = stylePrefs.replyDelaySeconds
+        if (delaySec <= 0) {
+            val singlePrePersisted = notification.copy(
+                isPrePersisted = true,
+                burstMessageIds = listOf(insertedId)
+            )
+            scope.launch {
+                channel.send(singlePrePersisted)
+            }
+            return
+        }
+
+        val delayMs = delaySec.coerceIn(1, 10) * 1000L
+        val maxWaitMs = 8000L
+        val contactKey = "${processed.sourceClass.name}_${processed.contactName.trim().lowercase()}"
+
+        synchronized(debounceLock) {
+            val turn = debounceBuffer.getOrPut(contactKey) {
+                BufferedTurn(firstArrivalMs = System.currentTimeMillis())
+            }
+            turn.notifications.add(notification)
+            turn.insertedIds.add(insertedId)
+
+            val elapsed = System.currentTimeMillis() - turn.firstArrivalMs
+            if (elapsed < maxWaitMs) {
+                turn.debounceJob?.cancel()
+                turn.debounceJob = scope.launch {
+                    delay(delayMs)
+                    flushDebounceBuffer(contactKey)
+                }
+            } else if (turn.debounceJob == null || !turn.debounceJob!!.isActive) {
+                turn.debounceJob = scope.launch {
+                    flushDebounceBuffer(contactKey)
+                }
+            }
+        }
+    }
+
+    internal suspend fun flushDebounceBuffer(contactKey: String) {
+        val turnToFlush = synchronized(debounceLock) {
+            debounceBuffer.remove(contactKey)
+        } ?: return
+
+        val batch = turnToFlush.notifications
+        if (batch.isEmpty()) return
+
+        val coalesced = coalesceNotifications(batch, turnToFlush.insertedIds)
+        channel.send(coalesced)
+    }
+
+    internal fun coalesceNotifications(
+        batch: List<WhatsAppNotification>,
+        insertedIds: List<Long> = emptyList()
+    ): WhatsAppNotification {
+        if (batch.isEmpty()) {
+            throw IllegalArgumentException("Cannot coalesce empty notification batch")
+        }
+        if (batch.size == 1) {
+            return batch[0].copy(
+                isPrePersisted = true,
+                burstMessageIds = insertedIds.ifEmpty { emptyList() }
+            )
+        }
+
+        val latest = batch.last()
+        // Distinct non-empty lines preserving chronological order
+        val combinedText = batch
+            .map { it.text.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString("\n")
+
+        // Retain media file if any message in burst carried media
+        val mediaPath = batch.mapNotNull { it.mediaFilePath }.firstOrNull { it.isNotBlank() }
+
+        // Audio failure only if all failed and no valid text exists
+        val voiceFailed = batch.all { it.isVoiceTranscriptionFailed } && combinedText.isBlank()
+
+        return latest.copy(
+            text = combinedText,
+            mediaFilePath = mediaPath,
+            isVoiceTranscriptionFailed = voiceFailed,
+            isPrePersisted = true,
+            burstMessageIds = insertedIds
+        )
+    }
+
+    internal suspend fun processNotificationSequentially(rawNotification: WhatsAppNotification) {
+        // 1. Pre-process notification FIRST
+        val processed = processor.process(rawNotification)
+        val sourceClassStr = processed.sourceClass.name
+
+        Log.i(PersonaLogTags.LLM, "📩 Incoming message from [${processed.contactName}] ($sourceClassStr): \"${processed.originalText}\"")
+
+        // 2. Persist inbound message immediately to chat_history
+        val insertedId = if (rawNotification.isPrePersisted) {
+            rawNotification.burstMessageIds.lastOrNull() ?: runCatching {
+                chatHistoryDao.getRecentMessagesExceptForSource(
+                    contactName = processed.contactName,
+                    sourceClass = sourceClassStr,
+                    excludeId = -1L,
+                    limit = 1
+                ).firstOrNull()?.id ?: 0L
+            }.getOrDefault(0L)
+        } else {
+            val chatHistoryEntity = ChatHistoryEntity(
+                contactName = processed.contactName,
+                messageText = processed.originalText,
+                isFromUser = true,
+                timestamp = processed.postTime,
+                embedding = null,
+                embeddingState = "PENDING",
+                sourceClass = sourceClassStr,
+                senderType = "CUSTOMER",
+                deliveryStatus = "SENT",
+                isRead = false
+            )
+            val id = chatHistoryDao.insert(chatHistoryEntity)
+            Log.d(TAG, "Chat history row inserted for contact=${processed.contactName}, id=$id")
+
+            // 3. Upsert conversation_metadata for the live inbox
+            conversationMetadataDao.recordMessageTurn(
+                contactName = processed.contactName,
+                sourceClass = sourceClassStr,
+                messageText = processed.originalText,
+                senderType = "CUSTOMER",
+                timestamp = processed.postTime,
+                notificationKey = processed.notificationKey,
+                incrementUnread = true
+            )
+            id
+        }
 
         // 4. Sequential single-embedding pipeline is executed at Step 11 to prevent ONNX lock contention.
 
@@ -437,8 +588,14 @@ class AutoReplyOrchestrator @Inject constructor(
                         contactName = effectiveProcessed.contactName,
                         sourceClass = sourceClassStr,
                         excludeId = insertedId,
-                        limit = 6
-                    ).firstOrNull { !it.isFromUser }?.messageText?.trim() ?: ""
+                        limit = 20
+                    ).let { list ->
+                        if (rawNotification.burstMessageIds.isNotEmpty()) {
+                            list.filterNot { rawNotification.burstMessageIds.contains(it.id) }
+                        } else {
+                            list
+                        }
+                    }.firstOrNull { !it.isFromUser }?.messageText?.trim() ?: ""
                 }.getOrDefault("")
 
                 val gatekeeperInput = if (lastAssistantText.isNotBlank()) {
@@ -504,12 +661,17 @@ class AutoReplyOrchestrator @Inject constructor(
 
             // Context Assembly
             val contextStart = System.currentTimeMillis()
-            val chatHistory = chatHistoryDao.getRecentMessagesExceptForSource(
+            val rawChatHistory = chatHistoryDao.getRecentMessagesExceptForSource(
                 contactName = effectiveProcessed.contactName,
                 sourceClass = sourceClassStr,
                 excludeId = insertedId,
-                limit = 6
+                limit = 20
             )
+            val chatHistory = if (rawNotification.burstMessageIds.isNotEmpty()) {
+                rawChatHistory.filterNot { rawNotification.burstMessageIds.contains(it.id) }
+            } else {
+                rawChatHistory
+            }
             val activeOrders = orderDao.getActiveOrdersByContact(effectiveProcessed.contactName)
             val latestOrder = runCatching { orderDao.getLatestOrderByContact(effectiveProcessed.contactName) }.getOrNull()
             val orderStatusCounts = runCatching { orderDao.getOrderStatusCounts(effectiveProcessed.contactName) }.getOrNull() ?: emptyList()
@@ -820,7 +982,9 @@ class AutoReplyOrchestrator @Inject constructor(
             }
 
             // 13. Execute direct reply via RemoteInput
-            delay(stylePrefs.replyDelaySeconds * 1000L)
+            if (!rawNotification.isPrePersisted && stylePrefs.replyDelaySeconds > 0) {
+                delay(stylePrefs.replyDelaySeconds * 1000L)
+            }
             val executionResult = directReplyExecutionUseCase.execute(
                 processed.notificationKey,
                 styledReplyText,

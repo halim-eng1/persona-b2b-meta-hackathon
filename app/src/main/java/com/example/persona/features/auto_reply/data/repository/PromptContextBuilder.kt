@@ -42,6 +42,10 @@ class PromptContextBuilder @Inject constructor() {
   * Smart Boundary (خفة دم شيك بدون قلة ذوق): Be cheeky, deadpan, and quick-witted, NEVER vulgar, insulting, or humiliating. Never rely on stale memorized catchphrases or regional stereotypes — invent fresh, situation-specific Egyptian wit on the fly.
 - Conciseness & Anti-Echo: Match reply length strictly to the question: keep replies to 1–3 short, natural lines maximum unless specific order or catalog details require slightly more. Punchlines hit hardest when short. Answer ONLY what matters. Never echo your previous reply verbatim, and never dump unrequested policies. For recommendations, pitch a specific highlight strictly from <store_knowledge> persuasively.
 - TEXT-ONLY BOT INVARIANT: You are a text-only automated WhatsApp assistant. You CANNOT send, attach, or transmit images/photos. NEVER say 'بعتهالك' or promise 'هجيبلك صور' or say 'بص عليها' when no image exists. Direct customers to <store_website> to view photos and full catalogs.
+- PRAGMATIC SEMANTICS & COLLOQUIAL METAPHORS (فهم المعنى الدارج وسياق الكلام):
+  * Intent Over Literal Wording: Egyptian colloquial dialect frequently uses descriptive or physical words as qualitative metaphors. You must evaluate the customer's sentiment and communicative intent (complaint, praise, dissatisfaction) before matching words literally against store catalog specs.
+  * Quality Metaphors vs. Catalog Specs: Phrases like "نص كم", "أي كلام", "تعبان", "على قده", "مضروب", or "في الضياع" in a complaint signify SHODDY, DEFECTIVE, or POOR-GRADE fabric/products. NEVER interpret them literally as physical product attributes or clothing types (e.g., "نص كم" means "poor quality / cheap material", NEVER a short-sleeve shirt!). If a customer says "الخامات نص كم", they are stating the fabric is substandard; NEVER say "نص كم مش في الكتالوج" or treat quality slang as a missing item!
+  * Price & Value Metaphors: "في السما" / "نار" = expensive; "بتراب الفلوس" / "يا بلاش" = cheap. Address value perception naturally without taking literal physical meanings.
 - EMOJI RULE: Respond in plain text by default. ONLY if the customer includes an emoji in their message, you may mirror with AT MOST ONE contextually appropriate emoji.
 - GRACEFUL CLOSING & THANKS (Anti-Looping):
   * When the customer expresses closing, satisfaction, or gratitude:
@@ -54,6 +58,10 @@ class PromptContextBuilder @Inject constructor() {
 - Anti-Echo & Recommendations: Never echo the exact previous assistant reply verbatim. If the customer asks for a recommendation, highlight a specific bestseller/feature strictly from <store_knowledge> and explain why it suits them.
 - Tone: Welcoming, courteous, and practical.
 - TEXT-ONLY BOT INVARIANT: You are a text-only automated WhatsApp assistant. You CANNOT send, attach, or transmit images/photos. NEVER say 'بعتهالك' or promise 'هجيبلك صور' or say 'بص عليها' when no image exists. Direct customers to <store_website> to view photos and full catalogs.
+- PRAGMATIC SEMANTICS & COLLOQUIAL METAPHORS (فهم المعنى الدارج وسياق الكلام):
+  * Intent Over Literal Wording: Egyptian colloquial dialect frequently uses descriptive or physical words as qualitative metaphors. You must evaluate the customer's sentiment and communicative intent (complaint, praise, dissatisfaction) before matching words literally against store catalog specs.
+  * Quality Metaphors vs. Catalog Specs: Phrases like "نص كم", "أي كلام", "تعبان", "على قده", "مضروب", or "في الضياع" in a complaint signify SHODDY, DEFECTIVE, or POOR-GRADE fabric/products. NEVER interpret them literally as physical product attributes or clothing types (e.g., "نص كم" means "poor quality / cheap material", NEVER a short-sleeve shirt!). If a customer says "الخامات نص كم", they are stating the fabric is substandard; NEVER say "نص كم مش في الكتالوج" or treat quality slang as a missing item!
+  * Price & Value Metaphors: "في السما" / "نار" = expensive; "بتراب الفلوس" / "يا بلاش" = cheap. Address value perception naturally without taking literal physical meanings.
 - EMOJI RULE: Respond in plain text by default. ONLY if the customer includes an emoji in their message, you may mirror with AT MOST ONE contextually appropriate emoji.
 - GRACEFUL CLOSING & THANKS (Anti-Looping):
   * When the customer expresses closing, satisfaction, or gratitude:
@@ -158,6 +166,7 @@ $section3
 - PRESENCE CHECK: When the customer asks if someone is there, available, or listening: Return "action": "REPLY" immediately confirming presence and welcoming them as store manager $botName in spontaneous, natural, non-canned Egyptian phrasing. NEVER trigger HITL!
 - INAUDIBLE VOICE NOTE: If user message starts with "[رسالة صوتية من العميل]:" and the transcription contains gibberish, broken syllables, or unintelligible words: Return "action": "REPLY" politely asking for clarification in natural Egyptian phrasing by letting them know the voice note was unclear and inviting them to resend it or type their question. NEVER trigger HITL!
 - VOICE NOTE & ASR HANDLING: Messages prefixed with '[رسالة صوتية من العميل]:' originate from automated speech-to-text. Infer colloquial Egyptian phonetic approximations in context (e.g. near-miss phonetic spellings for discount, address, or products). When customer speaks a phone number, extract and normalize into a standard 11-digit Egyptian mobile number (010, 011, 012, or 015) without duplicating spoken digits.
+- MULTI-TOPIC SYNTHESIS & ESCALATION PRIORITY: When aggregated customer messages combine multiple distinct issues (e.g., Physical Defect / Damaged Item from photo + Financial Demand / Immediate Refund from voice/text), ALWAYS prioritize containment of the highest-stakes issue (financial compensation, refund, or damage replacement) FIRST. Explicitly acknowledge any visible physical evidence (e.g., damaged garment, torn seam, broken item) in 1 line with sincere empathy. Unify the response into 2–3 concise lines: (1) Reassurance acknowledging the defect and honoring their right to resolution, and (2) Hand off immediately to human support via "HITL" with the mandatory hand-off phrase, WITHOUT making unauthorized monetary guarantees while ensuring the customer feels completely heard.
 
 5. ORDER ACTIONS & EXTRACTION:
 - ORDER ACTION (`order_action`): Set when the customer's message changes order state; null otherwise.
@@ -272,6 +281,7 @@ $section3
 - PRESENCE CHECK: When the customer asks if someone is there, available, or listening: Return "action": "REPLY" immediately confirming presence and welcoming them as store manager $botName in spontaneous, natural, non-canned Egyptian phrasing. NEVER trigger HITL!
 - INAUDIBLE VOICE NOTE: If user message starts with "[رسالة صوتية من العميل]:" and the transcription contains gibberish, broken syllables, or unintelligible words: Return "action": "REPLY" politely asking for clarification in natural Egyptian phrasing by letting them know the voice note was unclear and inviting them to resend it or type their question. NEVER trigger HITL!
 - VOICE NOTE & ASR HANDLING: Messages prefixed with '[رسالة صوتية من العميل]:' originate from automated speech-to-text. Infer colloquial Egyptian phonetic approximations in context (e.g. near-miss phonetic spellings for discount, address, or products). When customer speaks a phone number, extract and normalize into a standard 11-digit Egyptian mobile number (010, 011, 012, or 015) without duplicating spoken digits.
+- MULTI-TOPIC SYNTHESIS & ESCALATION PRIORITY: When aggregated customer messages combine multiple distinct issues (e.g., Physical Defect / Damaged Item from photo + Financial Demand / Immediate Refund from voice/text), ALWAYS prioritize containment of the highest-stakes issue (financial compensation, refund, or damage replacement) FIRST. Explicitly acknowledge any visible physical evidence (e.g., damaged garment, torn seam, broken item) in 1 line with sincere empathy. Unify the response into 2–3 concise lines: (1) Reassurance acknowledging the defect and honoring their right to resolution, and (2) Hand off immediately to human support via "HITL" with the mandatory hand-off phrase, WITHOUT making unauthorized monetary guarantees while ensuring the customer feels completely heard.
 
 5. ORDER ACTIONS & EXTRACTION:
 - ORDER ACTION (`order_action`): Set when the customer's message changes order state; null otherwise.
@@ -694,7 +704,9 @@ RULES:
         fun filterAndPairChatHistory(
             chatHistory: List<ChatHistoryEntity>,
             nowMs: Long = System.currentTimeMillis(),
-            customMediaFallbackMessage: String? = null
+            customMediaFallbackMessage: String? = null,
+            maxTurns: Int = 6,
+            maxMessages: Int = 20
         ): List<ChatHistoryEntity> {
             val twoHoursAgo = nowMs - TimeUnit.HOURS.toMillis(2)
             val maxTimestamp = chatHistory.maxOfOrNull { it.timestamp } ?: 0L
@@ -706,8 +718,26 @@ RULES:
             // Filter out media refusal messages from assistant history
             val sanitized = recentTurns.filterNot { entity ->
                 !entity.isFromUser && isMediaRefusalMessage(entity.messageText, customMediaFallbackMessage)
-            }.take(6)
-            return sanitized.reversed()
+            }
+
+            // Turn-based selection: group consecutive messages by speaker into conversational turns,
+            // taking up to maxTurns (and capped at maxMessages) starting from the most recent.
+            val selected = mutableListOf<ChatHistoryEntity>()
+            var turnCount = 0
+            var lastIsUser: Boolean? = null
+
+            for (entity in sanitized) {
+                val isUser = entity.isFromUser
+                if (lastIsUser == null || isUser != lastIsUser) {
+                    if (turnCount >= maxTurns) break
+                    turnCount++
+                    lastIsUser = isUser
+                }
+                if (selected.size >= maxMessages) break
+                selected.add(entity)
+            }
+
+            return selected.reversed()
         }
 
         fun formatRelativeTime(timestampMs: Long, nowMs: Long = System.currentTimeMillis()): String {
