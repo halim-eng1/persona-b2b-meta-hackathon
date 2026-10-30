@@ -1,8 +1,10 @@
 package com.example.persona
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.LocaleList
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,15 +15,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.onboarding.data.PermissionChecker
 import com.example.persona.navigation.BottomNavBar
 import com.example.persona.navigation.PersonaNavGraph
@@ -29,12 +39,14 @@ import com.example.persona.navigation.Screen
 import com.example.persona.navigation.TopLevelDestination
 import com.example.persona.ui.theme.PersonaTheme
 import dagger.hilt.android.AndroidEntryPoint
+import java.util.Locale
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var permissionChecker: PermissionChecker
+    @Inject lateinit var userPreferencesRepository: UserPreferencesRepository
 
     private var pendingDeepLinkContact by mutableStateOf<Pair<String, String>?>(null)
 
@@ -53,45 +65,81 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
 
         setContent {
-            PersonaTheme {
-                val navController = rememberNavController()
-                val currentBackStackEntry by navController.currentBackStackEntryAsState()
+            val appLanguage by userPreferencesRepository.appLanguageFlow.collectAsStateWithLifecycle(
+                initialValue = UserPreferencesRepository.DEFAULT_APP_LANGUAGE
+            )
+            // Keep a reference to the Activity context — Hilt's HiltViewModelFactory
+            // requires an Activity context and will crash if it receives a plain ContextImpl
+            // (which createConfigurationContext() returns). We apply locale config only to
+            // LocalConfiguration so that string resources respect the chosen language, while
+            // LocalContext always stays as the Activity itself.
+            val activityContext = LocalContext.current   // this IS the Activity
+            val layoutDirection = if (appLanguage == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
 
-                val currentDestination = currentBackStackEntry?.destination
-                val showBottomBar = TopLevelDestination.isTopLevelDestination(currentDestination)
+            val localizedConfiguration = remember(appLanguage) {
+                val locale = Locale(appLanguage)
+                Locale.setDefault(locale)
+                val config = Configuration(activityContext.resources.configuration)
+                config.setLocale(locale)
+                config.setLayoutDirection(locale)
+                config
+            }
 
-                LaunchedEffect(pendingDeepLinkContact) {
-                    pendingDeepLinkContact?.let { (contact, source) ->
-                        val currentContact = currentBackStackEntry?.arguments?.getString("contactName")
-                        val isAlreadyOnSameChat = currentDestination?.hasRoute(Screen.ChatDetail::class) == true &&
-                            currentContact == contact
+            LaunchedEffect(appLanguage) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    try {
+                        val localeManager = getSystemService(android.app.LocaleManager::class.java)
+                        localeManager?.applicationLocales = LocaleList(Locale.forLanguageTag(appLanguage))
+                    } catch (_: Throwable) {}
+                }
+            }
 
-                        if (!isAlreadyOnSameChat) {
-                            navController.navigate(Screen.ChatDetail(contact, source)) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            CompositionLocalProvider(
+                LocalLayoutDirection provides layoutDirection,
+                // ✅ Do NOT override LocalContext — keep it as the Activity so Hilt works.
+                // ✅ Override only LocalConfiguration so Compose picks up the locale.
+                LocalConfiguration provides localizedConfiguration
+            ) {
+                PersonaTheme {
+                    val navController = rememberNavController()
+                    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+
+                    val currentDestination = currentBackStackEntry?.destination
+                    val showBottomBar = TopLevelDestination.isTopLevelDestination(currentDestination)
+
+                    LaunchedEffect(pendingDeepLinkContact) {
+                        pendingDeepLinkContact?.let { (contact, source) ->
+                            val currentContact = currentBackStackEntry?.arguments?.getString("contactName")
+                            val isAlreadyOnSameChat = currentDestination?.hasRoute(Screen.ChatDetail::class) == true &&
+                                currentContact == contact
+
+                            if (!isAlreadyOnSameChat) {
+                                navController.navigate(Screen.ChatDetail(contact, source)) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
                                 }
-                                launchSingleTop = true
+                            }
+                            pendingDeepLinkContact = null
+                        }
+                    }
+
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        contentWindowInsets = if (showBottomBar) WindowInsets.systemBars else WindowInsets(0, 0, 0, 0),
+                        containerColor = MaterialTheme.colorScheme.background,
+                        bottomBar = {
+                            if (showBottomBar) {
+                                BottomNavBar(navController = navController)
                             }
                         }
-                        pendingDeepLinkContact = null
+                    ) { innerPadding ->
+                        PersonaNavGraph(
+                            navController = navController,
+                            modifier = Modifier.padding(innerPadding)
+                        )
                     }
-                }
-
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    contentWindowInsets = if (showBottomBar) WindowInsets.systemBars else WindowInsets(0, 0, 0, 0),
-                    containerColor = MaterialTheme.colorScheme.background,
-                    bottomBar = {
-                        if (showBottomBar) {
-                            BottomNavBar(navController = navController)
-                        }
-                    }
-                ) { innerPadding ->
-                    PersonaNavGraph(
-                        navController = navController,
-                        modifier = Modifier.padding(innerPadding)
-                    )
                 }
             }
         }
