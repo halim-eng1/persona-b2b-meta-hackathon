@@ -47,7 +47,8 @@ internal data class GeminiChatRequest(
     val messages: List<ChatMessage>,
     val temperature: Float = 0.5f,
     @SerialName("max_tokens")
-    val maxTokens: Int = 1000
+    val maxTokens: Int = 1000,
+    val stream: Boolean = false
 )
 
 @Singleton
@@ -79,72 +80,49 @@ class GeminiClient @Inject constructor(
         primaryApiKey: String,
         fallbackApiKey: String = ""
     ): CallResult = withContext(Dispatchers.IO) {
-        val primary = primaryApiKey.trim()
-        val fallback = fallbackApiKey.trim()
+        val keys = listOfNotNull(
+            primaryApiKey.trim().takeIf { it.isNotBlank() },
+            fallbackApiKey.trim().takeIf { it.isNotBlank() && it != primaryApiKey.trim() }
+        )
+        callWithKeys(model, messages, maxTokens, keys)
+    }
 
-        val effectivePrimary = primary.ifBlank { fallback }
-        val hasDistinctFallback = fallback.isNotBlank() && fallback != effectivePrimary
-
-        if (effectivePrimary.isBlank()) {
+    suspend fun callWithKeys(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int,
+        keys: List<String>
+    ): CallResult = withContext(Dispatchers.IO) {
+        val validKeys = keys.map { it.trim() }.filter { it.isNotBlank() }
+        if (validKeys.isEmpty()) {
             Log.w(TAG, "No Gemini API keys configured; skipping Gemini model $model")
             return@withContext CallResult.Failed
         }
 
-        val primaryMasked = ReplyGenerationRepositoryImpl.maskKey(effectivePrimary)
-        PersonaLogger.i(TAG, "Attempting [Gemini] model $model with key $primaryMasked")
-        Log.i(TAG, "Attempting [Gemini] model $model with key $primaryMasked")
+        var lastResult: CallResult = CallResult.Failed
+        for ((index, key) in validKeys.withIndex()) {
+            val keyMasked = ReplyGenerationRepositoryImpl.maskKey(key)
+            PersonaLogger.i(TAG, "Attempting [Gemini] model $model with key $keyMasked (key ${index + 1}/${validKeys.size})")
+            Log.i(TAG, "Attempting [Gemini] model $model with key $keyMasked (key ${index + 1}/${validKeys.size})")
 
-        val primaryResult = executeSingleCall(
-            model = model,
-            messages = messages,
-            maxTokens = maxTokens,
-            apiKey = effectivePrimary
-        )
-
-        if (primaryResult is CallResult.Success) {
-            return@withContext primaryResult
-        }
-
-        val isKeyOrError = primaryResult is CallResult.RateLimited ||
-            primaryResult is CallResult.AuthOrQuotaError ||
-            primaryResult is CallResult.ServerError ||
-            primaryResult is CallResult.Failed ||
-            primaryResult is CallResult.Timeout
-
-        if (hasDistinctFallback && isKeyOrError) {
-            val fallbackMasked = ReplyGenerationRepositoryImpl.maskKey(fallback)
-            Log.w(
-                TAG,
-                "Primary Gemini key ($primaryMasked) failed on model $model with $primaryResult. " +
-                    "Falling back to GEMINI_API_KEY_2 ($fallbackMasked)."
-            )
-            PersonaLogger.w(
-                TAG,
-                "Primary Gemini key ($primaryMasked) failed on model $model with $primaryResult -> fallback to GEMINI_API_KEY_2 ($fallbackMasked)"
-            )
-            PersonaLogger.i(TAG, "Attempting [Gemini] model $model with key $fallbackMasked")
-
-            val fallbackResult = executeSingleCall(
-                model = model,
-                messages = messages,
-                maxTokens = maxTokens,
-                apiKey = fallback
-            )
-
-            if (fallbackResult is CallResult.Success) {
-                Log.i(TAG, "Fallback GEMINI_API_KEY_2 succeeded on model $model")
-                PersonaLogger.i(TAG, "Fallback GEMINI_API_KEY_2 succeeded on model $model")
-                return@withContext fallbackResult
+            val result = executeSingleCall(model, messages, maxTokens, key)
+            if (result is CallResult.Success) {
+                return@withContext result
             }
 
-            Log.w(
-                TAG,
-                "Fallback GEMINI_API_KEY_2 also failed on model $model with $fallbackResult"
-            )
-            return@withContext fallbackResult
+            lastResult = result
+            val isRotateWorthy = result is CallResult.RateLimited ||
+                result is CallResult.AuthOrQuotaError ||
+                result is CallResult.ServerError ||
+                result is CallResult.Timeout ||
+                result is CallResult.Failed
+
+            if (isRotateWorthy && index < validKeys.size - 1) {
+                Log.w(TAG, "Gemini key ($keyMasked) failed with $result. Rotating to next key in pool...")
+            }
         }
 
-        primaryResult
+        lastResult
     }
 
     internal suspend fun executeSingleCall(
@@ -194,7 +172,8 @@ class GeminiClient @Inject constructor(
                                 model = model,
                                 messages = messages,
                                 temperature = 0.5f,
-                                maxTokens = effectiveMaxTokens
+                                maxTokens = effectiveMaxTokens,
+                                stream = false
                             )
                         )
                     } else {
@@ -272,13 +251,8 @@ class GeminiClient @Inject constructor(
                         }
                     }
                     else -> {
-                        val errorBody = runCatching { response.body<String>() }.getOrNull() ?: ""
-                        if (errorBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true)) {
-                            CallResult.RateLimited
-                        } else {
-                            Log.w(TAG, "HTTP $status error from [Gemini] $model (key $keyMasked)")
-                            CallResult.Failed
-                        }
+                        Log.w(TAG, "HTTP $status error from [Gemini] $model (key $keyMasked)")
+                        CallResult.Failed
                     }
                 }
             }
@@ -302,9 +276,10 @@ class GeminiClient @Inject constructor(
 
     fun extractGeminiContent(responseBody: String): String? {
         return try {
-            // 1. Try OpenAI-compatible chat completions schema: choices[0].message.content
+            // 1. Try OpenAI-compatible chat completions schema: choices[0].message.content or choices[0].delta.content
             val openAiBody = jsonParser.decodeFromString<OpenRouterResponse>(responseBody)
-            val openAiContent = openAiBody.choices?.firstOrNull()?.message?.content
+            val choice = openAiBody.choices?.firstOrNull()
+            val openAiContent = choice?.delta?.content ?: choice?.message?.content
             if (!openAiContent.isNullOrBlank()) {
                 return openAiContent
             }
@@ -331,7 +306,9 @@ class GeminiClient @Inject constructor(
 
         try {
             val baseUrl = BuildConfig.GEMINI_BASE_URL.trimEnd('/')
-            val endpoint = if (baseUrl.contains(":generateContent") || baseUrl.contains("/models")) {
+            val isNativeRest = baseUrl.contains(":generateContent") || baseUrl.contains("/models")
+
+            val endpoint = if (isNativeRest) {
                 "$baseUrl/models/${request.model}:streamGenerateContent?alt=sse&key=$trimmedKey"
             } else if (baseUrl.endsWith("/chat/completions")) {
                 baseUrl
@@ -341,15 +318,51 @@ class GeminiClient @Inject constructor(
 
             val statement = httpClient.preparePost(endpoint) {
                 contentType(ContentType.Application.Json)
-                bearerAuth(trimmedKey)
-                setBody(
-                    GeminiChatRequest(
-                        model = request.model,
-                        messages = request.toChatMessages(),
-                        temperature = request.temperature,
-                        maxTokens = request.maxTokens
+                if (!isNativeRest) {
+                    bearerAuth(trimmedKey)
+                    setBody(
+                        GeminiChatRequest(
+                            model = request.model,
+                            messages = request.toChatMessages(),
+                            temperature = request.temperature,
+                            maxTokens = request.maxTokens,
+                            stream = true
+                        )
                     )
-                )
+                } else {
+                    // Google native REST schema for streamGenerateContent
+                    val messages = request.toChatMessages()
+                    setBody(
+                        buildJsonObject {
+                            put("contents", buildJsonArray {
+                                for (msg in messages) {
+                                    addJsonObject {
+                                        put("role", if (msg.role == "assistant") "model" else "user")
+                                        put("parts", buildJsonArray {
+                                            addJsonObject {
+                                                put("text", msg.content)
+                                            }
+                                            msg.imageUrl?.let { imgUrl ->
+                                                if (imgUrl.isNotBlank()) {
+                                                    addJsonObject {
+                                                        putJsonObject("inline_data") {
+                                                            put("mime_type", "image/jpeg")
+                                                            put("data", imgUrl.substringAfter("base64,"))
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        })
+                                    }
+                                }
+                            })
+                            putJsonObject("generationConfig") {
+                                put("maxOutputTokens", request.maxTokens)
+                                put("temperature", request.temperature.toDouble())
+                            }
+                        }.toString()
+                    )
+                }
             }
 
             statement.execute { response ->

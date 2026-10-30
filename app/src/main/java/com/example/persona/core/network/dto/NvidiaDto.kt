@@ -15,7 +15,8 @@ data class NvidiaRequest(
     @SerialName("max_tokens")
     val maxTokens: Int = 1000,
     @SerialName("reasoning_effort")
-    val reasoningEffort: String? = null
+    val reasoningEffort: String? = null,
+    val stream: Boolean = false
 )
 
 /**
@@ -31,7 +32,8 @@ data class NvidiaResponse(
 @Serializable
 data class NvidiaChoice(
     val index: Int? = null,
-    val message: NvidiaMessageDto? = null
+    val message: NvidiaMessageDto? = null,
+    val delta: NvidiaMessageDto? = null
 )
 
 @Serializable

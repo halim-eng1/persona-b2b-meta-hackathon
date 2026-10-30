@@ -35,6 +35,11 @@ class LiquidDecisionClient @Inject constructor(
     internal var apiKeyOverride: String? = null
     internal var apiKey2Override: String? = null
     internal var baseUrlOverride: String? = null
+    var keyPool: List<String> = emptyList()
+
+    fun setKeys(keys: List<String>) {
+        keyPool = keys.map { it.trim() }.filter { it.isNotBlank() }
+    }
 
     private val primaryApiKey: String
         get() = apiKeyOverride ?: (runCatching {
@@ -93,36 +98,38 @@ class LiquidDecisionClient @Inject constructor(
 
     suspend fun decide(text: String, timeoutMs: Long = 800L): InboundIntent? = withContext(Dispatchers.IO) {
         withTimeoutOrNull(timeoutMs) {
-            val key1 = primaryApiKey.trim()
-            val key2 = fallbackApiKey.trim()
+            val keys = if (keyPool.isNotEmpty()) {
+                keyPool
+            } else {
+                listOfNotNull(
+                    primaryApiKey.trim().takeIf { it.isNotBlank() },
+                    fallbackApiKey.trim().takeIf { it.isNotBlank() && it != primaryApiKey.trim() }
+                )
+            }
 
-            if (key1.isBlank() && key2.isBlank()) {
-                Log.w(TAG, "No Liquid AI API key configured (primary and fallback are blank)")
+            if (keys.isEmpty()) {
+                Log.w(TAG, "No Liquid AI API key configured (key pool and defaults are blank)")
                 return@withTimeoutOrNull null
             }
 
-            // Dual-key rotation: Try primaryApiKey first; if 429 or error, retry immediately with fallbackApiKey
-            var currentKey = if (key1.isNotBlank()) key1 else key2
-
-            var outcome = executeCall(currentKey, PRIMARY_MODEL, text)
-            if (outcome.intent != null) {
-                return@withTimeoutOrNull outcome.intent
-            }
-
-            // Retry with fallback key if primary key failed and fallback key is available
-            if (key2.isNotBlank() && key2 != currentKey) {
-                Log.w(TAG, "Primary Liquid key failed (${outcome.errorSummary}). Retrying immediately with fallback key.")
-                outcome = executeCall(key2, PRIMARY_MODEL, text)
+            for ((index, key) in keys.withIndex()) {
+                var outcome = executeCall(key, PRIMARY_MODEL, text)
                 if (outcome.intent != null) {
                     return@withTimeoutOrNull outcome.intent
                 }
-                currentKey = key2
+
+                // If primary model failed on this key, attempt failover model
+                outcome = executeCall(key, FAILOVER_MODEL, text)
+                if (outcome.intent != null) {
+                    return@withTimeoutOrNull outcome.intent
+                }
+
+                if (index < keys.size - 1) {
+                    Log.w(TAG, "Liquid key failed (${outcome.errorSummary}). Rotating to next key in pool...")
+                }
             }
 
-            // Failover model: If primary model d1:latest failed across available keys, failover to d1
-            Log.w(TAG, "Primary model $PRIMARY_MODEL failed. Attempting failover model $FAILOVER_MODEL")
-            val failoverOutcome = executeCall(currentKey, FAILOVER_MODEL, text)
-            failoverOutcome.intent
+            null
         }
     }
 
@@ -179,59 +186,61 @@ class LiquidDecisionClient @Inject constructor(
             val mappedIntent = mapChoiceToIntent(choice)
             val confidence = parsed.answers["intent"]?.confidence ?: 0.95f
 
+            val isUrgentComplaint = parsed.answers["is_urgent_complaint"]?.choice == "yes"
+            val finalIntent = if (isUrgentComplaint) {
+                Log.w(TAG, "🚨 Liquid AI flagged urgent complaint/anger for: \"${text.take(60)}\" -> CATALOG_INQUIRY")
+                InboundIntent.CATALOG_INQUIRY
+            } else {
+                mappedIntent ?: InboundIntent.CATALOG_INQUIRY
+            }
+
             PersonaLogger.d(
                 PersonaLogTags.ORCHESTRATOR,
-                "⚡ Liquid AI decision: rawChoice=$choice -> intent=$mappedIntent (conf=$confidence, model=$model, latency=${latency}ms)"
+                "⚡ Gatekeeper Tier 2 (Liquid AI) resolved -> intent=$finalIntent (conf=$confidence, latency=${latency}ms)"
             )
-            CallOutcome(mappedIntent, isRateLimit = false, errorSummary = null)
+            CallOutcome(finalIntent, isRateLimit = false, errorSummary = null)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             val latency = System.currentTimeMillis() - t0
-            Log.w(TAG, "Liquid AI call exception (model=$model, latency=${latency}ms): ${e.message}", e)
-            CallOutcome(null, isRateLimit = false, errorSummary = e.message ?: "Exception")
+            Log.w(TAG, "Liquid AI network call failed (model=$model, latency=${latency}ms): ${e.message}")
+            CallOutcome(null, isRateLimit = false, errorSummary = e.message)
         }
     }
 
-    internal fun mapChoiceToIntent(choice: String?): InboundIntent {
-        return when (choice?.trim()?.uppercase()) {
+    internal fun mapChoiceToIntent(choice: String?): InboundIntent? {
+        if (choice == null) return null
+        return when (choice.uppercase().trim()) {
             "GREETING" -> InboundIntent.GREETING
-            "BANTER", "PRESENCE_CHECK", "CLOSING" -> InboundIntent.BANTER
-            "ORDER_CREATE" -> InboundIntent.CATALOG_INQUIRY
+            "CLOSING", "PRESENCE_CHECK", "BANTER" -> InboundIntent.BANTER
             "ORDER_STATUS", "ORDER_UPDATE", "ORDER_CANCEL" -> InboundIntent.ORDER_STATUS
-            "CATALOG_INQUIRY" -> InboundIntent.CATALOG_INQUIRY
-            "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
+            "CATALOG_INQUIRY", "ORDER_CREATE", "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
             else -> InboundIntent.CATALOG_INQUIRY
         }
     }
+
+    @Serializable
+    private data class SystemOneDecisionRequest(
+        val model: String,
+        val state: String,
+        val questions: Map<String, SystemOneQuestion>
+    )
+
+    @Serializable
+    private data class SystemOneQuestion(
+        val type: String,
+        val instructions: String,
+        val criteria: Map<String, String>
+    )
+
+    @Serializable
+    private data class SystemOneDecisionResponse(
+        val answers: Map<String, SystemOneAnswer> = emptyMap()
+    )
+
+    @Serializable
+    private data class SystemOneAnswer(
+        val choice: String? = null,
+        val confidence: Float? = null
+    )
 }
-
-@Serializable
-internal data class SystemOneDecisionRequest(
-    @SerialName("model") val model: String,
-    @SerialName("state") val state: String,
-    @SerialName("questions") val questions: Map<String, SystemOneQuestion>
-)
-
-@Serializable
-internal data class SystemOneQuestion(
-    @SerialName("type") val type: String,
-    @SerialName("instructions") val instructions: String? = null,
-    @SerialName("criteria") val criteria: Map<String, String>? = null
-)
-
-@Serializable
-internal data class SystemOneDecisionResponse(
-    @SerialName("id") val id: String? = null,
-    @SerialName("model") val model: String? = null,
-    @SerialName("answers") val answers: Map<String, SystemOneAnswer> = emptyMap()
-)
-
-@Serializable
-internal data class SystemOneAnswer(
-    @SerialName("type") val type: String? = null,
-    @SerialName("choice") val choice: String? = null,
-    @SerialName("confidence") val confidence: Float? = null,
-    @SerialName("number") val number: Double? = null,
-    @SerialName("bool") val bool: Boolean? = null
-)

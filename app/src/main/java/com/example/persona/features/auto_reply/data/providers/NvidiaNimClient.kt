@@ -62,34 +62,77 @@ class NvidiaNimClient @Inject constructor(
         maxTokens: Int,
         apiKey: String
     ): CallResult = withContext(Dispatchers.IO) {
-        val trimmedKey = apiKey.trim()
-        if (trimmedKey.isBlank()) {
+        callWithKeys(model, messages, maxTokens, listOfNotNull(apiKey.trim().takeIf { it.isNotBlank() }))
+    }
+
+    suspend fun callWithKeys(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int,
+        keys: List<String>
+    ): CallResult = withContext(Dispatchers.IO) {
+        val validKeys = keys.map { it.trim() }.filter { it.isNotBlank() }
+        if (validKeys.isEmpty()) {
             Log.w(TAG, "NVIDIA API key is blank; skipping request for model $model")
             return@withContext CallResult.Failed
         }
 
-        val keyMasked = ReplyGenerationRepositoryImpl.maskKey(trimmedKey)
+        var lastResult: CallResult = CallResult.Failed
+        for ((index, key) in validKeys.withIndex()) {
+            val keyMasked = ReplyGenerationRepositoryImpl.maskKey(key)
+            PersonaLogger.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (key ${index + 1}/${validKeys.size})")
+            Log.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (key ${index + 1}/${validKeys.size})")
+
+            val result = executeSingleCall(model, messages, maxTokens, key)
+            if (result is CallResult.Success) {
+                return@withContext result
+            }
+
+            lastResult = result
+            val isRotateWorthy = result is CallResult.RateLimited ||
+                result is CallResult.AuthOrQuotaError ||
+                result is CallResult.ServerError
+
+            if (isRotateWorthy && index < validKeys.size - 1) {
+                Log.w(TAG, "NVIDIA key ($keyMasked) failed with $result. Rotating to next key in pool...")
+            }
+        }
+
+        lastResult
+    }
+
+    internal suspend fun executeSingleCall(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int,
+        apiKey: String
+    ): CallResult {
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "NVIDIA API key is blank; skipping request for model $model")
+            return CallResult.Failed
+        }
+
+        val keyMasked = ReplyGenerationRepositoryImpl.maskKey(apiKey)
         val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
         val isVision = model in VISION_NVIDIA_MODELS || hasImage
         val timeoutMs = if (isVision) 25_000L else 10_000L
         val effectiveMaxTokens = if (model.contains("super-vl")) maxOf(maxTokens, 1500) else maxTokens
         val reasoningEffort = if (model.contains("ultra-550b")) "none" else null
         val temperature = if (model.contains("ultra-550b")) 1.0f else 0.5f
-        PersonaLogger.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
-        Log.i(TAG, "Attempting [NVIDIA NIM] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
 
-        try {
+        return try {
             withTimeout(timeoutMs) {
                 val response = httpClient.post(BuildConfig.NVIDIA_BASE_URL) {
                     contentType(ContentType.Application.Json)
-                    bearerAuth(trimmedKey)
+                    bearerAuth(apiKey)
                     setBody(
                         NvidiaRequest(
                             model = model,
                             messages = messages,
                             temperature = temperature,
                             maxTokens = effectiveMaxTokens,
-                            reasoningEffort = reasoningEffort
+                            reasoningEffort = reasoningEffort,
+                            stream = false
                         )
                     )
                 }
@@ -170,7 +213,8 @@ class NvidiaNimClient @Inject constructor(
                         messages = request.toChatMessages(),
                         temperature = temperature,
                         maxTokens = effectiveMaxTokens,
-                        reasoningEffort = reasoningEffort
+                        reasoningEffort = reasoningEffort,
+                        stream = true
                     )
                 )
             }
@@ -196,8 +240,12 @@ class NvidiaNimClient @Inject constructor(
                         }
                         try {
                             val chunk = jsonParser.decodeFromString<NvidiaResponse>(data)
-                            val rawContent = chunk.choices?.firstOrNull()?.message?.content
-                                ?: chunk.choices?.firstOrNull()?.message?.reasoningContent
+                            val choice = chunk.choices?.firstOrNull()
+                            val rawContent = choice?.delta?.content
+                                ?: choice?.delta?.reasoningContent
+                                ?: choice?.message?.content
+                                ?: choice?.message?.reasoningContent
+
                             if (!rawContent.isNullOrEmpty()) {
                                 buffer.append(rawContent)
                                 val currentStr = buffer.toString()

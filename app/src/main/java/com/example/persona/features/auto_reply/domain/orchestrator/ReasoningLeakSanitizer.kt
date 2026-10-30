@@ -7,7 +7,7 @@ import javax.inject.Singleton
 
 /**
  * Handles LLM output sanitization, markdown fence removal, JSON quote repair,
- * reasoning leakage detection, and safe fallback response building.
+ * reasoning leakage detection, <think> tag stripping, and safe fallback response building.
  */
 @Singleton
 class ReasoningLeakSanitizer @Inject constructor() {
@@ -16,14 +16,46 @@ class ReasoningLeakSanitizer @Inject constructor() {
         const val CANONICAL_HITL_MESSAGE =
             "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
 
+        private val THINK_TAG_REGEX = Regex("""<think>[\s\S]*?</think>""", RegexOption.IGNORE_CASE)
+        private val UNCLOSED_THINK_TAG_REGEX = Regex("""<think>[\s\S]*$""", RegexOption.IGNORE_CASE)
+
         private val REASONING_LEAK_MARKERS = listOf(
+            // English markers
             "the user is asking",
             "looking at the knowledge",
             "as an ai",
             "context provided",
             "thinking process",
-            "i need to"
+            "i need to",
+            // Arabic reasoning markers
+            "التفكير",
+            "تحليل",
+            "أفكر في",
+            "أفكر",
+            "المستخدم يسأل",
+            "أنا نموذج ذكاء",
+            "ذكاء اصطناعي",
+            "كذكاء اصطناعي",
+            "أحتاج إلى مراجعة",
+            "تفكير النموذج",
+            "خطوات التفكير",
+            "خطوات الحل",
+            "سأقوم بمراجعة",
+            "سأقوم بالرد",
+            "المستخدم يريد",
+            "تحليل الطلب",
+            "تفكير",
+            "<think>",
+            "</think>"
         )
+
+        fun stripThinkTags(text: String): String = stripReasoningTags(text)
+
+        fun stripReasoningTags(text: String): String {
+            var result = THINK_TAG_REGEX.replace(text, "")
+            result = UNCLOSED_THINK_TAG_REGEX.replace(result, "")
+            return result.trim()
+        }
 
         val agenticJson = Json {
             ignoreUnknownKeys = true
@@ -31,7 +63,8 @@ class ReasoningLeakSanitizer @Inject constructor() {
         }
 
         fun sanitizeLlmJson(raw: String): String {
-            var cleaned = raw.trim()
+            val stripped = stripReasoningTags(raw)
+            var cleaned = stripped.trim()
             cleaned = cleaned.removePrefix("```json").removePrefix("```JSON").removePrefix("```")
             if (cleaned.endsWith("```")) {
                 cleaned = cleaned.substring(0, cleaned.length - 3)
@@ -148,18 +181,32 @@ class ReasoningLeakSanitizer @Inject constructor() {
             val sanitized = sanitizeLlmJson(raw)
             val normalizedKeys = normalizeJsonKeys(sanitized)
             val normalized = normalizeRefinedSearchKeywordArray(normalizedKeys)
-            return try {
+            val decoded = try {
                 agenticJson.decodeFromString<AgenticLlmResponse>(normalized)
             } catch (e: Exception) {
                 val repaired = repairUnescapedJsonQuotes(normalized)
                 agenticJson.decodeFromString<AgenticLlmResponse>(repaired)
+            }
+
+            return if (decoded.finalReplyText != null) {
+                val cleanedReply = stripReasoningTags(decoded.finalReplyText)
+                if (cleanedReply != decoded.finalReplyText) {
+                    decoded.copy(finalReplyText = cleanedReply)
+                } else {
+                    decoded
+                }
+            } else {
+                decoded
             }
         }
 
         fun isLeakedReasoningText(text: String?): Boolean {
             if (text.isNullOrBlank()) return false
             val lowered = text.lowercase()
-            return REASONING_LEAK_MARKERS.any { lowered.contains(it) }
+            if (lowered.contains("<think>") || lowered.contains("</think>")) return true
+            return REASONING_LEAK_MARKERS.any { marker ->
+                lowered.contains(marker.lowercase())
+            }
         }
 
         fun buildUnsafeOutputHitlResponse(hitlMessage: String = CANONICAL_HITL_MESSAGE): AgenticLlmResponse = AgenticLlmResponse(

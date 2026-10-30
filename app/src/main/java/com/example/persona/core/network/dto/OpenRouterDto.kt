@@ -170,7 +170,8 @@ data class OpenRouterRequest(
     /**
      * Optional reasoning configuration. Only attached for benchmark-proven models.
      */
-    val reasoning: ReasoningConfig? = null
+    val reasoning: ReasoningConfig? = null,
+    val stream: Boolean = false
 )
 
 /**
@@ -201,7 +202,8 @@ data class OpenRouterResponse(
 
 @Serializable
 data class Choice(
-    val message: OpenRouterMessageDto? = null
+    val message: OpenRouterMessageDto? = null,
+    val delta: OpenRouterMessageDto? = null
 )
 
 @Serializable

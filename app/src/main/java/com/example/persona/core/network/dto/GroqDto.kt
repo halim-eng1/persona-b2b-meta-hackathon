@@ -17,7 +17,8 @@ data class GroqRequest(
     @SerialName("max_completion_tokens")
     val maxCompletionTokens: Int = 1000,
     @SerialName("reasoning_effort")
-    val reasoningEffort: String? = "low"
+    val reasoningEffort: String? = "low",
+    val stream: Boolean = false
 )
 
 /**
@@ -33,7 +34,8 @@ data class GroqResponse(
 @Serializable
 data class GroqChoice(
     val index: Int? = null,
-    val message: GroqMessageDto? = null
+    val message: GroqMessageDto? = null,
+    val delta: GroqMessageDto? = null
 )
 
 @Serializable

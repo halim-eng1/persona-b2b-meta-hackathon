@@ -28,7 +28,7 @@ class DirectReplyExecutionUseCase @Inject constructor(
      *
      * Tries:
      * 1. Exact match on live notificationKey in active notifications.
-     * 2. Live contactName + sourceClass matching in active notifications.
+     * 2. Live contactName + sourceClass matching in active notifications (picking the latest child carrying RemoteInput).
      * 3. Fallback to cached Notification.Action (from dual-indexed NotificationActionCache).
      *
      * Catches [PendingIntent.CanceledException] gracefully if the notification has been invalidated by the OS.
@@ -50,9 +50,14 @@ class DirectReplyExecutionUseCase @Inject constructor(
         if (listenerService != null) {
             val activeNotifications = listenerService.activeNotifications ?: emptyArray()
 
-            // 1. Try exact notificationKey matching in live status bar
+            // 1. Try exact notificationKey matching in live status bar carrying RemoteInput
             var liveSbn = if (!notificationKey.isNullOrBlank()) {
-                activeNotifications.firstOrNull { it.key == notificationKey }
+                activeNotifications.firstOrNull { sbn ->
+                    sbn.key == notificationKey &&
+                    sbn.notification?.actions?.any { act ->
+                        act.remoteInputs?.any { r -> r.resultKey != null } == true
+                    } == true
+                }
             } else {
                 null
             }
@@ -81,13 +86,16 @@ class DirectReplyExecutionUseCase @Inject constructor(
                 }
 
                 val allMatches = (directChildMatches + summaryChildMatches).distinctBy { it.key }
-                if (allMatches.size > 1) {
-                    val reason = "Aborted: Multiple active notifications (${allMatches.size}) match '$contactName' ($sourceClass)."
-                    PersonaLogger.d(PersonaLogTags.REPLY, "Execution failure: reason=$reason")
-                    return ReplyExecutionResult.Aborted
-                }
+                // Smart Active Notification Selection: Pick latest active notification carrying a RemoteInput
+                val matchWithRemoteInput = allMatches
+                    .filter { sbn ->
+                        sbn.notification?.actions?.any { act ->
+                            act.remoteInputs?.any { r -> r.resultKey != null } == true
+                        } == true
+                    }
+                    .maxByOrNull { it.postTime }
 
-                liveSbn = allMatches.firstOrNull()
+                liveSbn = matchWithRemoteInput ?: allMatches.maxByOrNull { it.postTime }
             }
 
             if (liveSbn != null) {

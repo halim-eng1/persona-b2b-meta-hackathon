@@ -58,6 +58,11 @@ class QwenCloudClient @Inject constructor(
             "qwen3.8-max"
         )
 
+        /**
+         * MANDATORY ARCHITECTURAL OVERRIDE:
+         * Strictly FORBIDDEN to reduce experimental Qwen models!
+         * All 10 default Qwen models MUST remain.
+         */
         val QWEN_TEXT_MODELS = listOf(
             "deepseek-v4.1-flash",
             "qwen3.8-max",
@@ -83,26 +88,63 @@ class QwenCloudClient @Inject constructor(
         maxTokens: Int,
         apiKey: String
     ): CallResult = withContext(Dispatchers.IO) {
-        val trimmedKey = apiKey.trim()
-        if (trimmedKey.isBlank()) {
+        callWithKeys(model, messages, maxTokens, listOfNotNull(apiKey.trim().takeIf { it.isNotBlank() }))
+    }
+
+    suspend fun callWithKeys(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int,
+        keys: List<String>
+    ): CallResult = withContext(Dispatchers.IO) {
+        val validKeys = keys.map { it.trim() }.filter { it.isNotBlank() }
+        if (validKeys.isEmpty()) {
             Log.w(TAG, "Qwen API key is blank; skipping request for model $model")
             return@withContext CallResult.Failed
         }
 
+        var lastResult: CallResult = CallResult.Failed
+        for ((index, key) in validKeys.withIndex()) {
+            val keyMasked = ReplyGenerationRepositoryImpl.maskKey(key)
+            PersonaLogger.i(TAG, "Attempting [QwenCloud] model $model with key $keyMasked (key ${index + 1}/${validKeys.size})")
+            Log.i(TAG, "Attempting [QwenCloud] model $model with key $keyMasked (key ${index + 1}/${validKeys.size})")
+
+            val result = executeSingleCall(model, messages, maxTokens, key)
+            if (result is CallResult.Success) {
+                return@withContext result
+            }
+
+            lastResult = result
+            val isRotateWorthy = result is CallResult.RateLimited ||
+                result is CallResult.AuthOrQuotaError ||
+                result is CallResult.ServerError
+
+            if (isRotateWorthy && index < validKeys.size - 1) {
+                Log.w(TAG, "Qwen key ($keyMasked) failed with $result. Rotating to next key in pool...")
+            }
+        }
+
+        lastResult
+    }
+
+    internal suspend fun executeSingleCall(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int,
+        trimmedKey: String
+    ): CallResult {
         val keyMasked = ReplyGenerationRepositoryImpl.maskKey(trimmedKey)
         val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
         val isVision = model in VISION_QWEN_MODELS || hasImage
         val timeoutMs = if (isVision) VISION_MODEL_TIMEOUT_MS else MODEL_TIMEOUT_MS
         val effectiveMaxTokens = if (isVision) maxOf(maxTokens, 1500) else maxOf(maxTokens, 1200)
-        PersonaLogger.i(TAG, "Attempting [QwenCloud] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
-        Log.i(TAG, "Attempting [QwenCloud] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
 
         val isReasoningModel = model in REASONING_QWEN_MODELS ||
             model.contains("deepseek", ignoreCase = true) ||
             model.contains("qwen3.8", ignoreCase = true) ||
             model.contains("reason", ignoreCase = true)
 
-        try {
+        return try {
             withTimeout(timeoutMs) {
                 val response = httpClient.post(BuildConfig.QWEN_BASE_URL) {
                     contentType(ContentType.Application.Json)

@@ -40,9 +40,12 @@ import com.example.persona.features.auto_reply.domain.gatekeeper.LocalDecisionCl
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
+import com.example.persona.features.auto_reply.data.repository.PersistentDebounceBuffer
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import javax.inject.Inject
@@ -76,7 +79,8 @@ class AutoReplyOrchestrator @Inject constructor(
     private val reasoningLeakSanitizer: ReasoningLeakSanitizer = ReasoningLeakSanitizer(),
     private val cloudflareClefClient: CloudflareClefClient = CloudflareClefClient(),
     private val liquidDecisionClient: LiquidDecisionClient = LiquidDecisionClient(),
-    private val localDecisionClassifier: LocalDecisionClassifier = LocalDecisionClassifier()
+    private val localDecisionClassifier: LocalDecisionClassifier = LocalDecisionClassifier(),
+    private val persistentDebounceBuffer: PersistentDebounceBuffer = PersistentDebounceBuffer(context)
 ) {
     companion object {
         private const val TAG = "AutoReplyOrchestrator"
@@ -176,10 +180,75 @@ class AutoReplyOrchestrator @Inject constructor(
 
         const val CONTEXT_WINDOW_MINUTES = 1L
         const val MAX_CONTEXT_QUEUE_SIZE = 50
+        const val MAX_CONTACT_MUTEXES = 100
     }
 
-    // Channel for sequential processing — prevents concurrent ONNX executions (OOM prevention)
-    private val channel = Channel<WhatsAppNotification>(Channel.UNLIMITED)
+    // Per-contact mutexes and active jobs for non-blocking multi-contact parallelism
+    private val contactMutexes = ConcurrentHashMap<String, Mutex>()
+    private val activeContactJobs = ConcurrentHashMap<String, Job>()
+    private val mutexGate = Any()
+    // Dedicated mutex guarding on-device ONNX embedding inference to eliminate lock contention
+    private val onnxMutex = Mutex()
+
+    private suspend fun safeEmbedForAutoReply(text: String): FloatArray? = onnxMutex.withLock {
+        embeddingEngine.embedForAutoReply(text)
+    }
+
+    private fun getOrCreateContactMutex(contactKey: String): Mutex {
+        synchronized(mutexGate) {
+            if (contactMutexes.size > MAX_CONTACT_MUTEXES) {
+                val iterator = contactMutexes.entries.iterator()
+                while (iterator.hasNext()) {
+                    val entry = iterator.next()
+                    if (!entry.value.isLocked && !activeContactJobs.containsKey(entry.key)) {
+                        iterator.remove()
+                    }
+                }
+            }
+            return contactMutexes.computeIfAbsent(contactKey) { Mutex() }
+        }
+    }
+
+    fun cancelInFlightProcessing(contactKey: String) {
+        val contactName = contactKey.substringAfter('_', "")
+        if (contactName.isNotBlank()) {
+            setContactProcessing(contactName, false)
+        }
+        activeContactJobs.remove(contactKey)?.let { job ->
+            if (job.isActive) {
+                Log.i(TAG, "Cancelling in-flight processing job for contactKey: $contactKey")
+                job.cancel()
+            }
+        }
+    }
+
+    internal fun dispatchContactProcessing(notification: WhatsAppNotification) {
+        val contactName = notification.title.trim().ifBlank { "unknown" }
+        val contactKey = "${notification.sourceClass.name}_${contactName.lowercase()}"
+        cancelInFlightProcessing(contactKey)
+        val contactMutex = getOrCreateContactMutex(contactKey)
+
+        val job = scope.launch(Dispatchers.Default) {
+            contactMutex.withLock {
+                try {
+                    processNotificationSequentially(notification)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    Log.i(TAG, "Processing cancelled for contactKey: $contactKey")
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing notification for contactKey: $contactKey", e)
+                } finally {
+                    activeContactJobs.remove(contactKey, coroutineContext[Job])
+                    synchronized(mutexGate) {
+                        if (contactMutexes.size > MAX_CONTACT_MUTEXES && !contactMutex.isLocked && !activeContactJobs.containsKey(contactKey)) {
+                            contactMutexes.remove(contactKey, contactMutex)
+                        }
+                    }
+                }
+            }
+        }
+        activeContactJobs[contactKey] = job
+    }
 
     // Queue for context window calculation with aggressive memory safety
     private val receivedNotifications = ConcurrentLinkedQueue<WhatsAppNotification>()
@@ -205,15 +274,6 @@ class AutoReplyOrchestrator @Inject constructor(
 
     init {
         hitlNotificationHandler.createAlarmNotificationChannel()
-        scope.launch {
-            for (notification in channel) {
-                try {
-                    processNotificationSequentially(notification)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in sequential processing of notification: ${notification.notificationKey}", e)
-                }
-            }
-        }
     }
 
     fun start() {
@@ -224,6 +284,18 @@ class AutoReplyOrchestrator @Inject constructor(
             }
             isCollecting = true
         }
+
+        // Recover pending debounce turns surviving process restart
+        scope.launch(Dispatchers.Default) {
+            val pendingTurns = persistentDebounceBuffer.recoverPendingTurns()
+            if (pendingTurns.isNotEmpty()) {
+                Log.i(TAG, "Recovered ${pendingTurns.size} pending debounce turns after restart. Dispatching...")
+                for ((_, notification) in pendingTurns) {
+                    dispatchContactProcessing(notification)
+                }
+            }
+        }
+
         scope.launch {
             incomingMessageDispatcher.notifications.collect { notification ->
                 enqueueInboundNotification(notification)
@@ -287,7 +359,7 @@ class AutoReplyOrchestrator @Inject constructor(
                 isPrePersisted = true,
                 burstMessageIds = listOf(insertedId)
             )
-            channel.send(singlePrePersisted)
+            dispatchContactProcessing(singlePrePersisted)
             return
         }
 
@@ -313,6 +385,9 @@ class AutoReplyOrchestrator @Inject constructor(
                 turn.targetDeadlineMs = minOf(turn.targetDeadlineMs + DEBOUNCE_MICRO_EXTENSION_MS, maxAllowedDeadline)
             }
 
+            // Persist turn to disk for crash recovery
+            persistentDebounceBuffer.persistTurn(contactKey, turn.notifications, turn.insertedIds, turn.targetDeadlineMs)
+
             if (turn.debounceJob == null || !turn.debounceJob!!.isActive) {
                 turn.debounceJob = scope.launch {
                     while (true) {
@@ -334,11 +409,13 @@ class AutoReplyOrchestrator @Inject constructor(
             debounceBuffer.remove(contactKey)
         } ?: return
 
+        persistentDebounceBuffer.removeTurn(contactKey)
+
         val batch = turnToFlush.notifications
         if (batch.isEmpty()) return
 
         val coalesced = coalesceNotifications(batch, turnToFlush.insertedIds)
-        channel.send(coalesced)
+        dispatchContactProcessing(coalesced)
     }
 
     internal fun coalesceNotifications(
@@ -560,7 +637,7 @@ class AutoReplyOrchestrator @Inject constructor(
         setContactProcessing(effectiveProcessed.contactName, true)
         try {
             // 11. RAG Retrieval Engine (Single-Query Pass 1)
-            val activeHashes = antiEchoGuard.getActiveReplyHashes()
+            val activeHashes = antiEchoGuard.getActiveReplyHashes(effectiveProcessed.contactName)
             val ragBaseThreshold = calculateRagBaseThreshold(stylePrefs.similarityThreshold)
             var candidates: List<RetrievalCandidate> = emptyList()
             var maxScore = 0f
@@ -575,7 +652,7 @@ class AutoReplyOrchestrator @Inject constructor(
 
             val queryEmbedding = try {
                 val startTime = System.currentTimeMillis()
-                val emb = embeddingEngine.embedForAutoReply(queryTextForEmbedding)
+                val emb = safeEmbedForAutoReply(queryTextForEmbedding)
                 val latency = System.currentTimeMillis() - startTime
                 Log.i("PersonaMetrics", "metric=embedding_latency_ms value=$latency contact=${processed.contactName.hashCode()}")
                 emb
@@ -605,63 +682,70 @@ class AutoReplyOrchestrator @Inject constructor(
 
             val isImagePresent = effectiveProcessed.mediaFilePath != null && !isAudioFilePath(effectiveProcessed.mediaFilePath)
 
-            // 3-Tier Multi-Cloud Gatekeeper Cascade:
-            // Tier 1: Cloudflare Clef (clef-flash / clef-omni) [1150ms SLA]
+            // Inverted Gatekeeper Cascade:
+            // Tier 0: LocalDecisionClassifier (<1ms on-device fast path) for high-confidence non-catalog intents
+            // Tier 1: Cloudflare Clef (clef-flash / clef-omni) [1150ms SLA] for catalog or ambiguous queries
             // Tier 2: Liquid AI (d1 / d1:latest) [800ms SLA fallback]
-            // Tier 3: LocalDecisionClassifier (On-Device Emergency Fallback, <0.2ms)
+            // Tier 3: LocalDecisionClassifier fallback
             val tGatekeeper = System.currentTimeMillis()
 
             val (decision, resolvedTier) = if (isImagePresent) {
                 DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 1.0f, latencyMs = 0L) to "FastPath: Image Present"
             } else {
-                val lastAssistantText = runCatching {
-                    chatHistoryDao.getRecentMessagesExceptForSource(
-                        contactName = effectiveProcessed.contactName,
-                        sourceClass = sourceClassStr,
-                        excludeId = insertedId,
-                        limit = 20
-                    ).let { list ->
-                        if (rawNotification.burstMessageIds.isNotEmpty()) {
-                            list.filterNot { rawNotification.burstMessageIds.contains(it.id) }
-                        } else {
-                            list
-                        }
-                    }.firstOrNull { !it.isFromUser }?.messageText?.trim() ?: ""
-                }.getOrDefault("")
-
-                val gatekeeperInput = if (lastAssistantText.isNotBlank()) {
-                    "[الرد السابق]: $lastAssistantText\n[رسالة العميل]: $queryTextForEmbedding"
-                } else {
-                    queryTextForEmbedding
+                val localDecision = runCatching {
+                    localDecisionClassifier.classify(queryTextForEmbedding, queryEmbedding)
+                }.getOrElse { e ->
+                    Log.e(TAG, "Gatekeeper Local Decision Classifier failed: ${e.message}", e)
+                    DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 0.5f, latencyMs = 0L)
                 }
 
-                val cfIntent = runCatching {
-                    cloudflareClefClient.decide(gatekeeperInput, timeoutMs = 1150L)
-                }.onFailure { e ->
-                    Log.w(TAG, "Gatekeeper Tier 1 (Cloudflare Clef) threw exception: ${e.message}")
-                }.getOrNull()
-
-                if (cfIntent != null) {
+                if (localDecision.intent != InboundIntent.CATALOG_INQUIRY && localDecision.confidence >= 0.25f) {
                     val latency = System.currentTimeMillis() - tGatekeeper
-                    DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Tier 1: Cloudflare Clef"
+                    DecisionResult(intent = localDecision.intent, confidence = localDecision.confidence, latencyMs = latency) to "Tier 0: Local FastPath (<1ms)"
                 } else {
-                    val liquidIntent = runCatching {
-                        liquidDecisionClient.decide(gatekeeperInput, timeoutMs = 800L)
+                    val lastAssistantText = runCatching {
+                        chatHistoryDao.getRecentMessagesExceptForSource(
+                            contactName = effectiveProcessed.contactName,
+                            sourceClass = sourceClassStr,
+                            excludeId = insertedId,
+                            limit = 20
+                        ).let { list ->
+                            if (rawNotification.burstMessageIds.isNotEmpty()) {
+                                list.filterNot { rawNotification.burstMessageIds.contains(it.id) }
+                            } else {
+                                list
+                            }
+                        }.firstOrNull { !it.isFromUser }?.messageText?.trim() ?: ""
+                    }.getOrDefault("")
+
+                    val gatekeeperInput = if (lastAssistantText.isNotBlank()) {
+                        "[الرد السابق]: $lastAssistantText\n[رسالة العميل]: $queryTextForEmbedding"
+                    } else {
+                        queryTextForEmbedding
+                    }
+
+                    val cfIntent = runCatching {
+                        cloudflareClefClient.decide(gatekeeperInput, timeoutMs = 1150L)
                     }.onFailure { e ->
-                        Log.w(TAG, "Gatekeeper Tier 2 (Liquid AI) threw exception: ${e.message}")
+                        Log.w(TAG, "Gatekeeper Tier 1 (Cloudflare Clef) threw exception: ${e.message}")
                     }.getOrNull()
 
-                    if (liquidIntent != null) {
+                    if (cfIntent != null) {
                         val latency = System.currentTimeMillis() - tGatekeeper
-                        DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Tier 2: Liquid AI"
+                        DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Tier 1: Cloudflare Clef"
                     } else {
-                        val localDecision = runCatching {
-                            localDecisionClassifier.classify(queryTextForEmbedding, queryEmbedding)
-                        }.getOrElse { e ->
-                            Log.e(TAG, "Gatekeeper Tier 3 (Local Decision) failed: ${e.message}", e)
-                            DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 0.5f, latencyMs = 0L)
+                        val liquidIntent = runCatching {
+                            liquidDecisionClient.decide(gatekeeperInput, timeoutMs = 800L)
+                        }.onFailure { e ->
+                            Log.w(TAG, "Gatekeeper Tier 2 (Liquid AI) threw exception: ${e.message}")
+                        }.getOrNull()
+
+                        if (liquidIntent != null) {
+                            val latency = System.currentTimeMillis() - tGatekeeper
+                            DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Tier 2: Liquid AI"
+                        } else {
+                            localDecision to "Tier 3: LocalDecisionClassifier (On-Device)"
                         }
-                        localDecision to "Tier 3: LocalDecisionClassifier (On-Device)"
                     }
                 }
             }
@@ -871,7 +955,7 @@ class AutoReplyOrchestrator @Inject constructor(
                             .joinToString(" ")
 
                         val retrievedPass2: List<RetrievalCandidate> = if (combinedSearchQuery.isNotBlank()) {
-                            val pass2Embedding = embeddingEngine.embedForAutoReply(combinedSearchQuery)
+                            val pass2Embedding = safeEmbedForAutoReply(combinedSearchQuery)
                             if (pass2Embedding != null) {
                                 val (retrieved, _) = semanticRetrievalRepository.retrieveCandidates(
                                     queryEmbedding = pass2Embedding,
@@ -1028,7 +1112,7 @@ class AutoReplyOrchestrator @Inject constructor(
                 is ReplyExecutionResult.Success -> {
                     cooldownMap[processed.contactName] = System.currentTimeMillis()
                     lastReplyTimestamps[processed.contactName] = System.currentTimeMillis()
-                    antiEchoGuard.addReplyToCache(styledReplyText)
+                    antiEchoGuard.addReplyToCache(styledReplyText, processed.contactName)
 
                     val botChatHistory = ChatHistoryEntity(
                         contactName = processed.contactName,
@@ -1060,7 +1144,7 @@ class AutoReplyOrchestrator @Inject constructor(
                         if (claimSuccess > 0) {
                             try {
                                 val startTime = System.currentTimeMillis()
-                                val embedding = embeddingEngine.embedForAutoReply(styledReplyText)
+                                val embedding = safeEmbedForAutoReply(styledReplyText)
                                 val latency = System.currentTimeMillis() - startTime
                                 Log.i("PersonaMetrics", "metric=embedding_latency_ms value=$latency contact=${processed.contactName.hashCode()}")
                                 if (embedding != null) {
@@ -1120,7 +1204,7 @@ class AutoReplyOrchestrator @Inject constructor(
             is ReplyExecutionResult.Success -> {
                 cooldownMap[processed.contactName] = System.currentTimeMillis()
                 lastReplyTimestamps[processed.contactName] = System.currentTimeMillis()
-                antiEchoGuard.addReplyToCache(text)
+                antiEchoGuard.addReplyToCache(text, processed.contactName)
 
                 val botChatHistory = ChatHistoryEntity(
                     contactName = processed.contactName,
@@ -1152,7 +1236,7 @@ class AutoReplyOrchestrator @Inject constructor(
                     if (claimSuccess > 0) {
                         try {
                             val startTime = System.currentTimeMillis()
-                            val embedding = embeddingEngine.embedForAutoReply(text)
+                            val embedding = safeEmbedForAutoReply(text)
                             val latency = System.currentTimeMillis() - startTime
                             Log.i("PersonaMetrics", "metric=embedding_latency_ms value=$latency contact=${processed.contactName.hashCode()}")
                             if (embedding != null) {

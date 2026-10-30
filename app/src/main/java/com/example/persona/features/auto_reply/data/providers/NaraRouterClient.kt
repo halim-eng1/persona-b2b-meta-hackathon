@@ -57,15 +57,50 @@ class NaraRouterClient @Inject constructor(
         maxTokens: Int,
         apiKey: String
     ): CallResult = withContext(Dispatchers.IO) {
-        val trimmedKey = apiKey.trim()
-        if (trimmedKey.isBlank()) {
+        callWithKeys(model, messages, maxTokens, listOfNotNull(apiKey.trim().takeIf { it.isNotBlank() }))
+    }
+
+    suspend fun callWithKeys(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int,
+        keys: List<String>
+    ): CallResult = withContext(Dispatchers.IO) {
+        val validKeys = keys.map { it.trim() }.filter { it.isNotBlank() }
+        if (validKeys.isEmpty()) {
             Log.w(TAG, "Nara API key is blank; skipping request for model $model")
             return@withContext CallResult.Failed
         }
 
-        val keyMasked = ReplyGenerationRepositoryImpl.maskKey(trimmedKey)
-        PersonaLogger.i(TAG, "Attempting [Nara Router] model $model with key $keyMasked (max_tokens=$maxTokens)")
+        var lastResult: CallResult = CallResult.Failed
+        for ((index, key) in validKeys.withIndex()) {
+            val keyMasked = ReplyGenerationRepositoryImpl.maskKey(key)
+            PersonaLogger.i(TAG, "Attempting [Nara Router] model $model with key $keyMasked (key ${index + 1}/${validKeys.size})")
 
+            val result = executeSingleCallWithRetry(model, messages, maxTokens, key)
+            if (result is CallResult.Success) {
+                return@withContext result
+            }
+
+            lastResult = result
+            val isRotateWorthy = result is CallResult.RateLimited ||
+                result is CallResult.AuthOrQuotaError ||
+                result is CallResult.ServerError
+
+            if (isRotateWorthy && index < validKeys.size - 1) {
+                Log.w(TAG, "Nara key ($keyMasked) failed with $result. Rotating to next key in pool...")
+            }
+        }
+
+        lastResult
+    }
+
+    private suspend fun executeSingleCallWithRetry(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int,
+        trimmedKey: String
+    ): CallResult {
         var lastResult: CallResult = CallResult.Failed
 
         for (attempt in 1..MAX_RETRIES) {
@@ -79,7 +114,8 @@ class NaraRouterClient @Inject constructor(
                                 model = model,
                                 messages = messages,
                                 maxTokens = maxTokens,
-                                reasoning = null
+                                reasoning = null,
+                                stream = false
                             )
                         )
                     }
@@ -121,8 +157,8 @@ class NaraRouterClient @Inject constructor(
                 lastResult = CallResult.Failed
             }
 
-            if (lastResult is CallResult.Success) {
-                return@withContext lastResult
+            if (lastResult is CallResult.Success || lastResult is CallResult.AuthOrQuotaError) {
+                return lastResult
             }
 
             // Exponential jittered backoff before retry on transient server errors or rate limits
@@ -134,7 +170,7 @@ class NaraRouterClient @Inject constructor(
             }
         }
 
-        lastResult
+        return lastResult
     }
 
     override fun generateStream(apiKey: String, request: ProviderRequest): Flow<StreamChunk> = flow {
@@ -153,7 +189,8 @@ class NaraRouterClient @Inject constructor(
                         model = request.model,
                         messages = request.toChatMessages(),
                         maxTokens = request.maxTokens,
-                        reasoning = null
+                        reasoning = null,
+                        stream = true
                     )
                 )
             }
@@ -176,7 +213,8 @@ class NaraRouterClient @Inject constructor(
                         }
                         try {
                             val chunk = jsonParser.decodeFromString<OpenRouterResponse>(data)
-                            val text = chunk.choices?.firstOrNull()?.message?.content
+                            val choice = chunk.choices?.firstOrNull()
+                            val text = choice?.delta?.content ?: choice?.message?.content
                             if (!text.isNullOrEmpty()) {
                                 emit(StreamChunk.Text(text))
                             }

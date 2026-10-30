@@ -185,4 +185,54 @@ class ReasoningLeakSanitizerTest {
             prompt.contains("MUST be exact key 'final_reply_text', no spaces")
         )
     }
+
+    @Test
+    fun `stripThinkTags removes closed think blocks completely`() {
+        val raw = "<think>Let us analyze the user question\nUser wants sizes</think>{\"action\":\"REPLY\",\"final_reply_text\":\"المقاسات المتاحة M و L و XL\"}"
+        val stripped = ReasoningLeakSanitizer.stripThinkTags(raw)
+        org.junit.Assert.assertFalse(stripped.contains("<think>"))
+        org.junit.Assert.assertFalse(stripped.contains("Let us analyze"))
+        org.junit.Assert.assertTrue(stripped.contains("المقاسات المتاحة"))
+    }
+
+    @Test
+    fun `stripThinkTags removes unclosed think block when output cut off`() {
+        val raw = "{\"action\":\"REPLY\",\"final_reply_text\":\"أهلاً بيك\"}\n<think>I should verify if the stock has..."
+        val stripped = ReasoningLeakSanitizer.stripThinkTags(raw)
+        org.junit.Assert.assertFalse(stripped.contains("<think>"))
+        org.junit.Assert.assertFalse(stripped.contains("verify if the stock"))
+    }
+
+    @Test
+    fun `isLeakedReasoningText detects Arabic reasoning markers`() {
+        org.junit.Assert.assertTrue(ReasoningLeakSanitizer.isLeakedReasoningText("التفكير: العميل يريد هودي أسود"))
+        org.junit.Assert.assertTrue(ReasoningLeakSanitizer.isLeakedReasoningText("تحليل: الطلب غير مكتمل"))
+        org.junit.Assert.assertTrue(ReasoningLeakSanitizer.isLeakedReasoningText("أفكر في تقديم عرض خصم"))
+        org.junit.Assert.assertTrue(ReasoningLeakSanitizer.isLeakedReasoningText("سأقوم بمراجعة الكتالوج الآن"))
+        org.junit.Assert.assertTrue(ReasoningLeakSanitizer.isLeakedReasoningText("خطوات التفكير:\n1. البحث"))
+        org.junit.Assert.assertTrue(ReasoningLeakSanitizer.isLeakedReasoningText("أنا نموذج ذكاء اصطناعي وأساعدك"))
+        org.junit.Assert.assertTrue(ReasoningLeakSanitizer.isLeakedReasoningText("كذكاء اصطناعي لا يمكنني الشحن"))
+
+        // Standard user conversational reply should NOT be detected as reasoning
+        org.junit.Assert.assertFalse(ReasoningLeakSanitizer.isLeakedReasoningText("أهلاً بحضرتك يا فندم! الهودي متاح بسعر 350 جنيه، تحب تحجز أي مقاس؟"))
+    }
+
+    @Test
+    fun `decodeAgenticResponseSafely strips think tags and parses valid response`() {
+        val rawWithDeepSeekThink = """
+            <think>
+            Internal CoT reasoning:
+            User is asking about hoodie prices.
+            Let's retrieve the prices from the catalog.
+            </think>
+            {
+              "action": "REPLY",
+              "final_reply_text": "سعر الهودي 350 جنيه يا فندم ومتاح كل المقاسات!"
+            }
+        """.trimIndent()
+
+        val resp = ReasoningLeakSanitizer.decodeAgenticResponseSafely(rawWithDeepSeekThink)
+        org.junit.Assert.assertEquals("REPLY", resp.action)
+        org.junit.Assert.assertEquals("سعر الهودي 350 جنيه يا فندم ومتاح كل المقاسات!", resp.finalReplyText)
+    }
 }

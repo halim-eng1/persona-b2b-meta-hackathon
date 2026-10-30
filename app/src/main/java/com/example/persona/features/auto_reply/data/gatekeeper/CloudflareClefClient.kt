@@ -34,6 +34,11 @@ class CloudflareClefClient @Inject constructor(
     internal var apiTokenOverride: String? = null
     internal var accountIdOverride: String? = null
     internal var baseUrlOverride: String? = null
+    var tokenPool: List<String> = emptyList()
+
+    fun setTokens(tokens: List<String>) {
+        tokenPool = tokens.map { it.trim() }.filter { it.isNotBlank() }
+    }
 
     private val apiToken: String
         get() = apiTokenOverride ?: (runCatching {
@@ -95,31 +100,39 @@ class CloudflareClefClient @Inject constructor(
 
     suspend fun decide(text: String, timeoutMs: Long = 1150L): InboundIntent? = withContext(Dispatchers.IO) {
         withTimeoutOrNull(timeoutMs) {
-            val token = apiToken.trim()
+            val tokens = if (tokenPool.isNotEmpty()) {
+                tokenPool
+            } else {
+                listOfNotNull(apiToken.trim().takeIf { it.isNotBlank() })
+            }
             val account = accountId.trim()
 
-            if (token.isBlank() || (account.isBlank() && baseUrlOverride == null)) {
+            if (tokens.isEmpty() || (account.isBlank() && baseUrlOverride == null)) {
                 Log.w(TAG, "Cloudflare credentials not configured (token or account blank)")
                 return@withTimeoutOrNull null
             }
 
-            // 1. Try PRIMARY_MODEL (@cf/cloudflare/clef-flash) with an allocated budget within the SLA
-            val primaryTimeout = (timeoutMs * 5 / 8).coerceAtLeast(400L)
-            val primaryOutcome = withTimeoutOrNull(primaryTimeout) {
-                executeCall(token, PRIMARY_MODEL, text)
+            for ((index, token) in tokens.withIndex()) {
+                val primaryTimeout = (timeoutMs * 5 / 8).coerceAtLeast(400L)
+                val primaryOutcome = withTimeoutOrNull(primaryTimeout) {
+                    executeCall(token, PRIMARY_MODEL, text)
+                }
+
+                if (primaryOutcome != null && primaryOutcome.intent != null) {
+                    return@withTimeoutOrNull primaryOutcome.intent
+                }
+
+                val failoverOutcome = executeCall(token, FAILOVER_MODEL, text)
+                if (failoverOutcome.intent != null) {
+                    return@withTimeoutOrNull failoverOutcome.intent
+                }
+
+                if (index < tokens.size - 1) {
+                    Log.w(TAG, "Cloudflare token failed. Rotating to next token in pool...")
+                }
             }
 
-            if (primaryOutcome != null && primaryOutcome.intent != null) {
-                return@withTimeoutOrNull primaryOutcome.intent
-            }
-
-            // 2. Dual-model failover: Try FAILOVER_MODEL (@cf/cloudflare/clef-omni)
-            Log.w(
-                TAG,
-                "Primary model $PRIMARY_MODEL failed or timed out (${primaryOutcome?.errorSummary ?: "timeout"}). Failing over to $FAILOVER_MODEL"
-            )
-            val failoverOutcome = executeCall(token, FAILOVER_MODEL, text)
-            failoverOutcome.intent
+            null
         }
     }
 
@@ -179,82 +192,69 @@ class CloudflareClefClient @Inject constructor(
             val intentAnswer = parsed.result?.answers?.get("intent")
             val choice = intentAnswer?.choice
             val mappedIntent = mapChoiceToIntent(choice)
-            val confidence = intentAnswer?.confidence ?: 0.90f
-            val usage = parsed.result?.usage
+            val confidence = intentAnswer?.confidence ?: 0.95f
+
+            val isUrgent = parsed.result?.answers?.get("is_urgent")?.choice == "yes"
+            val finalIntent = if (isUrgent) {
+                Log.w(TAG, "🚨 Cloudflare Clef flagged urgent complaint/anger for: \"${text.take(60)}\" -> CATALOG_INQUIRY")
+                InboundIntent.CATALOG_INQUIRY
+            } else {
+                mappedIntent ?: InboundIntent.CATALOG_INQUIRY
+            }
 
             PersonaLogger.d(
                 PersonaLogTags.ORCHESTRATOR,
-                "⚡ Cloudflare Clef decision: rawChoice=$choice -> intent=$mappedIntent (conf=$confidence, model=$model, latency=${latency}ms, inTokens=${usage?.input_tokens}, outTokens=${usage?.output_tokens})"
+                "⚡ Gatekeeper Tier 1 (Cloudflare Clef) resolved -> intent=$finalIntent (conf=$confidence, latency=${latency}ms)"
             )
-
-            CallOutcome(mappedIntent, isRateLimit = false, errorSummary = null)
+            CallOutcome(finalIntent, isRateLimit = false, errorSummary = null)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             val latency = System.currentTimeMillis() - t0
-            Log.w(TAG, "Cloudflare Clef call exception (model=$model, latency=${latency}ms): ${e.message}", e)
-            CallOutcome(null, isRateLimit = false, errorSummary = e.message ?: "Exception")
+            Log.w(TAG, "Cloudflare Clef network call failed (model=$model, latency=${latency}ms): ${e.message}")
+            CallOutcome(null, isRateLimit = false, errorSummary = e.message)
         }
     }
 
-    internal fun mapChoiceToIntent(choice: String?): InboundIntent {
-        return when (choice?.trim()?.uppercase()) {
+    internal fun mapChoiceToIntent(choice: String?): InboundIntent? {
+        if (choice == null) return null
+        return when (choice.uppercase().trim()) {
             "GREETING" -> InboundIntent.GREETING
-            "BANTER", "PRESENCE_CHECK", "CLOSING" -> InboundIntent.BANTER
-            "ORDER_CREATE" -> InboundIntent.CATALOG_INQUIRY
-            "ORDER_STATUS", "ORDER_UPDATE", "ORDER_CANCEL" -> InboundIntent.ORDER_STATUS
-            "CATALOG_INQUIRY" -> InboundIntent.CATALOG_INQUIRY
-            "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
+            "CLOSING", "BANTER", "PRESENCE_CHECK" -> InboundIntent.BANTER
+            "ORDER_STATUS" -> InboundIntent.ORDER_STATUS
+            "CATALOG_INQUIRY", "ORDER_CREATE", "ORDER_UPDATE", "ORDER_CANCEL", "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
             else -> InboundIntent.CATALOG_INQUIRY
         }
     }
+
+    @Serializable
+    private data class ClefDecisionRequest(
+        val model: String,
+        val state: String,
+        val questions: Map<String, ClefQuestion>
+    )
+
+    @Serializable
+    private data class ClefQuestion(
+        val type: String,
+        val instructions: String,
+        val criteria: Map<String, String>
+    )
+
+    @Serializable
+    private data class ClefResponse(
+        val result: ClefResult? = null,
+        val success: Boolean = false
+    )
+
+    @Serializable
+    private data class ClefResult(
+        val answers: Map<String, ClefAnswer> = emptyMap()
+    )
+
+    @Serializable
+    private data class ClefAnswer(
+        val choice: String? = null,
+        val confidence: Float? = null
+    )
 }
-
-@Serializable
-internal data class ClefDecisionRequest(
-    val model: String,
-    val state: String,
-    val questions: Map<String, ClefQuestion>
-)
-
-@Serializable
-internal data class ClefQuestion(
-    val type: String,
-    val instructions: String? = null,
-    val criteria: Map<String, String>? = null
-)
-
-@Serializable
-internal data class ClefResponse(
-    val result: ClefResult? = null,
-    val success: Boolean = false,
-    val errors: List<ClefError> = emptyList(),
-    val messages: List<String> = emptyList()
-)
-
-@Serializable
-internal data class ClefResult(
-    val model: String? = null,
-    val answers: Map<String, ClefAnswer> = emptyMap(),
-    val usage: ClefUsage? = null
-)
-
-@Serializable
-internal data class ClefAnswer(
-    val type: String? = null,
-    val choice: String? = null,
-    val confidence: Float? = null,
-    val probabilities: Map<String, Float> = emptyMap()
-)
-
-@Serializable
-internal data class ClefUsage(
-    val input_tokens: Int? = null,
-    val output_tokens: Int? = null
-)
-
-@Serializable
-internal data class ClefError(
-    val code: Int? = null,
-    val message: String? = null
-)
