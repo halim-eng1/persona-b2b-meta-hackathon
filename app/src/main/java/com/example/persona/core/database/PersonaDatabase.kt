@@ -26,7 +26,7 @@ import com.example.persona.core.database.entity.*
         ConversationMetadataEntity::class,
         ContactEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

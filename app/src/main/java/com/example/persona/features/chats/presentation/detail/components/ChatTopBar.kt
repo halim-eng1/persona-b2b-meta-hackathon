@@ -44,6 +44,9 @@ fun CompactChatTopBar(
     botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
     isAiGenerating: Boolean = false,
     needsHumanAttention: Boolean = false,
+    isGlobalAutoReplyEnabled: Boolean = true,
+    isAiOverrideEnabled: Boolean = false,
+    effectiveAiActive: Boolean = if (isGlobalAutoReplyEnabled) !isAiPaused else isAiOverrideEnabled,
     onNavigateBack: () -> Unit,
     onToggleAi: () -> Unit,
     onOpenWhatsApp: (() -> Unit)? = null,
@@ -147,7 +150,8 @@ fun CompactChatTopBar(
                 // the LTR root layout (BiDi first-strong rule).
                 val subtitleColor = when {
                     isAiGenerating -> chatColors.statusGenerating
-                    isAiPaused -> chatColors.statusPaused
+                    !isGlobalAutoReplyEnabled && isAiOverrideEnabled -> chatColors.statusReady
+                    !effectiveAiActive -> chatColors.statusPaused
                     replyCapability == ReplyCapability.READY_VIA_NOTIFICATION -> chatColors.statusReady
                     else -> chatColors.statusIdle
                 }
@@ -160,6 +164,23 @@ fun CompactChatTopBar(
                         isAiGenerating -> {
                             // The thinking bubble in the stream says "…is generating reply…";
                             // the top bar only carries who, so the sentence isn't said twice.
+                            Text(
+                                text = botName,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    textDirection = TextDirection.Content
+                                ),
+                                color = subtitleColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        !isGlobalAutoReplyEnabled && isAiOverrideEnabled -> {
+                            Text(
+                                text = "نشط (استثناء فردي) • ",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                color = subtitleColor
+                            )
                             Text(
                                 text = botName,
                                 style = MaterialTheme.typography.labelSmall.copy(
@@ -188,9 +209,9 @@ fun CompactChatTopBar(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        isAiPaused -> {
+                        !effectiveAiActive -> {
                             Text(
-                                text = "AI Paused",
+                                text = if (!isGlobalAutoReplyEnabled) "الرد الآلي متوقف عاماً" else "الرد الآلي متوقف",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                 color = subtitleColor
                             )
@@ -215,30 +236,49 @@ fun CompactChatTopBar(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(end = 4.dp)
             ) {
-                Text(
-                    text = "AI",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = chatColors.onSurface
-                    )
-                )
-                // Breathing room between label and switch: the label used to get its
-                // gap from the 0.75f switch scale, which no longer applies.
-                Spacer(modifier = Modifier.width(6.dp))
-                Switch(
-                    checked = !isAiPaused,
-                    onCheckedChange = { onToggleAi() },
-                    modifier = Modifier.semantics {
-                        contentDescription = "AI auto-reply"
-                        stateDescription = if (isAiPaused) "Paused" else "Active"
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = chatColors.onSurface,
-                        checkedTrackColor = chatColors.switchTrackChecked,
-                        uncheckedThumbColor = chatColors.statusIdle,
-                        uncheckedTrackColor = chatColors.surfaceAlt
-                    )
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "AI",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = chatColors.onSurface
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Switch(
+                            checked = effectiveAiActive,
+                            onCheckedChange = { onToggleAi() },
+                            modifier = Modifier.semantics {
+                                contentDescription = "AI auto-reply"
+                                stateDescription = if (effectiveAiActive) "Active" else "Paused"
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = chatColors.onSurface,
+                                checkedTrackColor = chatColors.switchTrackChecked,
+                                uncheckedThumbColor = chatColors.statusIdle,
+                                uncheckedTrackColor = chatColors.surfaceAlt
+                            )
+                        )
+                    }
+
+                    if (!isGlobalAutoReplyEnabled && isAiOverrideEnabled) {
+                        Text(
+                            text = "نشط (استثناء فردي)",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = chatColors.statusReady
+                            ),
+                            maxLines = 1
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(2.dp))
 

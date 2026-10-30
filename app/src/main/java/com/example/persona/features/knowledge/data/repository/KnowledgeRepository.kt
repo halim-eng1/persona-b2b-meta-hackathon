@@ -70,6 +70,57 @@ class KnowledgeRepository @Inject constructor(
         return true
     }
 
+    /**
+     * Ingests, chunks, embeds, and indexes a raw Markdown or plain-text document directly into
+     * `business_knowledge` and `embedding_index` via [vectorIndexer] and [businessKnowledgeDao].
+     *
+     * @return [Result.success] with the count of successfully indexed chunks, or [Result.failure] on error.
+     */
+    suspend fun ingestMarkdownDocument(
+        text: String,
+        chunker: com.example.persona.features.chat_import.data.parser.MarkdownChunker = com.example.persona.features.chat_import.data.parser.MarkdownChunker(),
+        sourceFileName: String = "direct_paste.md",
+        sourceType: String = "CORE_DOCUMENT"
+    ): Result<Int> {
+        if (text.isBlank()) {
+            return Result.failure(IllegalArgumentException("Knowledge text cannot be blank"))
+        }
+
+        val chunks = chunker.chunk(
+            documentText = text,
+            sourceFileName = sourceFileName,
+            sourceType = sourceType
+        )
+        if (chunks.isEmpty()) {
+            return Result.failure(IllegalStateException("No readable chunks generated from text"))
+        }
+
+        vectorIndexer.ensureReady()
+
+        var indexedCount = 0
+        for (chunk in chunks) {
+            val indexed = vectorIndexer.indexVector(chunk.chunkId, chunk.chunkText)
+            if (indexed) {
+                val entity = BusinessKnowledgeEntity(
+                    chunkId = chunk.chunkId,
+                    headerContext = chunk.headerContext,
+                    chunkText = chunk.chunkText,
+                    sourceType = chunk.sourceType,
+                    sourceFileName = chunk.sourceFileName,
+                    timestamp = System.currentTimeMillis()
+                )
+                businessKnowledgeDao.insertChunk(entity)
+                indexedCount++
+            }
+        }
+
+        return if (indexedCount > 0) {
+            Result.success(indexedCount)
+        } else {
+            Result.failure(IllegalStateException("Failed to index knowledge embeddings"))
+        }
+    }
+
     suspend fun updateKnowledge(
         chunkId: String,
         newText: String,

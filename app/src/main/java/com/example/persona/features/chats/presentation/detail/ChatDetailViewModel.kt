@@ -9,6 +9,7 @@ import com.example.persona.core.database.dao.ContactDao
 import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.dao.OrderDao
 import com.example.persona.core.database.entity.ChatHistoryEntity
+import com.example.persona.core.database.entity.ConversationMetadataEntity
 import com.example.persona.features.auto_reply.data.service.NotificationActionCache
 import com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener
 import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
@@ -106,9 +107,20 @@ class ChatDetailViewModel @Inject constructor(
         flowOf(null)
     }
 
-    private val contactPhoneFlow: Flow<String?> = if (contactDao != null) {
+    private val contactPhoneFlow: Flow<String?> = if (contactDao != null && orderDao != null) {
+        combine(contactDao.observeAllContacts(), orderDao.observeAllOrders()) { contacts, orders ->
+            val fromContact = contacts.firstOrNull { it.contactName.equals(contactName, ignoreCase = true) }?.phoneNumber?.takeIf { it.isNotBlank() }
+            val fromOrder = orders.firstOrNull { it.contactName.equals(contactName, ignoreCase = true) }?.customerPhone?.takeIf { it.isNotBlank() }
+            fromContact ?: fromOrder
+        }
+    } else if (contactDao != null) {
         contactDao.observeAllContacts().map { contacts ->
             contacts.firstOrNull { it.contactName.equals(contactName, ignoreCase = true) }?.phoneNumber
+                ?.takeIf { it.isNotBlank() }
+        }
+    } else if (orderDao != null) {
+        orderDao.observeAllOrders().map { orders ->
+            orders.firstOrNull { it.contactName.equals(contactName, ignoreCase = true) }?.customerPhone
                 ?.takeIf { it.isNotBlank() }
         }
     } else {
@@ -125,19 +137,48 @@ class ChatDetailViewModel @Inject constructor(
         Triple(capability, input, persona) to (order to phone)
     }
 
+    private val conversationFlow: Flow<ConversationMetadataEntity?> = conversationMetadataDao
+        .observeConversation(contactName, sourceClass)
+        .combine(conversationMetadataDao.observeAllConversations()) { single, all ->
+            single ?: all.firstOrNull {
+                it.contactName.equals(contactName, ignoreCase = true) &&
+                    it.sourceClass.equals(sourceClass, ignoreCase = true)
+            }
+        }
+
+    private val globalAutoReplyFlow: Flow<Boolean> = userPreferencesRepository.isAutoReplyEnabled
+        .onStart {
+            emit(try { userPreferencesRepository.isAutoReplyEnabledSync() } catch (_: Exception) { true })
+        }
+        .catch { emit(true) }
+
+    private data class AiControlState(
+        val isGlobalEnabled: Boolean,
+        val convMeta: ConversationMetadataEntity?
+    )
+
+    private val _aiControlFlow: Flow<AiControlState> = combine(
+        globalAutoReplyFlow,
+        conversationFlow
+    ) { isGlobal: Boolean, meta: ConversationMetadataEntity? ->
+        AiControlState(isGlobal, meta)
+    }
+
     val uiState: StateFlow<ChatDetailUiState> = combine(
         chatHistoryDao.observeMessagesForContact(contactName, sourceClass),
-        conversationMetadataDao.observeAllConversations(),
+        _aiControlFlow,
         _secondaryChatState,
         _messageLimit
-    ) { rawMessages, allConversations, (triplet, orderAndPhone), limit ->
+    ) { rawMessages, aiControl, secondary, limit ->
+        val (triplet, orderAndPhone) = secondary
         val (capability, inputState, personaState) = triplet
         val (activeOrder, contactPhone) = orderAndPhone
 
-        val convMeta = allConversations.firstOrNull {
-            it.contactName.equals(contactName, ignoreCase = true) &&
-                it.sourceClass.equals(sourceClass, ignoreCase = true)
-        }
+        val isGlobal = aiControl.isGlobalEnabled
+        val convMeta = aiControl.convMeta
+        val isPaused = convMeta?.isAiPaused ?: false
+        val isOverride = convMeta?.isAiOverrideEnabled ?: false
+        val effectiveActive = if (isGlobal) !isPaused else isOverride
 
         val totalCount = rawMessages.size
         val hasMore = totalCount > limit
@@ -148,7 +189,10 @@ class ChatDetailViewModel @Inject constructor(
             contactName = contactName,
             sourceClass = sourceClass,
             messages = uiMessages,
-            isAiPaused = convMeta?.isAiPaused ?: false,
+            isAiPaused = isPaused,
+            isGlobalAutoReplyEnabled = isGlobal,
+            isAiOverrideEnabled = isOverride,
+            effectiveAiActive = effectiveActive,
             needsHumanAttention = convMeta?.needsHumanAttention ?: false,
             replyCapability = capability,
             inputText = inputState.text,
@@ -224,11 +268,48 @@ class ChatDetailViewModel @Inject constructor(
         _inputText.value = text
     }
 
-    fun toggleAiPaused() {
+    fun toggleAiActive() {
         viewModelScope.launch {
-            val currentPaused = uiState.value.isAiPaused
-            conversationMetadataDao.setAiPaused(contactName, sourceClass, !currentPaused)
+            val isGlobalOn = try {
+                userPreferencesRepository.isAutoReplyEnabled.first()
+            } catch (_: Exception) {
+                userPreferencesRepository.isAutoReplyEnabledSync()
+            }
+            val existing = conversationMetadataDao.getConversation(contactName, sourceClass)
+            if (isGlobalOn) {
+                val currentPaused = uiState.value.isAiPaused
+                val newPaused = !currentPaused
+                if (existing != null) {
+                    conversationMetadataDao.setAiPaused(contactName, sourceClass, newPaused)
+                } else {
+                    conversationMetadataDao.upsert(
+                        com.example.persona.core.database.entity.ConversationMetadataEntity(
+                            contactName = contactName,
+                            sourceClass = sourceClass,
+                            isAiPaused = newPaused
+                        )
+                    )
+                }
+            } else {
+                val currentOverride = uiState.value.isAiOverrideEnabled
+                val newOverride = !currentOverride
+                if (existing != null) {
+                    conversationMetadataDao.setAiOverrideEnabled(contactName, sourceClass, newOverride)
+                } else {
+                    conversationMetadataDao.upsert(
+                        com.example.persona.core.database.entity.ConversationMetadataEntity(
+                            contactName = contactName,
+                            sourceClass = sourceClass,
+                            isAiOverrideEnabled = newOverride
+                        )
+                    )
+                }
+            }
         }
+    }
+
+    fun toggleAiPaused() {
+        toggleAiActive()
     }
 
     /**

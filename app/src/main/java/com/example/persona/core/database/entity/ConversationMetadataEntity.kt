@@ -32,6 +32,13 @@ data class ConversationMetadataEntity(
     @ColumnInfo(name = "is_ai_paused", defaultValue = "0")
     val isAiPaused: Boolean = false,
 
+    /**
+     * When true, explicitly overrides global auto-reply pause, allowing AI auto-replies
+     * exclusively for this specific contact even if global auto-reply is turned OFF.
+     */
+    @ColumnInfo(name = "is_ai_override_enabled", defaultValue = "0")
+    val isAiOverrideEnabled: Boolean = false,
+
     /** Flagged when human-in-the-loop (HITL) intervention is needed (e.g. urgent safety alert or low confidence). */
     @ColumnInfo(name = "needs_human_attention", defaultValue = "0")
     val needsHumanAttention: Boolean = false,

@@ -1,9 +1,7 @@
 package com.example.persona.features.chats.presentation.detail.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -16,15 +14,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.persona.ui.theme.chatColors
 
-val DEFAULT_QUICK_REPLIES = listOf(
-    "تمام يا فندم",
-    "تم تأكيد طلبك",
-    "الطلب مع المندوب",
-    "العنوان مظبوط؟"
-)
+// Removed per user directive. Do not restore quick reply suggestion chips.
 
 /**
- * Chat Composer Bar with quick reply chips.
+ * Chat Composer Bar for manual merchant replies.
  * Note: Does NOT include imePadding internally, in accordance with root layout padding rules.
  */
 @Composable
@@ -33,8 +26,6 @@ fun ChatComposerBar(
     isSending: Boolean,
     onInputTextChanged: (String) -> Unit,
     onSendMessage: () -> Unit,
-    quickReplies: List<String> = DEFAULT_QUICK_REPLIES,
-    onQuickReplyClicked: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val chatColors = MaterialTheme.chatColors
@@ -43,39 +34,7 @@ fun ChatComposerBar(
         color = chatColors.surface
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Quick reply chips bar
-            if (quickReplies.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    quickReplies.forEach { reply ->
-                        SuggestionChip(
-                            onClick = {
-                                onQuickReplyClicked?.invoke(reply) ?: onInputTextChanged(reply)
-                            },
-                            label = {
-                                Text(
-                                    text = reply,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp)
-                                )
-                            },
-                            shape = RoundedCornerShape(16.dp),
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = chatColors.field,
-                                labelColor = chatColors.onSurface
-                            ),
-                            border = SuggestionChipDefaults.suggestionChipBorder(
-                                enabled = true,
-                                borderColor = chatColors.surfaceAlt
-                            )
-                        )
-                    }
-                }
-            }
+            // Removed per user directive. Do not restore quick reply suggestion chips.
 
             Row(
                 modifier = Modifier

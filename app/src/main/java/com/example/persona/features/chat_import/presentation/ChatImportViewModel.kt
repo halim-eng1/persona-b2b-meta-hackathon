@@ -20,11 +20,106 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatImportViewModel @Inject constructor(
     private val startImportUseCase: StartChatImportUseCase,
-    private val repository: ChatImportRepository
+    private val repository: ChatImportRepository,
+    private val knowledgeRepository: com.example.persona.features.knowledge.data.repository.KnowledgeRepository? = null,
+    private val markdownChunker: com.example.persona.features.chat_import.data.parser.MarkdownChunker = com.example.persona.features.chat_import.data.parser.MarkdownChunker(),
+    private val userPreferencesRepository: com.example.persona.core.data.repository.UserPreferencesRepository? = null
 ) : ViewModel() {
+
+    constructor(
+        startImportUseCase: StartChatImportUseCase,
+        repository: ChatImportRepository
+    ) : this(
+        startImportUseCase = startImportUseCase,
+        repository = repository,
+        knowledgeRepository = null,
+        markdownChunker = com.example.persona.features.chat_import.data.parser.MarkdownChunker(),
+        userPreferencesRepository = null
+    )
 
     private val _uiState = MutableStateFlow(ChatImportUiState())
     val uiState: StateFlow<ChatImportUiState> = _uiState.asStateFlow()
+
+    fun onDirectInputTextChanged(text: String) {
+        _uiState.update { it.copy(directInputText = text, directIndexError = null, directIndexSuccessMessage = null) }
+    }
+
+    fun clearDirectIndexMessages() {
+        _uiState.update { it.copy(directIndexError = null, directIndexSuccessMessage = null) }
+    }
+
+    fun ingestDirectText() {
+        val text = _uiState.value.directInputText.trim()
+        if (text.isBlank()) {
+            _uiState.update {
+                it.copy(directIndexError = "يرجى لصق نص المعرفة أولاً (Knowledge text cannot be blank)")
+            }
+            return
+        }
+
+        val kRepo = knowledgeRepository
+        if (kRepo == null) {
+            _uiState.update {
+                it.copy(directIndexError = "محرك المعرفة غير مهيأ (Knowledge repository not initialized)")
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isDirectIndexing = true,
+                    directIndexError = null,
+                    directIndexSuccessMessage = null
+                )
+            }
+
+            try {
+                val result = kRepo.ingestMarkdownDocument(
+                    text = text,
+                    chunker = markdownChunker,
+                    sourceFileName = "direct_paste.md",
+                    sourceType = "CORE_DOCUMENT"
+                )
+
+                result.fold(
+                    onSuccess = { chunkCount ->
+                        userPreferencesRepository?.let { prefs ->
+                            try {
+                                val topics = com.example.persona.features.chat_import.data.parser.StoreTopicsExtractor.extract(text)
+                                prefs.setStoreKnowledgeTopics(topics)
+                                val website = com.example.persona.features.chat_import.data.parser.StoreWebsiteExtractor.extract(text)
+                                prefs.setStoreWebsite(website)
+                            } catch (_: Exception) {}
+                        }
+
+                        _uiState.update {
+                            it.copy(
+                                isDirectIndexing = false,
+                                directIndexSuccessMessage = "تمت فهرسة $chunkCount مقطعاً بنجاح!",
+                                directInputText = ""
+                            )
+                        }
+                    },
+                    onFailure = { error ->
+                        _uiState.update {
+                            it.copy(
+                                isDirectIndexing = false,
+                                directIndexError = error.message ?: "فشلت عملية فهرسة المعرفة"
+                            )
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isDirectIndexing = false,
+                        directIndexError = e.message ?: "حدث خطأ غير متوقع أثناء الفهرسة"
+                    )
+                }
+            }
+        }
+    }
 
     fun onFilePicked(uri: Uri) {
         _uiState.update { it.copy(selectedFileUri = uri, error = null, isOwnerNameMissing = false) }
@@ -123,6 +218,11 @@ data class ChatImportUiState(
     val isCancelled: Boolean = false,
     val error: String? = null,
     val isOwnerNameMissing: Boolean = false,
+    // Direct text ingestion state
+    val directInputText: String = "",
+    val isDirectIndexing: Boolean = false,
+    val directIndexSuccessMessage: String? = null,
+    val directIndexError: String? = null,
     // Progress
     val currentPhase: String = "",
     val currentBatch: Int = 0,

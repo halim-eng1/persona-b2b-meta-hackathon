@@ -6,6 +6,7 @@ import com.example.persona.R
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.Converters
 import com.example.persona.core.database.dao.BusinessKnowledgeDao
+import com.example.persona.core.database.dao.ContactDao
 import com.example.persona.core.database.dao.ChatHistoryDao
 import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.dao.FailedQueryDao
@@ -74,7 +75,8 @@ class AutoReplyOrchestrator @Inject constructor(
     @ApplicationContext private val context: Context,
     @ApplicationScope private val scope: CoroutineScope,
     private val mediaExtractor: WhatsAppMediaExtractor? = null,
-    private val orderIngestionManager: OrderIngestionManager = OrderIngestionManager(orderDao, chatHistoryDao),
+    private val contactDao: ContactDao? = null,
+    private val orderIngestionManager: OrderIngestionManager = OrderIngestionManager(orderDao, chatHistoryDao, contactDao),
     private val hitlNotificationHandler: HitlNotificationHandler = HitlNotificationHandler(context, conversationMetadataDao, prefsRepository),
     private val antiEchoGuard: AntiEchoGuard = AntiEchoGuard(),
     private val reasoningLeakSanitizer: ReasoningLeakSanitizer = ReasoningLeakSanitizer(),
@@ -371,14 +373,18 @@ class AutoReplyOrchestrator @Inject constructor(
             incrementUnread = true
         )
 
-        // 2. Gate check: if auto-reply is disabled or AI is paused, do not schedule reply
-        if (!prefsRepository.isAutoReplyEnabledSync()) {
-            PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Notification captured, auto-reply OFF")
-            return
-        }
+        // 2. Gate check: allowed if Global is ON and not individually paused, OR if explicitly overridden ON for this specific chat
+        val isGlobalAutoReplyEnabled = prefsRepository.isAutoReplyEnabledSync()
         val convMeta = conversationMetadataDao.getConversation(processed.contactName, sourceClassStr)
-        if (convMeta?.isAiPaused == true) {
-            PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Notification captured, AI paused for contact")
+        val isContactPaused = convMeta?.isAiPaused == true
+        val isContactOverride = convMeta?.isAiOverrideEnabled == true
+
+        val isAutoReplyAllowedForContact = (isGlobalAutoReplyEnabled && !isContactPaused) || isContactOverride
+        if (!isAutoReplyAllowedForContact) {
+            PersonaLogger.d(
+                PersonaLogTags.ORCHESTRATOR,
+                "Auto-reply suppressed for ${processed.contactName} (Global=$isGlobalAutoReplyEnabled, Paused=$isContactPaused, Override=$isContactOverride)"
+            )
             return
         }
 
@@ -535,18 +541,19 @@ class AutoReplyOrchestrator @Inject constructor(
 
         // 4. Sequential single-embedding pipeline is executed at Step 11 to prevent ONNX lock contention.
 
-        // 5. Global switch gate
-        if (!prefsRepository.isAutoReplyEnabledSync()) {
-            PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Notification captured, auto-reply OFF")
-            Log.d(TAG, "Auto-reply globally disabled. Stored inbound message, skipping reply for ${rawNotification.title}")
-            return
-        }
-
-        // 6. Per-contact AI pause gate
+        // 5. Execution gatekeeper: allowed if Global is ON and not individually paused, OR if explicitly overridden ON for this specific chat
+        val isGlobalAutoReplyEnabled = prefsRepository.isAutoReplyEnabledSync()
         val convMeta = conversationMetadataDao.getConversation(processed.contactName, sourceClassStr)
-        if (convMeta?.isAiPaused == true) {
-            PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Notification captured, AI paused for contact")
-            Log.d(TAG, "AI auto-reply paused for contact ${processed.contactName} ($sourceClassStr). Stored inbound message, skipping reply.")
+        val isContactPaused = convMeta?.isAiPaused == true
+        val isContactOverride = convMeta?.isAiOverrideEnabled == true
+
+        val isAutoReplyAllowedForContact = (isGlobalAutoReplyEnabled && !isContactPaused) || isContactOverride
+        if (!isAutoReplyAllowedForContact) {
+            PersonaLogger.d(
+                PersonaLogTags.ORCHESTRATOR,
+                "Auto-reply suppressed for ${processed.contactName} (Global=$isGlobalAutoReplyEnabled, Paused=$isContactPaused, Override=$isContactOverride)"
+            )
+            Log.d(TAG, "Auto-reply suppressed for ${processed.contactName} (Global=$isGlobalAutoReplyEnabled, Paused=$isContactPaused, Override=$isContactOverride)")
             return
         }
 
@@ -746,26 +753,33 @@ class AutoReplyOrchestrator @Inject constructor(
                 val cfIntent = runCatching {
                     cloudflareClefClient.decide(gatekeeperInput, timeoutMs = 1150L)
                 }.onFailure { e ->
-                    Log.w(TAG, "Gatekeeper Tier 1 (Cloudflare Clef) threw exception: ${e.message}")
+                    PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper Tier 1 (Cloudflare Clef) threw exception: ${e.message}")
+                    Log.w(TAG, "Gatekeeper Tier 1 (Cloudflare Clef) threw exception: ${e.message}", e)
                 }.getOrNull()
 
                 if (cfIntent != null) {
                     val latency = System.currentTimeMillis() - tGatekeeper
                     DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Tier 1: Cloudflare Clef"
                 } else {
+                    PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper Tier 1 (Cloudflare Clef) unfulfilled; falling back to Tier 2 (Liquid AI)")
+                    Log.w(TAG, "Gatekeeper Tier 1 (Cloudflare Clef) unfulfilled; falling back to Tier 2 (Liquid AI)")
                     val liquidIntent = runCatching {
                         liquidDecisionClient.decide(gatekeeperInput, timeoutMs = 800L)
                     }.onFailure { e ->
-                        Log.w(TAG, "Gatekeeper Tier 2 (Liquid AI) threw exception: ${e.message}")
+                        PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper Tier 2 (Liquid AI) threw exception: ${e.message}")
+                        Log.w(TAG, "Gatekeeper Tier 2 (Liquid AI) threw exception: ${e.message}", e)
                     }.getOrNull()
 
                     if (liquidIntent != null) {
                         val latency = System.currentTimeMillis() - tGatekeeper
                         DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Tier 2: Liquid AI"
                     } else {
+                        PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper Tier 2 (Liquid AI) unfulfilled; falling back to Tier 3 (Local Decision Classifier)")
+                        Log.w(TAG, "Gatekeeper Tier 2 (Liquid AI) unfulfilled; falling back to Tier 3 (Local Decision Classifier)")
                         val localDecision = runCatching {
                             localDecisionClassifier.classify(queryTextForEmbedding, queryEmbedding)
                         }.getOrElse { e ->
+                            PersonaLogger.e(PersonaLogTags.ORCHESTRATOR, "Gatekeeper Local Decision Classifier failed: ${e.message}")
                             Log.e(TAG, "Gatekeeper Local Decision Classifier failed: ${e.message}", e)
                             DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 0.5f, latencyMs = 0L)
                         }
@@ -887,8 +901,7 @@ class AutoReplyOrchestrator @Inject constructor(
 
             // Agentic Order Actions & Ingestion Routing
             var overriddenReplyText: String? = null
-            val orderAction = agenticResponse.orderAction?.trim()?.uppercase()
-                ?.takeIf { it == "CREATE" || it == "CANCEL" || it == "UPDATE" }
+            val orderAction = OrderIngestionManager.normalizeOrderAction(agenticResponse.orderAction)
 
             Log.i("PersonaMetrics", "metric=order_extraction_rate value=${if (agenticResponse.extractedOrder != null) 1 else 0} contact=${processed.contactName.hashCode()}")
             Log.i("PersonaMetrics", "metric=order_action_usage value=${orderAction ?: if (agenticResponse.orderAction != null) "UNKNOWN" else "NONE"} contact=${processed.contactName.hashCode()}")
@@ -1126,10 +1139,14 @@ class AutoReplyOrchestrator @Inject constructor(
                 delay(stylePrefs.replyDelaySeconds * 1000L)
             }
 
-            // Pre-execution abort check: re-verify merchant hasn't paused AI for this contact
+            // Pre-execution abort check: re-verify merchant hasn't suppressed auto-reply for this contact
             val preExecConv = conversationMetadataDao.getConversation(processed.contactName, processed.sourceClass.name)
-            if (preExecConv?.isAiPaused == true) {
-                Log.i(TAG, "AI auto-reply turn aborted before execution: AI paused by merchant for ${processed.contactName}")
+            val isPreExecGlobalOn = prefsRepository.isAutoReplyEnabledSync()
+            val isPreExecPaused = preExecConv?.isAiPaused == true
+            val isPreExecOverride = preExecConv?.isAiOverrideEnabled == true
+            val isPreExecAllowed = (isPreExecGlobalOn && !isPreExecPaused) || isPreExecOverride
+            if (!isPreExecAllowed) {
+                Log.i(TAG, "AI auto-reply turn aborted before execution: suppressed for ${processed.contactName} (Global=$isPreExecGlobalOn, Paused=$isPreExecPaused, Override=$isPreExecOverride)")
                 return
             }
 
@@ -1228,8 +1245,12 @@ class AutoReplyOrchestrator @Inject constructor(
 
     private suspend fun sendImmediateReply(processed: ProcessedNotification, text: String) {
         val preExecConv = conversationMetadataDao.getConversation(processed.contactName, processed.sourceClass.name)
-        if (preExecConv?.isAiPaused == true) {
-            Log.i(TAG, "Immediate AI reply aborted before execution: AI paused by merchant for ${processed.contactName}")
+        val isPreExecGlobalOn = prefsRepository.isAutoReplyEnabledSync()
+        val isPreExecPaused = preExecConv?.isAiPaused == true
+        val isPreExecOverride = preExecConv?.isAiOverrideEnabled == true
+        val isPreExecAllowed = (isPreExecGlobalOn && !isPreExecPaused) || isPreExecOverride
+        if (!isPreExecAllowed) {
+            Log.i(TAG, "Immediate AI reply aborted before execution: suppressed for ${processed.contactName} (Global=$isPreExecGlobalOn, Paused=$isPreExecPaused, Override=$isPreExecOverride)")
             return
         }
 

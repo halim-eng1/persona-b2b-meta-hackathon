@@ -202,7 +202,7 @@ class AutoReplyOrchestratorRagTest {
 
     @Test
     fun `Pass 2 finalParsed with orderAction CREATE and valid extractedOrder successfully invokes orderDao insert`() = runBlocking {
-        val orderDao = mockk<OrderDao>()
+        val orderDao = mockk<OrderDao>(relaxed = true)
         val chatHistoryDao = mockk<ChatHistoryDao>()
         coEvery { orderDao.getActiveMatchingOrder(any()) } returns null
         coEvery { orderDao.insert(any()) } returns 101L
@@ -1428,5 +1428,83 @@ class AutoReplyOrchestratorRagTest {
         coVerify(exactly = 1) { chatHistoryDao.updateEmbeddingState(401L, "SKIPPED") }
         coVerify(exactly = 1) { chatHistoryDao.updateEmbeddingState(402L, "SKIPPED") }
         coVerify(exactly = 0) { chatHistoryDao.updateEmbeddingState(403L, "SKIPPED") }
+    }
+
+    @Test
+    fun `when global auto-reply is disabled and override is OFF, reply is suppressed`() = runBlocking {
+        val prefsRepo: UserPreferencesRepository = mockk(relaxed = true) {
+            coEvery { isAutoReplyEnabledSync() } returns false
+        }
+        val convDao: ConversationMetadataDao = mockk(relaxed = true) {
+            coEvery { getConversation(any(), any()) } returns com.example.persona.core.database.entity.ConversationMetadataEntity(
+                contactName = "عميل بدون استثناء",
+                sourceClass = "BUSINESS",
+                isAiPaused = false,
+                isAiOverrideEnabled = false
+            )
+        }
+        val replyGen: ReplyGenerationRepository = mockk(relaxed = true)
+        val orchestrator = createTestOrchestrator(
+            prefsRepository = prefsRepo,
+            conversationMetadataDao = convDao,
+            replyGenerationRepository = replyGen
+        )
+
+        val notification = WhatsAppNotification(
+            title = "عميل بدون استثناء",
+            text = "السلام عليكم",
+            postTime = 1000L,
+            notificationKey = "key_no_override",
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+
+        orchestrator.processNotificationSequentially(notification)
+
+        // Reply generation should NOT be invoked
+        coVerify(exactly = 0) { replyGen.generateReply(any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `when global auto-reply is disabled and override is ON, reply is allowed and processed`() = runBlocking {
+        val prefsRepo: UserPreferencesRepository = mockk(relaxed = true) {
+            coEvery { isAutoReplyEnabledSync() } returns false
+            coEvery { getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0, replyDelaySeconds = 0)
+        }
+        val convDao: ConversationMetadataDao = mockk(relaxed = true) {
+            coEvery { getConversation(any(), any()) } returns com.example.persona.core.database.entity.ConversationMetadataEntity(
+                contactName = "عميل الاستثناء الفردي",
+                sourceClass = "BUSINESS",
+                isAiPaused = false,
+                isAiOverrideEnabled = true
+            )
+        }
+        val replyGen: ReplyGenerationRepository = mockk(relaxed = true) {
+            coEvery { generateReply(any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.success(
+                AgenticLlmResponse(replyText = "أهلاً بك يا فندم في متجرنا!")
+            )
+        }
+        val executionUseCase: DirectReplyExecutionUseCase = mockk(relaxed = true) {
+            coEvery { execute(any(), any(), any(), any()) } returns com.example.persona.features.auto_reply.domain.model.ReplyExecutionResult.Success
+        }
+
+        val orchestrator = createTestOrchestrator(
+            prefsRepository = prefsRepo,
+            conversationMetadataDao = convDao,
+            replyGenerationRepository = replyGen,
+            directReplyExecutionUseCase = executionUseCase
+        )
+
+        val notification = WhatsAppNotification(
+            title = "عميل الاستثناء الفردي",
+            text = "هل التيشيرت متاح؟",
+            postTime = 1000L,
+            notificationKey = "key_override_allowed",
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+
+        orchestrator.processNotificationSequentially(notification)
+
+        // Reply generation MUST be invoked because isAiOverrideEnabled = true
+        coVerify(atLeast = 1) { replyGen.generateReply(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 }

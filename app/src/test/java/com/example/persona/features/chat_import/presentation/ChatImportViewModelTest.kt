@@ -132,4 +132,44 @@ class ChatImportViewModelTest {
         assertEquals(0.4f, state.progressFraction, 0.001f)
         assertFalse(state.isOwnerNameMissing)
     }
+
+    @Test
+    fun onDirectInputTextChanged_updatesDirectInputText() {
+        viewModel.onDirectInputTextChanged("نص المعرفة التجريبي")
+
+        assertEquals("نص المعرفة التجريبي", viewModel.uiState.value.directInputText)
+        assertNull(viewModel.uiState.value.directIndexError)
+        assertNull(viewModel.uiState.value.directIndexSuccessMessage)
+    }
+
+    @Test
+    fun ingestDirectText_whenTextIsBlank_setsError() {
+        viewModel.onDirectInputTextChanged("   ")
+        viewModel.ingestDirectText()
+
+        assertTrue(viewModel.uiState.value.directIndexError?.contains("blank", ignoreCase = true) == true ||
+            viewModel.uiState.value.directIndexError?.contains("أولاً") == true)
+        assertFalse(viewModel.uiState.value.isDirectIndexing)
+    }
+
+    @Test
+    fun ingestDirectText_whenSuccessful_updatesSuccessMessageAndClearsInput() = runTest {
+        val mockKnowledgeRepo = mockk<com.example.persona.features.knowledge.data.repository.KnowledgeRepository>()
+        coEvery { mockKnowledgeRepo.ingestMarkdownDocument(any(), any(), any(), any()) } returns Result.success(5)
+
+        val vm = ChatImportViewModel(
+            startImportUseCase = startImportUseCase,
+            repository = repository,
+            knowledgeRepository = mockKnowledgeRepo
+        )
+
+        vm.onDirectInputTextChanged("# منتجات المتجر\n- تيشيرت قطن: 250 ج.م")
+        vm.ingestDirectText()
+
+        val state = vm.uiState.value
+        assertFalse(state.isDirectIndexing)
+        assertEquals("تمت فهرسة 5 مقطعاً بنجاح!", state.directIndexSuccessMessage)
+        assertEquals("", state.directInputText)
+        assertNull(state.directIndexError)
+    }
 }

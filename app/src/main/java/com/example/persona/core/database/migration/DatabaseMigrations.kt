@@ -198,10 +198,21 @@ object DatabaseMigrations {
         }
     }
 
+    /**
+     * v10 → v11:
+     *  - Extends `conversation_metadata` with `is_ai_override_enabled` column for per-chat AI override.
+     */
+    val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `conversation_metadata` ADD COLUMN `is_ai_override_enabled` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     /** All migration paths, registered via `.addMigrations(...)` in DatabaseModule. */
     val ALL_MIGRATIONS: Array<Migration> = arrayOf(
         MIGRATION_7_8,
         MIGRATION_8_9,
-        MIGRATION_9_10
+        MIGRATION_9_10,
+        MIGRATION_10_11
     )
 }

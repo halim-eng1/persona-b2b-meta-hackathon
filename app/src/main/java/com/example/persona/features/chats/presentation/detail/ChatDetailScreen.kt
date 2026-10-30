@@ -181,8 +181,11 @@ fun ChatDetailScreen(
             botName = state.botName,
             isAiGenerating = state.isAiGenerating,
             needsHumanAttention = state.needsHumanAttention,
+            isGlobalAutoReplyEnabled = state.isGlobalAutoReplyEnabled,
+            isAiOverrideEnabled = state.isAiOverrideEnabled,
+            effectiveAiActive = state.effectiveAiActive,
             onNavigateBack = onNavigateBack,
-            onToggleAi = { viewModel.toggleAiPaused() },
+            onToggleAi = { viewModel.toggleAiActive() },
             onOpenWhatsApp = {
                 WhatsAppLauncher.openChat(
                     context = context,
@@ -246,8 +249,8 @@ fun ChatDetailScreen(
             }
         }
 
-        // In-chat banner when AI is paused
-        AnimatedVisibility(visible = state.isAiPaused && !state.needsHumanAttention) {
+        // In-chat banner when AI is paused or inactive
+        AnimatedVisibility(visible = !state.effectiveAiActive && !state.needsHumanAttention) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -255,8 +258,8 @@ fun ChatDetailScreen(
                     .semantics { stateDescription = "AI auto-reply is paused" }
                     .clickable(
                         role = Role.Button,
-                        onClickLabel = "Resume AI auto-reply"
-                    ) { viewModel.toggleAiPaused() },
+                        onClickLabel = "Toggle AI auto-reply"
+                    ) { viewModel.toggleAiActive() },
                 color = chatColors.surfaceAlt
             ) {
                 Row(
@@ -272,7 +275,10 @@ fun ChatDetailScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "الرد الآلي متوقف لهذه المحادثة — اضغط للاستئناف",
+                        text = if (!state.isGlobalAutoReplyEnabled)
+                            "الرد الآلي العام متوقف — اضغط لتفعيل استثناء لهذه المحادثة"
+                        else
+                            "الرد الآلي متوقف لهذه المحادثة — اضغط للاستئناف",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Medium,
                             color = chatColors.onSurface
@@ -457,7 +463,7 @@ fun ChatDetailScreen(
             )
         }
 
-        // Composer Bar with Quick Reply Chips
+        // Removed per user directive. Do not restore quick reply suggestion chips.
         ChatComposerBar(
             inputText = state.inputText,
             isSending = state.isSending,

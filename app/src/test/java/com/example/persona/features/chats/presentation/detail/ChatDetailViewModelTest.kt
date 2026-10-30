@@ -86,7 +86,11 @@ class ChatDetailViewModelTest {
         AutoReplyOrchestrator.clearActiveProcessingContacts()
         every { chatHistoryDao.observeMessagesForContact("أحمد مصطفى", "BUSINESS") } returns flowOf(listOf(msg1, msg2))
         every { conversationMetadataDao.observeAllConversations() } returns flowOf(listOf(convMeta))
+        every { conversationMetadataDao.observeConversation("أحمد مصطفى", "BUSINESS") } returns flowOf(convMeta)
+        coEvery { conversationMetadataDao.getConversation("أحمد مصطفى", "BUSINESS") } returns convMeta
         every { userPreferencesRepository.botName } returns flowOf(UserPreferencesRepository.DEFAULT_BOT_NAME)
+        every { userPreferencesRepository.isAutoReplyEnabled } returns flowOf(true)
+        every { userPreferencesRepository.isAutoReplyEnabledSync() } returns true
     }
 
     @After
@@ -154,6 +158,27 @@ class ChatDetailViewModelTest {
 
         // Since initial isAiPaused = false, toggling should set it to true
         coVerify(exactly = 1) { conversationMetadataDao.setAiPaused("أحمد مصطفى", "BUSINESS", true) }
+    }
+
+    @Test
+    fun `toggleAiActive when global is OFF toggles isAiOverrideEnabled in ConversationMetadataDao`() = runTest(testDispatcher) {
+        every { userPreferencesRepository.isAutoReplyEnabled } returns flowOf(false)
+        every { userPreferencesRepository.isAutoReplyEnabledSync() } returns false
+
+        val viewModel = ChatDetailViewModel(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            sendManualReplyUseCase = sendManualReplyUseCase,
+            savedStateHandle = savedStateHandle,
+            userPreferencesRepository = userPreferencesRepository
+        )
+        advanceUntilIdle()
+
+        viewModel.toggleAiActive()
+        advanceUntilIdle()
+
+        // Since initial isAiOverrideEnabled = false, toggling should set it to true
+        coVerify(exactly = 1) { conversationMetadataDao.setAiOverrideEnabled("أحمد مصطفى", "BUSINESS", true) }
     }
 
     @Test

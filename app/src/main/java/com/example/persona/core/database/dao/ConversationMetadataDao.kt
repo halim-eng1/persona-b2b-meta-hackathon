@@ -47,11 +47,25 @@ interface ConversationMetadataDao {
     suspend fun getConversation(contactName: String, sourceClass: String): ConversationMetadataEntity?
 
     @Query("""
+        SELECT * FROM conversation_metadata
+        WHERE contact_name = :contactName AND source_class = :sourceClass
+        LIMIT 1
+    """)
+    fun observeConversation(contactName: String, sourceClass: String): Flow<ConversationMetadataEntity?>
+
+    @Query("""
         UPDATE conversation_metadata
         SET is_ai_paused = :isPaused
         WHERE contact_name = :contactName AND source_class = :sourceClass
     """)
     suspend fun setAiPaused(contactName: String, sourceClass: String, isPaused: Boolean)
+
+    @Query("""
+        UPDATE conversation_metadata
+        SET is_ai_override_enabled = :enabled
+        WHERE contact_name = :contactName AND source_class = :sourceClass
+    """)
+    suspend fun setAiOverrideEnabled(contactName: String, sourceClass: String, enabled: Boolean)
 
     @Query("""
         UPDATE conversation_metadata
