@@ -713,8 +713,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         // ── Pure Text / Transcribed Voice Request (Dynamic Cascade with Circuit Breaker) ──
         val cascadeOrder = circuitBreaker.getProviderCascadeOrder()
 
-        for (providerId in cascadeOrder) {
-            if (!circuitBreaker.isProviderHealthy(providerId)) {
+                for (providerId in cascadeOrder) {
+                        if (!circuitBreaker.isProviderHealthy(providerId)) {
                 PersonaLogger.i(TAG, "⚡ [$providerId] circuit breaker is OPEN (cooldown 5m). Bypassing in 0ms.")
                 Log.i(TAG, "⚡ [$providerId] circuit breaker is OPEN (cooldown 5m). Bypassing in 0ms.")
                 continue
@@ -766,6 +766,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                         ProviderCircuitBreakerAndKeyManager.PROVIDER_NARA -> naraRouterClient.call(model, messages, targetMaxTokens, key)
                         else -> CallResult.Failed
                     }
+                    
 
                     when (result) {
                         is CallResult.Success -> {
@@ -776,9 +777,13 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                             return result.content
                         }
                         is CallResult.AuthOrQuotaError -> {
-                            PersonaLogger.w(TAG, "Model $model quota/auth error (${result.code}) on [$providerId]. Evicting key.")
-                            circuitBreaker.evictKey(providerId, key, "Auth/quota error: ${result.code}")
-                            break // rotate to next key
+                            if (result.code == 401 || result.code == 402) {
+                                PersonaLogger.w(TAG, "Key auth error (${result.code}) on [$providerId]. Evicting key.")
+                                circuitBreaker.evictKey(providerId, key, "Auth error: ${result.code}")
+                                break // rotate to next key
+                            } else {
+                                PersonaLogger.w(TAG, "Model $model quota error (${result.code}) on [$providerId]. Cascading to next model.")
+                            }
                         }
                         is CallResult.Timeout -> {
                             PersonaLogger.w(TAG, "Timeout on [$providerId] model $model.")
@@ -795,8 +800,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                             }
                         }
                         is CallResult.RateLimited -> {
-                            PersonaLogger.w(TAG, "Rate limited (429) on [$providerId] model $model. Trying next key.")
-                            break
+                            PersonaLogger.w(TAG, "Rate limited (429) on [$providerId] model $model. Trying next model.")
                         }
                         else -> {
                             Log.w(TAG, "Model $model call failed ($result) on [$providerId].")

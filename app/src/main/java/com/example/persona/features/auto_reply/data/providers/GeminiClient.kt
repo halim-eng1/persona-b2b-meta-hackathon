@@ -125,15 +125,15 @@ class GeminiClient @Inject constructor(
         lastResult
     }
 
-    internal suspend fun executeSingleCall(
+        internal suspend fun executeSingleCall(
         model: String,
         messages: List<ChatMessage>,
         maxTokens: Int,
         apiKey: String
-    ): CallResult {
+    ): CallResult = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
             Log.w(TAG, "Gemini API key is blank; skipping request for model $model")
-            return CallResult.Failed
+            return@withContext CallResult.Failed
         }
 
         val keyMasked = ReplyGenerationRepositoryImpl.maskKey(apiKey)
@@ -161,7 +161,7 @@ class GeminiClient @Inject constructor(
         PersonaLogger.i(TAG, "Attempting [Gemini] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
         Log.i(TAG, "Attempting [Gemini] model $model with key $keyMasked (max_tokens=$effectiveMaxTokens, timeout=${timeoutMs}ms)")
 
-        return try {
+        try {
             withTimeout(timeoutMs) {
                 val response = httpClient.post(endpoint) {
                     contentType(ContentType.Application.Json)
@@ -272,8 +272,8 @@ class GeminiClient @Inject constructor(
                 }
             }
         }
-    }
 
+    }
     fun extractGeminiContent(responseBody: String): String? {
         return try {
             // 1. Try OpenAI-compatible chat completions schema: choices[0].message.content or choices[0].delta.content

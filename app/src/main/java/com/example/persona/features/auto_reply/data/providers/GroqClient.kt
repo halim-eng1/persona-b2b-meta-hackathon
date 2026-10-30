@@ -109,15 +109,15 @@ class GroqClient @Inject constructor(
         lastResult
     }
 
-    internal suspend fun executeSingleCall(
+        internal suspend fun executeSingleCall(
         model: String,
         messages: List<ChatMessage>,
         maxTokens: Int,
         apiKey: String
-    ): CallResult {
+    ): CallResult = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
             Log.w(TAG, "Groq API key is blank; skipping request for model $model")
-            return CallResult.Failed
+            return@withContext CallResult.Failed
         }
 
         val keyMasked = ReplyGenerationRepositoryImpl.maskKey(apiKey)
@@ -126,7 +126,7 @@ class GroqClient @Inject constructor(
         val timeoutMs = if (isVision) 25_000L else 10_000L
         val reasoningEffort = if (isVision) null else "low"
 
-        return try {
+        try {
             withTimeout(timeoutMs) {
                 var response = httpClient.post(BuildConfig.GROQ_BASE_URL) {
                     contentType(ContentType.Application.Json)
@@ -212,8 +212,8 @@ class GroqClient @Inject constructor(
                 }
             }
         }
-    }
 
+    }
     override fun generateStream(apiKey: String, request: ProviderRequest): Flow<StreamChunk> = flow {
         val trimmedKey = apiKey.trim()
         if (trimmedKey.isBlank()) {

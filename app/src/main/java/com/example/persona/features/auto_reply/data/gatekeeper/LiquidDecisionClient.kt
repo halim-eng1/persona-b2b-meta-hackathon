@@ -118,10 +118,12 @@ class LiquidDecisionClient @Inject constructor(
                     return@withTimeoutOrNull outcome.intent
                 }
 
-                // If primary model failed on this key, attempt failover model
-                outcome = executeCall(key, FAILOVER_MODEL, text)
-                if (outcome.intent != null) {
-                    return@withTimeoutOrNull outcome.intent
+                if (!outcome.isRateLimit) {
+                    // If primary model failed on this key and not rate limited, attempt failover model
+                    outcome = executeCall(key, FAILOVER_MODEL, text)
+                    if (outcome.intent != null) {
+                        return@withTimeoutOrNull outcome.intent
+                    }
                 }
 
                 if (index < keys.size - 1) {
@@ -244,3 +246,4 @@ class LiquidDecisionClient @Inject constructor(
         val confidence: Float? = null
     )
 }
+

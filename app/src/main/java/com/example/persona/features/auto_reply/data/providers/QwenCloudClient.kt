@@ -127,12 +127,12 @@ class QwenCloudClient @Inject constructor(
         lastResult
     }
 
-    internal suspend fun executeSingleCall(
+        internal suspend fun executeSingleCall(
         model: String,
         messages: List<ChatMessage>,
         maxTokens: Int,
         trimmedKey: String
-    ): CallResult {
+    ): CallResult = withContext(Dispatchers.IO) {
         val keyMasked = ReplyGenerationRepositoryImpl.maskKey(trimmedKey)
         val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
         val isVision = model in VISION_QWEN_MODELS || hasImage
@@ -144,7 +144,7 @@ class QwenCloudClient @Inject constructor(
             model.contains("qwen3.8", ignoreCase = true) ||
             model.contains("reason", ignoreCase = true)
 
-        return try {
+        try {
             withTimeout(timeoutMs) {
                 val response = httpClient.post(BuildConfig.QWEN_BASE_URL) {
                     contentType(ContentType.Application.Json)
@@ -216,8 +216,8 @@ class QwenCloudClient @Inject constructor(
                 }
             }
         }
-    }
 
+    }
     override fun generateStream(apiKey: String, request: ProviderRequest): Flow<StreamChunk> = flow {
         val trimmedKey = apiKey.trim()
         if (trimmedKey.isBlank()) {

@@ -221,8 +221,8 @@ class CloudflareClefClient @Inject constructor(
         return when (choice.uppercase().trim()) {
             "GREETING" -> InboundIntent.GREETING
             "CLOSING", "BANTER", "PRESENCE_CHECK" -> InboundIntent.BANTER
-            "ORDER_STATUS" -> InboundIntent.ORDER_STATUS
-            "CATALOG_INQUIRY", "ORDER_CREATE", "ORDER_UPDATE", "ORDER_CANCEL", "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
+            "ORDER_STATUS", "ORDER_UPDATE", "ORDER_CANCEL" -> InboundIntent.ORDER_STATUS
+            "CATALOG_INQUIRY", "ORDER_CREATE", "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
             else -> InboundIntent.CATALOG_INQUIRY
         }
     }
@@ -258,3 +258,5 @@ class CloudflareClefClient @Inject constructor(
         val confidence: Float? = null
     )
 }
+
+

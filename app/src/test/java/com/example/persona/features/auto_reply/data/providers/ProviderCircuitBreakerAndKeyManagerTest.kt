@@ -42,16 +42,7 @@ class ProviderCircuitBreakerAndKeyManagerTest {
     fun `default models preserves all 10 Qwen models without pruning`() {
         val qwenModels = manager.getModels(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN)
         assertEquals(10, qwenModels.size)
-        assertTrue(qwenModels.contains("qwen-max"))
-        assertTrue(qwenModels.contains("qwen-plus"))
-        assertTrue(qwenModels.contains("qwen-turbo"))
-        assertTrue(qwenModels.contains("qwen2.5-72b-instruct"))
-        assertTrue(qwenModels.contains("qwen2.5-32b-instruct"))
-        assertTrue(qwenModels.contains("qwen2.5-14b-instruct"))
-        assertTrue(qwenModels.contains("qwen2.5-7b-instruct"))
-        assertTrue(qwenModels.contains("qwen-long"))
-        assertTrue(qwenModels.contains("deepseek-r1"))
-        assertTrue(qwenModels.contains("deepseek-v3"))
+        assertEquals(QwenCloudClient.QWEN_TEXT_MODELS, qwenModels)
     }
 
     @Test

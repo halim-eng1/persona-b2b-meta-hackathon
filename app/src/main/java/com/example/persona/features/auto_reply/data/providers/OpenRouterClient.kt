@@ -102,11 +102,12 @@ class OpenRouterClient @Inject constructor(
             }
 
             lastResult = result
-            val isRotateWorthy = result is CallResult.RateLimited ||
-                result is CallResult.AuthOrQuotaError ||
-                result is CallResult.ServerError
+            val isKeyOrQuotaError = result is CallResult.RateLimited || result is CallResult.AuthOrQuotaError
+            if (!isKeyOrQuotaError) {
+                return@withContext result
+            }
 
-            if (isRotateWorthy && index < validKeys.size - 1) {
+            if (index < validKeys.size - 1) {
                 Log.w(TAG, "OpenRouter key ($keyMasked) failed with $result. Rotating to next key in pool...")
             }
         }
@@ -114,15 +115,15 @@ class OpenRouterClient @Inject constructor(
         lastResult
     }
 
-    internal suspend fun executeSingleCall(
+        internal suspend fun executeSingleCall(
         model: String,
         messages: List<ChatMessage>,
         maxTokens: Int,
         apiKey: String
-    ): CallResult {
+    ): CallResult = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
             Log.w(TAG, "API key is blank; skipping request for model $model")
-            return CallResult.Failed
+            return@withContext CallResult.Failed
         }
 
         val keyMasked = ReplyGenerationRepositoryImpl.maskKey(apiKey)
@@ -131,7 +132,7 @@ class OpenRouterClient @Inject constructor(
         val timeoutMs = if (isVision) 25_000L else 10_000L
         val effectiveMaxTokens = if (model.contains("super-vl")) maxOf(maxTokens, 1500) else maxTokens
 
-        return try {
+        try {
             withTimeout(timeoutMs) {
                 val reasoning = if (model in REASONING_MODELS && !hasImage) ReasoningConfig(effort = "low") else null
                 var response = httpClient.post(BuildConfig.OPENROUTER_BASE_URL) {
@@ -212,8 +213,8 @@ class OpenRouterClient @Inject constructor(
                 }
             }
         }
-    }
 
+    }
     override fun generateStream(apiKey: String, request: ProviderRequest): Flow<StreamChunk> = flow {
         val trimmedKey = apiKey.trim()
         if (trimmedKey.isBlank()) {

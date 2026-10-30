@@ -46,44 +46,12 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
          * Strictly FORBIDDEN to reduce experimental Qwen models!
          * All 10 default Qwen models MUST remain.
          */
-        val DEFAULT_QWEN_MODELS = listOf(
-            "qwen-max",
-            "qwen-plus",
-            "qwen-turbo",
-            "qwen2.5-72b-instruct",
-            "qwen2.5-32b-instruct",
-            "qwen2.5-14b-instruct",
-            "qwen2.5-7b-instruct",
-            "qwen-long",
-            "deepseek-r1",
-            "deepseek-v3"
-        )
-
-        val DEFAULT_GEMINI_MODELS = listOf(
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-thinking",
-            "gemini-2.0-flash"
-        )
-
-        val DEFAULT_NVIDIA_MODELS = listOf(
-            "meta/llama-3.3-70b-instruct",
-            "mistralai/mixtral-8x22b-instruct-v0.1"
-        )
-
-        val DEFAULT_GROQ_MODELS = listOf(
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant"
-        )
-
-        val DEFAULT_OPENROUTER_MODELS = listOf(
-            "deepseek/deepseek-chat",
-            "google/gemini-2.0-flash-001",
-            "meta-llama/llama-3.3-70b-instruct"
-        )
-
-        val DEFAULT_NARA_MODELS = listOf(
-            "laguna-s-2.1"
-        )
+        val DEFAULT_QWEN_MODELS = QwenCloudClient.QWEN_TEXT_MODELS
+        val DEFAULT_GEMINI_MODELS = GeminiClient.GEMINI_TEXT_MODELS
+        val DEFAULT_NVIDIA_MODELS = NvidiaNimClient.NVIDIA_TEXT_MODELS
+        val DEFAULT_GROQ_MODELS = GroqClient.GROQ_MODELS
+        val DEFAULT_OPENROUTER_MODELS = OpenRouterClient.OPENROUTER_FAILOVER_MODELS
+        val DEFAULT_NARA_MODELS = NaraRouterClient.NARA_TEXT_MODELS
 
         val DEFAULT_CASCADE_ORDER = listOf(
             PROVIDER_QWEN,

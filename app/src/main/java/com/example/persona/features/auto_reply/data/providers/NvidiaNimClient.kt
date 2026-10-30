@@ -101,15 +101,14 @@ class NvidiaNimClient @Inject constructor(
         lastResult
     }
 
-    internal suspend fun executeSingleCall(
+        internal suspend fun executeSingleCall(
         model: String,
         messages: List<ChatMessage>,
         maxTokens: Int,
         apiKey: String
-    ): CallResult {
-        if (apiKey.isBlank()) {
+    ): CallResult = withContext(Dispatchers.IO) {if (apiKey.isBlank()) {
             Log.w(TAG, "NVIDIA API key is blank; skipping request for model $model")
-            return CallResult.Failed
+            return@withContext CallResult.Failed
         }
 
         val keyMasked = ReplyGenerationRepositoryImpl.maskKey(apiKey)
@@ -120,7 +119,7 @@ class NvidiaNimClient @Inject constructor(
         val reasoningEffort = if (model.contains("ultra-550b")) "none" else null
         val temperature = if (model.contains("ultra-550b")) 1.0f else 0.5f
 
-        return try {
+        try {
             withTimeout(timeoutMs) {
                 val response = httpClient.post(BuildConfig.NVIDIA_BASE_URL) {
                     contentType(ContentType.Application.Json)
@@ -190,8 +189,8 @@ class NvidiaNimClient @Inject constructor(
                 }
             }
         }
-    }
 
+    }
     override fun generateStream(apiKey: String, request: ProviderRequest): Flow<StreamChunk> = flow {
         val trimmedKey = apiKey.trim()
         if (trimmedKey.isBlank()) {
