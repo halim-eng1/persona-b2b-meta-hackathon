@@ -106,7 +106,7 @@ class AutoReplyOrchestratorConcurrencyTest {
     }
 
     @Test
-    fun `inverted gatekeeper resolves high-confidence greeting in Tier 0 without calling Cloudflare or Liquid`() = runBlocking {
+    fun `gatekeeper resolves via Tier 1 Cloudflare Clef when available`() = runBlocking {
         orchestrator = buildOrchestrator(this)
 
         val greetingText = "صباح الخير"
@@ -120,6 +120,7 @@ class AutoReplyOrchestratorConcurrencyTest {
             sourceClass = NotificationSourceClass.BUSINESS
         )
         coEvery { processor.process(any()) } returns processed
+        coEvery { cfClient.decide(any(), any()) } returns InboundIntent.GREETING
         coEvery {
             replyGenerationRepository.generateReply(
                 notification = any(),
@@ -145,8 +146,8 @@ class AutoReplyOrchestratorConcurrencyTest {
             )
         )
 
-        // Verifies Tier 0 fast-path: Cloudflare and Liquid were completely BYPASSED (<1ms on-device resolution)
-        coVerify(exactly = 0) { cfClient.decide(any(), any()) }
+        // Verifies Tier 1 Cloudflare Clef was called as primary
+        coVerify(exactly = 1) { cfClient.decide(any(), any()) }
         coVerify(exactly = 0) { liquidClient.decide(any(), any()) }
 
         // And direct reply executed
@@ -155,6 +156,62 @@ class AutoReplyOrchestratorConcurrencyTest {
                 "key_greeting_1",
                 match { it.contains("صباح النور") },
                 "GreetingUser",
+                "BUSINESS"
+            )
+        }
+    }
+
+    @Test
+    fun `gatekeeper falls back to Tier 3 LocalDecisionClassifier when Cloudflare and Liquid fail`() = runBlocking {
+        orchestrator = buildOrchestrator(this)
+
+        val greetingText = "صباح الخير"
+        val processed = ProcessedNotification(
+            contactName = "FallbackUser",
+            originalText = greetingText,
+            normalizedText = greetingText,
+            notificationKey = "key_fallback_1",
+            postTime = System.currentTimeMillis(),
+            context = mockk(relaxed = true),
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+        coEvery { processor.process(any()) } returns processed
+        coEvery { cfClient.decide(any(), any()) } throws RuntimeException("CF down")
+        coEvery { liquidClient.decide(any(), any()) } throws RuntimeException("Liquid down")
+        coEvery {
+            replyGenerationRepository.generateReply(
+                notification = any(),
+                candidates = any(),
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = any(),
+                lastOrder = any(),
+                orderStatusCounts = any(),
+                inboundIntent = any()
+            )
+        } returns """{"action":"REPLY","final_reply_text":"أهلاً بك، تفضل كيف أساعدك؟"}"""
+
+        orchestrator.processNotificationSequentially(
+            WhatsAppNotification(
+                title = "FallbackUser",
+                text = greetingText,
+                postTime = System.currentTimeMillis(),
+                notificationKey = "key_fallback_1",
+                sourceClass = NotificationSourceClass.BUSINESS
+            )
+        )
+
+        // Verifies both cloud gatekeepers were attempted before fallback
+        coVerify(exactly = 1) { cfClient.decide(any(), any()) }
+        coVerify(exactly = 1) { liquidClient.decide(any(), any()) }
+
+        coVerify(atLeast = 1) {
+            directReplyExecutionUseCase.execute(
+                "key_fallback_1",
+                any(),
+                "FallbackUser",
                 "BUSINESS"
             )
         }
