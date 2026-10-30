@@ -276,21 +276,21 @@ fun KnowledgeManagementScreen(
                     )
 
                     // Filter Chips
+                    val filters = listOf(
+                        "ALL" to R.string.knowledge_filter_all,
+                        "PRODUCT" to R.string.knowledge_filter_product,
+                        "POLICY" to R.string.knowledge_filter_policy,
+                        "OFFER" to R.string.knowledge_filter_offer
+                    )
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        val filters = listOf(
-                            "ALL" to stringResource(R.string.knowledge_filter_all),
-                            "PRODUCT" to stringResource(R.string.knowledge_filter_product),
-                            "POLICY" to stringResource(R.string.knowledge_filter_policy),
-                            "OFFER" to stringResource(R.string.knowledge_filter_offer)
-                        )
-                        items(filters) { (key, label) ->
+                        items(filters) { (key, resId) ->
                             FilterChip(
                                 selected = state.selectedFilter == key,
                                 onClick = { viewModel.onFilterSelected(key) },
-                                label = { Text(label, fontSize = 12.sp) }
+                                label = { Text(stringResource(resId), fontSize = 12.sp) }
                             )
                         }
                     }

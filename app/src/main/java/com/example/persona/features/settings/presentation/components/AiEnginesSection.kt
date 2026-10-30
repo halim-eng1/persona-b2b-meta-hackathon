@@ -200,7 +200,7 @@ fun AiEnginesSection(
                                     modifier = Modifier
                                         .size(16.dp)
                                         .clickable { showGuideDialogForProvider = provider }
-                                }
+                                )
                             }
                         } else null
                     )
