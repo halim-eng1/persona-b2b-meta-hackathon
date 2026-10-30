@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -110,12 +111,19 @@ fun KnowledgeManagementScreen(
         )
     }
 
-    // Bot Simulator / RAG Tester Dialog
+    // Bot Simulator / Full Agentic Multi-turn Sandbox Dialog
     BotSimulatorDialog(
         isOpen = state.isSimulatorOpen,
         onDismiss = { viewModel.onCloseSimulator() },
         onRunTest = { query -> viewModel.runSimulation(query) },
+        onSendTurn = { query, uri, type -> viewModel.runSimulation(query, uri, type) },
+        onClearHistory = { viewModel.onClearSimulatorHistory() },
+        onMediaSelected = { uri, type -> viewModel.onSimulatorMediaSelected(uri, type) },
+        onClearMedia = { viewModel.onClearSelectedMedia() },
         isSimulating = state.isSimulating,
+        messages = state.simulatorMessages,
+        selectedMediaUri = state.selectedMediaUri,
+        selectedMediaType = state.selectedMediaType,
         simulatedResponse = state.simulatedResponse,
         simulationResults = state.simulationResults,
         simulationBestScore = state.simulationBestScore,
@@ -137,10 +145,11 @@ fun KnowledgeManagementScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Title Header with Simulator & Clear Action Buttons
+            // Title Header cleanly below status bar (Simulator moved to FAB to prevent overlap)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -154,34 +163,15 @@ fun KnowledgeManagementScreen(
                     )
                 )
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                IconButton(
+                    onClick = { showClearConfirmationDialog = true },
+                    modifier = Modifier.size(48.dp)
                 ) {
-                    FilledTonalButton(
-                        onClick = { viewModel.onOpenSimulator() },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.defaultMinSize(minHeight = 48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = "محاكي البوت", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-
-                    IconButton(
-                        onClick = { showClearConfirmationDialog = true },
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.DeleteSweep,
-                            contentDescription = "مسح قاعدة المعرفة بالكامل",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.DeleteSweep,
+                        contentDescription = "مسح قاعدة المعرفة بالكامل",
+                        tint = MaterialTheme.colorScheme.error
+                    )
                 }
             }
 
@@ -347,6 +337,7 @@ fun KnowledgeManagementScreen(
                         }
                     } else {
                         LazyColumn(
+                            contentPadding = PaddingValues(bottom = 88.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
@@ -404,6 +395,7 @@ fun KnowledgeManagementScreen(
                         }
                     } else {
                         LazyColumn(
+                            contentPadding = PaddingValues(bottom = 88.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
@@ -424,5 +416,31 @@ fun KnowledgeManagementScreen(
                 }
             }
         }
+
+        // Floating Action Button to launch Bot Simulator cleanly
+        ExtendedFloatingActionButton(
+            onClick = { viewModel.onOpenSimulator() },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp)
+                )
+            },
+            text = {
+                Text(
+                    text = "محاكي البوت",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+            },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(20.dp)
+                .navigationBarsPadding(),
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+        )
     }
 }
