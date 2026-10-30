@@ -84,6 +84,9 @@ class SendManualReplyUseCaseTest {
         coVerify(exactly = 1) {
             conversationMetadataDao.setAiPaused("أحمد", "BUSINESS", true)
         }
+        coVerify(exactly = 1) {
+            conversationMetadataDao.setAiOverrideEnabled("أحمد", "BUSINESS", false)
+        }
 
         // Verify metadata update
         coVerify(exactly = 1) {
@@ -95,7 +98,8 @@ class SendManualReplyUseCaseTest {
                 timestamp = any(),
                 notificationKey = null,
                 incrementUnread = false,
-                isAiPaused = true
+                isAiPaused = true,
+                isAiOverrideEnabled = false
             )
         }
 
@@ -190,5 +194,48 @@ class SendManualReplyUseCaseTest {
         )
 
         verify(exactly = 1) { orchestrator.cancelInFlightTurn("كريم") }
+    }
+
+    @Test
+    fun `aborted manual reply still pauses AI, disables override, and cancels in-flight turn`() = runTest(testDispatcher) {
+        val orchestrator = mockk<AutoReplyOrchestrator>(relaxed = true)
+        val testUseCase = SendManualReplyUseCase(
+            chatHistoryDao = chatHistoryDao,
+            conversationMetadataDao = conversationMetadataDao,
+            directReplyExecutionUseCase = directReplyExecutionUseCase,
+            embeddingEngine = embeddingEngine,
+            scope = testScope,
+            autoReplyOrchestrator = orchestrator
+        )
+
+        coEvery { chatHistoryDao.insert(any()) } returns 77L
+        coEvery { directReplyExecutionUseCase.execute(any(), any(), any(), any()) } returns ReplyExecutionResult.Aborted
+
+        val result = testUseCase.invoke(
+            contactName = "Halim•",
+            sourceClass = "BUSINESS",
+            replyText = "تمام"
+        )
+
+        assertTrue(result is ManualReplyResult.Failed)
+        coVerify(exactly = 1) { conversationMetadataDao.setAiPaused("Halim•", "BUSINESS", true) }
+        coVerify(exactly = 1) { conversationMetadataDao.setAiOverrideEnabled("Halim•", "BUSINESS", false) }
+        verify(exactly = 1) { orchestrator.cancelInFlightTurn("Halim•") }
+    }
+
+    @Test
+    fun `retrying failed message pauses AI and disables override`() = runTest(testDispatcher) {
+        coEvery { directReplyExecutionUseCase.execute(any(), any(), any(), any()) } returns ReplyExecutionResult.Aborted
+
+        val result = useCase.invoke(
+            contactName = "Halim•",
+            sourceClass = "BUSINESS",
+            replyText = "تمام",
+            retryMessageId = 88L
+        )
+
+        assertTrue(result is ManualReplyResult.Failed)
+        coVerify(exactly = 1) { conversationMetadataDao.setAiPaused("Halim•", "BUSINESS", true) }
+        coVerify(exactly = 1) { conversationMetadataDao.setAiOverrideEnabled("Halim•", "BUSINESS", false) }
     }
 }
