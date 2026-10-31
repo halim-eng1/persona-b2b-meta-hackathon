@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ import com.example.persona.ui.components.PersonaSectionHeader
 import com.example.persona.ui.components.personaScreenBackground
 import com.example.persona.ui.theme.spacing
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToImport: () -> Unit,
@@ -62,11 +64,16 @@ fun HomeScreen(
             .fillMaxSize()
             .personaScreenBackground()
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = spacing.xl, vertical = spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(spacing.lg)
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.fillMaxSize()
         ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = spacing.xl, vertical = spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(spacing.lg)
+            ) {
             // ── Top Bar / Header ──────────────────────────────────────────────
             item(key = "header") {
                 Row(
@@ -243,6 +250,7 @@ fun HomeScreen(
             item(key = "bottom_spacer") {
                 Spacer(modifier = Modifier.height(24.dp))
             }
+        }
         }
 
         SnackbarHost(

@@ -114,6 +114,19 @@
     <string name="knowledge_input_in_stock">In Stock</string>
     <string name="knowledge_input_out_of_stock">Out of Stock</string>
     <string name="knowledge_input_btn_add_to_catalog">Add to Store</string>
+    <string name="knowledge_input_card_toggle_title">Add New Product or Fact</string>
+    <string name="knowledge_input_card_expand">Expand creation form</string>
+    <string name="knowledge_input_card_collapse">Collapse creation form</string>
+    <string name="knowledge_empty_state_cta">Add First Product to Catalog</string>
+    <string name="knowledge_snackbar_entry_added">Knowledge added to bot memory successfully</string>
+    <string name="knowledge_snackbar_answer_saved">Answer saved and bot knowledge updated</string>
+    <string name="knowledge_snackbar_entry_deleted">Knowledge item deleted</string>
+    <string name="knowledge_snackbar_undo">Undo</string>
+    <string name="knowledge_snackbar_entry_restored">Knowledge item restored</string>
+    <string name="knowledge_source_qa">Trained Q&amp;A</string>
+    <string name="knowledge_question_label">Question:</string>
+    <string name="knowledge_answer_label">Answer:</string>
+    <string name="common_undo">Undo</string>
 
     <!-- ── Orders & Manifest ──────────────────────────────────────────────────── -->
     <string name="order_action_note">Note</string>
@@ -247,6 +260,17 @@
     <string name="settings_ai_models_title">AI Models for %s</string>
     <string name="settings_ai_models_subtitle">Reorder models, remove unused ones, or add a custom model identifier.</string>
     <string name="settings_ai_add_model_label">Add custom model identifier</string>
+    <string name="settings_ai_delete_key_title">Delete API Key?</string>
+    <string name="settings_ai_delete_key_message">Are you sure you want to delete this API key? Automated replies using this key will stop functioning.</string>
+    <string name="settings_ai_delete_model_title">Remove AI Model?</string>
+    <string name="settings_ai_delete_model_message">Are you sure you want to remove \"%s\" from the fallback model chain?</string>
+    <string name="settings_ai_models_summary">%1$d models configured (Primary: %2$s)</string>
+    <string name="settings_ai_models_summary_empty">No models configured</string>
+    <string name="settings_ai_model_primary_badge">Primary #1</string>
+    <string name="settings_ai_model_fallback_badge">Fallback #%d</string>
+    <string name="settings_hours_tap_to_change">Tap to select time</string>
+    <string name="settings_cache_clean_confirm_title">Clear Cache?</string>
+    <string name="settings_cache_clean_confirm_message">Are you sure you want to clear temporary files and diagnostic logs? This will free space and will not affect your store settings or knowledge base.</string>
     <string name="guide_portal_link_label">Official Portal URL:</string>
     <string name="guide_steps_header">Steps to obtain API key:</string>
     <string name="guide_copy_prompt_btn">Ask AI for Guidance</string>
@@ -380,6 +404,9 @@
     <string name="home_stat_total_replies_sent">Total Replies Sent</string>
     <string name="home_stat_knowledge_chunks">Knowledge Base Items</string>
     <string name="home_recent_reply_prefix">Reply: %s</string>
+    <string name="home_match_high">Verified Reply</string>
+    <string name="home_match_medium">Good Match</string>
+    <string name="home_match_low">General</string>
     <string name="home_service_restart_success">Notification listener service restarted successfully</string>
     <string name="home_service_restart_failed">Failed to restart service: %s</string>
     <string name="common_search_placeholder">Search...</string>

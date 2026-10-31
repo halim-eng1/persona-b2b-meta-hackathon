@@ -114,6 +114,19 @@
     <string name="knowledge_input_in_stock">متوفر بالمخزن</string>
     <string name="knowledge_input_out_of_stock">نفد من المخزن</string>
     <string name="knowledge_input_btn_add_to_catalog">إضافة للمتجر</string>
+    <string name="knowledge_input_card_toggle_title">إضافة منتج أو معلومة جديدة</string>
+    <string name="knowledge_input_card_expand">توسيع نموذج الإضافة</string>
+    <string name="knowledge_input_card_collapse">طي نموذج الإضافة</string>
+    <string name="knowledge_empty_state_cta">إضافة أول منتج للكتالوج</string>
+    <string name="knowledge_snackbar_entry_added">تمت إضافة المعلومة إلى ذاكرة البوت بنجاح</string>
+    <string name="knowledge_snackbar_answer_saved">تم حفظ الرد وتحديث ذاكرة البوت بنجاح</string>
+    <string name="knowledge_snackbar_entry_deleted">تم حذف المعلومة</string>
+    <string name="knowledge_snackbar_undo">تراجع</string>
+    <string name="knowledge_snackbar_entry_restored">تمت استعادة المعلومة بنجاح</string>
+    <string name="knowledge_source_qa">سؤال وجواب معتمد</string>
+    <string name="knowledge_question_label">سؤال:</string>
+    <string name="knowledge_answer_label">إجابة:</string>
+    <string name="common_undo">تراجع</string>
 
     <!-- ── Orders & Manifest ──────────────────────────────────────────────────── -->
     <string name="order_action_note">ملاحظة</string>
@@ -247,6 +260,17 @@
     <string name="settings_ai_models_title">نماذج الذكاء الاصطناعي لمزود %s</string>
     <string name="settings_ai_models_subtitle">يمكنك تعديل ترتيب النماذج، حذف النماذج غير المرغوبة، أو إضافة كود نموذج مخصص.</string>
     <string name="settings_ai_add_model_label">إضافة كود نموذج مخصص</string>
+    <string name="settings_ai_delete_key_title">حذف مفتاح API؟</string>
+    <string name="settings_ai_delete_key_message">هل أنت متأكد من حذف هذا المفتاح؟ سيتوقف البوت عن استخدامه في الردود التلقائية.</string>
+    <string name="settings_ai_delete_model_title">إزالة نموذج الذكاء الاصطناعي؟</string>
+    <string name="settings_ai_delete_model_message">هل أنت متأكد من إزالة النموذج \"%s\" من سلسلة النماذج الاحتياطية؟</string>
+    <string name="settings_ai_models_summary">%1$d نماذج مجهزة (الأساسي: %2$s)</string>
+    <string name="settings_ai_models_summary_empty">لم تتم تهيئة نماذج بعد</string>
+    <string name="settings_ai_model_primary_badge">الأساسي #1</string>
+    <string name="settings_ai_model_fallback_badge">احتياطي #%d</string>
+    <string name="settings_hours_tap_to_change">اضغط لاختيار الوقت</string>
+    <string name="settings_cache_clean_confirm_title">مسح الذاكرة المؤقتة؟</string>
+    <string name="settings_cache_clean_confirm_message">هل أنت متأكد من مسح الملفات المؤقتة وسجلات الفحص؟ سيؤدي ذلك لتحرير مساحة تخزين دون التأثير على إعدادات المتجر أو قاعدة المعرفة.</string>
     <string name="guide_portal_link_label">رابط المنصة الرسمي:</string>
     <string name="guide_steps_header">خطوات الحصول على المفتاح:</string>
     <string name="guide_copy_prompt_btn">اجعل الذكاء الاصطناعي يرشدك</string>
@@ -380,6 +404,9 @@
     <string name="home_stat_total_replies_sent">إجمالي الردود المرسلة</string>
     <string name="home_stat_knowledge_chunks">عناصر قاعدة المعرفة</string>
     <string name="home_recent_reply_prefix">الرد: %s</string>
+    <string name="home_match_high">رد موثوق</string>
+    <string name="home_match_medium">تطابق جيد</string>
+    <string name="home_match_low">تطابق عام</string>
     <string name="home_service_restart_success">تمت إعادة تشغيل خدمة الإشعارات بنجاح</string>
     <string name="home_service_restart_failed">تعذر إعادة تشغيل الخدمة: %s</string>
     <string name="common_search_placeholder">بحث...</string>

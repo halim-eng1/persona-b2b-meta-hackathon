@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -71,7 +72,8 @@ data class HomeUiState(
     val totalRepliesSent: Int = 0,
     val knowledgeChunkCount: Int = 0,
     val recentActivity: List<AuditLogItem> = emptyList(),
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val isRefreshing: Boolean = false
 )
 
 private data class B2BMetrics(
@@ -177,13 +179,15 @@ class HomeViewModel @Inject constructor(
         B2BMetrics(orders, rev, totalReplies, todayReplies)
     }
 
+    private val _isRefreshing = MutableStateFlow(false)
+
     val uiState: StateFlow<HomeUiState> = combine(
-        autoReplyHealthFlow,
-        attentionFlow,
+        combine(autoReplyHealthFlow, attentionFlow) { health, attention -> Pair(health, attention) },
         metricsFlow,
         businessKnowledgeDao.observeChunkCount(),
-        recentLogsFlow
-    ) { healthData, attentionData, metrics, chunkCount, recentLogs ->
+        recentLogsFlow,
+        _isRefreshing
+    ) { (healthData, attentionData), metrics, chunkCount, recentLogs, isRefreshing ->
         val (isEnabled, isConnected) = healthData
         val (attentionCount, waitingCustomers) = attentionData
         val running = try { serviceAliveChecker() } catch (_: Throwable) { isConnected }
@@ -201,7 +205,8 @@ class HomeViewModel @Inject constructor(
             totalRepliesSent = metrics.totalReplies.coerceAtLeast(0),
             knowledgeChunkCount = chunkCount.coerceAtLeast(0),
             recentActivity = recentLogs,
-            isLoading = false
+            isLoading = false,
+            isRefreshing = isRefreshing
         )
     }.stateIn(
         scope = viewModelScope,
@@ -247,6 +252,15 @@ class HomeViewModel @Inject constructor(
 
     fun refreshSystemHealth() {
         refreshHealth()
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            refreshSystemHealth()
+            kotlinx.coroutines.delay(400)
+            _isRefreshing.value = false
+        }
     }
 
     fun isNotificationPermissionGranted(): Boolean {

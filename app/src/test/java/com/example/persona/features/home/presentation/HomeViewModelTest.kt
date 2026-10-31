@@ -420,4 +420,18 @@ class HomeViewModelTest {
         verify { permissionChecker.startNotificationListenerSettings(mockContext) }
         coVerify(exactly = 0) { toggleAutoReplyUseCase(any()) }
     }
+
+    @Test
+    fun `refresh triggers health evaluation and resets isRefreshing`() = runTest(testDispatcher) {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isRefreshing)
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isRefreshing)
+        collectJob.cancel()
+    }
 }

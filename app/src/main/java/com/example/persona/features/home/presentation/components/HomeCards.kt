@@ -34,6 +34,7 @@ import com.example.persona.R
 import com.example.persona.features.audit_log.domain.model.AuditLogItem
 import com.example.persona.ui.components.AvatarShape
 import com.example.persona.ui.components.PersonaAvatar
+import com.example.persona.ui.components.PersonaStatusBadge
 import com.example.persona.features.home.presentation.SystemHealthStatus
 import com.example.persona.features.home.presentation.WaitingCustomer
 import kotlinx.datetime.TimeZone
@@ -565,7 +566,24 @@ fun RecentActivityRow(
 ) {
     val localDt = item.timestamp.toLocalDateTime(TimeZone.currentSystemDefault())
     val formattedTime = "%02d:%02d".format(localDt.hour, localDt.minute)
-    val pct = (item.similarityScore * 100).roundToInt()
+
+    val (badgeText, badgeBg, badgeContent) = when {
+        item.similarityScore >= 0.85f -> Triple(
+            stringResource(R.string.home_match_high),
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+            MaterialTheme.colorScheme.primary
+        )
+        item.similarityScore >= 0.70f -> Triple(
+            stringResource(R.string.home_match_medium),
+            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+            MaterialTheme.colorScheme.secondary
+        )
+        else -> Triple(
+            stringResource(R.string.home_match_low),
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 
     Row(
         modifier = modifier
@@ -624,16 +642,11 @@ fun RecentActivityRow(
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant
-        ) {
-            Text(
-                text = "$pct%",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        PersonaStatusBadge(
+            label = badgeText,
+            containerColor = badgeBg,
+            contentColor = badgeContent,
+            shape = RoundedCornerShape(8.dp)
+        )
     }
 }
