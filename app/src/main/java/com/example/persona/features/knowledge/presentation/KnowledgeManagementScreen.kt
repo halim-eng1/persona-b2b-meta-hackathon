@@ -19,10 +19,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -37,6 +39,7 @@ import com.example.persona.features.knowledge.presentation.components.EditKnowle
 import com.example.persona.features.knowledge.presentation.components.FailedQueryRow
 import com.example.persona.features.knowledge.presentation.components.KnowledgeEntryRow
 import com.example.persona.features.knowledge.presentation.components.ManualKnowledgeInputCard
+import kotlinx.coroutines.launch
 
 private val KnowledgeFilters = listOf(
     "ALL" to R.string.knowledge_filter_all,
@@ -54,6 +57,9 @@ fun KnowledgeManagementScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableStateOf(0) }
     var showClearConfirmationDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // Clear All Dialog
     if (showClearConfirmationDialog) {
@@ -114,6 +120,12 @@ fun KnowledgeManagementScreen(
             onDismiss = { viewModel.onDismissAnswerDialog() },
             onSaveAnswer = { answer, isOffer ->
                 viewModel.saveAnswerForFailedQuery(queryToAnswer.id, queryToAnswer.queryText, answer, isOffer)
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = context.getString(R.string.knowledge_snackbar_answer_saved),
+                        duration = SnackbarDuration.Short
+                    )
+                }
             }
         )
     }
@@ -256,7 +268,16 @@ fun KnowledgeManagementScreen(
                         onTemporaryOfferToggled = { viewModel.onTemporaryOfferToggled(it) },
                         isProcessing = state.isProcessing,
                         errorMessage = state.errorMessage,
-                        onAddEntry = { viewModel.addManualEntry() }
+                        onAddEntry = {
+                            viewModel.addManualEntry()
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(
+                                    message = context.getString(R.string.knowledge_snackbar_entry_added),
+                                    duration = SnackbarDuration.Short
+                                )
+                            }
+                        },
+                        isInitiallyExpanded = state.entries.isEmpty()
                     )
 
                     // Search & Category Filter Bar
@@ -348,6 +369,14 @@ fun KnowledgeManagementScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
                                 )
+                                if (state.searchQuery.isNotBlank()) {
+                                    OutlinedButton(
+                                        onClick = { viewModel.onSearchQueryChanged("") },
+                                        modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                                    ) {
+                                        Text(stringResource(R.string.knowledge_search_clear))
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -362,7 +391,24 @@ fun KnowledgeManagementScreen(
                                 KnowledgeEntryRow(
                                     entry = entry,
                                     onEdit = { viewModel.onEditEntry(entry) },
-                                    onDelete = { viewModel.deleteEntry(entry.chunkId) }
+                                    onDelete = {
+                                        val deletedItem = entry
+                                        viewModel.deleteEntry(deletedItem)
+                                        coroutineScope.launch {
+                                            val result = snackbarHostState.showSnackbar(
+                                                message = context.getString(R.string.knowledge_snackbar_entry_deleted),
+                                                actionLabel = context.getString(R.string.knowledge_snackbar_undo),
+                                                duration = SnackbarDuration.Short
+                                            )
+                                            if (result == SnackbarResult.ActionPerformed) {
+                                                viewModel.restoreLastDeletedEntry()
+                                                snackbarHostState.showSnackbar(
+                                                    message = context.getString(R.string.knowledge_snackbar_entry_restored),
+                                                    duration = SnackbarDuration.Short
+                                                )
+                                            }
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -431,6 +477,15 @@ fun KnowledgeManagementScreen(
                 }
             }
         }
+
+        // Operational Snackbar Host for Action Confirmations & Undo
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 88.dp)
+        )
 
         // Floating Action Button to launch Bot Simulator cleanly
         ExtendedFloatingActionButton(

@@ -186,9 +186,35 @@ class KnowledgeManagementViewModel @Inject constructor(
         }
     }
 
+    private var lastDeletedEntry: KnowledgeEntry? = null
+
+    fun deleteEntry(entry: KnowledgeEntry) {
+        lastDeletedEntry = entry
+        viewModelScope.launch {
+            deleteKnowledgeEntryUseCase(entry.chunkId)
+        }
+    }
+
     fun deleteEntry(chunkId: String) {
+        val entry = _uiState.value.entries.find { it.chunkId == chunkId }
+        if (entry != null) {
+            lastDeletedEntry = entry
+        }
         viewModelScope.launch {
             deleteKnowledgeEntryUseCase(chunkId)
+        }
+    }
+
+    fun restoreLastDeletedEntry() {
+        val entry = lastDeletedEntry ?: return
+        viewModelScope.launch {
+            repository.updateKnowledge(
+                chunkId = entry.chunkId,
+                newText = entry.chunkText,
+                sourceType = entry.sourceType,
+                headerContext = entry.headerContext
+            )
+            lastDeletedEntry = null
         }
     }
 
