@@ -54,17 +54,17 @@ fun PersonaOrderStatusBadge(
     modifier: Modifier = Modifier
 ) {
     val statusColors = PersonaTheme.statusColors
-    val (container, content, label) = when (status) {
-        OrderStatus.PENDING -> Triple(statusColors.pendingContainer, statusColors.pending, "قيد الانتظار")
-        OrderStatus.IN_PREPARATION -> Triple(statusColors.inPreparationContainer, statusColors.inPreparation, "قيد التجهيز")
-        OrderStatus.SHIPPING_IN_PROGRESS -> Triple(statusColors.shippingContainer, statusColors.shipping, "جاري الشحن")
-        OrderStatus.SHIPPED -> Triple(statusColors.completedContainer, statusColors.completed, "تم الشحن")
-        OrderStatus.CANCELLED -> Triple(statusColors.cancelledContainer, statusColors.cancelled, "ملغي")
-        OrderStatus.RETURNED -> Triple(statusColors.returnedContainer, statusColors.returned, "مرتجع")
+    val (container, content, labelRes) = when (status) {
+        OrderStatus.PENDING -> Triple(statusColors.pendingContainer, statusColors.pending, com.example.persona.R.string.order_status_pending)
+        OrderStatus.IN_PREPARATION -> Triple(statusColors.inPreparationContainer, statusColors.inPreparation, com.example.persona.R.string.order_status_in_prep)
+        OrderStatus.SHIPPING_IN_PROGRESS -> Triple(statusColors.shippingContainer, statusColors.shipping, com.example.persona.R.string.order_status_shipping)
+        OrderStatus.SHIPPED -> Triple(statusColors.completedContainer, statusColors.completed, com.example.persona.R.string.order_status_delivered_card)
+        OrderStatus.CANCELLED -> Triple(statusColors.cancelledContainer, statusColors.cancelled, com.example.persona.R.string.order_status_cancelled)
+        OrderStatus.RETURNED -> Triple(statusColors.returnedContainer, statusColors.returned, com.example.persona.R.string.order_status_returned_badge)
     }
 
     PersonaStatusBadge(
-        label = label,
+        label = androidx.compose.ui.res.stringResource(labelRes),
         containerColor = container,
         contentColor = content,
         modifier = modifier,

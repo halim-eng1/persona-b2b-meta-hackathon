@@ -315,6 +315,11 @@
     <string name="clear_range_last_two_hours">آخر ساعتين</string>
     <string name="clear_range_today">اليوم</string>
     <string name="clear_range_all_time">كامل المحادثة</string>
+    <string name="chat_delete_conversation_title">حذف المحادثة</string>
+    <string name="chat_delete_conversation_message">هل أنت متأكد من حذف محادثة \"%1$s\" وجميع رسائلها؟ لا يمكن التراجع عن هذا الإجراء.</string>
+    <string name="contacts_delete_contact_title">حذف جهة الاتصال</string>
+    <string name="contacts_delete_contact_message">هل أنت متأكد من حذف \"%1$s\" من دليل العملاء؟</string>
+    <string name="contacts_delete_contact_button">حذف جهة الاتصال</string>
 
     <!-- ── Studio / Chat Import ────────────────────────────────────────────────── -->
     <string name="chat_import_studio_title">استوديو استخراج وتدريب المعرفة</string>
@@ -611,4 +616,15 @@
     <string name="audit_log_no_search_results">لا توجد نتائج مطابقة لمعايير البحث</string>
     <string name="audit_log_empty_desc">ستظهر الردود الآلية وتفاصيل كل محادثة هنا فور إرسالها.</string>
     <string name="audit_log_empty_desc_search">جرّب تغيير كلمات البحث أو إعادة ضبط الفلاتر المحددة.</string>
+
+    <string name="contact_tag_regular">عميل عادي</string>
+    <string name="contact_tag_vip">عميل VIP</string>
+    <string name="contact_tag_debtor">عميل آجل/مديونية</string>
+    <string name="contact_tag_problematic">عميل مرتجعات/مشاكل</string>
+    <string name="contact_tag_blocked">محظور</string>
+    <string name="chat_filter_all">كل المحادثات</string>
+    <string name="chat_filter_main_app">واتساب الأساسي</string>
+    <string name="chat_filter_business">واتساب للأعمال</string>
+    <string name="chat_filter_clone">التطبيق المستنسخ</string>
+    <string name="chat_filter_needs_attention">تتطلب انتباهاً</string>
 </resources>

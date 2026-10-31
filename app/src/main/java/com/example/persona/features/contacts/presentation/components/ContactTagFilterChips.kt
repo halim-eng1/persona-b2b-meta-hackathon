@@ -32,7 +32,7 @@ fun ContactTagFilterChips(
             FilterChip(
                 selected = selectedTag == tag,
                 onClick = { onTagSelected(if (selectedTag == tag) null else tag) },
-                label = { Text(tag.labelAr) }
+                label = { Text(androidx.compose.ui.res.stringResource(tag.labelResId)) }
             )
         }
     }

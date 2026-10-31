@@ -2,6 +2,8 @@ package com.example.persona.features.chats.presentation.list
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.persona.core.database.dao.ChatHistoryDao
+import com.example.persona.core.database.dao.ContactDao
 import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.entity.ConversationMetadataEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -9,18 +11,23 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import javax.inject.Inject
 
-enum class ChatFilter(val label: String) {
-    ALL("All"),
-    MAIN_APP("Main WhatsApp"),
-    BUSINESS("WhatsApp Business"),
-    CLONE("Dual / Clone"),
-    NEEDS_ATTENTION("Needs Attention")
+enum class ChatFilter(
+    val label: String,
+    @androidx.annotation.StringRes val labelResId: Int
+) {
+    ALL("All", com.example.persona.R.string.chat_filter_all),
+    MAIN_APP("Main WhatsApp", com.example.persona.R.string.chat_filter_main_app),
+    BUSINESS("WhatsApp Business", com.example.persona.R.string.chat_filter_business),
+    CLONE("Dual / Clone", com.example.persona.R.string.chat_filter_clone),
+    NEEDS_ATTENTION("Needs Attention", com.example.persona.R.string.chat_filter_needs_attention)
 }
 
 data class ConversationItemUiModel(
@@ -44,7 +51,9 @@ data class ChatsListUiState(
 
 @HiltViewModel
 class ChatsListViewModel @Inject constructor(
-    private val conversationMetadataDao: ConversationMetadataDao
+    private val conversationMetadataDao: ConversationMetadataDao,
+    private val chatHistoryDao: ChatHistoryDao? = null,
+    private val contactDao: ContactDao? = null
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -94,6 +103,42 @@ class ChatsListViewModel @Inject constructor(
 
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
+    }
+
+    init {
+        syncConversationsWithContacts()
+    }
+
+    fun syncConversationsWithContacts() {
+        val cDao = contactDao ?: return
+        viewModelScope.launch {
+            try {
+                val contacts = cDao.observeAllContacts().first()
+                for (contact in contacts) {
+                    val existing = conversationMetadataDao.getLatestConversationForContact(contact.contactName)
+                    if (existing == null) {
+                        conversationMetadataDao.upsert(
+                            ConversationMetadataEntity(
+                                contactName = contact.contactName,
+                                sourceClass = "BUSINESS",
+                                lastMessageTimestamp = contact.lastActiveTimestamp,
+                                lastMessageText = null,
+                                lastMessageSenderType = ""
+                            )
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                // Graceful fallback for tests or missing tables
+            }
+        }
+    }
+
+    fun deleteConversation(contactName: String, sourceClass: String) {
+        viewModelScope.launch {
+            chatHistoryDao?.deleteMessagesSince(contactName, sourceClass, 0L)
+            conversationMetadataDao.deleteConversation(contactName, sourceClass)
+        }
     }
 
     fun onFilterSelected(filter: ChatFilter) {

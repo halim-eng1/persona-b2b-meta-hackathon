@@ -8,12 +8,15 @@ import androidx.room.PrimaryKey
 /**
  * Customer tag classification for B2B CRM.
  */
-enum class ContactTag(val labelAr: String) {
-    REGULAR("عميل عادي"),
-    VIP("عميل VIP"),
-    DEBTOR("عميل آجل/مديونية"),
-    PROBLEMATIC("عميل مرتجعات/مشاكل"),
-    BLOCKED("محظور")
+enum class ContactTag(
+    val labelAr: String,
+    @androidx.annotation.StringRes val labelResId: Int
+) {
+    REGULAR("عميل عادي", com.example.persona.R.string.contact_tag_regular),
+    VIP("عميل VIP", com.example.persona.R.string.contact_tag_vip),
+    DEBTOR("عميل آجل/مديونية", com.example.persona.R.string.contact_tag_debtor),
+    PROBLEMATIC("عميل مرتجعات/مشاكل", com.example.persona.R.string.contact_tag_problematic),
+    BLOCKED("محظور", com.example.persona.R.string.contact_tag_blocked)
 }
 
 @Entity(

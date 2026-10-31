@@ -42,6 +42,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.persona.features.chats.presentation.list.components.ConversationRowItem
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import com.example.persona.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,6 +61,7 @@ fun ChatsListScreen(
     viewModel: ChatsListViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var conversationToDelete by remember { mutableStateOf<ConversationItemUiModel?>(null) }
 
     Scaffold(
         topBar = {
@@ -178,7 +189,8 @@ fun ChatsListScreen(
                     ) { item ->
                         ConversationRowItem(
                             item = item,
-                            onClick = { onNavigateToChat(item.contactName, item.sourceClass) }
+                            onClick = { onNavigateToChat(item.contactName, item.sourceClass) },
+                            onLongClick = { conversationToDelete = item }
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(start = 72.dp, end = 16.dp),
@@ -189,5 +201,50 @@ fun ChatsListScreen(
                 }
             }
         }
+    }
+
+    conversationToDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { conversationToDelete = null },
+            shape = RoundedCornerShape(20.dp),
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = {
+                Text(
+                    text = stringResource(R.string.chat_delete_conversation_title),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.chat_delete_conversation_message, target.contactName),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteConversation(target.contactName, target.sourceClass)
+                        conversationToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text(stringResource(R.string.common_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { conversationToDelete = null }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
     }
 }

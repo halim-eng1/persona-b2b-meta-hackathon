@@ -5,6 +5,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -19,7 +22,8 @@ import com.example.persona.core.database.entity.ContactTag
 fun EditContactDialog(
     contact: ContactEntity,
     onDismissRequest: () -> Unit,
-    onConfirmUpdate: (tag: ContactTag, notes: String, phone: String) -> Unit
+    onConfirmUpdate: (tag: ContactTag, notes: String, phone: String) -> Unit,
+    onDeleteContact: (() -> Unit)? = null
 ) {
     var selectedTag by remember {
         mutableStateOf(runCatching { ContactTag.valueOf(contact.tag) }.getOrDefault(ContactTag.REGULAR))
@@ -61,7 +65,7 @@ fun EditContactDialog(
                         FilterChip(
                             selected = selectedTag == tag,
                             onClick = { selectedTag = tag },
-                            label = { Text(tag.labelAr, style = MaterialTheme.typography.labelSmall) }
+                            label = { Text(stringResource(tag.labelResId), style = MaterialTheme.typography.labelSmall) }
                         )
                     }
                 }
@@ -85,6 +89,64 @@ fun EditContactDialog(
                     maxLines = 4,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                if (onDeleteContact != null) {
+                    var showConfirmDelete by remember { mutableStateOf(false) }
+
+                    if (showConfirmDelete) {
+                        AlertDialog(
+                            onDismissRequest = { showConfirmDelete = false },
+                            title = {
+                                Text(
+                                    text = stringResource(R.string.contacts_delete_contact_title),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            text = {
+                                Text(
+                                    text = stringResource(R.string.contacts_delete_contact_message, contact.contactName)
+                                )
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        showConfirmDelete = false
+                                        onDeleteContact()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.error,
+                                        contentColor = MaterialTheme.colorScheme.onError
+                                    )
+                                ) {
+                                    Text(stringResource(R.string.common_delete))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showConfirmDelete = false }) {
+                                    Text(stringResource(R.string.common_cancel))
+                                }
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { showConfirmDelete = true },
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.contacts_delete_contact_button))
+                    }
+                }
             }
         },
         confirmButton = {

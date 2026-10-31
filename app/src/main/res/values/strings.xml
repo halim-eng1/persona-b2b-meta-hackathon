@@ -315,6 +315,11 @@
     <string name="clear_range_last_two_hours">Last 2 Hours</string>
     <string name="clear_range_today">Today</string>
     <string name="clear_range_all_time">All Time</string>
+    <string name="chat_delete_conversation_title">Delete Conversation</string>
+    <string name="chat_delete_conversation_message">Are you sure you want to delete the conversation with \"%1$s\" and all its messages? This action cannot be undone.</string>
+    <string name="contacts_delete_contact_title">Delete Contact</string>
+    <string name="contacts_delete_contact_message">Are you sure you want to delete \"%1$s\" from Customer Directory?</string>
+    <string name="contacts_delete_contact_button">Delete Contact</string>
 
     <!-- ── Studio / Chat Import ────────────────────────────────────────────────── -->
     <string name="chat_import_studio_title">Knowledge Studio</string>
@@ -611,4 +616,15 @@
     <string name="audit_log_no_search_results">No results match search criteria</string>
     <string name="audit_log_empty_desc">Automated replies and chat details will appear here as soon as they are sent.</string>
     <string name="audit_log_empty_desc_search">Try changing your search terms or resetting the selected filters.</string>
+
+    <string name="contact_tag_regular">Regular</string>
+    <string name="contact_tag_vip">VIP Customer</string>
+    <string name="contact_tag_debtor">Credit / Debtor</string>
+    <string name="contact_tag_problematic">Returns / Problems</string>
+    <string name="contact_tag_blocked">Blocked</string>
+    <string name="chat_filter_all">All Chats</string>
+    <string name="chat_filter_main_app">Main WhatsApp</string>
+    <string name="chat_filter_business">WhatsApp Business</string>
+    <string name="chat_filter_clone">Dual / Clone</string>
+    <string name="chat_filter_needs_attention">Needs Attention</string>
 </resources>

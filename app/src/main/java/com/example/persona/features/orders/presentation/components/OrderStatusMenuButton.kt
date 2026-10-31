@@ -42,7 +42,7 @@ fun OrderStatusMenuButton(
                 DropdownMenuItem(
                     text = {
                         Text(
-                            text = StatusBadgeStyle.from(candidate.name).label,
+                            text = androidx.compose.ui.res.stringResource(StatusBadgeStyle.from(candidate.name).labelResId),
                             fontWeight = if (candidate.name == currentStatus) FontWeight.Bold else FontWeight.Normal
                         )
                     },

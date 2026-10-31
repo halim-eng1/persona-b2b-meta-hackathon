@@ -4,6 +4,8 @@ import com.example.persona.R
 import androidx.compose.ui.res.stringResource
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -30,11 +32,13 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ContactCard(
     contact: ContactEntity,
     onEditClicked: () -> Unit,
     onNavigateToChat: ((contactName: String) -> Unit)? = null,
+    onDeleteClicked: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -52,9 +56,11 @@ fun ContactCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clickable(enabled = onNavigateToChat != null) {
-                onNavigateToChat?.invoke(contact.contactName)
-            },
+            .combinedClickable(
+                enabled = onNavigateToChat != null || onDeleteClicked != null,
+                onClick = { onNavigateToChat?.invoke(contact.contactName) },
+                onLongClick = onDeleteClicked
+            ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -111,7 +117,7 @@ fun ContactCard(
                     modifier = Modifier.padding(start = 8.dp)
                 ) {
                     Text(
-                        text = tagEnum.labelAr,
+                        text = stringResource(tagEnum.labelResId),
                         color = badgeTextColor,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
