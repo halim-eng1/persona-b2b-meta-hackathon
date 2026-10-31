@@ -14,11 +14,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.R
 import com.example.persona.features.chats.presentation.list.ConversationItemUiModel
 import com.example.persona.features.orders.domain.EgyptianOrderUtils
 import com.example.persona.ui.components.extractMonogram
@@ -86,7 +88,10 @@ fun ConversationRowItem(
         Spacer(modifier = Modifier.width(14.dp))
 
         // Center Content
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.Start
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -94,20 +99,22 @@ fun ConversationRowItem(
             ) {
                 Text(
                     text = EgyptianOrderUtils.formatContactDisplayName(item.contactName),
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = if (item.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
-                        // BiDi: contact names mix Arabic with Latin (store/brand names)
-                        textDirection = TextDirection.ContentOrRtl
-                    ),
+                    modifier = Modifier.weight(1f, fill = false),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = if (item.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold
+                    ),
+                    textAlign = TextAlign.Start
                 )
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
                     text = item.formattedTime,
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (item.unreadCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (item.unreadCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End
                 )
             }
 
@@ -119,16 +126,14 @@ fun ConversationRowItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = item.lastMessageSnippet,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        // BiDi: snippets mix Arabic text with "AI:"/"You:" prefixes and
-                        // English product names; resolve direction from content
-                        textDirection = TextDirection.ContentOrRtl
-                    ),
-                    color = if (item.unreadCount > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = item.lastMessageSnippet.ifBlank { stringResource(R.string.chats_no_messages) },
+                    modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = if (item.unreadCount > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    textAlign = TextAlign.Start
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))

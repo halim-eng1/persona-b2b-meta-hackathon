@@ -286,9 +286,9 @@
     <!-- ── Theme Preference ───────────────────────────────────────────────────── -->
     <string name="settings_theme_title">Display &amp; Appearance</string>
     <string name="settings_theme_subtitle">Select operational appearance for shop floor or daylight</string>
-    <string name="settings_theme_dark">Dark Mode</string>
+    <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_dark_sub">OLED battery saver, shop terminal</string>
-    <string name="settings_theme_light">Outdoor Mode</string>
+    <string name="settings_theme_light">Light</string>
     <string name="settings_theme_light_sub">High-contrast for direct sunlight</string>
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_system_sub">Follow device appearance</string>
@@ -701,6 +701,7 @@
     <string name="chats_empty_desc">Incoming WhatsApp and Business messages will appear here live</string>
     <string name="chats_empty_search_desc">Try searching for a different name or message</string>
     <string name="chats_empty_clear_search_btn">Clear Search Filter</string>
+    <string name="chats_no_messages">No messages yet</string>
     <string name="chat_filter_all">All Chats</string>
     <string name="chat_filter_main_app">Main WhatsApp</string>
     <string name="chat_filter_business">WhatsApp Business</string>

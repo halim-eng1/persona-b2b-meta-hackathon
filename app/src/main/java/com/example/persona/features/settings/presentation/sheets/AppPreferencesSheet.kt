@@ -14,6 +14,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -30,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.persona.R
 import com.example.persona.features.settings.presentation.AppActions
+import com.example.persona.features.settings.presentation.components.PersonaSelectionCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,25 +111,25 @@ fun AppPreferencesSheet(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    PreferenceCard(
+                    PersonaSelectionCard(
                         title = stringResource(R.string.settings_theme_dark),
-                        subtitle = stringResource(R.string.settings_theme_dark_sub),
                         isSelected = themeMode == "dark",
                         onSelect = { actions.setThemeMode("dark") },
+                        icon = Icons.Default.DarkMode,
                         modifier = Modifier.weight(1f)
                     )
-                    PreferenceCard(
+                    PersonaSelectionCard(
                         title = stringResource(R.string.settings_theme_light),
-                        subtitle = stringResource(R.string.settings_theme_light_sub),
                         isSelected = themeMode == "light",
                         onSelect = { actions.setThemeMode("light") },
+                        icon = Icons.Default.LightMode,
                         modifier = Modifier.weight(1f)
                     )
-                    PreferenceCard(
+                    PersonaSelectionCard(
                         title = stringResource(R.string.settings_theme_system),
-                        subtitle = stringResource(R.string.settings_theme_system_sub),
                         isSelected = themeMode == "system",
                         onSelect = { actions.setThemeMode("system") },
+                        icon = Icons.Default.BrightnessAuto,
                         modifier = Modifier.weight(1f)
                     )
                 }
