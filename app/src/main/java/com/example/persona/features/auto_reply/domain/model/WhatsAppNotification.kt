@@ -28,5 +28,9 @@ data class WhatsAppNotification(
     val mediaFilePath: String? = null,
     val isVoiceTranscriptionFailed: Boolean = false,
     val isPrePersisted: Boolean = false,
-    val burstMessageIds: List<Long> = emptyList()
+    val burstMessageIds: List<Long> = emptyList(),
+    val sbnTag: String? = null,
+    val shortcutId: String? = null,
+    val personUri: String? = null,
+    val resolvedPhoneNumber: String? = null
 )

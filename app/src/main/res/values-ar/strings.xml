@@ -349,6 +349,10 @@
     <string name="chat_ai_paused_banner_global">الرد الآلي العام متوقف — اضغط لتفعيل استثناء لهذه المحادثة</string>
     <string name="chat_ai_paused_banner_single">الرد الآلي متوقف لهذه المحادثة — اضغط للاستئناف</string>
     <string name="chat_active_order_banner">طلب نشط: %s</string>
+    <string name="chat_sheet_active_orders">الطلبات النشطة</string>
+    <string name="chat_sheet_no_active_orders">لا توجد طلبات نشطة حالياً</string>
+    <string name="chat_sheet_order_time">وقت الطلب: %s</string>
+    <string name="chat_sheet_delivery_address">عنوان التوصيل: %s</string>
     <string name="chat_order_cod_amount">%1$d ج.م (دفع عند الاستلام)</string>
     <string name="chat_load_older_messages">تحميل رسائل أقدم (%1$d من %2$d)</string>
     <string name="chat_message_copied_toast">تم نسخ الرسالة إلى الحافظة</string>

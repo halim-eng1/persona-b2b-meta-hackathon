@@ -349,6 +349,10 @@
     <string name="chat_ai_paused_banner_global">Global auto-reply is paused — tap to activate exception for this chat</string>
     <string name="chat_ai_paused_banner_single">Auto-reply paused for this chat — tap to resume</string>
     <string name="chat_active_order_banner">Active Order: %s</string>
+    <string name="chat_sheet_active_orders">Active Orders</string>
+    <string name="chat_sheet_no_active_orders">No active orders</string>
+    <string name="chat_sheet_order_time">Order time: %s</string>
+    <string name="chat_sheet_delivery_address">Delivery Address: %s</string>
     <string name="chat_order_cod_amount">%1$d EGP (COD)</string>
     <string name="chat_load_older_messages">Load older messages (%1$d of %2$d)</string>
     <string name="chat_message_copied_toast">Message copied to clipboard</string>

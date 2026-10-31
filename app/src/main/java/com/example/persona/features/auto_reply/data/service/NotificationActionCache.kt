@@ -82,6 +82,18 @@ object NotificationActionCache {
         return compositeCache[compositeKey]?.action
     }
 
+    /**
+     * Aliases a cached reply action from an old contact name to a new unified contact name.
+     * Ensures manual/auto-reply lookup continues to succeed after contact renaming/merging.
+     */
+    @Synchronized
+    fun aliasContact(sourceClass: String, oldContactName: String, newContactName: String) {
+        val oldKey = buildCompositeKey(sourceClass, oldContactName)
+        val item = compositeCache[oldKey] ?: return
+        val newKey = buildCompositeKey(sourceClass, newContactName)
+        compositeCache[newKey] = item
+    }
+
     /** Retained for explicit clearing if needed; not called on notification dismissal. */
     @Synchronized
     fun remove(notificationKey: String) {

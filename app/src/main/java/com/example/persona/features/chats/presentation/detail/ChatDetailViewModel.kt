@@ -99,7 +99,8 @@ class ChatDetailViewModel @Inject constructor(
                     status = it.status,
                     orderDetails = it.orderDetails ?: "تفاصيل الطلب غير مسجلة",
                     totalAmount = it.totalAmount,
-                    deliveryAddress = it.deliveryAddress
+                    deliveryAddress = it.deliveryAddress,
+                    createdAt = it.timestamp
                 )
             }
         }

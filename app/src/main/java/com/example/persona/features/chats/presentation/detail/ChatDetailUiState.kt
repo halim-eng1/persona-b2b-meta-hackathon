@@ -48,7 +48,8 @@ data class ActiveOrderSummary(
     val status: String,
     val orderDetails: String,
     val totalAmount: Double,
-    val deliveryAddress: String? = null
+    val deliveryAddress: String? = null,
+    val createdAt: Long = 0L
 )
 
 data class ChatMessageUiModel(

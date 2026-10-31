@@ -7,6 +7,7 @@ import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.Converters
 import com.example.persona.core.database.dao.BusinessKnowledgeDao
 import com.example.persona.core.database.dao.ChatHistoryDao
+import com.example.persona.core.database.dao.ContactDao
 import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.dao.FailedQueryDao
 import com.example.persona.core.database.dao.OrderDao
@@ -18,6 +19,7 @@ import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.features.auto_reply.data.service.IncomingMessageDispatcher
 import com.example.persona.features.auto_reply.data.service.WhatsAppMediaExtractor
+import com.example.persona.features.contacts.data.resolver.ThreadIdentityResolver
 import com.example.persona.features.auto_reply.data.repository.NotificationProcessorImpl
 import com.example.persona.features.auto_reply.data.repository.SemanticRetrievalRepository
 import com.example.persona.features.auto_reply.domain.modifier.StylePostProcessor
@@ -71,6 +73,7 @@ class AutoReplyOrchestrator @Inject constructor(
     private val orderDao: OrderDao,
     private val businessKnowledgeDao: BusinessKnowledgeDao,
     private val conversationMetadataDao: ConversationMetadataDao,
+    private val contactDao: ContactDao? = null,
     @ApplicationContext private val context: Context,
     @ApplicationScope private val scope: CoroutineScope,
     private val mediaExtractor: WhatsAppMediaExtractor? = null,
@@ -81,7 +84,8 @@ class AutoReplyOrchestrator @Inject constructor(
     private val cloudflareClefClient: CloudflareClefClient = CloudflareClefClient(),
     private val liquidDecisionClient: LiquidDecisionClient = LiquidDecisionClient(),
     private val localDecisionClassifier: LocalDecisionClassifier = LocalDecisionClassifier(),
-    private val persistentDebounceBuffer: PersistentDebounceBuffer = PersistentDebounceBuffer(context)
+    private val persistentDebounceBuffer: PersistentDebounceBuffer = PersistentDebounceBuffer(context),
+    private val threadIdentityResolver: ThreadIdentityResolver? = null
 ) {
     companion object {
         private const val TAG = "AutoReplyOrchestrator"
@@ -343,8 +347,19 @@ class AutoReplyOrchestrator @Inject constructor(
         val cutOff = System.currentTimeMillis() - 10 * 60 * 1000L
         receivedNotifications.removeIf { it.postTime < cutOff }
 
-        // 1. Immediate persistence for zero data loss & live UI responsiveness
-        val processed = processor.process(notification)
+        // 1. Resolve contact identity & perform cascade thread merge across title/phone transitions
+        val resolver = threadIdentityResolver ?: if (contactDao != null) {
+            ThreadIdentityResolver(contactDao, conversationMetadataDao, chatHistoryDao, orderDao)
+        } else null
+        val resolvedIdentity = resolver?.resolveAndMerge(notification)
+        val effectiveTitle = resolvedIdentity?.unifiedContactName ?: notification.title
+        val effectiveNotification = notification.copy(
+            title = effectiveTitle,
+            resolvedPhoneNumber = resolvedIdentity?.resolvedPhoneNumber ?: notification.resolvedPhoneNumber
+        )
+
+        // 2. Immediate persistence for zero data loss & live UI responsiveness
+        val processed = processor.process(effectiveNotification)
         val sourceClassStr = processed.sourceClass.name
         val chatHistoryEntity = ChatHistoryEntity(
             contactName = processed.contactName,
@@ -371,7 +386,7 @@ class AutoReplyOrchestrator @Inject constructor(
             incrementUnread = true
         )
 
-        // 2. Gate check: allowed if not individually paused AND (Global is ON or explicitly overridden ON for this specific chat)
+        // 3. Gate check: allowed if not individually paused AND (Global is ON or explicitly overridden ON for this specific chat)
         val isGlobalAutoReplyEnabled = prefsRepository.isAutoReplyEnabledSync()
         val convMeta = conversationMetadataDao.getConversation(processed.contactName, sourceClassStr)
         val isContactPaused = convMeta?.isAiPaused == true
@@ -386,11 +401,11 @@ class AutoReplyOrchestrator @Inject constructor(
             return
         }
 
-        // 3. Sliding Debounce Window with Micro-Extension
+        // 4. Sliding Debounce Window with Micro-Extension
         val stylePrefs = prefsRepository.getStylePreferencesSync()
         val delaySec = stylePrefs.replyDelaySeconds
         if (delaySec <= 0) {
-            val singlePrePersisted = notification.copy(
+            val singlePrePersisted = effectiveNotification.copy(
                 isPrePersisted = true,
                 burstMessageIds = listOf(insertedId)
             )
@@ -411,7 +426,7 @@ class AutoReplyOrchestrator @Inject constructor(
                     targetDeadlineMs = now + baseDelayMs
                 )
             }
-            turn.notifications.add(notification)
+            turn.notifications.add(effectiveNotification)
             turn.insertedIds.add(insertedId)
 
             if (!isNewTurn) {

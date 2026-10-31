@@ -25,6 +25,7 @@ import com.example.persona.features.auto_reply.data.diagnostics.NotificationSour
 import com.example.persona.features.auto_reply.domain.model.ExtraMessage
 import com.example.persona.features.auto_reply.domain.model.WhatsAppNotification
 import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
+import com.example.persona.features.auto_reply.service.NotificationParser
 import com.example.persona.features.chat_import.data.embedding.HuggingFaceTokenizer
 import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
 import dagger.hilt.android.AndroidEntryPoint
@@ -199,8 +200,9 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             "Notification accepted: source=$sourceClass title=$title key=${sbn.key}"
         )
 
-        // Extract phone number from notification metadata & update ContactDao
-        val extractedPhone = extractWhatsAppPhoneFromNotification(sbn)
+        // Extract notification metadata & phone number via NotificationParser
+        val parsedMetadata = NotificationParser.parseMetadata(this, sbn, title)
+        val extractedPhone = parsedMetadata.resolvedPhone
         if (!extractedPhone.isNullOrBlank() && title.isNotBlank() && !SELF_REPLY_TITLES.any { it.equals(title.trim(), ignoreCase = true) }) {
             serviceScope.launch(Dispatchers.IO) {
                 runCatching {
@@ -338,7 +340,11 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 extraMessages = extraMessagesList,
                 sourceClass = sourceClass,
                 mediaFilePath = mediaFilePath,
-                isVoiceTranscriptionFailed = isVoiceFailed
+                isVoiceTranscriptionFailed = isVoiceFailed,
+                sbnTag = parsedMetadata.sbnTag,
+                shortcutId = parsedMetadata.shortcutId,
+                personUri = parsedMetadata.personUri,
+                resolvedPhoneNumber = parsedMetadata.resolvedPhone
             )
 
             messageDispatcher.dispatch(whatsappNotification)
@@ -448,53 +454,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     }
 
     fun extractWhatsAppPhoneFromNotification(sbn: StatusBarNotification): String? {
-        val extras = sbn.notification?.extras
-        val tag = sbn.tag
-        val shortcutId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            sbn.notification?.shortcutId
-        } else null
-        val subText = extras?.getString("android.subText") ?: extras?.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
-
-        var personKey: String? = null
-        var personUri: String? = null
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && extras != null) {
-            val parcelableMessages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
-            if (parcelableMessages != null) {
-                for (parcelable in parcelableMessages) {
-                    if (parcelable is android.os.Bundle) {
-                        val person = parcelable.getParcelable<android.app.Person>("sender_person")
-                        if (person != null) {
-                            if (person.key != null) personKey = person.key
-                            if (person.uri != null) personUri = person.uri
-                        }
-                    }
-                }
-            }
-        }
-
-        Log.d(
-            "NLS_PHONE",
-            "Notification metadata inspected: sbn.tag=$tag, shortcutId=$shortcutId, subText=$subText, Person.key=$personKey, Person.uri=$personUri"
-        )
-
-        val candidates = listOfNotNull(tag, shortcutId, personUri, personKey, subText)
-        for (candidate in candidates) {
-            val phone = extractPhoneFromToken(candidate)
-            if (!phone.isNullOrBlank()) {
-                return phone
-            }
-        }
-
-        // Try querying phone number directly from personUri if it's a contacts URI
-        if (!personUri.isNullOrBlank() && personUri.startsWith("content://com.android.contacts/")) {
-            val contactPhone = resolvePhoneFromContactsUri(personUri)
-            if (!contactPhone.isNullOrBlank()) {
-                return contactPhone
-            }
-        }
-
-        return null
+        val title = sbn.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
+        return NotificationParser.parseMetadata(this, sbn, title).resolvedPhone
     }
 
     private fun resolvePhoneFromContactsUri(uriString: String): String? {

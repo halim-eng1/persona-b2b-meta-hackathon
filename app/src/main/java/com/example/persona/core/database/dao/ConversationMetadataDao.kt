@@ -102,6 +102,41 @@ interface ConversationMetadataDao {
     """)
     suspend fun getLatestConversationForContact(contactName: String): ConversationMetadataEntity?
 
+    @Query("""
+        SELECT * FROM conversation_metadata
+        WHERE last_notification_key LIKE '%' || :tag || '%'
+        LIMIT 1
+    """)
+    suspend fun getConversationByNotificationTag(tag: String): ConversationMetadataEntity?
+
+    @Query("UPDATE conversation_metadata SET contact_name = :newContactName WHERE contact_name = :oldContactName")
+    suspend fun reassignConversationContact(oldContactName: String, newContactName: String): Int
+
+    @Transaction
+    suspend fun mergeConversationContacts(oldContactName: String, newContactName: String, sourceClass: String) {
+        val oldConv = getConversation(oldContactName, sourceClass) ?: return
+        val newConv = getConversation(newContactName, sourceClass)
+        if (newConv == null) {
+            deleteConversation(oldContactName, sourceClass)
+            upsert(oldConv.copy(contactName = newContactName))
+        } else {
+            val useOldMessage = oldConv.lastMessageTimestamp > newConv.lastMessageTimestamp
+            upsert(
+                newConv.copy(
+                    unreadCount = newConv.unreadCount + oldConv.unreadCount,
+                    isAiPaused = newConv.isAiPaused || oldConv.isAiPaused,
+                    isAiOverrideEnabled = newConv.isAiOverrideEnabled || oldConv.isAiOverrideEnabled,
+                    needsHumanAttention = newConv.needsHumanAttention || oldConv.needsHumanAttention,
+                    lastNotificationKey = if (useOldMessage) oldConv.lastNotificationKey else newConv.lastNotificationKey,
+                    lastMessageText = if (useOldMessage) oldConv.lastMessageText else newConv.lastMessageText,
+                    lastMessageSenderType = if (useOldMessage) oldConv.lastMessageSenderType else newConv.lastMessageSenderType,
+                    lastMessageTimestamp = maxOf(newConv.lastMessageTimestamp, oldConv.lastMessageTimestamp)
+                )
+            )
+            deleteConversation(oldContactName, sourceClass)
+        }
+    }
+
     /**
      * Deletes the conversation metadata row for a specific contact and source class.
      */

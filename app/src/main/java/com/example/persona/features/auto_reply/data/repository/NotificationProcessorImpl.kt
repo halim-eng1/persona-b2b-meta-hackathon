@@ -37,7 +37,8 @@ class NotificationProcessorImpl @Inject constructor(
             postTime = notification.postTime,
             sourceClass = notification.sourceClass,
             mediaFilePath = notification.mediaFilePath,
-            isVoiceTranscriptionFailed = notification.isVoiceTranscriptionFailed
+            isVoiceTranscriptionFailed = notification.isVoiceTranscriptionFailed,
+            resolvedPhoneNumber = notification.resolvedPhoneNumber
         )
     }
 

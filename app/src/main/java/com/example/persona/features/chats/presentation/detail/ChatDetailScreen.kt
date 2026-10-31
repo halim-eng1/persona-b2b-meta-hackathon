@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -47,6 +46,7 @@ import com.example.persona.features.chats.presentation.detail.components.AiThink
 import com.example.persona.features.chats.presentation.detail.components.ChatComposerBar
 import com.example.persona.features.chats.presentation.detail.components.ClearChatDialog
 import com.example.persona.features.chats.presentation.detail.components.CompactChatTopBar
+import com.example.persona.features.chats.presentation.detail.components.ContactQuickProfileSheet
 import com.example.persona.features.chats.presentation.detail.components.DateHeaderChip
 import com.example.persona.features.chats.presentation.detail.components.ExportChatDialog
 import com.example.persona.features.chats.presentation.detail.components.MessageBubble
@@ -73,141 +73,34 @@ fun ChatDetailScreen(
 
     // Track whether initial scroll to bottom has completed for the active contact
     var isInitialScrolled by remember(state.contactName) { mutableStateOf(false) }
-    var previousMessageCount by remember(state.contactName) { mutableIntStateOf(0) }
     var unreadCountBelow by remember(state.contactName) { mutableIntStateOf(0) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showClearChatDialog by remember { mutableStateOf(false) }
     var showContactProfileSheet by remember { mutableStateOf(false) }
 
     if (showContactProfileSheet) {
-        ModalBottomSheet(
+        ContactQuickProfileSheet(
+            contactName = state.contactName,
+            sourceClass = state.sourceClass,
+            phoneNumber = state.contactPhoneNumber,
+            activeOrder = state.activeOrder,
             onDismissRequest = { showContactProfileSheet = false },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp)
-                    .navigationBarsPadding(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    PersonaAvatar(
-                        name = state.contactName,
-                        size = 52.dp,
-                        shape = AvatarShape.ROUNDED
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = EgyptianOrderUtils.formatContactDisplayName(state.contactName),
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            val localizedSource = when (state.sourceClass.uppercase()) {
-                                "BUSINESS" -> stringResource(R.string.chat_badge_business)
-                                "MAIN_APP" -> stringResource(R.string.chat_badge_main)
-                                else -> state.sourceClass
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = when (state.sourceClass.uppercase()) {
-                                    "BUSINESS" -> chatColors.badgeBusiness
-                                    "MAIN_APP" -> chatColors.badgeMainApp
-                                    else -> chatColors.badgeOther
-                                }
-                            ) {
-                                Text(
-                                    text = localizedSource,
-                                    color = chatColors.onBadge,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    ),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                        val phone = state.contactPhoneNumber ?: stringResource(R.string.chat_profile_no_phone)
-                        Text(
-                            text = phone,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                    val activeOrder = state.activeOrder
-                    if (activeOrder != null) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text(
-                                    text = stringResource(R.string.chat_active_order_banner, activeOrder.id.toString()),
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (activeOrder.orderDetails.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = activeOrder.orderDetails,
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            showContactProfileSheet = false
-                            viewModel.onManualTakeover()
-                            WhatsAppLauncher.openChat(
-                                context = context,
-                                phoneNumber = state.contactPhoneNumber,
-                                contactName = state.contactName,
-                                preferBusiness = (state.sourceClass.uppercase() == "BUSINESS")
-                            )
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.chat_toast_whatsapp_takeover),
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = stringResource(R.string.chat_open_whatsapp))
-                    }
-                }
+            onOpenWhatsApp = {
+                showContactProfileSheet = false
+                viewModel.onManualTakeover()
+                WhatsAppLauncher.openChat(
+                    context = context,
+                    phoneNumber = state.contactPhoneNumber,
+                    contactName = state.contactName,
+                    preferBusiness = (state.sourceClass.uppercase() == "BUSINESS")
+                )
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.chat_toast_whatsapp_takeover),
+                    Toast.LENGTH_SHORT
+                ).show()
             }
-        }
+        )
     }
 
     if (showClearChatDialog) {
@@ -263,44 +156,28 @@ fun ChatDetailScreen(
         }
     }
 
+    val messagesCount = state.messages.size
+    val totalItems = messagesCount + if (state.isAiGenerating) 1 else 0
+
     // Master Scroll Orchestrator:
     // 1. Initial Load: Instantly positions directly at the bottom without top-message flicker.
-    // 2. Incoming Messages: If the user was viewing the bottom, smooth auto-scroll reveals the message.
-    // 3. History Reading: If the user scrolled up, keeps reading position stable and increments unread badge.
-    LaunchedEffect(state.messages.size, state.isAiGenerating, imeBottom) {
-        val totalItems = state.messages.size + if (state.isAiGenerating) 1 else 0
-        if (totalItems <= 0) return@LaunchedEffect
-
-        if (!isInitialScrolled) {
-            // First load: immediate jump to bottom with zero visual jitter
-            listState.scrollToItem(totalItems - 1)
-            isInitialScrolled = true
-            previousMessageCount = state.messages.size
-        } else {
-            val currentCount = state.messages.size
-            val newMessagesCount = currentCount - previousMessageCount
-
-            if (newMessagesCount > 0) {
-                val layoutInfo = listState.layoutInfo
-                val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-                val wasAtBottom = (lastVisibleIndex >= previousMessageCount - 1) || !listState.canScrollForward
-                val isOutgoingFromMe = state.messages.lastOrNull()?.isFromUser == true
-
-                if (wasAtBottom || isOutgoingFromMe) {
-                    listState.animateScrollToItem(totalItems - 1)
-                    unreadCountBelow = 0
-                } else {
-                    unreadCountBelow += newMessagesCount
-                }
-                previousMessageCount = currentCount
-            } else if (newMessagesCount < 0) {
-                previousMessageCount = currentCount
+    // 2. Incoming Messages / AI Replies / Generation Bubble: Smooth auto-scroll reveals latest item.
+    LaunchedEffect(messagesCount, state.isAiGenerating) {
+        if (totalItems > 0) {
+            if (!isInitialScrolled) {
+                listState.scrollToItem(totalItems - 1)
+                isInitialScrolled = true
             } else {
-                // AI generating state or keyboard size changed while at the bottom
-                if (isAtBottom || !listState.canScrollForward) {
-                    listState.animateScrollToItem(totalItems - 1)
-                }
+                listState.animateScrollToItem(totalItems - 1)
             }
+            unreadCountBelow = 0
+        }
+    }
+
+    // Keep anchored to bottom when keyboard (IME) opens
+    LaunchedEffect(imeBottom) {
+        if (totalItems > 0 && imeBottom > 0) {
+            listState.animateScrollToItem(totalItems - 1)
         }
     }
 
@@ -422,76 +299,6 @@ fun ChatDetailScreen(
             }
         }
 
-        // Sticky Active Order Banner
-        AnimatedVisibility(visible = state.activeOrder != null) {
-            state.activeOrder?.let { order ->
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
-                    tonalElevation = 2.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocalShipping,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                val statusLabel = when (order.status.uppercase()) {
-                                    "PENDING" -> stringResource(R.string.order_status_pending)
-                                    "CONFIRMED", "IN_PREPARATION" -> stringResource(R.string.order_status_in_prep)
-                                    "SHIPPED" -> stringResource(R.string.order_status_shipped)
-                                    "DELIVERED" -> stringResource(R.string.order_status_delivered)
-                                    "CANCELLED" -> stringResource(R.string.order_status_cancelled)
-                                    else -> order.status
-                                }
-                                Text(
-                                    text = stringResource(R.string.chat_active_order_banner, statusLabel),
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                )
-                                Text(
-                                    text = stringResource(R.string.chat_order_cod_amount, order.totalAmount.toInt()),
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                )
-                            }
-                            if (order.orderDetails.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = order.orderDetails,
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                    ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         // Messages Stream
         Box(
             modifier = Modifier
@@ -500,9 +307,7 @@ fun ChatDetailScreen(
         ) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .alpha(if (isInitialScrolled || state.messages.isEmpty()) 1f else 0f),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -594,9 +399,9 @@ fun ChatDetailScreen(
                     unreadCount = unreadCountBelow,
                     onClick = {
                         coroutineScope.launch {
-                            val totalItems = state.messages.size + if (state.isAiGenerating) 1 else 0
-                            if (totalItems > 0) {
-                                listState.animateScrollToItem(totalItems - 1)
+                            val count = state.messages.size + if (state.isAiGenerating) 1 else 0
+                            if (count > 0) {
+                                listState.animateScrollToItem(count - 1)
                             }
                             unreadCountBelow = 0
                         }
