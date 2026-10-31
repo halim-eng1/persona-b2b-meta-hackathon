@@ -107,7 +107,7 @@ fun OrderCardDetails(
                                 .padding(4.dp)
                         ) {
                             Text(
-                                text = if (isExpanded) "عرض أقل" else "عرض المزيد",
+                                text = if (isExpanded) stringResource(R.string.orders_card_show_less) else stringResource(R.string.orders_card_show_more),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -190,7 +190,7 @@ fun OrderCardDetails(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "ملاحظة التجهيز للمساعد الآلي: \"$merchantNote\"",
+                        text = stringResource(R.string.orders_card_merchant_prep_note, merchantNote),
                         style = MaterialTheme.typography.labelSmall.copy(
                             textDirection = TextDirection.ContentOrRtl
                         ),
@@ -204,7 +204,7 @@ fun OrderCardDetails(
         // Custom notes from customer
         if (!customNotes.isNullOrBlank()) {
             Text(
-                text = "ملاحظات العميل: $customNotes",
+                text = stringResource(R.string.orders_card_customer_notes, customNotes),
                 style = MaterialTheme.typography.labelSmall.copy(
                     textDirection = TextDirection.ContentOrRtl
                 ),
@@ -236,7 +236,7 @@ fun OrderCardDetails(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "سبب الإلغاء: $cancellationReason",
+                        text = stringResource(R.string.orders_card_cancel_reason, cancellationReason),
                         style = MaterialTheme.typography.labelSmall.copy(
                             textDirection = TextDirection.ContentOrRtl,
                             fontWeight = FontWeight.Bold

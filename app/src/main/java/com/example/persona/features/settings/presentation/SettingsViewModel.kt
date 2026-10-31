@@ -1,5 +1,8 @@
 package com.example.persona.features.settings.presentation
 
+import androidx.annotation.StringRes
+import com.example.persona.R
+
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,10 +34,15 @@ import java.net.UnknownHostException
 import java.util.Collections
 import javax.inject.Inject
 
-enum class ThresholdLevel(val displayName: String, val threshold: Float) {
-    CONSERVATIVE("Conservative", 0.85f),
-    BALANCED("Balanced", 0.75f),
-    AGGRESSIVE("Aggressive", 0.65f);
+enum class ThresholdLevel(
+    val displayName: String,
+    val threshold: Float,
+    @StringRes val labelResId: Int = R.string.settings_threshold_balanced,
+    @StringRes val descResId: Int = R.string.settings_threshold_balanced_desc
+) {
+    CONSERVATIVE("Conservative", 0.85f, R.string.settings_threshold_conservative, R.string.settings_threshold_conservative_desc),
+    BALANCED("Balanced", 0.75f, R.string.settings_threshold_balanced, R.string.settings_threshold_balanced_desc),
+    AGGRESSIVE("Aggressive", 0.65f, R.string.settings_threshold_aggressive, R.string.settings_threshold_aggressive_desc);
 
     companion object {
         fun fromThreshold(value: Float): ThresholdLevel = when {

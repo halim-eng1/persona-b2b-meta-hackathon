@@ -60,6 +60,7 @@ fun CreateOrderDialog(
 
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     val subtotal = EgyptianOrderUtils.parseEgyptianDecimal(totalAmountText) ?: 0.0
     val shipping = EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) ?: 0.0
@@ -126,7 +127,7 @@ fun CreateOrderDialog(
                         validationError = null
                     },
                     label = { Text(stringResource(R.string.orders_customer_name_label)) },
-                    placeholder = { Text("مثال: محمد أحمد") },
+                    placeholder = { Text(stringResource(R.string.orders_customer_name_placeholder)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth(),
@@ -141,7 +142,7 @@ fun CreateOrderDialog(
                         customerPhone = it
                         validationError = null
                     },
-                    label = { Text("رقم الهاتف المحمول (11 رقم) *") },
+                    label = { Text(stringResource(R.string.orders_customer_phone_label)) },
                     placeholder = { Text("01012345678") },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Phone,
@@ -164,8 +165,8 @@ fun CreateOrderDialog(
                         value = selectedGov,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("المحافظة") },
-                        placeholder = { Text("اختر المحافظة...") },
+                        label = { Text(stringResource(R.string.orders_input_gov_label)) },
+                        placeholder = { Text(stringResource(R.string.orders_input_gov_placeholder)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = govExpanded) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -193,8 +194,8 @@ fun CreateOrderDialog(
                 OutlinedTextField(
                     value = deliveryAddress,
                     onValueChange = { deliveryAddress = it },
-                    label = { Text("عنوان التوصيل بالتفصيل") },
-                    placeholder = { Text("الشارع، رقم العمارة، الشقة، علامة مميزة") },
+                    label = { Text(stringResource(R.string.orders_input_address_label)) },
+                    placeholder = { Text(stringResource(R.string.orders_input_address_placeholder)) },
                     minLines = 2,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth(),
@@ -209,8 +210,8 @@ fun CreateOrderDialog(
                         orderDetails = it
                         validationError = null
                     },
-                    label = { Text("محتويات الطلب والأصناف *") },
-                    placeholder = { Text("مثال: 2x تي شيرت قطن أسود L\n1x قميص كتان أبيض XL") },
+                    label = { Text(stringResource(R.string.orders_input_items_label)) },
+                    placeholder = { Text(stringResource(R.string.orders_input_items_placeholder)) },
                     minLines = 3,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth(),
@@ -229,7 +230,7 @@ fun CreateOrderDialog(
                             totalAmountText = it
                             validationError = null
                         },
-                        label = { Text("سعر المنتجات (ج.م) *") },
+                        label = { Text(stringResource(R.string.orders_input_products_price_label)) },
                         placeholder = { Text("0.00") },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Decimal,
@@ -245,7 +246,7 @@ fun CreateOrderDialog(
                             shippingFeeText = it
                             validationError = null
                         },
-                        label = { Text("الشحن (ج.م)") },
+                        label = { Text(stringResource(R.string.orders_input_shipping_fee_label)) },
                         placeholder = { Text("0.00") },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Decimal,
@@ -277,7 +278,7 @@ fun CreateOrderDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "إجمالي التحصيل عند الاستلام: ${EgyptianOrderUtils.formatMoney(codTotal)} ج.م (شامل الشحن)",
+                            text = stringResource(R.string.orders_total_cod_summary, EgyptianOrderUtils.formatMoney(codTotal)),
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                             color = OrderGreen
                         )
@@ -290,7 +291,7 @@ fun CreateOrderDialog(
                     value = customNotes,
                     onValueChange = { customNotes = it },
                     label = { Text(stringResource(R.string.orders_customer_notes_label)) },
-                    placeholder = { Text("ملاحظات خاصة بالتسليم أو المواعيد") },
+                    placeholder = { Text(stringResource(R.string.orders_input_notes_placeholder)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
@@ -312,27 +313,27 @@ fun CreateOrderDialog(
                         val parsedShipping = EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) ?: 0.0
 
                         if (name.isEmpty() && phone.isEmpty()) {
-                            validationError = "يرجى كتابة اسم العميل أو رقم الهاتف"
+                            validationError = context.getString(R.string.orders_error_name_or_phone_required)
                             return@Button
                         }
                         if (phone.isNotEmpty() && !EgyptianOrderUtils.isValidEgyptianMobile(phone)) {
-                            validationError = "رقم الهاتف غير صالح. يجب أن يتكون من 11 رقماً ويبدأ بـ 010 أو 011 أو 012 أو 015"
+                            validationError = context.getString(R.string.orders_error_invalid_egyptian_phone)
                             return@Button
                         }
                         if (details.isEmpty()) {
-                            validationError = "يرجى إدخال أصناف ومحتويات الطلب"
+                            validationError = context.getString(R.string.orders_error_items_required)
                             return@Button
                         }
                         if (totalAmountText.isNotBlank() && EgyptianOrderUtils.parseEgyptianDecimal(totalAmountText) == null) {
-                            validationError = "يرجى إدخال سعر صحيح للمنتجات"
+                            validationError = context.getString(R.string.orders_error_invalid_price)
                             return@Button
                         }
                         if (shippingFeeText.isNotBlank() && EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) == null) {
-                            validationError = "يرجى إدخال قيمة صحيحة لمصاريف الشحن"
+                            validationError = context.getString(R.string.orders_error_invalid_shipping)
                             return@Button
                         }
                         if (parsedTotal < 0.0 || parsedShipping < 0.0) {
-                            validationError = "لا يمكن أن تكون المبالغ المالية بالسالب"
+                            validationError = context.getString(R.string.orders_error_negative_amounts)
                             return@Button
                         }
 
@@ -358,7 +359,7 @@ fun CreateOrderDialog(
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "إضافة الطلب للنظام",
+                        text = stringResource(R.string.orders_create_btn),
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.labelLarge
                     )

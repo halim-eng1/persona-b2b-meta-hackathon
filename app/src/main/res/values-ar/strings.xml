@@ -640,4 +640,211 @@
     <string name="notification_key_evicted_body">تم استبعاد المفتاح %1$s بسبب: %2$s، والتحويل للمفتاح التالي في الحوض.</string>
     <string name="notification_provider_tripped_title">🚨 عزل مزود الذكاء الاصطناعي: %s</string>
     <string name="notification_provider_tripped_body">تم عزل مزود %1$s لمدة %2$d دقائق بسبب: %3$s. تم التحويل الفوري لمزود بديل في 0ms.</string>
+
+    <!-- Sprint 1: Provider Guide Details -->
+    <string name="guide_close_desc">إغلاق</string>
+    <string name="guide_open_portal_desc">فتح المنصة</string>
+    <string name="guide_qwen_step_1">ادخل إلى منصة Qwen Cloud عبر الرابط الرسمي وسجل الدخول باستخدام حسابك.</string>
+    <string name="guide_qwen_step_2">من القائمة الجانبية في Model Studio، توجه إلى قسم مفاتيح الواجهة (API-KEY).</string>
+    <string name="guide_qwen_step_3">اضغط على Create API-KEY وانسخ الرمز السري المتولد فوراً (يبدأ بـ sk-...).</string>
+    <string name="guide_qwen_step_4">يدعم جميع نماذج Qwen 3.8 Max و Qwen 3.8 Flash و DeepSeek v4.1 السريعة.</string>
+    <string name="guide_qwen_tips">تأكد من حفظ المفتاح؛ يتيح لك التطبيق تدوير عدة مفاتيح مجانية لضمان استمرار الخدمة دون انقطاع.</string>
+
+    <string name="guide_gemini_step_1">افتح رابط منصة Google AI Studio وسجل الدخول باستخدام حساب Google الخاص بك.</string>
+    <string name="guide_gemini_step_2">اضغط على زر (Get API key) في الزاوية العلوية ثم اختر (Create API key).</string>
+    <string name="guide_gemini_step_3">اختر مشروع Google Cloud جديد أو قائم، ثم انسخ المفتاح الذي يبدأ بـ AIzaSy...</string>
+    <string name="guide_gemini_step_4">يمنحك وصولاً مجانياً سخياً لنماذج Gemini 3.1 Flash-Lite و 3.5 Flash-Lite و 3.8 Flash.</string>
+    <string name="guide_gemini_tips">مفاتيح Gemini مجانية وسريعة جداً وتدعم معالجة الصور والنصوص بجودة فائقة.</string>
+
+    <string name="guide_groq_step_1">سجل الدخول إلى GroqCloud Console عبر حساب Google أو GitHub مجاناً.</string>
+    <string name="guide_groq_step_2">من القائمة الجانبية اضغط على تبويب (API Keys) ثم زر (Create API Key).</string>
+    <string name="guide_groq_step_3">اكتب اسماً للمفتاح ثم انسخ الرمز المولد (يبدأ بـ gsk_...).</string>
+    <string name="guide_groq_step_4">يوفر سرعة استجابة فائقة البرق مع معالجات LPU لنماذج GPT-OSS و Qwen 3.8.</string>
+    <string name="guide_groq_tips">أسرع استجابة زمنية (TTFT) على الإطلاق، مثالية للرد الفوري على رسائل العملاء.</string>
+
+    <string name="guide_nvidia_step_1">ادخل إلى NVIDIA Build وسجل الدخول بحساب مطور NVIDIA Developer مجاناً.</string>
+    <string name="guide_nvidia_step_2">اختر نموذج Nemotron (مثل Nemotron 3 Ultra 550B أو Lightning).</string>
+    <string name="guide_nvidia_step_3">اضغط على زر (Get API Key) وأنشئ مفتاحاً سرياً جديداً (يبدأ بـ nvapi-...).</string>
+    <string name="guide_nvidia_step_4">تحصل على رصيد ترحيبي قدره 1000 نقطة لتشغيل أضخم النماذج المعرفية المؤسسية.</string>
+    <string name="guide_nvidia_tips">نماذج Nemotron فائقة الذكاء وممتازة للتفاوض المعقد واستخراج الطلبات.</string>
+
+    <string name="guide_openrouter_step_1">سجل الدخول إلى بوابة OpenRouter عبر حساب Google أو GitHub.</string>
+    <string name="guide_openrouter_step_2">انتقل إلى صفحة المفاتيح (Keys) ثم اضغط على (Create Key).</string>
+    <string name="guide_openrouter_step_3">انسخ المفتاح السري الذي يبدأ بـ (sk-or-v1-...).</string>
+    <string name="guide_openrouter_step_4">يدعم تلقائياً مئات النماذج المجانية والمدفوعة الدائمة مثل Nemotron Free و Liquid Free.</string>
+    <string name="guide_openrouter_tips">البديل الاحتياطي الأمثل (Failover Gateway) الذي يضمن عدم توقف الردود أبداً.</string>
+
+    <string name="guide_cloudflare_step_1">ادخل إلى لوحة تحكم Cloudflare وتوجه إلى قسم (Workers &amp; Pages) ثم (AI).</string>
+    <string name="guide_cloudflare_step_2">انسخ معرّف الحساب (Account ID) الظاهر في الشريط الجانبي الأيمن وألصقه في حقل Account ID.</string>
+    <string name="guide_cloudflare_step_3">اضغط على (Manage API Tokens) وأنشئ توكن جديد بصلاحية (Workers AI Read).</string>
+    <string name="guide_cloudflare_step_4">انسخ التوكن السري (يبدأ بـ cfut_...) وأضفه في قائمة مفاتيح الـ API.</string>
+    <string name="guide_cloudflare_tips">يتطلب Cloudflare Workers AI كلاً من Account ID و API Token للعمل مع نماذج Clef Flash و Clef Omni.</string>
+
+    <string name="guide_liquid_step_1">ادخل إلى بوابة مطوري Liquid AI وسجل الدخول بحسابك.</string>
+    <string name="guide_liquid_step_2">انتقل إلى قسم API Credentials وأنشئ مفتاحاً جديداً (يبدأ بـ liquid_...).</string>
+    <string name="guide_liquid_step_3">انسخ المفتاح السري وألصقه في التطبيق.</string>
+    <string name="guide_liquid_step_4">يدعم محرك اتخاذ القرار الفوري ونماذج d1 و d1:latest ذات زمن الاستجابة فائق الصغر.</string>
+    <string name="guide_liquid_tips">يعمل كحارس بوابات (Gatekeeper) لتصنيف نية العميل وكشف الشكاوى العاجلة خلال أقل من 800ms.</string>
+
+    <string name="guide_nara_step_1">ادخل إلى بوابة Nara Router وأنشئ حساب مستخدم جديد.</string>
+    <string name="guide_nara_step_2">توجه إلى إدارة مفاتيح API واستخرج مفتاحاً جديداً (يبدأ بـ sk-nry-...).</string>
+    <string name="guide_nara_step_3">انسخ المفتاح وضعه في قائمة مفاتيح التطبيق.</string>
+    <string name="guide_nara_step_4">يدعم نموذج laguna-s-2.1 المخصص للغة العربية والمعاملات.</string>
+    <string name="guide_nara_tips">نموذج عربي مخصص ومدرب بكفاءة عالية على اللهجات العربية وتجربة التجارة الإلكترونية.</string>
+
+    <string name="guide_default_step_1">سجل الدخول إلى المنصة الرسمية للمزود.</string>
+    <string name="guide_default_step_2">انتقل إلى إعدادات API وأنشئ مفتاحاً جديداً.</string>
+    <string name="guide_default_step_3">انسخ المفتاح وضعه داخل التطبيق.</string>
+    <string name="guide_default_tips">يمكنك إضافة أكثر من مفتاح لنفس المزود لتوزيع الحمل وتجنب حدود الاستخدام.</string>
+
+    <!-- Sprint 1: System Health & Maintenance -->
+    <string name="settings_perm_notification_disabled">غير مفعلة (مطلوبة للرد الآلي)</string>
+    <string name="settings_perm_battery_title">استثناء توفير الطاقة والبطارية</string>
+    <string name="settings_perm_battery_ok">مستثناة (حماية من القتل في الخلفية)</string>
+    <string name="settings_perm_battery_missing">غير مستثناة (قد يتوقف التطبيق بعد قفل الشاشة)</string>
+    <string name="settings_perm_autostart_title">التشغيل التلقائي مع فتح الهاتف</string>
+    <string name="settings_perm_autostart_ok">مؤكد ومفعل</string>
+    <string name="settings_routing_media_desc">يتيح قراءة الصور والرسائل الصوتية الواردة ومعالجتها بنماذج الذكاء الاصطناعي محلياً.</string>
+    <string name="settings_hours_out_of_hours_desc">عند التفعيل، سيرسل الروبوت رسالة خارج أوقات العمل بدلاً من محاولة البيع في غير أوقات الدوام.</string>
+
+    <!-- Sprint 1: Onboarding Permissions -->
+    <string name="onboarding_intro_desc">يرجى منح الأذونات المطلوبة لتمكين محرك الرد الآلي المحلي من العمل في الخلفية دون انقطاع. جميع بياناتك ومحادثات عملائك تظل مشفرة محلياً على جهازك.</string>
+    <string name="onboarding_android13_title">تنبيه لمستخدمي أندرويد 13 فما فوق</string>
+    <string name="onboarding_android13_desc">إذا كان زر تفعيل الإشعارات معطلاً باللون الرمادي أو ظهرت رسالة أمان بالإعدادات المقيدة:
+1. اضغط على الزر بالأسفل لفتح «معلومات التطبيق».
+2. اضغط على القائمة (الثلاث نقاط ⋮) في أعلى الشاشة.
+3. اختر «السماح بالإعدادات المقيدة».
+4. ارجع هنا وفعّل صلاحية قراءة الإشعارات.</string>
+    <string name="onboarding_open_app_info_btn">فتح معلومات التطبيق</string>
+    <string name="onboarding_perm_notif_title">قراءة إشعارات واتساب</string>
+    <string name="onboarding_perm_notif_desc">مطلوبة لاكتشاف وقراءة الرسائل الواردة من تطبيق واتساب واقتراح أو إرسال الردود التلقائية الذكية.</string>
+    <string name="onboarding_perm_battery_title">استثناء توفير البطارية</string>
+    <string name="onboarding_perm_battery_desc">يمنع نظام أندرويد من إيقاف أو قتل خدمة الرد الآلي في الخلفية عندما يكون الهاتف في وضع الاستعداد أو الشاشة مغلقة.</string>
+    <string name="onboarding_perm_post_notif_title">إشعارات شريط الحالة</string>
+    <string name="onboarding_perm_post_notif_desc">مطلوبة لعرض حالة تشغيل محرك الذكاء الاصطناعي وتنبيهات التدخل البشري العاجلة.</string>
+    <string name="onboarding_autostart_title">التشغيل التلقائي مع فتح الهاتف (%s)</string>
+    <string name="onboarding_autostart_desc">تقوم واجهات أجهزة (%s) بتقييد التطبيقات بعد إعادة تشغيل الهاتف. انقر بالأسفل لفتح إعدادات بدء التشغيل التلقائي وضمان استمرار عمل الردود.</string>
+    <string name="onboarding_open_autostart_btn">فتح إعدادات التشغيل التلقائي</string>
+    <string name="onboarding_autostart_checkbox">أؤكد تفعيل خيار بدء التشغيل التلقائي لتطبيق PersonaChat.</string>
+    <string name="onboarding_start_engine_btn">بدء تشغيل محرك الرد الآلي ✓</string>
+    <string name="onboarding_complete_perms_warning">يرجى استكمال الصلاحيات أعلاه</string>
+    <string name="onboarding_grant_now_btn">منح الصلاحية الآن</string>
+
+    <!-- Sprint 1: Threshold & Ping -->
+    <string name="settings_threshold_conservative">متحفظ</string>
+    <string name="settings_threshold_balanced">متوازن</string>
+    <string name="settings_threshold_aggressive">متقدم / هجومي</string>
+    <string name="settings_threshold_conservative_desc">الرد فقط عند الثقة العالية (≥ 85%).</string>
+    <string name="settings_threshold_balanced_desc">مستوى ثقة متوازن مطلوب (≥ 75%).</string>
+    <string name="settings_threshold_aggressive_desc">الرد حتى مع مستوى ثقة منخفض (≥ 65%).</string>
+
+
+    <!-- Sprint 2: Order & Date Filters -->
+    <string name="order_filter_all">الكل</string>
+    <string name="order_filter_pending">جديد</string>
+    <string name="order_filter_in_prep">قيد التجهيز</string>
+    <string name="order_filter_shipping">جاري التوصيل</string>
+    <string name="order_filter_completed">تم التسليم</string>
+    <string name="order_filter_cancelled">ملغي</string>
+    <string name="order_filter_returned">مرتجع</string>
+
+    <string name="order_date_filter_all">الكل</string>
+    <string name="order_date_filter_today">اليوم</string>
+    <string name="order_date_filter_yesterday">أمس</string>
+    <string name="order_date_filter_last_7_days">آخر 7 أيام</string>
+    <string name="order_date_filter_this_month">هذا الشهر</string>
+
+    <string name="orders_manifest_copied_snackbar">تم نسخ كشف الشحنات المجمع</string>
+    <string name="orders_export_manifest_desc">تصدير المانيفست المجمع</string>
+    <string name="orders_card_show_more">عرض المزيد</string>
+    <string name="orders_card_show_less">عرض أقل</string>
+    <string name="orders_card_merchant_prep_note">ملاحظة التجهيز للمساعد الآلي: &quot;%s&quot;</string>
+    <string name="orders_card_customer_notes">ملاحظات العميل: %s</string>
+    <string name="orders_card_cancel_reason">سبب الإلغاء: %s</string>
+    <string name="orders_metrics_displayed_cod">تحصيل معروض</string>
+    <string name="orders_action_call_customer">اتصال بالعميل</string>
+    <string name="orders_action_open_chat">فتح المحادثة</string>
+    <string name="orders_create_dialog_title">إضافة طلب جديد</string>
+    <string name="orders_create_btn">إضافة الطلب للنظام</string>
+    <string name="orders_edit_btn">حفظ التعديلات</string>
+    <string name="orders_input_gov_label">المحافظة</string>
+    <string name="orders_input_gov_placeholder">اختر المحافظة...</string>
+    <string name="orders_input_address_label">عنوان التوصيل بالتفصيل</string>
+    <string name="orders_input_address_placeholder">الشارع، رقم العمارة، الشقة، علامة مميزة</string>
+    <string name="orders_input_items_label">محتويات الطلب والأصناف *</string>
+    <string name="orders_input_items_placeholder">مثال: 2x تي شيرت قطن أسود L\n1x قميص كتان أبيض XL</string>
+    <string name="orders_input_items_label_edit">محتويات الطلب والأصناف</string>
+    <string name="orders_input_phone_rep_label">رقم الهاتف (للمندوب)</string>
+    <string name="orders_input_products_price_label">سعر المنتجات (ج.م) *</string>
+    <string name="orders_input_products_price_edit_label">سعر المنتجات (ج.م)</string>
+    <string name="orders_input_shipping_fee_label">الشحن (ج.م)</string>
+    <string name="orders_input_notes_placeholder">ملاحظات خاصة بالتسليم أو المواعيد</string>
+    <string name="orders_total_cod_summary">إجمالي التحصيل عند الاستلام: %s ج.م (شامل الشحن)</string>
+
+    <!-- Sprint 2: Validation Errors -->
+    <string name="orders_error_name_or_phone_required">يرجى كتابة اسم العميل أو رقم الهاتف</string>
+    <string name="orders_error_invalid_egyptian_phone">رقم الهاتف غير صالح. يجب أن يتكون من 11 رقماً ويبدأ بـ 010 أو 011 أو 012 أو 015</string>
+    <string name="orders_error_items_required">يرجى إدخال أصناف ومحتويات الطلب</string>
+    <string name="orders_error_invalid_price">يرجى إدخال سعر صحيح للمنتجات</string>
+    <string name="orders_error_invalid_shipping">يرجى إدخال قيمة صحيحة لمصاريف الشحن</string>
+    <string name="orders_error_negative_amounts">لا يمكن أن تكون المبالغ المالية بالسالب</string>
+    <string name="orders_error_save_failed">تعذر حفظ التغييرات. يرجى المحاولة مرة أخرى.</string>
+
+    <!-- Sprint 2: Note Suggestions -->
+    <string name="orders_note_suggest_courier_today">المندوب هيوصل لحضرتك اليوم</string>
+    <string name="orders_note_suggest_confirm_size">يرجى تأكيد المقاس واللون المفضل</string>
+    <string name="orders_note_suggest_send_location">العنوان غير واضح، يرجى إرسال اللوكيشن</string>
+    <string name="orders_note_suggest_shipped_48h">تم شحن الطلب وسيصلك خلال 48 ساعة</string>
+
+    <!-- Sprint 2: Relative Dates & Contacts -->
+    <string name="time_relative_undefined">غير محدد</string>
+    <string name="time_relative_today_at">اليوم %1$02d:%2$02d</string>
+    <string name="time_relative_yesterday">أمس</string>
+    <string name="time_relative_days_ago">منذ %d أيام</string>
+    <string name="contacts_edit_notes_placeholder">مثال: يفضل الشحن الصباحي، عميل دائم...</string>
+
+    <!-- Sprint 2: Import Progress Phases -->
+    <string name="import_phase_reading_file">قراءة الملف وتجهيز النصوص...</string>
+    <string name="import_phase_chunking">استخراج عناصر الكتالوج والأسئلة الشائعة...</string>
+    <string name="import_phase_embedding">توليد المتجهات الدلالية وبناء الفهرس الذكي...</string>
+    <string name="import_phase_persisting">حفظ بيانات المتجر في قاعدة المعرفة...</string>
+    <string name="import_phase_checkpoint">تثبيت قاعدة البيانات بنجاح...</string>
+    <string name="import_phase_complete">اكتملت المعالجة بنجاح!</string>
+    <string name="import_phase_starting">جاري بدء المعالجة...</string>
+    <string name="import_phase_batch_info">الدفعة %1$d من %2$d</string>
+    <string name="import_phase_messages_info">تمت معالجة وفهرسة %1$d من أصل %2$d مقطع</string>
+    <string name="import_progress_cancel_action">إلغاء العملية</string>
+
+    <string name="import_progress_title">استيراد وفهرسة الكتالوج</string>
+    <string name="import_progress_close_desc">إلغاء الاستيراد</string>
+    <string name="import_progress_success_title">اكتمل الاستيراد بنجاح! 🎉</string>
+    <string name="import_progress_summary_title">ملخص الاستيراد والفهرسة</string>
+    <string name="import_progress_total_extracted">إجمالي المقاطع المستخرجة:</string>
+    <string name="import_progress_ai_indexed">المقاطع المفهرسة بالذكاء الاصطناعي:</string>
+    <string name="import_progress_detected_format">صيغة المصدر المكتشفة:</string>
+    <string name="import_progress_format_whatsapp">محادثات واتساب (.txt)</string>
+    <string name="import_progress_format_markdown">كتالوج ماركداون (.md)</string>
+    <string name="import_progress_manage_catalog_btn">الذهاب لإدارة الكتالوج</string>
+    <string name="import_progress_failed_title">فشلت عملية الاستيراد</string>
+    <string name="import_progress_unexpected_error">حدث خطأ غير متوقع أثناء معالجة الملف.</string>
+    <string name="import_progress_retry_btn">إعادة المحاولة</string>
+    <string name="import_progress_cancelled_title">تم إلغاء الاستيراد</string>
+    <string name="import_progress_back_btn">العودة</string>
+
+    <!-- Sprint 2: Chat Import Screen -->
+    <string name="chat_import_hero_description">أنشئ قاعدة المعرفة الذكية لمتجرك أو مساعدك الشخصي عبر برومبتات الذكاء الاصطناعي الجاهزة، أو الصق النص مباشرة للفهرسة الفورية، أو اختر ملفاً من جهازك.</string>
+    <string name="chat_import_ai_card_description">انسخ البرومبت المتخصص والصقه في ChatGPT أو Claude. سيقوم الذكاء الاصطناعي بمقابلتك خطوة بخطوة وتوليد ملف المعرفة المنسق بالماركداون (# Heading) لتقوم بلصقه هنا مباشرة:</string>
+    <string name="chat_import_direct_card_description">الصق نص المعرفة المنسق بالماركداون أو النص العادي ليتم تقطيعه وتوليد التضمينات الشعاعية محلياً على جهازك دون الحاجة لحفظ أو رفع ملفات:</string>
+    <string name="chat_import_selected_file_label">الملف المحدد: %s</string>
+    <string name="chat_import_start_icon_desc">بدء</string>
+    <string name="chat_import_error_icon_desc">خطأ</string>
+
+    <!-- Sprint 2: Audit Log Screen -->
+    <string name="audit_log_filter_all">الكل</string>
+    <string name="audit_log_more_suffix">\n... [المزيد]</string>
+    <string name="audit_log_share_chooser_title">مشاركة تقرير المراجعة</string>
+    <string name="audit_log_share_failed_toast">تعذر فتح تطبيق المشاركة</string>
+    <string name="audit_log_tokens_format">إدخال: %1$d | إخراج: %2$d</string>
+
+    <string name="orders_customer_name_placeholder">مثال: محمد أحمد</string>
 </resources>

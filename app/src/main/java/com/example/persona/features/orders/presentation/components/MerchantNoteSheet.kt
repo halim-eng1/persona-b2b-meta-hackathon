@@ -27,10 +27,10 @@ fun MerchantNoteSheet(
     var noteValue by remember(order.id) { mutableStateOf(order.merchantNote.orEmpty()) }
 
     val quickNoteSuggestions = listOf(
-        "المندوب هيوصل لحضرتك اليوم",
-        "يرجى تأكيد المقاس واللون المفضل",
-        "العنوان غير واضح، يرجى إرسال اللوكيشن",
-        "تم شحن الطلب وسيصلك خلال 48 ساعة"
+        stringResource(R.string.orders_note_suggest_courier_today),
+        stringResource(R.string.orders_note_suggest_confirm_size),
+        stringResource(R.string.orders_note_suggest_send_location),
+        stringResource(R.string.orders_note_suggest_shipped_48h)
     )
 
     ModalBottomSheet(
@@ -51,7 +51,7 @@ fun MerchantNoteSheet(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "أي ملاحظة هتكتبها هنا، المساعد الآلي هيبلغها للعميل تلقائياً في أول رسالة على واتساب. يمكنك مسح الملاحظة بالكامل وحفظها لإلغائها.",
+                text = stringResource(R.string.orders_note_sheet_explanation),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

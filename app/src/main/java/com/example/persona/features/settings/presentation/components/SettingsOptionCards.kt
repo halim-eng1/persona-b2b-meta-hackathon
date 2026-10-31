@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.settings.presentation.ThresholdLevel
 
@@ -35,12 +36,6 @@ fun PersonaToneCard(
         previewContent = tone.samplePreview
     )
 }
-
-private val thresholdDescriptions = mapOf(
-    ThresholdLevel.CONSERVATIVE to "Only reply when highly confident (≥ 85%).",
-    ThresholdLevel.BALANCED     to "Balanced confidence required (≥ 75%).",
-    ThresholdLevel.AGGRESSIVE   to "Reply even with lower confidence (≥ 65%)."
-)
 
 @Composable
 fun ThresholdOption(
@@ -64,13 +59,13 @@ fun ThresholdOption(
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = level.displayName,
+                text = stringResource(level.labelResId),
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                 )
             )
             Text(
-                text = thresholdDescriptions[level] ?: "",
+                text = stringResource(level.descResId),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

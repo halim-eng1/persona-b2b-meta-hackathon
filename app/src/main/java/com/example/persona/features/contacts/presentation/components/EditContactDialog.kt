@@ -85,7 +85,7 @@ fun EditContactDialog(
                     value = notesText,
                     onValueChange = { notesText = it },
                     label = { Text(stringResource(R.string.contacts_edit_dialog_notes_label)) },
-                    placeholder = { Text("مثال: يفضل الشحن الصباحي، عميل دائم...") },
+                    placeholder = { Text(stringResource(R.string.contacts_edit_notes_placeholder)) },
                     maxLines = 4,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -155,7 +155,7 @@ fun EditContactDialog(
                     onConfirmUpdate(selectedTag, notesText.trim(), phoneText.trim())
                 }
             ) {
-                Text("حفظ")
+                Text(stringResource(R.string.common_save))
             }
         },
         dismissButton = {

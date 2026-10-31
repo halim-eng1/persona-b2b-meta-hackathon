@@ -90,18 +90,18 @@ fun SystemMaintenanceSection(
                 title = stringResource(R.string.settings_perm_notification_title),
                 isOk = state.isNotificationListenerGranted,
                 okText = stringResource(R.string.settings_perm_notification_active),
-                missingText = "غير مفعلة (مطلوبة للرد الآلي)"
+                missingText = stringResource(R.string.settings_perm_notification_disabled)
             )
             HealthItemRow(
-                title = "استثناء توفير الطاقة والبطارية",
+                title = stringResource(R.string.settings_perm_battery_title),
                 isOk = state.isBatteryOptimizationIgnored,
-                okText = "مستثناة (حماية من القتل في الخلفية)",
-                missingText = "غير مستثناة (قد يتوقف التطبيق بعد قفل الشاشة)"
+                okText = stringResource(R.string.settings_perm_battery_ok),
+                missingText = stringResource(R.string.settings_perm_battery_missing)
             )
             HealthItemRow(
-                title = "التشغيل التلقائي مع فتح الهاتف",
+                title = stringResource(R.string.settings_perm_autostart_title),
                 isOk = state.isAutoStartConfirmed,
-                okText = "مؤكد ومفعل",
+                okText = stringResource(R.string.settings_perm_autostart_ok),
                 missingText = stringResource(R.string.settings_perm_notification_missing)
             )
             HealthItemRow(

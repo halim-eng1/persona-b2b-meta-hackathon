@@ -1,5 +1,8 @@
 package com.example.persona.features.orders.presentation.components
 
+import androidx.compose.ui.res.stringResource
+import com.example.persona.R
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -29,26 +32,13 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-private val ORDER_MONTHS = mapOf(
-    1 to "Jan", 2 to "Feb", 3 to "Mar", 4 to "Apr", 5 to "May", 6 to "Jun",
-    7 to "Jul", 8 to "Aug", 9 to "Sep", 10 to "Oct", 11 to "Nov", 12 to "Dec"
-)
-
+@Composable
 internal fun formatOrderTimestamp(timestamp: Long): String {
-    val dt = Instant.fromEpochMilliseconds(timestamp)
-        .toLocalDateTime(TimeZone.currentSystemDefault())
-    val month = ORDER_MONTHS[dt.monthNumber] ?: "%02d".format(java.util.Locale.US, dt.monthNumber)
-    return "%d %s — %02d:%02d".format(
-        java.util.Locale.US, dt.dayOfMonth, month, dt.hour, dt.minute
-    )
-}
-
-internal fun formatOrderTimestampArabic(timestamp: Long): String {
     val now = System.currentTimeMillis()
     val diff = now - timestamp
-    if (diff < 60_000) return "الآن"
-    if (diff < 3600_000) return "منذ ${diff / 60_000} د"
-    if (diff < 86400_000) return "منذ ${diff / 3600_000} س"
+    if (diff < 60_000) return stringResource(R.string.orders_time_just_now)
+    if (diff < 3600_000) return stringResource(R.string.orders_time_minutes_ago, diff / 60_000)
+    if (diff < 86400_000) return stringResource(R.string.orders_time_hours_ago, diff / 3600_000)
 
     val dt = Instant.fromEpochMilliseconds(timestamp)
         .toLocalDateTime(TimeZone.currentSystemDefault())
@@ -103,7 +93,7 @@ fun OrderCardHeader(
                 )
             }
             Text(
-                text = formatOrderTimestampArabic(timestamp),
+                text = formatOrderTimestamp(timestamp),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
             )
@@ -117,7 +107,7 @@ fun OrderCardHeader(
             ) {
                 Icon(
                     imageVector = Icons.Default.Phone,
-                    contentDescription = "اتصال بالعميل",
+                    contentDescription = stringResource(R.string.orders_action_call_customer),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
@@ -133,7 +123,7 @@ fun OrderCardHeader(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Chat,
-                    contentDescription = "فتح المحادثة",
+                    contentDescription = stringResource(R.string.orders_action_open_chat),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )

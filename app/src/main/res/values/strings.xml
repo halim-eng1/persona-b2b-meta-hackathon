@@ -640,4 +640,211 @@
     <string name="notification_key_evicted_body">Key %1$s was evicted due to: %2$s. Switched to next key in pool.</string>
     <string name="notification_provider_tripped_title">🚨 Provider Isolated: %s</string>
     <string name="notification_provider_tripped_body">Provider %1$s isolated for %2$d minutes due to: %3$s. Instant failover applied in 0ms.</string>
+
+    <!-- Sprint 1: Provider Guide Details -->
+    <string name="guide_close_desc">Close</string>
+    <string name="guide_open_portal_desc">Open Portal</string>
+    <string name="guide_qwen_step_1">Log in to the official Qwen Cloud platform with your account.</string>
+    <string name="guide_qwen_step_2">From the side menu in Model Studio, navigate to API-KEY.</string>
+    <string name="guide_qwen_step_3">Click Create API-KEY and copy your generated secret key (starts with sk-...).</string>
+    <string name="guide_qwen_step_4">Supports all fast models: Qwen 3.8 Max, Qwen 3.8 Flash, and DeepSeek v4.1.</string>
+    <string name="guide_qwen_tips">Be sure to save the key; Persona supports rotating multiple free keys for zero downtime.</string>
+
+    <string name="guide_gemini_step_1">Open Google AI Studio and sign in with your Google account.</string>
+    <string name="guide_gemini_step_2">Click (Get API key) in the top corner and choose (Create API key).</string>
+    <string name="guide_gemini_step_3">Select a new or existing Google Cloud project, then copy the key starting with AIzaSy...</string>
+    <string name="guide_gemini_step_4">Grants generous free tier access to Gemini 3.1 Flash-Lite, 3.5 Flash-Lite, and 3.8 Flash.</string>
+    <string name="guide_gemini_tips">Gemini keys are fast, free, and support multimodal images and text with high quality.</string>
+
+    <string name="guide_groq_step_1">Sign in to GroqCloud Console using Google or GitHub for free.</string>
+    <string name="guide_groq_step_2">From the side menu, click (API Keys) tab then (Create API Key).</string>
+    <string name="guide_groq_step_3">Enter a name for the key and copy the token (starts with gsk_...).</string>
+    <string name="guide_groq_step_4">Provides ultra-fast LPU inference speeds for GPT-OSS and Qwen 3.8 models.</string>
+    <string name="guide_groq_tips">Fastest Time-to-First-Token (TTFT), ideal for real-time customer auto-replies.</string>
+
+    <string name="guide_nvidia_step_1">Go to NVIDIA Build and sign in with a free NVIDIA Developer account.</string>
+    <string name="guide_nvidia_step_2">Select a Nemotron model (e.g. Nemotron 3 Ultra 550B or Lightning).</string>
+    <string name="guide_nvidia_step_3">Click (Get API Key) and generate a new key (starts with nvapi-...).</string>
+    <string name="guide_nvidia_step_4">Receive 1,000 welcome points to run enterprise foundation models.</string>
+    <string name="guide_nvidia_tips">Nemotron models excel at complex multi-turn negotiation and order extraction.</string>
+
+    <string name="guide_openrouter_step_1">Sign in to OpenRouter via Google or GitHub.</string>
+    <string name="guide_openrouter_step_2">Go to Keys page and click (Create Key).</string>
+    <string name="guide_openrouter_step_3">Copy the secret key that starts with (sk-or-v1-...).</string>
+    <string name="guide_openrouter_step_4">Automatically supports hundreds of permanent free and paid models like Nemotron Free and Liquid Free.</string>
+    <string name="guide_openrouter_tips">The ultimate failover gateway ensuring your automated replies never stop.</string>
+
+    <string name="guide_cloudflare_step_1">Log into Cloudflare dashboard and go to (Workers &amp; Pages) then (AI).</string>
+    <string name="guide_cloudflare_step_2">Copy the Account ID shown on the right sidebar and paste into the Account ID field.</string>
+    <string name="guide_cloudflare_step_3">Click (Manage API Tokens) and create a new token with Workers AI Read permissions.</string>
+    <string name="guide_cloudflare_step_4">Copy the secret token (starts with cfut_...) and add it to your API keys.</string>
+    <string name="guide_cloudflare_tips">Cloudflare Workers AI requires both Account ID and API Token for Clef Flash and Clef Omni models.</string>
+
+    <string name="guide_liquid_step_1">Log in to the Liquid AI Developer Portal with your account.</string>
+    <string name="guide_liquid_step_2">Go to API Credentials and create a new key (starts with liquid_...).</string>
+    <string name="guide_liquid_step_3">Copy the key and paste it into the application.</string>
+    <string name="guide_liquid_step_4">Supports instant decision engine and d1 / d1:latest models with ultra-low latency.</string>
+    <string name="guide_liquid_tips">Functions as a Gatekeeper classifying customer intent and detecting urgent issues under 800ms.</string>
+
+    <string name="guide_nara_step_1">Open the Nara Router portal and create a new account.</string>
+    <string name="guide_nara_step_2">Go to API Keys management and generate a new key (starts with sk-nry-...).</string>
+    <string name="guide_nara_step_3">Copy the key and add it to the app\'s key manager.</string>
+    <string name="guide_nara_step_4">Supports the specialized Arabic commerce transaction model laguna-s-2.1.</string>
+    <string name="guide_nara_tips">A dedicated Arabic model fine-tuned for regional dialects and e-commerce transactions.</string>
+
+    <string name="guide_default_step_1">Sign in to the provider\'s official developer platform.</string>
+    <string name="guide_default_step_2">Navigate to API settings and create a new key.</string>
+    <string name="guide_default_step_3">Copy the key and paste it into the application.</string>
+    <string name="guide_default_tips">You can add multiple keys for the same provider for load balancing and rate limit avoidance.</string>
+
+    <!-- Sprint 1: System Health & Maintenance -->
+    <string name="settings_perm_notification_disabled">Inactive (required for auto-reply)</string>
+    <string name="settings_perm_battery_title">Battery Optimization Exemption</string>
+    <string name="settings_perm_battery_ok">Exempted (protected from background termination)</string>
+    <string name="settings_perm_battery_missing">Not exempted (service may pause when screen is off)</string>
+    <string name="settings_perm_autostart_title">Auto-Start on Boot</string>
+    <string name="settings_perm_autostart_ok">Confirmed &amp; Active</string>
+    <string name="settings_routing_media_desc">Enables reading incoming WhatsApp images and voice notes for local AI processing.</string>
+    <string name="settings_hours_out_of_hours_desc">When enabled, the assistant sends an out-of-office message instead of handling sales outside working hours.</string>
+
+    <!-- Sprint 1: Onboarding Permissions -->
+    <string name="onboarding_intro_desc">Please grant the required permissions to allow the local auto-reply engine to run smoothly in the background. All your customer chats remain securely encrypted on your device.</string>
+    <string name="onboarding_android13_title">Notice for Android 13+ Users</string>
+    <string name="onboarding_android13_desc">If the Notification toggle is greyed out with a "Restricted setting" prompt:
+1. Tap the button below to open App Info.
+2. Tap the three dots (⋮) in the top-right corner.
+3. Choose "Allow restricted settings".
+4. Return here and enable Notification Access.</string>
+    <string name="onboarding_open_app_info_btn">Open App Info</string>
+    <string name="onboarding_perm_notif_title">WhatsApp Notification Access</string>
+    <string name="onboarding_perm_notif_desc">Required to detect and read incoming WhatsApp messages and suggest or send smart automated replies.</string>
+    <string name="onboarding_perm_battery_title">Battery Optimization Exemption</string>
+    <string name="onboarding_perm_battery_desc">Prevents Android from killing the auto-reply background service when the screen is locked or idle.</string>
+    <string name="onboarding_perm_post_notif_title">Status Bar Notifications</string>
+    <string name="onboarding_perm_post_notif_desc">Required to display the AI engine status and urgent human intervention alerts.</string>
+    <string name="onboarding_autostart_title">Auto-Start on Boot (%s)</string>
+    <string name="onboarding_autostart_desc">(%s) devices restrict background apps after reboot. Tap below to configure auto-start and guarantee uninterrupted replies.</string>
+    <string name="onboarding_open_autostart_btn">Open Auto-Start Settings</string>
+    <string name="onboarding_autostart_checkbox">I confirm enabling Auto-Start for PersonaChat.</string>
+    <string name="onboarding_start_engine_btn">Start Auto-Reply Engine ✓</string>
+    <string name="onboarding_complete_perms_warning">Please complete the permissions above</string>
+    <string name="onboarding_grant_now_btn">Grant Permission Now</string>
+
+    <!-- Sprint 1: Threshold & Ping -->
+    <string name="settings_threshold_conservative">Conservative</string>
+    <string name="settings_threshold_balanced">Balanced</string>
+    <string name="settings_threshold_aggressive">Aggressive</string>
+    <string name="settings_threshold_conservative_desc">Only reply when highly confident (≥ 85%).</string>
+    <string name="settings_threshold_balanced_desc">Balanced confidence required (≥ 75%).</string>
+    <string name="settings_threshold_aggressive_desc">Reply even with lower confidence (≥ 65%).</string>
+
+
+    <!-- Sprint 2: Order & Date Filters -->
+    <string name="order_filter_all">All</string>
+    <string name="order_filter_pending">New</string>
+    <string name="order_filter_in_prep">In Prep</string>
+    <string name="order_filter_shipping">Out for Delivery</string>
+    <string name="order_filter_completed">Delivered</string>
+    <string name="order_filter_cancelled">Cancelled</string>
+    <string name="order_filter_returned">Returned</string>
+
+    <string name="order_date_filter_all">All Time</string>
+    <string name="order_date_filter_today">Today</string>
+    <string name="order_date_filter_yesterday">Yesterday</string>
+    <string name="order_date_filter_last_7_days">Last 7 Days</string>
+    <string name="order_date_filter_this_month">This Month</string>
+
+    <string name="orders_manifest_copied_snackbar">Bulk shipment manifest copied</string>
+    <string name="orders_export_manifest_desc">Export Bulk Manifest</string>
+    <string name="orders_card_show_more">Show more</string>
+    <string name="orders_card_show_less">Show less</string>
+    <string name="orders_card_merchant_prep_note">Fulfillment Note for Assistant: &quot;%s&quot;</string>
+    <string name="orders_card_customer_notes">Customer Notes: %s</string>
+    <string name="orders_card_cancel_reason">Cancellation Reason: %s</string>
+    <string name="orders_metrics_displayed_cod">Displayed COD</string>
+    <string name="orders_action_call_customer">Call Customer</string>
+    <string name="orders_action_open_chat">Open Chat</string>
+    <string name="orders_create_dialog_title">Add New Order</string>
+    <string name="orders_create_btn">Add Order to System</string>
+    <string name="orders_edit_btn">Save Changes</string>
+    <string name="orders_input_gov_label">Governorate</string>
+    <string name="orders_input_gov_placeholder">Select governorate...</string>
+    <string name="orders_input_address_label">Detailed Delivery Address</string>
+    <string name="orders_input_address_placeholder">Street, building number, apartment, landmark</string>
+    <string name="orders_input_items_label">Order Items &amp; Details *</string>
+    <string name="orders_input_items_placeholder">e.g. 2x Cotton T-Shirt Black L\n1x Linen Shirt White XL</string>
+    <string name="orders_input_items_label_edit">Order Items &amp; Details</string>
+    <string name="orders_input_phone_rep_label">Phone Number (for Courier)</string>
+    <string name="orders_input_products_price_label">Items Subtotal (EGP) *</string>
+    <string name="orders_input_products_price_edit_label">Items Subtotal (EGP)</string>
+    <string name="orders_input_shipping_fee_label">Shipping Fee (EGP)</string>
+    <string name="orders_input_notes_placeholder">Special instructions for delivery or timing</string>
+    <string name="orders_total_cod_summary">Total COD Collection: %s EGP (includes shipping)</string>
+
+    <!-- Sprint 2: Validation Errors -->
+    <string name="orders_error_name_or_phone_required">Please enter customer name or phone number</string>
+    <string name="orders_error_invalid_egyptian_phone">Invalid mobile number. Must be 11 digits starting with 010, 011, 012, or 015</string>
+    <string name="orders_error_items_required">Please enter order items and package contents</string>
+    <string name="orders_error_invalid_price">Please enter a valid price for items</string>
+    <string name="orders_error_invalid_shipping">Please enter a valid value for shipping fee</string>
+    <string name="orders_error_negative_amounts">Monetary values cannot be negative</string>
+    <string name="orders_error_save_failed">Could not save changes. Please try again.</string>
+
+    <!-- Sprint 2: Note Suggestions -->
+    <string name="orders_note_suggest_courier_today">Courier will deliver to you today</string>
+    <string name="orders_note_suggest_confirm_size">Please confirm your preferred size and color</string>
+    <string name="orders_note_suggest_send_location">Address is unclear, please send location</string>
+    <string name="orders_note_suggest_shipped_48h">Order shipped and will arrive within 48 hours</string>
+
+    <!-- Sprint 2: Relative Dates & Contacts -->
+    <string name="time_relative_undefined">Not specified</string>
+    <string name="time_relative_today_at">Today %1$02d:%2$02d</string>
+    <string name="time_relative_yesterday">Yesterday</string>
+    <string name="time_relative_days_ago">%d days ago</string>
+    <string name="contacts_edit_notes_placeholder">e.g. Prefers morning delivery, loyal customer...</string>
+
+    <!-- Sprint 2: Import Progress Phases -->
+    <string name="import_phase_reading_file">Reading file and preparing texts...</string>
+    <string name="import_phase_chunking">Extracting catalog items and FAQs...</string>
+    <string name="import_phase_embedding">Generating semantic embeddings and vector index...</string>
+    <string name="import_phase_persisting">Saving store knowledge into database...</string>
+    <string name="import_phase_checkpoint">Database synchronized successfully...</string>
+    <string name="import_phase_complete">Processing completed successfully!</string>
+    <string name="import_phase_starting">Starting processing...</string>
+    <string name="import_phase_batch_info">Batch %1$d of %2$d</string>
+    <string name="import_phase_messages_info">Processed and indexed %1$d of %2$d segments</string>
+    <string name="import_progress_cancel_action">Cancel Operation</string>
+
+    <string name="import_progress_title">Catalog Import &amp; Indexing</string>
+    <string name="import_progress_close_desc">Cancel Import</string>
+    <string name="import_progress_success_title">Import Completed Successfully! 🎉</string>
+    <string name="import_progress_summary_title">Import &amp; Indexing Summary</string>
+    <string name="import_progress_total_extracted">Total extracted segments:</string>
+    <string name="import_progress_ai_indexed">AI indexed segments:</string>
+    <string name="import_progress_detected_format">Detected source format:</string>
+    <string name="import_progress_format_whatsapp">WhatsApp Chats (.txt)</string>
+    <string name="import_progress_format_markdown">Markdown Catalog (.md)</string>
+    <string name="import_progress_manage_catalog_btn">Manage Catalog</string>
+    <string name="import_progress_failed_title">Import Failed</string>
+    <string name="import_progress_unexpected_error">An unexpected error occurred while processing the file.</string>
+    <string name="import_progress_retry_btn">Retry</string>
+    <string name="import_progress_cancelled_title">Import Cancelled</string>
+    <string name="import_progress_back_btn">Back</string>
+
+    <!-- Sprint 2: Chat Import Screen -->
+    <string name="chat_import_hero_description">Build a smart knowledge base for your store or personal assistant via ready-made AI prompts, paste text for instant indexing, or pick a file from your device.</string>
+    <string name="chat_import_ai_card_description">Copy this specialized prompt and paste it into ChatGPT or Claude. The AI will interview you step by step and generate a clean Markdown (# Heading) file for you to paste here directly:</string>
+    <string name="chat_import_direct_card_description">Paste Markdown formatted text or plain knowledge to chunk and generate local vector embeddings without uploading files:</string>
+    <string name="chat_import_selected_file_label">Selected file: %s</string>
+    <string name="chat_import_start_icon_desc">Start</string>
+    <string name="chat_import_error_icon_desc">Error</string>
+
+    <!-- Sprint 2: Audit Log Screen -->
+    <string name="audit_log_filter_all">All</string>
+    <string name="audit_log_more_suffix">\n... [More]</string>
+    <string name="audit_log_share_chooser_title">Share Audit Report</string>
+    <string name="audit_log_share_failed_toast">Could not open sharing application</string>
+    <string name="audit_log_tokens_format">Input: %1$d | Output: %2$d</string>
+
+    <string name="orders_customer_name_placeholder">e.g. Mohamed Ahmed</string>
 </resources>

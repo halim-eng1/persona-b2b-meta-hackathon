@@ -1,5 +1,8 @@
 package com.example.persona.features.orders.presentation
 
+import androidx.annotation.StringRes
+import com.example.persona.R
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.persona.core.database.dao.ConversationMetadataDao
@@ -27,14 +30,17 @@ import javax.inject.Inject
  * Covers all stages of the fulfillment pipeline so merchants can triage
  * new orders, packing in preparation, dispatches, and exceptions.
  */
-enum class OrderFilter(val label: String) {
-    ALL("الكل"),
-    PENDING("جديد"),
-    IN_PREPARATION("قيد التجهيز"),
-    SHIPPING_IN_PROGRESS("جاري التوصيل"),
-    COMPLETED("تم التسليم"),
-    CANCELLED("ملغي"),
-    RETURNED("مرتجع");
+enum class OrderFilter(
+    val label: String,
+    @StringRes val labelResId: Int = R.string.order_filter_all
+) {
+    ALL("الكل", R.string.order_filter_all),
+    PENDING("جديد", R.string.order_filter_pending),
+    IN_PREPARATION("قيد التجهيز", R.string.order_filter_in_prep),
+    SHIPPING_IN_PROGRESS("جاري التوصيل", R.string.order_filter_shipping),
+    COMPLETED("تم التسليم", R.string.order_filter_completed),
+    CANCELLED("ملغي", R.string.order_filter_cancelled),
+    RETURNED("مرتجع", R.string.order_filter_returned);
 
     /** Returns true when [order] passes this filter. */
     fun matches(order: OrderEntity): Boolean = when (this) {
@@ -56,12 +62,15 @@ enum class OrderFilter(val label: String) {
 /**
  * Date range filter for daily shipping settlement and logistics dispatch.
  */
-enum class DateFilter(val label: String) {
-    ALL("الكل"),
-    TODAY("اليوم"),
-    YESTERDAY("أمس"),
-    LAST_7_DAYS("آخر 7 أيام"),
-    THIS_MONTH("هذا الشهر");
+enum class DateFilter(
+    val label: String,
+    @StringRes val labelResId: Int = R.string.order_date_filter_all
+) {
+    ALL("الكل", R.string.order_date_filter_all),
+    TODAY("اليوم", R.string.order_date_filter_today),
+    YESTERDAY("أمس", R.string.order_date_filter_yesterday),
+    LAST_7_DAYS("آخر 7 أيام", R.string.order_date_filter_last_7_days),
+    THIS_MONTH("هذا الشهر", R.string.order_date_filter_this_month);
 
     fun matches(timestamp: Long, now: Long = System.currentTimeMillis()): Boolean {
         if (this == ALL) return true

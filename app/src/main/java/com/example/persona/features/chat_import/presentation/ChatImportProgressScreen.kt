@@ -46,7 +46,7 @@ fun ChatImportProgressScreen(
         AlertDialog(
             onDismissRequest = { showCancelDialog = false },
             title = { Text(stringResource(R.string.import_progress_cancel_title)) },
-            text = { Text(stringResource(R.string.import_progress_cancel_desc)) },
+            text = { Text(stringResource(R.string.import_progress_close_desc)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -73,14 +73,14 @@ fun ChatImportProgressScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("استيراد وفهرسة الكتالوج") },
+                title = { Text(stringResource(R.string.import_progress_title)) },
                 actions = {
                     if (uiState.isImporting) {
                         IconButton(
                             onClick = { showCancelDialog = true },
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "إلغاء الاستيراد")
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.import_progress_close_desc))
                         }
                     }
                 },
@@ -108,7 +108,7 @@ fun ChatImportProgressScreen(
                     // Success View
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "نجاح",
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(100.dp)
                     )
@@ -116,7 +116,7 @@ fun ChatImportProgressScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
-                        text = "اكتمل الاستيراد بنجاح! 🎉",
+                        text = stringResource(R.string.import_progress_success_title),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
@@ -135,7 +135,7 @@ fun ChatImportProgressScreen(
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Text(
-                                text = "ملخص الاستيراد والفهرسة",
+                                text = stringResource(R.string.import_progress_summary_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -146,7 +146,7 @@ fun ChatImportProgressScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("إجمالي المقاطع المستخرجة:", style = MaterialTheme.typography.bodyMedium)
+                                Text(stringResource(R.string.import_progress_total_extracted), style = MaterialTheme.typography.bodyMedium)
                                 Text(
                                     text = "${uiState.resultTotal}",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -158,7 +158,7 @@ fun ChatImportProgressScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("المقاطع المفهرسة بالذكاء الاصطناعي:", style = MaterialTheme.typography.bodyMedium)
+                                Text(stringResource(R.string.import_progress_ai_indexed), style = MaterialTheme.typography.bodyMedium)
                                 Text(
                                     text = "${uiState.resultUserMsgs}",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -170,11 +170,11 @@ fun ChatImportProgressScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("صيغة المصدر المكتشفة:", style = MaterialTheme.typography.bodyMedium)
+                                Text(stringResource(R.string.import_progress_detected_format), style = MaterialTheme.typography.bodyMedium)
                                 val formatDisplay = when (uiState.resultFormat) {
-                                    "WHATSAPP" -> "محادثات واتساب (.txt)"
-                                    "MARKDOWN" -> "كتالوج ماركداون (.md)"
-                                    else -> uiState.resultFormat ?: "غير محدد"
+                                    "WHATSAPP" -> stringResource(R.string.import_progress_format_whatsapp)
+                                    "MARKDOWN" -> stringResource(R.string.import_progress_format_markdown)
+                                    else -> uiState.resultFormat ?: stringResource(R.string.time_relative_undefined)
                                 }
                                 Text(
                                     text = formatDisplay,
@@ -194,7 +194,7 @@ fun ChatImportProgressScreen(
                             .fillMaxWidth()
                             .height(56.dp)
                     ) {
-                        Text("الذهاب لإدارة الكتالوج", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.import_progress_manage_catalog_btn), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -202,7 +202,7 @@ fun ChatImportProgressScreen(
                     // Error View
                     Icon(
                         imageVector = Icons.Default.Warning,
-                        contentDescription = "خطأ",
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(100.dp)
                     )
@@ -210,7 +210,7 @@ fun ChatImportProgressScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
-                        text = "فشلت عملية الاستيراد",
+                        text = stringResource(R.string.import_progress_failed_title),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
@@ -219,7 +219,7 @@ fun ChatImportProgressScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = uiState.error ?: "حدث خطأ غير متوقع أثناء معالجة الملف.",
+                        text = uiState.error ?: stringResource(R.string.import_progress_unexpected_error),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error,
                         textAlign = TextAlign.Center,
@@ -235,7 +235,7 @@ fun ChatImportProgressScreen(
                             .fillMaxWidth()
                             .height(56.dp)
                     ) {
-                        Text("إعادة المحاولة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.import_progress_retry_btn), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -243,7 +243,7 @@ fun ChatImportProgressScreen(
                     // Cancelled View
                     Icon(
                         imageVector = Icons.Default.Warning,
-                        contentDescription = "ملغي",
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(100.dp)
                     )
@@ -251,7 +251,7 @@ fun ChatImportProgressScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
-                        text = "تم إلغاء الاستيراد",
+                        text = stringResource(R.string.import_progress_cancelled_title),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
@@ -266,7 +266,7 @@ fun ChatImportProgressScreen(
                             .fillMaxWidth()
                             .height(56.dp)
                     ) {
-                        Text("العودة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.import_progress_back_btn), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -306,13 +306,13 @@ fun ChatImportProgressScreen(
                         label = "PhaseCrossfade"
                     ) { phase ->
                         val friendlyPhase = when (phase) {
-                            "READING_FILE" -> "قراءة الملف وتجهيز النصوص..."
-                            "CHUNKING" -> "استخراج عناصر الكتالوج والأسئلة الشائعة..."
-                            "EMBEDDING" -> "توليد المتجهات الدلالية وبناء الفهرس الذكي..."
-                            "PERSISTING" -> "حفظ بيانات المتجر في قاعدة المعرفة..."
-                            "CHECKPOINT" -> "تثبيت قاعدة البيانات بنجاح..."
-                            "COMPLETE" -> "اكتملت المعالجة بنجاح!"
-                            else -> if (phase.isBlank()) "جاري بدء المعالجة..." else phase
+                            "READING_FILE" -> stringResource(R.string.import_phase_reading_file)
+                            "CHUNKING" -> stringResource(R.string.import_phase_chunking)
+                            "EMBEDDING" -> stringResource(R.string.import_phase_embedding)
+                            "PERSISTING" -> stringResource(R.string.import_phase_persisting)
+                            "CHECKPOINT" -> stringResource(R.string.import_phase_checkpoint)
+                            "COMPLETE" -> stringResource(R.string.import_phase_complete)
+                            else -> if (phase.isBlank()) stringResource(R.string.import_phase_starting) else phase
                         }
                         Text(
                             text = friendlyPhase,
@@ -340,12 +340,12 @@ fun ChatImportProgressScreen(
 
                     if (uiState.totalBatches > 0) {
                         Text(
-                            text = "الدفعة ${uiState.currentBatch} من ${uiState.totalBatches}",
+                            text = stringResource(R.string.import_phase_batch_info, uiState.currentBatch, uiState.totalBatches),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "تمت معالجة وفهرسة ${uiState.messagesProcessed} من أصل ${uiState.totalMessages} مقطع",
+                            text = stringResource(R.string.import_phase_messages_info, uiState.messagesProcessed, uiState.totalMessages),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             modifier = Modifier.padding(top = 4.dp)
@@ -362,7 +362,7 @@ fun ChatImportProgressScreen(
                             .height(56.dp),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text("إلغاء العملية", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.import_progress_cancel_action), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                 }
             }

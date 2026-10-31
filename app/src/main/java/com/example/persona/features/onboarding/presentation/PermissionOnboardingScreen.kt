@@ -185,7 +185,7 @@ fun PermissionOnboardingScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "يرجى منح الأذونات المطلوبة لتمكين محرك الرد الآلي المحلي من العمل في الخلفية دون انقطاع. جميع بياناتك ومحادثات عملائك تظل مشفرة محلياً على جهازك.",
+                    text = stringResource(R.string.onboarding_intro_desc),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -217,7 +217,7 @@ fun PermissionOnboardingScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "تنبيه لمستخدمي أندرويد 13 فما فوق",
+                                    text = stringResource(R.string.onboarding_android13_title),
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.error
@@ -225,11 +225,7 @@ fun PermissionOnboardingScreen(
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "إذا كان زر تفعيل الإشعارات معطلاً باللون الرمادي أو ظهرت رسالة أمان بالإعدادات المقيدة:\n" +
-                                        "1. اضغط على الزر بالأسفل لفتح «معلومات التطبيق».\n" +
-                                        "2. اضغط على القائمة (الثلاث نقاط ⋮) في أعلى الشاشة.\n" +
-                                        "3. اختر «السماح بالإعدادات المقيدة».\n" +
-                                        "4. ارجع هنا وفعّل صلاحية قراءة الإشعارات.",
+                                text = stringResource(R.string.onboarding_android13_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 lineHeight = 18.sp
@@ -240,7 +236,7 @@ fun PermissionOnboardingScreen(
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("فتح معلومات التطبيق")
+                                Text(stringResource(R.string.onboarding_open_app_info_btn))
                             }
                         }
                     }
@@ -248,8 +244,8 @@ fun PermissionOnboardingScreen(
 
                 // ── Step 1: Notification Access (Always Required) ─────────────
                 PermissionCard(
-                    title = "قراءة إشعارات واتساب",
-                    description = "مطلوبة لاكتشاف وقراءة الرسائل الواردة من تطبيق واتساب واقتراح أو إرسال الردود التلقائية الذكية.",
+                    title = stringResource(R.string.onboarding_perm_notif_title),
+                    description = stringResource(R.string.onboarding_perm_notif_desc),
                     isGranted = state.isNotificationListenerGranted,
                     isActiveStep = wizardState.currentStep is OnboardingStep.NotificationAccess,
                     onGrantClick = {
@@ -261,8 +257,8 @@ fun PermissionOnboardingScreen(
 
                 // ── Step 2: Ignore Battery Optimizations (Always Required) ────
                 PermissionCard(
-                    title = "استثناء توفير البطارية",
-                    description = "يمنع نظام أندرويد من إيقاف أو قتل خدمة الرد الآلي في الخلفية عندما يكون الهاتف في وضع الاستعداد أو الشاشة مغلقة.",
+                    title = stringResource(R.string.onboarding_perm_battery_title),
+                    description = stringResource(R.string.onboarding_perm_battery_desc),
                     isGranted = state.isBatteryOptimizationIgnored,
                     isActiveStep = wizardState.currentStep is OnboardingStep.BatteryOptimization,
                     onGrantClick = {
@@ -274,8 +270,8 @@ fun PermissionOnboardingScreen(
                 if (state.isPostNotificationsRequired) {
                     Spacer(modifier = Modifier.height(16.dp))
                     PermissionCard(
-                        title = "إشعارات شريط الحالة",
-                        description = "مطلوبة لعرض حالة تشغيل محرك الذكاء الاصطناعي وتنبيهات التدخل البشري العاجلة.",
+                        title = stringResource(R.string.onboarding_perm_post_notif_title),
+                        description = stringResource(R.string.onboarding_perm_post_notif_desc),
                         isGranted = state.isPostNotificationsGranted,
                         isActiveStep = wizardState.currentStep is OnboardingStep.PostNotifications,
                         onGrantClick = {
@@ -307,7 +303,7 @@ fun PermissionOnboardingScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = "التشغيل التلقائي مع فتح الهاتف (${viewModel.getManufacturerName()})",
+                                    text = stringResource(R.string.onboarding_autostart_title, viewModel.getManufacturerName()),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -330,7 +326,7 @@ fun PermissionOnboardingScreen(
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "تقوم واجهات أجهزة (${viewModel.getManufacturerName()}) بتقييد التطبيقات بعد إعادة تشغيل الهاتف. انقر بالأسفل لفتح إعدادات بدء التشغيل التلقائي وضمان استمرار عمل الردود.",
+                                text = stringResource(R.string.onboarding_autostart_desc, viewModel.getManufacturerName()),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 18.sp
@@ -345,7 +341,7 @@ fun PermissionOnboardingScreen(
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("فتح إعدادات التشغيل التلقائي")
+                                Text(stringResource(R.string.onboarding_open_autostart_btn))
                             }
 
                             Spacer(modifier = Modifier.height(12.dp))
@@ -362,7 +358,7 @@ fun PermissionOnboardingScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "أؤكد تفعيل خيار بدء التشغيل التلقائي لتطبيق PersonaChat.",
+                                    text = stringResource(R.string.onboarding_autostart_checkbox),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -391,7 +387,7 @@ fun PermissionOnboardingScreen(
                         .padding(bottom = 32.dp)
                 ) {
                     Text(
-                        text = if (wizardState.canProceed) "بدء تشغيل محرك الرد الآلي ✓" else "يرجى استكمال الصلاحيات أعلاه",
+                        text = if (wizardState.canProceed) stringResource(R.string.onboarding_start_engine_btn) else stringResource(R.string.onboarding_complete_perms_warning),
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )
@@ -474,7 +470,7 @@ private fun PermissionCard(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("منح الصلاحية الآن")
+                    Text(stringResource(R.string.onboarding_grant_now_btn))
                 }
             }
         }

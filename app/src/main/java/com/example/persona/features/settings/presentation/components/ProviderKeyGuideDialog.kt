@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -58,11 +59,16 @@ data class ProviderGuideDetails(
     val platformName: String,
     val portalUrl: String,
     val keyOrIdLabel: String,
-    val steps: List<String>,
-    val tips: String
+    @StringRes val stepResIds: List<Int>,
+    @StringRes val tipsResId: Int
 ) {
-    fun getAiPrompt(): String {
-        return "أشرح لي خطوة بخطوة للمبتدئين بالصور والروابط كيف أنشئ حساباً على منصة $platformName ($portalUrl) وكيف أستخرج مفتاح $keyOrIdLabel مجاناً لاستخدامه في تطبيقي."
+    fun getAiPrompt(context: Context): String {
+        return context.getString(
+            R.string.guide_ai_prompt_template,
+            platformName,
+            portalUrl,
+            keyOrIdLabel
+        )
     }
 }
 
@@ -75,13 +81,13 @@ object ProviderGuideRegistry {
                 platformName = "Qwen Cloud",
                 portalUrl = "https://home.qwencloud.com/",
                 keyOrIdLabel = "API Key",
-                steps = listOf(
-                    "ادخل إلى منصة Qwen Cloud عبر الرابط الرسمي وسجل الدخول باستخدام حساب .",
-                    "من القائمة الجانبية في Model Studio، توجه إلى قسم مفاتيح الواجهة (API-KEY).",
-                    "اضغط على Create API-KEY وانسخ الرمز السري المتولد فوراً (يبدأ بـ sk-...).",
-                    "يدعم جميع نماذج Qwen 3.8 Max و Qwen 3.8 Flash و DeepSeek v4.1 السريعة."
+                stepResIds = listOf(
+                    R.string.guide_qwen_step_1,
+                    R.string.guide_qwen_step_2,
+                    R.string.guide_qwen_step_3,
+                    R.string.guide_qwen_step_4
                 ),
-                tips = "تأكد من حفظ المفتاح؛ يتيح لك التطبيق تدوير عدة مفاتيح مجانية لضمان استمرار الخدمة دون انقطاع."
+                tipsResId = R.string.guide_qwen_tips
             )
             ModelProviders.GEMINI -> ProviderGuideDetails(
                 provider = ModelProviders.GEMINI,
@@ -89,13 +95,13 @@ object ProviderGuideRegistry {
                 platformName = "Google AI Studio",
                 portalUrl = "https://aistudio.google.com/app/apikey",
                 keyOrIdLabel = "API Key",
-                steps = listOf(
-                    "افتح رابط منصة Google AI Studio وسجل الدخول باستخدام حساب Google الخاص بك.",
-                    "اضغط على زر (Get API key) في الزاوية العلوية ثم اختر (Create API key).",
-                    "اختر مشروع Google Cloud جديد أو قائم، ثم انسخ المفتاح الذي يبدأ بـ AIzaSy...",
-                    "يمنحك وصولاً مجانياً سخياً لنماذج Gemini 3.1 Flash-Lite و 3.5 Flash-Lite و 3.8 Flash."
+                stepResIds = listOf(
+                    R.string.guide_gemini_step_1,
+                    R.string.guide_gemini_step_2,
+                    R.string.guide_gemini_step_3,
+                    R.string.guide_gemini_step_4
                 ),
-                tips = "مفاتيح Gemini مجانية وسريعة جداً وتدعم معالجة الصور والنصوص بجودة فائقة."
+                tipsResId = R.string.guide_gemini_tips
             )
             ModelProviders.GROQ -> ProviderGuideDetails(
                 provider = ModelProviders.GROQ,
@@ -103,13 +109,13 @@ object ProviderGuideRegistry {
                 platformName = "GroqCloud",
                 portalUrl = "https://console.groq.com/keys",
                 keyOrIdLabel = "API Key",
-                steps = listOf(
-                    "سجل الدخول إلى GroqCloud Console عبر حساب Google أو GitHub مجاناً.",
-                    "من القائمة الجانبية اضغط على تبويب (API Keys) ثم زر (Create API Key).",
-                    "اكتب اسماً للمفتاح ثم انسخ الرمز المولد (يبدأ بـ gsk_...).",
-                    "يوفر سرعة استجابة فائقة البرق مع معالجات LPU لنماذج GPT-OSS و Qwen 3.8."
+                stepResIds = listOf(
+                    R.string.guide_groq_step_1,
+                    R.string.guide_groq_step_2,
+                    R.string.guide_groq_step_3,
+                    R.string.guide_groq_step_4
                 ),
-                tips = "أسرع استجابة زمنية (TTFT) على الإطلاق، مثالية للرد الفوري على رسائل العملاء."
+                tipsResId = R.string.guide_groq_tips
             )
             ModelProviders.NVIDIA -> ProviderGuideDetails(
                 provider = ModelProviders.NVIDIA,
@@ -117,13 +123,13 @@ object ProviderGuideRegistry {
                 platformName = "NVIDIA Build",
                 portalUrl = "https://build.nvidia.com",
                 keyOrIdLabel = "API Key",
-                steps = listOf(
-                    "ادخل إلى NVIDIA Build وسجل الدخول بحساب مطور NVIDIA Developer مجاناً.",
-                    "اختر نموذج Nemotron (مثل Nemotron 3 Ultra 550B أو Lightning).",
-                    "اضغط على زر (Get API Key) وأنشئ مفتاحاً سرياً جديداً (يبدأ بـ nvapi-...).",
-                    "تحصل على رصيد ترحيبي قدره 1000 نقطة لتشغيل أضخم النماذج المعرفية المؤسسية."
+                stepResIds = listOf(
+                    R.string.guide_nvidia_step_1,
+                    R.string.guide_nvidia_step_2,
+                    R.string.guide_nvidia_step_3,
+                    R.string.guide_nvidia_step_4
                 ),
-                tips = "نماذج Nemotron فائقة الذكاء وممتازة للتفاوض المعقد واستخراج الطلبات."
+                tipsResId = R.string.guide_nvidia_tips
             )
             ModelProviders.OPENROUTER -> ProviderGuideDetails(
                 provider = ModelProviders.OPENROUTER,
@@ -131,27 +137,27 @@ object ProviderGuideRegistry {
                 platformName = "OpenRouter",
                 portalUrl = "https://openrouter.ai/keys",
                 keyOrIdLabel = "API Key",
-                steps = listOf(
-                    "سجل الدخول إلى بوابة OpenRouter عبر حساب Google أو GitHub.",
-                    "انتقل إلى صفحة المفاتيح (Keys) ثم اضغط على (Create Key).",
-                    "انسخ المفتاح السري الذي يبدأ بـ (sk-or-v1-...).",
-                    "يدعم تلقائياً مئات النماذج المجانية والمدفوعة الدائمة مثل Nemotron Free و Liquid Free."
+                stepResIds = listOf(
+                    R.string.guide_openrouter_step_1,
+                    R.string.guide_openrouter_step_2,
+                    R.string.guide_openrouter_step_3,
+                    R.string.guide_openrouter_step_4
                 ),
-                tips = "البديل الاحتياطي الأمثل (Failover Gateway) الذي يضمن عدم توقف الردود أبداً."
+                tipsResId = R.string.guide_openrouter_tips
             )
             ModelProviders.CLOUDFLARE -> ProviderGuideDetails(
                 provider = ModelProviders.CLOUDFLARE,
                 title = "Cloudflare Workers AI",
                 platformName = "Cloudflare Dashboard",
                 portalUrl = "https://dash.cloudflare.com",
-                keyOrIdLabel = "Account ID و API Token",
-                steps = listOf(
-                    "ادخل إلى لوحة تحكم Cloudflare وتوجه إلى قسم (Workers & Pages) ثم (AI).",
-                    "انسخ معرّف الحساب (Account ID) الظاهر في الشريط الجانبي الأيمن وألصقه في حقل Account ID.",
-                    "اضغط على (Manage API Tokens) وأنشئ توكن جديد بصلاحية (Workers AI Read).",
-                    "انسخ التوكن السري (يبدأ بـ cfut_...) وأضفه في قائمة مفاتيح الـ API."
+                keyOrIdLabel = "Account ID & API Token",
+                stepResIds = listOf(
+                    R.string.guide_cloudflare_step_1,
+                    R.string.guide_cloudflare_step_2,
+                    R.string.guide_cloudflare_step_3,
+                    R.string.guide_cloudflare_step_4
                 ),
-                tips = "يتطلب Cloudflare Workers AI كلاً من Account ID و API Token للعمل مع نماذج Clef Flash و Clef Omni."
+                tipsResId = R.string.guide_cloudflare_tips
             )
             ModelProviders.LIQUID -> ProviderGuideDetails(
                 provider = ModelProviders.LIQUID,
@@ -159,13 +165,13 @@ object ProviderGuideRegistry {
                 platformName = "Liquid AI",
                 portalUrl = "https://www.liquid.ai",
                 keyOrIdLabel = "API Key",
-                steps = listOf(
-                    "ادخل إلى بوابة مطوري Liquid AI وسجل الدخول بحسابك.",
-                    "انتقل إلى قسم API Credentials وأنشئ مفتاحاً جديداً (يبدأ بـ liquid_...).",
-                    "انسخ المفتاح السري وألصقه في التطبيق.",
-                    "يدعم محرك اتخاذ القرار الفوري ونماذج d1 و d1:latest ذات زمن الاستجابة فائق الصغر."
+                stepResIds = listOf(
+                    R.string.guide_liquid_step_1,
+                    R.string.guide_liquid_step_2,
+                    R.string.guide_liquid_step_3,
+                    R.string.guide_liquid_step_4
                 ),
-                tips = "يعمل كحارس بوابات (Gatekeeper) لتصنيف نية العميل وكشف الشكاوى العاجلة خلال أقل من 800ms."
+                tipsResId = R.string.guide_liquid_tips
             )
             ModelProviders.NARA -> ProviderGuideDetails(
                 provider = ModelProviders.NARA,
@@ -173,13 +179,13 @@ object ProviderGuideRegistry {
                 platformName = "Nara Router",
                 portalUrl = "https://router.bynara.id",
                 keyOrIdLabel = "API Key",
-                steps = listOf(
-                    "ادخل إلى بوابة Nara Router وأنشئ حساب مستخدم جديد.",
-                    "توجه إلى إدارة مفاتيح API واستخرج مفتاحاً جديداً (يبدأ بـ sk-nry-...).",
-                    "انسخ المفتاح وضعه في قائمة مفاتيح التطبيق.",
-                    "يدعم نموذج laguna-s-2.1 المخصص للغة العربية والمعاملات."
+                stepResIds = listOf(
+                    R.string.guide_nara_step_1,
+                    R.string.guide_nara_step_2,
+                    R.string.guide_nara_step_3,
+                    R.string.guide_nara_step_4
                 ),
-                tips = "نموذج عربي مخصص ومدرب بكفاءة عالية على اللهجات العربية وتجربة التجارة الإلكترونية."
+                tipsResId = R.string.guide_nara_tips
             )
             else -> ProviderGuideDetails(
                 provider = provider,
@@ -187,12 +193,12 @@ object ProviderGuideRegistry {
                 platformName = provider,
                 portalUrl = "https://google.com",
                 keyOrIdLabel = "API Key",
-                steps = listOf(
-                    "سجل الدخول إلى المنصة الرسمية للمزود.",
-                    "انتقل إلى إعدادات API وأنشئ مفتاحاً جديداً.",
-                    "انسخ المفتاح وضعه داخل التطبيق."
+                stepResIds = listOf(
+                    R.string.guide_default_step_1,
+                    R.string.guide_default_step_2,
+                    R.string.guide_default_step_3
                 ),
-                tips = "يمكنك إضافة أكثر من مفتاح لنفس المزود لتوزيع الحمل وتجنب حدود الاستخدام."
+                tipsResId = R.string.guide_default_tips
             )
         }
     }
@@ -247,7 +253,11 @@ fun ProviderKeyGuideDialog(
                     }
                 }
                 IconButton(onClick = onDismissRequest, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = stringResource(R.string.guide_close_desc),
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         },
@@ -295,7 +305,7 @@ fun ProviderKeyGuideDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.OpenInNew,
-                                contentDescription = "Open Portal",
+                                contentDescription = stringResource(R.string.guide_open_portal_desc),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -311,7 +321,7 @@ fun ProviderKeyGuideDialog(
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    guide.steps.forEachIndexed { index, step ->
+                    guide.stepResIds.forEachIndexed { index, stepResId ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.Top
@@ -332,7 +342,7 @@ fun ProviderKeyGuideDialog(
                             }
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = step,
+                                text = stringResource(stepResId),
                                 style = MaterialTheme.typography.bodySmall,
                                 lineHeight = 18.sp,
                                 modifier = Modifier.weight(1f)
@@ -361,7 +371,7 @@ fun ProviderKeyGuideDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = guide.tips,
+                            text = stringResource(guide.tipsResId),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
@@ -373,7 +383,7 @@ fun ProviderKeyGuideDialog(
                 // Prominent AI Guide Prompt Copy Button
                 Button(
                     onClick = {
-                        val aiPrompt = guide.getAiPrompt()
+                        val aiPrompt = guide.getAiPrompt(context)
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         val clip = ClipData.newPlainText("AI Guide Prompt", aiPrompt)
                         clipboard.setPrimaryClip(clip)

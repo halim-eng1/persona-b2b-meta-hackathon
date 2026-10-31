@@ -108,7 +108,7 @@ fun OrderMetricsRow(
                             color = statusColors.completed
                         )
                         Text(
-                            text = "تحصيل معروض",
+                            text = stringResource(R.string.orders_metrics_displayed_cod),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

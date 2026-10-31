@@ -74,7 +74,7 @@ fun BusinessHoursSection(
         ) {
             PreferenceSwitchRow(
                 title = stringResource(R.string.settings_hours_enable_title),
-                subtitle = "عند التفعيل، سيرسل الروبوت رسالة خارج أوقات العمل بدلاً من محاولة البيع في غير أوقات الدوام.",
+                subtitle = stringResource(R.string.settings_hours_out_of_hours_desc),
                 checked = schedule.isEnabled,
                 onCheckedChange = onBusinessHoursEnabledChange
             )

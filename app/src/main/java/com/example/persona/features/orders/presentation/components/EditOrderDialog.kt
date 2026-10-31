@@ -70,6 +70,7 @@ fun EditOrderDialog(
 
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     val subtotal = EgyptianOrderUtils.parseEgyptianDecimal(totalAmountText) ?: 0.0
     val shipping = EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) ?: 0.0
@@ -150,7 +151,7 @@ fun EditOrderDialog(
                         customerPhone = it
                         validationError = null
                     },
-                    label = { Text("رقم الهاتف (للمندوب)") },
+                    label = { Text(stringResource(R.string.orders_input_phone_rep_label)) },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Phone,
                         imeAction = ImeAction.Next
@@ -172,8 +173,8 @@ fun EditOrderDialog(
                         value = selectedGov,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("المحافظة") },
-                        placeholder = { Text("اختر المحافظة...") },
+                        label = { Text(stringResource(R.string.orders_input_gov_label)) },
+                        placeholder = { Text(stringResource(R.string.orders_input_gov_placeholder)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = govExpanded) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -201,7 +202,7 @@ fun EditOrderDialog(
                 OutlinedTextField(
                     value = deliveryAddress,
                     onValueChange = { deliveryAddress = it },
-                    label = { Text("عنوان التوصيل بالتفصيل") },
+                    label = { Text(stringResource(R.string.orders_input_address_label)) },
                     minLines = 2,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth(),
@@ -216,7 +217,7 @@ fun EditOrderDialog(
                         orderDetails = it
                         validationError = null
                     },
-                    label = { Text("محتويات الطلب والأصناف") },
+                    label = { Text(stringResource(R.string.orders_input_items_label_edit)) },
                     minLines = 3,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth(),
@@ -235,7 +236,7 @@ fun EditOrderDialog(
                             totalAmountText = it
                             validationError = null
                         },
-                        label = { Text("سعر المنتجات (ج.م)") },
+                        label = { Text(stringResource(R.string.orders_input_products_price_edit_label)) },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Decimal,
                             imeAction = ImeAction.Next
@@ -250,7 +251,7 @@ fun EditOrderDialog(
                             shippingFeeText = it
                             validationError = null
                         },
-                        label = { Text("الشحن (ج.م)") },
+                        label = { Text(stringResource(R.string.orders_input_shipping_fee_label)) },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Decimal,
                             imeAction = ImeAction.Done
@@ -282,7 +283,7 @@ fun EditOrderDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "إجمالي التحصيل عند الاستلام: ${EgyptianOrderUtils.formatMoney(codTotal)} ج.م (شامل الشحن)",
+                            text = stringResource(R.string.orders_total_cod_summary, EgyptianOrderUtils.formatMoney(codTotal)),
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                             color = OrderGreen
                         )
@@ -298,15 +299,15 @@ fun EditOrderDialog(
 
                         val phone = customerPhone.trim()
                         if (phone.isNotEmpty() && !EgyptianOrderUtils.isValidEgyptianMobile(phone)) {
-                            validationError = "رقم الهاتف غير صالح. يجب أن يتكون من 11 رقماً ويبدأ بـ 010 أو 011 أو 012 أو 015"
+                            validationError = context.getString(R.string.orders_error_invalid_egyptian_phone)
                             return@Button
                         }
                         if (totalAmountText.isNotBlank() && EgyptianOrderUtils.parseEgyptianDecimal(totalAmountText) == null) {
-                            validationError = "يرجى إدخال سعر صحيح للمنتجات"
+                            validationError = context.getString(R.string.orders_error_invalid_price)
                             return@Button
                         }
                         if (shippingFeeText.isNotBlank() && EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) == null) {
-                            validationError = "يرجى إدخال قيمة صحيحة لمصاريف الشحن"
+                            validationError = context.getString(R.string.orders_error_invalid_shipping)
                             return@Button
                         }
 
@@ -314,7 +315,7 @@ fun EditOrderDialog(
                         val shippingFeeVal = EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) ?: 0.0
 
                         if (total < 0.0 || shippingFeeVal < 0.0) {
-                            validationError = "لا يمكن أن تكون المبالغ المالية بالسالب"
+                            validationError = context.getString(R.string.orders_error_negative_amounts)
                             return@Button
                         }
 
@@ -340,7 +341,7 @@ fun EditOrderDialog(
                     Icon(Icons.Default.Save, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "حفظ التعديلات",
+                        text = stringResource(R.string.orders_edit_btn),
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.labelLarge
                     )

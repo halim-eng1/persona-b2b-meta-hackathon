@@ -83,12 +83,12 @@ fun OrdersDashboardScreen(
                                 val manifest = viewModel.exportSelectedBulkManifest()
                                 clipboardManager.setText(AnnotatedString(manifest))
                                 coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("تم نسخ كشف الشحنات المجمع")
+                                    snackbarHostState.showSnackbar(context.getString(R.string.orders_manifest_copied_snackbar))
                                 }
                             },
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Icon(Icons.Default.Share, contentDescription = "تصدير المانيفست المجمع")
+                            Icon(Icons.Default.Share, contentDescription = stringResource(R.string.orders_export_manifest_desc))
                         }
                         IconButton(
                             onClick = viewModel::bulkAdvanceStatus,
@@ -186,7 +186,7 @@ fun OrdersDashboardScreen(
                         FilterChip(
                             selected = state.selectedDateFilter == dateFilter,
                             onClick = { viewModel.onDateFilterSelected(dateFilter) },
-                            label = { Text(dateFilter.label, style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringResource(dateFilter.labelResId), style = MaterialTheme.typography.labelSmall) },
                             shape = RoundedCornerShape(10.dp)
                         )
                     }
@@ -272,7 +272,8 @@ fun OrdersDashboardScreen(
                             OrderFilter.CANCELLED -> state.cancelledCount
                             OrderFilter.RETURNED -> state.returnedCount
                         }
-                        val tabText = if (count > 0) "${filter.label} ($count)" else filter.label
+                        val filterName = stringResource(filter.labelResId)
+                        val tabText = if (count > 0) "$filterName ($count)" else filterName
                         Tab(
                             selected = filter == state.selectedTab,
                             onClick = { viewModel.onFilterSelected(filter) },

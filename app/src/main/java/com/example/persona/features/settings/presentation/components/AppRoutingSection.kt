@@ -66,7 +66,7 @@ fun AppRoutingSection(
         // ── WhatsApp Media & Voice Notes Access ────────────────────────────────
         PreferenceSection(
             title = stringResource(R.string.settings_routing_storage_title),
-            subtitle = "يتيح قراءة الصور والرسائل الصوتية الواردة ومعالجتها بنماذج الذكاء الاصطناعي محلياً."
+            subtitle = stringResource(R.string.settings_routing_media_desc)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

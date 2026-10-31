@@ -207,7 +207,8 @@ fun AuditLogScreen(
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    listOf("ALL" to "الكل", "Gemini" to "Gemini", "Qwen" to "Qwen", "Nvidia" to "NVIDIA", "Groq" to "Groq").forEach { (providerKey, label) ->
+                    val allLabel = stringResource(R.string.audit_log_filter_all)
+                    listOf("ALL" to allLabel, "Gemini" to "Gemini", "Qwen" to "Qwen", "Nvidia" to "NVIDIA", "Groq" to "Groq").forEach { (providerKey, label) ->
                         FilterChip(
                             selected = state.selectedProvider == providerKey,
                             onClick = { viewModel.onProviderSelected(providerKey) },
@@ -364,8 +365,9 @@ fun AuditLogScreen(
                                 .fillMaxWidth()
                                 .heightIn(max = 160.dp)
                         ) {
+                            val moreSuffix = stringResource(R.string.audit_log_more_suffix)
                             Text(
-                                text = payload.take(600) + if (payload.length > 600) "\n... [المزيد]" else "",
+                                text = payload.take(600) + if (payload.length > 600) moreSuffix else "",
                                 modifier = Modifier.padding(8.dp),
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontFamily = FontFamily.Monospace,
@@ -400,9 +402,9 @@ fun AuditLogScreen(
                                     putExtra(Intent.EXTRA_SUBJECT, "Persona B2B Audit Trail")
                                     putExtra(Intent.EXTRA_TEXT, payload)
                                 }
-                                context.startActivity(Intent.createChooser(sendIntent, "مشاركة تقرير المراجعة"))
+                                context.startActivity(Intent.createChooser(sendIntent, context.getString(R.string.audit_log_share_chooser_title)))
                             } catch (_: Exception) {
-                                Toast.makeText(context, "تعذر فتح تطبيق المشاركة", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.audit_log_share_failed_toast), Toast.LENGTH_SHORT).show()
                             }
                             viewModel.clearExportPayload()
                         },
@@ -581,7 +583,7 @@ private fun AuditLogCard(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        TelemetryBadge(label = stringResource(R.string.audit_log_tokens_badge), value = "إدخال: ${item.promptTokens} | إخراج: ${item.completionTokens}")
+                        TelemetryBadge(label = stringResource(R.string.audit_log_tokens_badge), value = stringResource(R.string.audit_log_tokens_format, item.promptTokens, item.completionTokens))
                         TelemetryBadge(label = stringResource(R.string.audit_log_latency_badge), value = stringResource(R.string.audit_log_latency_unit, item.latencyMs))
                     }
 

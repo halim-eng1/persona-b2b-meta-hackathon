@@ -233,19 +233,21 @@ fun ContactCard(
     }
 }
 
+@Composable
 private fun formatLastActive(timestampMs: Long): String {
-    if (timestampMs <= 0) return "غير محدد"
-    return try {
+    if (timestampMs <= 0) return stringResource(R.string.time_relative_undefined)
+    val parsed = runCatching {
         val dt = Instant.fromEpochMilliseconds(timestampMs).toLocalDateTime(TimeZone.currentSystemDefault())
         val now = Instant.fromEpochMilliseconds(System.currentTimeMillis()).toLocalDateTime(TimeZone.currentSystemDefault())
         val days = now.date.toEpochDays() - dt.date.toEpochDays()
-        when {
-            days == 0 -> "اليوم %02d:%02d".format(dt.hour, dt.minute)
-            days == 1 -> "أمس"
-            days in 2..6 -> "منذ $days أيام"
-            else -> "%02d/%02d/%04d".format(dt.dayOfMonth, dt.monthNumber, dt.year)
-        }
-    } catch (_: Exception) {
-        ""
+        Triple(days, dt, true)
+    }.getOrNull() ?: return ""
+
+    val (days, dt) = parsed
+    return when {
+        days == 0 -> stringResource(R.string.time_relative_today_at, dt.hour, dt.minute)
+        days == 1 -> stringResource(R.string.time_relative_yesterday)
+        days in 2..6 -> stringResource(R.string.time_relative_days_ago, days)
+        else -> "%02d/%02d/%04d".format(dt.dayOfMonth, dt.monthNumber, dt.year)
     }
 }

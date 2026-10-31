@@ -183,7 +183,7 @@ fun ChatImportScreen(
                         )
                     }
                     Text(
-                        text = "أنشئ قاعدة المعرفة الذكية لمتجرك أو مساعدك الشخصي عبر برومبتات الذكاء الاصطناعي الجاهزة، أو الصق النص مباشرة للفهرسة الفورية، أو اختر ملفاً من جهازك.",
+                        text = stringResource(R.string.chat_import_hero_description),
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.9f)
                     )
@@ -220,7 +220,7 @@ fun ChatImportScreen(
                     }
 
                     Text(
-                        text = "انسخ البرومبت المتخصص والصقه في ChatGPT أو Claude. سيقوم الذكاء الاصطناعي بمقابلتك خطوة بخطوة وتوليد ملف المعرفة المنسق بالماركداون (# Heading) لتقوم بلصقه هنا مباشرة:",
+                        text = stringResource(R.string.chat_import_ai_card_description),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -305,7 +305,7 @@ fun ChatImportScreen(
                     }
 
                     Text(
-                        text = "الصق نص المعرفة المنسق بالماركداون أو النص العادي ليتم تقطيعه وتوليد التضمينات الشعاعية محلياً على جهازك دون الحاجة لحفظ أو رفع ملفات:",
+                        text = stringResource(R.string.chat_import_direct_card_description),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -444,7 +444,7 @@ fun ChatImportScreen(
 
                     uiState.selectedFileUri?.let { uri ->
                         Text(
-                            text = "الملف المحدد: ${uri.queryDisplayName(context) ?: uri.lastPathSegment ?: "knowledge.md"}",
+                            text = stringResource(R.string.chat_import_selected_file_label, uri.queryDisplayName(context) ?: uri.lastPathSegment ?: "knowledge.md"),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.primary,
@@ -460,7 +460,7 @@ fun ChatImportScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "بدء",
+                                contentDescription = stringResource(R.string.chat_import_start_icon_desc),
                                 modifier = Modifier.padding(end = 8.dp)
                             )
                             Text(stringResource(R.string.import_screen_start_btn), fontWeight = FontWeight.Bold)
@@ -487,7 +487,7 @@ fun ChatImportScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
-                                contentDescription = "خطأ",
+                                contentDescription = stringResource(R.string.chat_import_error_icon_desc),
                                 tint = MaterialTheme.colorScheme.error
                             )
                             Text(
