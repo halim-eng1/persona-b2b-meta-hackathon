@@ -34,92 +34,6 @@ import java.net.UnknownHostException
 import java.util.Collections
 import javax.inject.Inject
 
-enum class ThresholdLevel(
-    val displayName: String,
-    val threshold: Float,
-    @StringRes val labelResId: Int = R.string.settings_threshold_balanced,
-    @StringRes val descResId: Int = R.string.settings_threshold_balanced_desc
-) {
-    CONSERVATIVE("Conservative", 0.85f, R.string.settings_threshold_conservative, R.string.settings_threshold_conservative_desc),
-    BALANCED("Balanced", 0.75f, R.string.settings_threshold_balanced, R.string.settings_threshold_balanced_desc),
-    AGGRESSIVE("Aggressive", 0.65f, R.string.settings_threshold_aggressive, R.string.settings_threshold_aggressive_desc);
-
-    companion object {
-        fun fromThreshold(value: Float): ThresholdLevel = when {
-            value >= 0.80f -> CONSERVATIVE
-            value >= 0.70f -> BALANCED
-            else           -> AGGRESSIVE
-        }
-    }
-}
-
-sealed interface VerificationState {
-    data object Idle : VerificationState
-    data object Checking : VerificationState
-    data class Success(val message: String = "الاتصال ناجح ✓") : VerificationState
-    data class Error(val error: String) : VerificationState
-}
-
-data class ProviderConfigState(
-    val provider: String,
-    val keys: List<String> = emptyList(),
-    val models: List<String> = emptyList(),
-    val verificationStates: Map<String, VerificationState> = emptyMap()
-)
-
-data class SettingsUiState(
-    // ── Tab selection (0: AI Engines, 1: Store Persona, 2: Hours & Blacklist, 3: App Routing, 4: Maintenance)
-    val selectedTab: Int = 0,
-
-    // ── App Language & Locale ("ar" or "en")
-    val appLanguage: String = UserPreferencesRepository.DEFAULT_APP_LANGUAGE,
-
-    // ── Theme Mode ("dark", "light", "system")
-    val themeMode: String = UserPreferencesRepository.DEFAULT_THEME_MODE,
-
-    // ── 1. AI Engines, Keys & Models
-    val providerOrder: List<String> = UserPreferencesRepository.DEFAULT_PROVIDER_ORDER,
-    val providerConfigs: Map<String, ProviderConfigState> = emptyMap(),
-    val selectedProviderForEdit: String = ModelProviders.QWEN,
-    val cloudflareAccountId: String = "",
-
-    // ── 2. Store Identity & Bot Persona
-    val botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
-    val storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME,
-    val personaTone: PersonaTone = PersonaTone.WITTY_EGYPTIAN,
-    val styleProfile: StyleProfile = StyleProfile.CASUAL,
-    val thresholdLevel: ThresholdLevel = ThresholdLevel.BALANCED,
-    val cooldownMins: Int = 5,
-    val replyDelaySeconds: Int = 2,
-    val replyDelayInput: String = "2",
-    val replyDelayError: String? = null,
-    val greetingTemplate: String = "",
-    val farewellTemplate: String = "",
-
-    // ── 3. Business Hours & Blacklist
-    val businessHoursSchedule: BusinessHoursSchedule = BusinessHoursSchedule(),
-    val ignoreWhatsAppGroups: Boolean = true,
-    val blacklistedNumbers: Set<String> = emptySet(),
-
-    // ── 4. WhatsApp App Routing & HITL
-    val listenMainApp: Boolean = true,
-    val listenBusinessApp: Boolean = true,
-    val listenCloneApp: Boolean = false,
-    val isAutoPauseOnHitl: Boolean = false,
-    val hitlHoldingMessage: String = UserPreferencesRepository.DEFAULT_HITL_HOLDING_MESSAGE,
-    val mediaFallbackMessage: String = UserPreferencesRepository.DEFAULT_MEDIA_FALLBACK_MESSAGE,
-    val blankReplyFallbackTemplate: String = UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE,
-
-    // ── 5. System Maintenance & Health
-    val isStorageAccessGranted: Boolean = false,
-    val isNotificationListenerGranted: Boolean = false,
-    val isBatteryOptimizationIgnored: Boolean = false,
-    val isAutoStartConfirmed: Boolean = false,
-    val maintenanceMessage: String? = null,
-
-    val isLoading: Boolean = true
-)
-
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
@@ -328,11 +242,34 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun moveProvider(from: Int, to: Int) {
+        val order = _uiState.value.providerOrder.toMutableList()
+        if (from !in order.indices || to !in order.indices) return
+        val item = order.removeAt(from)
+        order.add(to, item)
+        _uiState.update { it.copy(providerOrder = order) }
+        viewModelScope.launch {
+            userPreferencesRepository.setProviderOrder(order)
+        }
+    }
+
     fun addApiKey(provider: String, key: String) {
         val norm = ModelProviders.normalize(provider)
         val trimmed = key.trim()
         if (trimmed.isBlank()) return
         secureCredentialsRepository.addApiKey(norm, trimmed)
+        refreshProviderConfig(norm)
+    }
+
+    fun addApiKeyAtIndex(provider: String, key: String, index: Int) {
+        val norm = ModelProviders.normalize(provider)
+        val trimmed = key.trim()
+        if (trimmed.isBlank()) return
+        val current = secureCredentialsRepository.getApiKeys(norm).toMutableList()
+        current.remove(trimmed)
+        val safeIndex = index.coerceIn(0, current.size)
+        current.add(safeIndex, trimmed)
+        secureCredentialsRepository.setApiKeys(norm, current)
         refreshProviderConfig(norm)
     }
 
@@ -466,6 +403,38 @@ class SettingsViewModel @Inject constructor(
                 refreshProviderConfig(norm)
             }
         }
+    }
+
+    fun moveModel(provider: String, from: Int, to: Int) {
+        val norm = ModelProviders.normalize(provider)
+        viewModelScope.launch {
+            val current = userPreferencesRepository.getProviderModelsSync(norm).toMutableList()
+            if (from !in current.indices || to !in current.indices) return@launch
+            val item = current.removeAt(from)
+            current.add(to, item)
+            userPreferencesRepository.setProviderModels(norm, current)
+            refreshProviderConfig(norm)
+        }
+    }
+
+    fun addProviderModelAtIndex(provider: String, model: String, index: Int) {
+        val norm = ModelProviders.normalize(provider)
+        val trimmed = model.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            val current = userPreferencesRepository.getProviderModelsSync(norm).toMutableList()
+            current.remove(trimmed)
+            val safeIndex = index.coerceIn(0, current.size)
+            current.add(safeIndex, trimmed)
+            userPreferencesRepository.setProviderModels(norm, current)
+            refreshProviderConfig(norm)
+        }
+    }
+
+    fun testAllConnections(provider: String) {
+        val norm = ModelProviders.normalize(provider)
+        val keys = _uiState.value.providerConfigs[norm]?.keys.orEmpty()
+        keys.forEach { testConnection(norm, it) }
     }
 
     // ── 2. Store Identity & Bot Persona Operations ────────────────────────────

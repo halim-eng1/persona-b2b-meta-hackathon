@@ -917,4 +917,129 @@
 
     <string name="orders_customer_name_placeholder">مثال: محمد أحمد</string>
     <string name="currency_egp">ج.م</string>
+
+    <!-- ── Settings Overhaul (Proposal 3 Hub & Spokes + Frankenstein Synthesis) ── -->
+    <string name="spoke_voice">نبرة وسلوك المتحدث</string>
+    <string name="spoke_messages">الرسائل والردود التلقائية</string>
+    <string name="spoke_hours">ساعات العمل والخصوصية</string>
+    <string name="spoke_whatsapp">قنوات واتساب</string>
+    <string name="spoke_ai">محركات الذكاء الاصطناعي</string>
+    <string name="spoke_health">صحة النظام والبيانات</string>
+
+    <string name="hub_voice_summary">%1$s · تأخير %2$d ث</string>
+    <string name="hub_messages_summary">%d رسائل تلقائية مضبوطة</string>
+    <string name="hub_hours_on">مفعل · %d أيام عمل</string>
+    <string name="hub_hours_off">معطل (يعمل على مدار الساعة)</string>
+    <string name="hub_whatsapp_summary">%d تطبيقات قيد الاستماع</string>
+    <string name="hub_ai_summary">%1$s · %2$d مفاتيح</string>
+    <string name="hub_health_summary">%1$d من %2$d فحوصات مكتملة</string>
+
+    <string name="setup_copilot_title">مساعد الإعداد الذكي</string>
+    <string name="setup_copilot_desc">أكمل هذه الخطوات للحصول على أفضل أداء للمساعد</string>
+    <string name="setup_copilot_step">الخطوة %1$d من %2$d</string>
+    <string name="setup_add_key">إضافة مفتاح API واحد على الأقل</string>
+    <string name="setup_notification_access">منح إذن قراءة الإشعارات</string>
+    <string name="setup_storage_access">منح إذن قراءة الوسائط والتسجيلات</string>
+    <string name="setup_name_store">تحديد اسم المتجر والمساعد</string>
+
+    <string name="quick_hours">ساعات العمل</string>
+    <string name="quick_groups">تجاهل المجموعات</string>
+    <string name="quick_handoff">التدخل البشري</string>
+
+    <string name="settings_search">البحث في الإعدادات</string>
+    <string name="settings_search_hint">ابحث في الإعدادات والكلمات الدلالية...</string>
+    <string name="settings_app_preferences">تفضيلات التطبيق</string>
+    <string name="settings_language_theme_summary">اللغة ومظهر التطبيق</string>
+    <string name="settings_search_no_results">لم يتم العثور على إعدادات مطابقة لبحثك.</string>
+
+    <string name="common_paste">لصق</string>
+    <string name="common_done">تم</string>
+    <string name="common_reset_default">استعادة الافتراضي</string>
+    <string name="reorder_move_up">تحريك لأعلى</string>
+    <string name="reorder_move_down">تحريك لأسفل</string>
+    <string name="reorder_drag_handle">سحب لإعادة الترتيب</string>
+    <string name="settings_saved">تم الحفظ</string>
+
+    <string name="settings_ai_keys_title">مجموعة مفاتيح API</string>
+    <string name="settings_ai_providers_title">مزودو الذكاء الاصطناعي المدعومون</string>
+    <string name="settings_ai_no_keys_warning">لا توجد مفاتيح مسجلة</string>
+    <string name="settings_ai_key_deleted">تم حذف مفتاح API</string>
+    <string name="settings_ai_model_deleted">تم حذف النموذج %s</string>
+    <string name="settings_ai_add_and_test">إضافة وفحص</string>
+    <string name="settings_ai_test_all">فحص الكل</string>
+    <string name="settings_ai_add_key_title">إضافة مفتاح API لـ %s</string>
+    <string name="settings_ai_models_summary_sheet">النماذج المضبوطة بالترتيب الاحتياطي</string>
+    <string name="settings_ai_provider_cascade_title">سلسلة التراجع النشطة</string>
+    <string name="settings_ai_provider_cascade_subtitle">اضغط لترتيب أولوية المحركات</string>
+    <string name="settings_ai_cloudflare_hint">معرّف حساب كلاودفلير يتكون عادة من 32 حرفاً سداسي عشري</string>
+
+    <string name="msg_when_greeting">يُرسل عند بدء محادثة جديدة مع العميل</string>
+    <string name="msg_when_farewell">يُرسل عند ختام المحادثة</string>
+    <string name="msg_when_closed">يُرسل عند التواصل خارج ساعات العمل الرسمية</string>
+    <string name="msg_when_human">يُرسل عند تحويل المحادثة لممثل خدمة بشري</string>
+    <string name="msg_when_media">يُرسل عند استلام ملف وسائط أو رسالة صوتية</string>
+    <string name="msg_when_blank">يُرسل كبديل عند تعذر توليد رد مناسب</string>
+    <string name="msg_preview_empty">لم يتم تحديد نص للرسالة بعد</string>
+    <string name="msg_reset_confirm">هل تريد استعادة النص الافتراضي؟</string>
+
+    <string name="settings_hours_no_days_hint">لم يتم تحديد أي يوم. سيكون جدول ساعات العمل غير نشط.</string>
+    <string name="settings_hours_range_label">فترة ساعات العمل</string>
+    <string name="settings_hours_blocked_deleted">تمت إزالة الرقم %s من قائمة الحظر</string>
+    <string name="settings_blocklist_title">الأرقام المحظورة</string>
+    <string name="settings_blocklist_subtitle">إدارة أرقام هواتف العملاء المستبعدين من الردود التلقائية</string>
+    <string name="settings_blocklist_count">%d جهات اتصال محظورة</string>
+
+    <string name="day_sat_short">سبت</string>
+    <string name="day_sun_short">أحد</string>
+    <string name="day_mon_short">اثنين</string>
+    <string name="day_tue_short">ثلاثاء</string>
+    <string name="day_wed_short">أربعاء</string>
+    <string name="day_thu_short">خميس</string>
+    <string name="day_fri_short">جمعة</string>
+
+    <!-- Frankenstein Addition 1: Delay Stepper & Preset Chips -->
+    <string name="settings_reply_delay_stepper_decrease">تقليل ثانية واحدة</string>
+    <string name="settings_reply_delay_stepper_increase">زيادة ثانية واحدة</string>
+    <string name="settings_reply_delay_preset_1s">1 ث</string>
+    <string name="settings_reply_delay_preset_2s">2 ث</string>
+    <string name="settings_reply_delay_preset_5s">5 ث</string>
+    <string name="settings_reply_delay_preset_10s">10 ث</string>
+
+    <!-- Frankenstein Addition 2: Confirm Restore Backup Dialog -->
+    <string name="confirm_restore_backup_title">تأكيد استعادة النسخة الاحتياطية</string>
+    <string name="confirm_restore_backup_message">تحذير: استعادة النسخة الاحتياطية ستستبدل كافة الإعدادات ومفاتيح الـ API وقواعد البيانات الحالية. هل أنت متأكد من المتابعة؟</string>
+    <string name="confirm_restore_backup_confirm_btn">استعادة واستبدال</string>
+
+    <!-- Search Keywords (Bilingual Search Index) -->
+    <string name="kw_api_keys">api keys tokens credentials secret openrouter groq gemini nvidia qwen cloudflare nara liquid مفاتيح توكن سر ربط ذكاء اصطناعي</string>
+    <string name="kw_cloudflare">cloudflare account id workers ai حساب كلاودفلير معرّف</string>
+    <string name="kw_tone">tone persona personality voice witty formal friendly concise نبرة شخصية أسلوب مرح رسمي ودود مقتضب</string>
+    <string name="kw_days">working days schedule official hours أيام العمل الجدول مواعيد رسمي</string>
+    <string name="kw_bot_name">bot name assistant persona اسم البوت المساعد الممثل</string>
+    <string name="kw_store_name">store name business brand identity اسم المتجر البراند العلامة التجارية</string>
+    <string name="kw_delay">reply delay response timing seconds stepper تأخير الرد وقت ثواني سرعة</string>
+    <string name="kw_cooldown">cooldown delay minutes repeat chat فترة انتظار تهدئة دقائق تكرار</string>
+    <string name="kw_sensitivity">sensitivity match similarity threshold conservative balanced aggressive حساسية المطابقة تشابه دقة توازن</string>
+    <string name="kw_greeting">greeting welcome message start template ترحيب بداية المحادثة رسالة أهلاً</string>
+    <string name="kw_farewell">farewell closing concluding goodbye template وداع ختام مع السلامة شكراً</string>
+    <string name="kw_out_of_hours">out of hours closed off schedule message خارج أوقات العمل مغلق إجازة</string>
+    <string name="kw_human_holding">human takeover handoff support agent holding message تدخل بشري ممثل خدمة تحويل انتظار</string>
+    <string name="kw_media_fallback">media audio voice note image unsupported fallback وسائط صوت فويس صورة رسالة صوتية</string>
+    <string name="kw_blank_reply">blank empty reply fallback failure template رد فارغ تعذر توليد بديل</string>
+    <string name="kw_business_hours">business working hours schedule shift toggle مواعيد العمل دوام فترة تشغيل</string>
+    <string name="kw_working_times">working times start end picker hours وقت العمل بداية نهاية دوام</string>
+    <string name="kw_ignore_groups">groups ignore whatsapp privacy mute مجموعات جروبات تجاهل خصوصية واتساب</string>
+    <string name="kw_blocklist">blocklist blocked numbers blacklist ignore حظر أرقام محظورة قائمة سوداء منع</string>
+    <string name="kw_listen_main">whatsapp main official messenger listen listener واتساب رئيسي رسمي استماع</string>
+    <string name="kw_listen_business">whatsapp business w4b business listener واتساب أعمال تجاري بزنس استماع</string>
+    <string name="kw_listen_clone">whatsapp clone dual parallel listener واتساب مستنسخ مكرر موازي استماع</string>
+    <string name="kw_storage_access">storage media files all files access permission إذن تخزين وسائط وصول ملفات</string>
+    <string name="kw_human_takeover">human takeover pause safety safety toggle إيقاف أمان تدخل بشري</string>
+    <string name="kw_provider_chain">provider chain fallback cascade order priority أولوية ترتيب محركات الذكاء بديل</string>
+    <string name="kw_models">models llm inference custom model deepseek qwen نماذج ذكاء اصطناعي تخصيص</string>
+    <string name="kw_permissions">permissions health checks diagnostics recheck أذونات صحة فحص تشخيص إعادة فحص</string>
+    <string name="kw_backup">backup export restore encrypted local data نسخة احتياطية تصدير استيراد تشفير</string>
+    <string name="kw_cache">cache clean storage clear temporary cleaner ذاكرة مؤقتة تنظيف مسح مساحة</string>
+    <string name="kw_language">language arabic english locale لغة عربي إنجليزي لغات</string>
+    <string name="kw_theme">theme appearance dark light system mode مظهر سمة داكن فاتح نظام</string>
 </resources>
