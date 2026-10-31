@@ -627,4 +627,17 @@
     <string name="chat_filter_business">واتساب للأعمال</string>
     <string name="chat_filter_clone">التطبيق المستنسخ</string>
     <string name="chat_filter_needs_attention">تتطلب انتباهاً</string>
+
+    <string name="notification_listener_title">Persona B2B — المساعد نشط وجاهز</string>
+    <string name="notification_listener_text">المساعد الآلي نشط وجاهز للرد. يجب أن يظل هذا الإشعار مفعلاً لضمان عمل الخدمة بدون انقطاع.</string>
+    <string name="notification_listener_channel_name">خدمة الرد الآلي على واتساب</string>
+    <string name="notification_listener_channel_desc">يحافظ على تشغيل خدمة الرد الآلي في الخلفية</string>
+    <string name="notification_import_title">استيراد كتالوج ومحادثات المتجر</string>
+    <string name="notification_import_text">جاري معالجة بيانات المتجر وتوليد التضمينات الذكية...</string>
+    <string name="notification_alert_channel_name">تنبيهات النظام ومفاتيح التشغيل</string>
+    <string name="notification_alert_channel_desc">تنبيهات فورية عند نفاد رصيد المفاتيح أو عزل مزودي الذكاء الاصطناعي</string>
+    <string name="notification_key_evicted_title">⚠️ استبعاد مفتاح %s</string>
+    <string name="notification_key_evicted_body">تم استبعاد المفتاح %1$s بسبب: %2$s، والتحويل للمفتاح التالي في الحوض.</string>
+    <string name="notification_provider_tripped_title">🚨 عزل مزود الذكاء الاصطناعي: %s</string>
+    <string name="notification_provider_tripped_body">تم عزل مزود %1$s لمدة %2$d دقائق بسبب: %3$s. تم التحويل الفوري لمزود بديل في 0ms.</string>
 </resources>

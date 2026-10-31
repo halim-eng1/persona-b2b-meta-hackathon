@@ -314,8 +314,8 @@ class ChatImportWorker @AssistedInject constructor(
         }
 
         val notification = NotificationCompat.Builder(applicationContext, channelId)
-            .setContentTitle("استيراد كتالوج ومحادثات المتجر")
-            .setContentText("جاري معالجة بيانات المتجر وتوليد التضمينات الذكية...")
+            .setContentTitle(applicationContext.getString(R.string.notification_import_title))
+            .setContentText(applicationContext.getString(R.string.notification_import_text))
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

@@ -627,4 +627,17 @@
     <string name="chat_filter_business">WhatsApp Business</string>
     <string name="chat_filter_clone">Dual / Clone</string>
     <string name="chat_filter_needs_attention">Needs Attention</string>
+
+    <string name="notification_listener_title">Persona B2B — Active &amp; Ready</string>
+    <string name="notification_listener_text">Assistant is ready to reply. Keep this notification enabled to ensure uninterrupted service.</string>
+    <string name="notification_listener_channel_name">WhatsApp Auto-Reply Service</string>
+    <string name="notification_listener_channel_desc">Keeps Persona auto-reply service active in background</string>
+    <string name="notification_import_title">Importing Catalog &amp; Chat History</string>
+    <string name="notification_import_text">Processing store knowledge and generating smart vector embeddings...</string>
+    <string name="notification_alert_channel_name">System &amp; Key Alerts</string>
+    <string name="notification_alert_channel_desc">Instant alerts on quota depletion or AI provider isolation</string>
+    <string name="notification_key_evicted_title">⚠️ API Key Evicted: %s</string>
+    <string name="notification_key_evicted_body">Key %1$s was evicted due to: %2$s. Switched to next key in pool.</string>
+    <string name="notification_provider_tripped_title">🚨 Provider Isolated: %s</string>
+    <string name="notification_provider_tripped_body">Provider %1$s isolated for %2$d minutes due to: %3$s. Instant failover applied in 0ms.</string>
 </resources>

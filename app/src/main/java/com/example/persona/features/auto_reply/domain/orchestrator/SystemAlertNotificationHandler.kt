@@ -37,8 +37,8 @@ class SystemAlertNotificationHandler @Inject constructor(
 
     fun createAlertNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "تنبيهات النظام ومفاتيح التشغيل"
-            val descriptionText = "تنبيهات فورية عند نفاد رصيد المفاتيح أو عزل مزودي الذكاء الاصطناعي"
+            val name = context.getString(R.string.notification_alert_channel_name)
+            val descriptionText = context.getString(R.string.notification_alert_channel_desc)
             val importance = NotificationManager.IMPORTANCE_HIGH
             val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             val audioAttributes = AudioAttributes.Builder()
@@ -58,8 +58,8 @@ class SystemAlertNotificationHandler @Inject constructor(
 
     fun notifyKeyEvicted(provider: String, evictedKeyMasked: String, reason: String) {
         try {
-            val title = "⚠️ استبعاد مفتاح $provider"
-            val body = "تم استبعاد المفتاح $evictedKeyMasked بسبب: $reason، والتحويل للمفتاح التالي في الحوض."
+            val title = context.getString(R.string.notification_key_evicted_title, provider)
+            val body = context.getString(R.string.notification_key_evicted_body, evictedKeyMasked, reason)
             dispatchNotification(title, body)
             Log.w(TAG, "Key evicted alert dispatched: provider=$provider, key=$evictedKeyMasked, reason=$reason")
         } catch (e: Exception) {
@@ -69,8 +69,8 @@ class SystemAlertNotificationHandler @Inject constructor(
 
     fun notifyProviderTripped(provider: String, cooldownMinutes: Int = 5, reason: String) {
         try {
-            val title = "🚨 عزل مزود الذكاء الاصطناعي: $provider"
-            val body = "تم عزل مزود $provider لمدة $cooldownMinutes دقائق بسبب: $reason. تم التحويل الفوري لمزود بديل في 0ms."
+            val title = context.getString(R.string.notification_provider_tripped_title, provider)
+            val body = context.getString(R.string.notification_provider_tripped_body, provider, cooldownMinutes, reason)
             dispatchNotification(title, body)
             Log.e(TAG, "Provider tripped alert dispatched: provider=$provider, cooldown=${cooldownMinutes}m, reason=$reason")
         } catch (e: Exception) {

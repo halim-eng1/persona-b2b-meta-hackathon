@@ -517,10 +517,10 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Auto-Reply Service",
+            getString(R.string.notification_listener_channel_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Keeps PersonaChat auto-reply running"
+            description = getString(R.string.notification_listener_channel_desc)
             setShowBadge(false)
             lockscreenVisibility = Notification.VISIBILITY_SECRET
         }
@@ -530,8 +530,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
     private fun buildSilentNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Persona B2B Active")
-            .setContentText("المساعد الآلي يراقب الرسائل الواردة")
+            .setContentTitle(getString(R.string.notification_listener_title))
+            .setContentText(getString(R.string.notification_listener_text))
             .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
