@@ -83,7 +83,16 @@ fun PersonaNavGraph(
         }
 
         composable<Screen.Settings> {
-            SettingsScreen()
+            SettingsScreen(
+                onExit = {
+                    if (!navController.popBackStack()) {
+                        navController.navigate(Screen.Home) {
+                            popUpTo(Screen.Home) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    }
+                }
+            )
         }
 
         // ── CRM Contacts Directory ────────────────────────────────────────────

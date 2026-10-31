@@ -1,5 +1,6 @@
 package com.example.persona.features.settings.presentation.screens.hub
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -62,6 +63,8 @@ fun SettingsHubScreen(
     var searching by rememberSaveable { mutableStateOf(false) }
     var showPreferences by rememberSaveable { mutableStateOf(false) }
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    BackHandler(enabled = !searching, onBack = onExit)
 
     Scaffold(
         modifier = modifier.nestedScroll(scroll.nestedScrollConnection),
