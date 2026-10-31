@@ -53,4 +53,7 @@ interface ReplyLogDao {
 
     @Query("SELECT COUNT(*) FROM reply_log WHERE was_auto_sent = 1")
     fun observeAutoSentCount(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM reply_log WHERE was_auto_sent = 1 AND timestamp >= :since")
+    fun observeAutoSentCountSince(since: Instant): Flow<Int>
 }

@@ -62,6 +62,7 @@ import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.presentation.ProviderConfigState
 import com.example.persona.features.settings.presentation.SettingsUiState
 import com.example.persona.features.settings.presentation.VerificationState
+import com.example.persona.ui.theme.PersonaTheme
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -85,7 +86,7 @@ fun AiEnginesSection(
 
     var newKeyInput by remember(selectedProvider) { mutableStateOf("") }
     var newModelInput by remember(selectedProvider) { mutableStateOf("") }
-    val visibleKeys = remember { mutableStateMapOf<String, Boolean>() }
+    val visibleKeys = remember(selectedProvider) { mutableStateMapOf<String, Boolean>() }
     var showGuideDialogForProvider by remember { mutableStateOf<String?>(null) }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -95,14 +96,12 @@ fun AiEnginesSection(
             subtitle = stringResource(R.string.settings_ai_priority_subtitle)
         ) {
             state.providerOrder.forEachIndexed { index, provider ->
-                Card(
+                Surface(
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (provider == selectedProvider)
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                        else
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                    ),
+                    color = if (provider == selectedProvider)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onSelectProvider(provider) }
@@ -147,8 +146,7 @@ fun AiEnginesSection(
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(
-                                onClick = { showGuideDialogForProvider = provider },
-                                modifier = Modifier.size(36.dp)
+                                onClick = { showGuideDialogForProvider = provider }
                             ) {
                                 Icon(
                                     Icons.Default.Info,
@@ -159,17 +157,15 @@ fun AiEnginesSection(
                             }
                             IconButton(
                                 onClick = { onMoveProviderUp(provider) },
-                                enabled = index > 0,
-                                modifier = Modifier.size(36.dp)
+                                enabled = index > 0
                             ) {
-                                Icon(Icons.Default.ArrowUpward, contentDescription = "Move Up", modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.common_move_up), modifier = Modifier.size(18.dp))
                             }
                             IconButton(
                                 onClick = { onMoveProviderDown(provider) },
-                                enabled = index < state.providerOrder.size - 1,
-                                modifier = Modifier.size(36.dp)
+                                enabled = index < state.providerOrder.size - 1
                             ) {
-                                Icon(Icons.Default.ArrowDownward, contentDescription = "Move Down", modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.common_move_down), modifier = Modifier.size(18.dp))
                             }
                         }
                     }
@@ -196,10 +192,8 @@ fun AiEnginesSection(
                             {
                                 Icon(
                                     imageVector = Icons.Default.Info,
-                                    contentDescription = stringResource(R.string.settings_ai_provider_guide_btn),
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .clickable { showGuideDialogForProvider = provider }
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         } else null
@@ -249,11 +243,9 @@ fun AiEnginesSection(
 
             // Dedicated Cloudflare Account ID Field
             if (selectedProvider == ModelProviders.CLOUDFLARE) {
-                Card(
+                Surface(
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
-                    ),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 10.dp)
@@ -313,11 +305,9 @@ fun AiEnginesSection(
                     val isVisible = visibleKeys[apiKey] ?: false
                     val verificationState = config.verificationStates[apiKey] ?: VerificationState.Idle
 
-                    Card(
+                    Surface(
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                        ),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)
@@ -335,8 +325,13 @@ fun AiEnginesSection(
                                         color = MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.Bold
                                     )
+                                    val maskedKey = if (isVisible) apiKey else when {
+                                        apiKey.length <= 4 -> "••••••••"
+                                        apiKey.length < 12 -> apiKey.take(2) + "••••••••" + apiKey.takeLast(2)
+                                        else -> apiKey.take(6) + "••••••••••••" + apiKey.takeLast(4)
+                                    }
                                     Text(
-                                        text = if (isVisible) apiKey else apiKey.take(6) + "••••••••••••" + apiKey.takeLast(4),
+                                        text = maskedKey,
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -344,22 +339,20 @@ fun AiEnginesSection(
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     IconButton(
-                                        onClick = { visibleKeys[apiKey] = !isVisible },
-                                        modifier = Modifier.size(36.dp)
+                                        onClick = { visibleKeys[apiKey] = !isVisible }
                                     ) {
                                         Icon(
                                             imageVector = if (isVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                            contentDescription = "Toggle Visibility",
+                                            contentDescription = stringResource(R.string.common_toggle_visibility),
                                             modifier = Modifier.size(18.dp)
                                         )
                                     }
                                     IconButton(
-                                        onClick = { onRemoveApiKey(selectedProvider, apiKey) },
-                                        modifier = Modifier.size(36.dp)
+                                        onClick = { onRemoveApiKey(selectedProvider, apiKey) }
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Delete,
-                                            contentDescription = "Delete Key",
+                                            contentDescription = stringResource(R.string.common_delete),
                                             tint = MaterialTheme.colorScheme.error,
                                             modifier = Modifier.size(18.dp)
                                         )
@@ -396,12 +389,12 @@ fun AiEnginesSection(
                                     }
                                     is VerificationState.Success -> {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
+                                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = PersonaTheme.statusColors.success, modifier = Modifier.size(16.dp))
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
                                                 text = verificationState.message,
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = Color(0xFF2E7D32),
+                                                color = PersonaTheme.statusColors.success,
                                                 fontWeight = FontWeight.Medium
                                             )
                                         }
@@ -459,7 +452,7 @@ fun AiEnginesSection(
                     },
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add")
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.common_add))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(stringResource(R.string.common_add))
                 }
@@ -472,11 +465,9 @@ fun AiEnginesSection(
             subtitle = stringResource(R.string.settings_ai_models_subtitle)
         ) {
             config.models.forEachIndexed { modelIdx, modelName ->
-                Card(
+                Surface(
                     shape = RoundedCornerShape(10.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                    ),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 3.dp)
@@ -498,23 +489,20 @@ fun AiEnginesSection(
                         Row {
                             IconButton(
                                 onClick = { onMoveModelUp(selectedProvider, modelName) },
-                                enabled = modelIdx > 0,
-                                modifier = Modifier.size(32.dp)
+                                enabled = modelIdx > 0
                             ) {
-                                Icon(Icons.Default.ArrowUpward, contentDescription = "Move Model Up", modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.common_move_up), modifier = Modifier.size(16.dp))
                             }
                             IconButton(
                                 onClick = { onMoveModelDown(selectedProvider, modelName) },
-                                enabled = modelIdx < config.models.size - 1,
-                                modifier = Modifier.size(32.dp)
+                                enabled = modelIdx < config.models.size - 1
                             ) {
-                                Icon(Icons.Default.ArrowDownward, contentDescription = "Move Model Down", modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.common_move_down), modifier = Modifier.size(16.dp))
                             }
                             IconButton(
-                                onClick = { onRemoveProviderModel(selectedProvider, modelName) },
-                                modifier = Modifier.size(32.dp)
+                                onClick = { onRemoveProviderModel(selectedProvider, modelName) }
                             ) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete Model", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.common_delete), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                             }
                         }
                     }
@@ -546,7 +534,7 @@ fun AiEnginesSection(
                     },
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Model")
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.common_add))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(stringResource(R.string.common_add))
                 }

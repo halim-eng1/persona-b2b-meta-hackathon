@@ -6,6 +6,7 @@ import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.dao.OrderDao
 import com.example.persona.core.database.entity.ConversationMetadataEntity
 import com.example.persona.core.database.entity.OrderEntity
+import com.example.persona.core.database.entity.TodayOrdersAggregate
 import com.example.persona.features.audit_log.domain.model.AuditLogItem
 import com.example.persona.features.audit_log.domain.repository.AuditLogRepository
 import com.example.persona.features.auto_reply.domain.usecase.ToggleAutoReplyUseCase
@@ -56,6 +57,8 @@ class HomeViewModelTest {
     private val attentionCountFlow = MutableStateFlow(0)
     private val needsAttentionConversationsFlow = MutableStateFlow<List<ConversationMetadataEntity>>(emptyList())
     private val allOrdersFlow = MutableStateFlow<List<OrderEntity>>(emptyList())
+    private val todayOrdersAggregateFlow = MutableStateFlow(TodayOrdersAggregate(0, 0.0))
+    private val todayRepliesCountFlow = MutableStateFlow(0)
 
     private lateinit var viewModel: HomeViewModel
 
@@ -77,6 +80,8 @@ class HomeViewModelTest {
         every { conversationMetadataDao.observeTotalAttentionCount() } returns attentionCountFlow
         every { conversationMetadataDao.observeNeedsAttentionConversations() } returns needsAttentionConversationsFlow
         every { orderDao.observeAllOrders() } returns allOrdersFlow
+        every { orderDao.observeTodayOrdersAggregate(any()) } returns todayOrdersAggregateFlow
+        every { auditLogRepository.observeAutoSentCountSince(any()) } returns todayRepliesCountFlow
         every { permissionChecker.isNotificationListenerEnabled() } returns true
 
         viewModel = HomeViewModel(
@@ -86,7 +91,8 @@ class HomeViewModelTest {
             businessKnowledgeDao = businessKnowledgeDao,
             conversationMetadataDao = conversationMetadataDao,
             orderDao = orderDao,
-            permissionChecker = permissionChecker
+            permissionChecker = permissionChecker,
+            ioDispatcher = testDispatcher
         ).apply {
             clockEpochMillis = { fixedClockMillis }
             serviceAliveChecker = { true }
@@ -168,14 +174,6 @@ class HomeViewModelTest {
     @Test
     fun `setAutoReplyEnabled delegates to toggleAutoReplyUseCase`() = runTest(testDispatcher) {
         viewModel.setAutoReplyEnabled(false)
-        advanceUntilIdle()
-
-        coVerify(exactly = 1) { toggleAutoReplyUseCase.invoke(false) }
-    }
-
-    @Test
-    fun `emergencyKillSwitch delegates to toggleAutoReplyUseCase with false`() = runTest(testDispatcher) {
-        viewModel.emergencyKillSwitch()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { toggleAutoReplyUseCase.invoke(false) }
@@ -291,6 +289,7 @@ class HomeViewModelTest {
         )
 
         allOrdersFlow.value = listOf(orderTodayPending, orderTodayPrep, orderTodayDelivered, orderYesterday)
+        todayOrdersAggregateFlow.value = TodayOrdersAggregate(orderCount = 3, pendingRevenue = 850.0)
 
         val logTodayAuto = AuditLogItem(
             id = 201L,
@@ -321,6 +320,7 @@ class HomeViewModelTest {
         )
 
         allLogsFlow.value = listOf(logTodayAuto, logTodayManual, logYesterday)
+        todayRepliesCountFlow.value = 1
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -399,6 +399,7 @@ class HomeViewModelTest {
         )
 
         allOrdersFlow.value = listOf(order1, order2)
+        todayOrdersAggregateFlow.value = TodayOrdersAggregate(orderCount = 2, pendingRevenue = 650.0)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -406,5 +407,17 @@ class HomeViewModelTest {
         assertEquals(650.0, state.todayPendingRevenue, 0.001)
 
         collectJob.cancel()
+    }
+
+    @Test
+    fun `restartNotificationListenerService opens settings if permission is missing`() = runTest(testDispatcher) {
+        val mockContext = mockk<android.content.Context>(relaxed = true)
+        every { permissionChecker.isNotificationListenerEnabled() } returns false
+
+        viewModel.restartNotificationListenerService(mockContext)
+        advanceUntilIdle()
+
+        verify { permissionChecker.startNotificationListenerSettings(mockContext) }
+        coVerify(exactly = 0) { toggleAutoReplyUseCase(any()) }
     }
 }

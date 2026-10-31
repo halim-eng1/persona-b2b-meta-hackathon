@@ -1,4 +1,4 @@
-package com.example.persona.features.settings.presentation.components
+﻿package com.example.persona.features.settings.presentation.components
 
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.runtime.Composable

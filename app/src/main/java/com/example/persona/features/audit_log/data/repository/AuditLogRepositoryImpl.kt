@@ -12,6 +12,7 @@ import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -134,6 +135,9 @@ class AuditLogRepositoryImpl @Inject constructor(
         }
 
     override fun observeReplyCount(): Flow<Int> = replyLogDao.observeAutoSentCount()
+
+    override fun observeAutoSentCountSince(since: Instant): Flow<Int> =
+        replyLogDao.observeAutoSentCountSince(since)
 
     override suspend fun clearPendingRepliesForContact(contactName: String) {
         replyQueueDao.deletePendingRepliesForContact(contactName)

@@ -1,22 +1,36 @@
 package com.example.persona.features.home.presentation
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import android.service.notification.NotificationListenerService
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.persona.R
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.dao.BusinessKnowledgeDao
 import com.example.persona.core.database.dao.ConversationMetadataDao
 import com.example.persona.core.database.dao.OrderDao
 import com.example.persona.core.database.entity.OrderStatus
+import com.example.persona.core.database.entity.TodayOrdersAggregate
+import com.example.persona.core.di.IoDispatcher
 import com.example.persona.features.audit_log.domain.model.AuditLogItem
 import com.example.persona.features.audit_log.domain.repository.AuditLogRepository
 import com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener
 import com.example.persona.features.auto_reply.domain.usecase.ToggleAutoReplyUseCase
 import com.example.persona.features.onboarding.data.PermissionChecker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -24,6 +38,10 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
+
+sealed interface HomeUiEvent {
+    data class ShowSnackbar(val message: String) : HomeUiEvent
+}
 
 enum class SystemHealthStatus {
     ACTIVE,             // Enabled, permission granted, service running in OS
@@ -71,7 +89,8 @@ class HomeViewModel @Inject constructor(
     private val businessKnowledgeDao: BusinessKnowledgeDao,
     private val conversationMetadataDao: ConversationMetadataDao,
     private val orderDao: OrderDao,
-    private val permissionChecker: PermissionChecker
+    private val permissionChecker: PermissionChecker,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     // Overridable clock and service checker for testing
@@ -81,6 +100,8 @@ class HomeViewModel @Inject constructor(
     }
 
     private val _healthRefreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0L)
+    private val _uiEvents = Channel<HomeUiEvent>(Channel.BUFFERED)
+    val uiEvents = _uiEvents.receiveAsFlow()
 
     fun refreshHealth() {
         _healthRefreshTrigger.value = System.currentTimeMillis()
@@ -115,7 +136,7 @@ class HomeViewModel @Inject constructor(
                 log.copy(sourceClass = resolved)
             }
         }
-    }
+    }.flowOn(ioDispatcher)
 
     private val attentionFlow = combine(
         conversationMetadataDao.observeTotalAttentionCount(),
@@ -132,29 +153,25 @@ class HomeViewModel @Inject constructor(
         Pair(count, mappedCustomers)
     }
 
-    private val ordersMetricFlow = orderDao.observeAllOrders().map { allOrders ->
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val ordersMetricFlow = _healthRefreshTrigger.flatMapLatest {
         val startOfToday = getStartOfTodayEpochMillis()
-        val todayOrders = allOrders.filter { it.timestamp >= startOfToday }
-        val count = todayOrders.size
-        val pendingRev = todayOrders
-            .filter {
-                val s = it.status.trim()
-                s.equals("PENDING", ignoreCase = true) || s.equals("IN_PREPARATION", ignoreCase = true)
-            }
-            .sumOf { it.totalAmount }
-        Pair(count, pendingRev)
-    }
+        orderDao.observeTodayOrdersAggregate(startOfToday)
+    }.map { aggregate ->
+        Pair(aggregate.orderCount, aggregate.pendingRevenue)
+    }.flowOn(ioDispatcher)
 
-    private val repliesMetricFlow = combine(
-        auditLogRepository.observeReplyCount(),
-        auditLogRepository.observeLogs(limit = 200)
-    ) { totalReplies, logs ->
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val repliesMetricFlow = _healthRefreshTrigger.flatMapLatest {
         val startOfToday = getStartOfTodayEpochMillis()
-        val todayReplies = logs.count {
-            it.timestamp.toEpochMilliseconds() >= startOfToday && it.wasAutoSent
+        val startOfTodayInstant = kotlinx.datetime.Instant.fromEpochMilliseconds(startOfToday)
+        combine(
+            auditLogRepository.observeReplyCount(),
+            auditLogRepository.observeAutoSentCountSince(startOfTodayInstant)
+        ) { totalReplies, todayReplies ->
+            Pair(totalReplies, todayReplies)
         }
-        Pair(totalReplies, todayReplies)
-    }
+    }.flowOn(ioDispatcher)
 
     private val metricsFlow = combine(ordersMetricFlow, repliesMetricFlow) { (orders, rev), (totalReplies, todayReplies) ->
         B2BMetrics(orders, rev, totalReplies, todayReplies)
@@ -228,12 +245,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun emergencyKillSwitch() {
-        viewModelScope.launch {
-            toggleAutoReplyUseCase(false)
-        }
-    }
-
     fun refreshSystemHealth() {
         refreshHealth()
     }
@@ -253,6 +264,37 @@ class HomeViewModel @Inject constructor(
     fun restartService() {
         viewModelScope.launch {
             toggleAutoReplyUseCase(true)
+        }
+    }
+
+    fun restartNotificationListenerService(context: Context) {
+        if (!isNotificationPermissionGranted()) {
+            openNotificationSettings(context)
+            return
+        }
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val componentName = ComponentName(context, WhatsAppNotificationListener::class.java)
+                val pm = context.packageManager
+                pm.setComponentEnabledSetting(
+                    componentName,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                pm.setComponentEnabledSetting(
+                    componentName,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    NotificationListenerService.requestRebind(componentName)
+                }
+                toggleAutoReplyUseCase(true)
+                refreshSystemHealth()
+                _uiEvents.send(HomeUiEvent.ShowSnackbar(context.getString(R.string.home_service_restart_success)))
+            } catch (e: Exception) {
+                _uiEvents.send(HomeUiEvent.ShowSnackbar(context.getString(R.string.home_service_restart_failed, e.message ?: "")))
+            }
         }
     }
 }

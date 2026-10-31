@@ -36,6 +36,13 @@
     <string name="common_send">إرسال</string>
     <string name="common_all">الكل</string>
     <string name="common_back">رجوع</string>
+    <string name="common_move_up">تحريك للأعلى</string>
+    <string name="common_move_down">تحريك للأسفل</string>
+    <string name="common_toggle_visibility">تبديل الرؤية</string>
+    <string name="common_remove">إزالة</string>
+    <string name="settings_cooldown_none">بدون تأخير (فوري / وضع الفحص)</string>
+    <string name="settings_cooldown_one_min">دقيقة واحدة</string>
+    <string name="settings_cooldown_mins">%d دقائق</string>
 
     <!-- ── Home & Dashboard ────────────────────────────────────────────────────── -->
     <string name="home_dashboard_title">لوحة التحكم</string>
@@ -871,4 +878,5 @@
     <string name="audit_log_tokens_format">إدخال: %1$d | إخراج: %2$d</string>
 
     <string name="orders_customer_name_placeholder">مثال: محمد أحمد</string>
+    <string name="currency_egp">ج.م</string>
 </resources>

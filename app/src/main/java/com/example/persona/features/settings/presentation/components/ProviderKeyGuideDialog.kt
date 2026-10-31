@@ -252,7 +252,7 @@ fun ProviderKeyGuideDialog(
                         )
                     }
                 }
-                IconButton(onClick = onDismissRequest, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onDismissRequest) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = stringResource(R.string.guide_close_desc),
@@ -300,8 +300,7 @@ fun ProviderKeyGuideDialog(
                         IconButton(
                             onClick = {
                                 runCatching { uriHandler.openUri(guide.portalUrl) }
-                            },
-                            modifier = Modifier.size(36.dp)
+                            }
                         ) {
                             Icon(
                                 imageVector = Icons.Default.OpenInNew,
@@ -388,8 +387,8 @@ fun ProviderKeyGuideDialog(
                         val clip = ClipData.newPlainText("AI Guide Prompt", aiPrompt)
                         clipboard.setPrimaryClip(clip)
 
-                        val notificationText = context.getString(R.string.guide_notification_copy_text) + "\n" + aiPrompt
-                        Toast.makeText(context, notificationText, Toast.LENGTH_LONG).show()
+                        val notificationText = context.getString(R.string.guide_notification_copy_text)
+                        Toast.makeText(context, notificationText, Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),

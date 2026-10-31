@@ -1,4 +1,4 @@
-package com.example.persona.features.settings.presentation.components
+﻿package com.example.persona.features.settings.presentation.components
 
 import com.example.persona.R
 import androidx.compose.ui.res.stringResource

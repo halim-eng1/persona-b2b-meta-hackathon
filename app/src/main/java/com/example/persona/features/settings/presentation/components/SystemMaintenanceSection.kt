@@ -29,6 +29,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.persona.features.settings.presentation.SettingsUiState
+import com.example.persona.ui.theme.PersonaTheme
 
 @Composable
 fun SystemMaintenanceSection(
@@ -51,11 +53,9 @@ fun SystemMaintenanceSection(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Feedback message banner
         AnimatedVisibility(visible = state.maintenanceMessage != null) {
-            Card(
+            Surface(
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                ),
+                color = MaterialTheme.colorScheme.primaryContainer,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -184,14 +184,12 @@ private fun HealthItemRow(
     missingText: String,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Surface(
         shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isOk)
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
-            else
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
-        ),
+        color = if (isOk)
+            PersonaTheme.statusColors.successContainer.copy(alpha = 0.35f)
+        else
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 3.dp)
@@ -212,14 +210,14 @@ private fun HealthItemRow(
                 Text(
                     text = if (isOk) okText else missingText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isOk) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                    color = if (isOk) PersonaTheme.statusColors.success else MaterialTheme.colorScheme.error
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
                 imageVector = if (isOk) Icons.Default.CheckCircle else Icons.Default.Error,
                 contentDescription = null,
-                tint = if (isOk) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
+                tint = if (isOk) PersonaTheme.statusColors.success else MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(20.dp)
             )
         }

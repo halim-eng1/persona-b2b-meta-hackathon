@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -21,6 +22,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -98,7 +103,7 @@ fun SystemHealthCard(
                     modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(imageVector = config.icon, contentDescription = null, tint = config.iconTint, modifier = Modifier.size(20.dp))
+                        Icon(imageVector = config.icon, contentDescription = config.title, tint = config.iconTint, modifier = Modifier.size(20.dp))
                     }
                 }
                 Column(modifier = Modifier.weight(1f)) {
@@ -173,7 +178,7 @@ fun UrgentAttentionBanner(
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Icon(
                             imageVector = Icons.Default.Warning,
-                            contentDescription = null,
+                            contentDescription = stringResource(R.string.home_attention_customers_waiting, pendingCount),
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(20.dp)
                         )
@@ -215,7 +220,10 @@ fun UrgentAttentionBanner(
                             modifier = Modifier
                                 .heightIn(min = 48.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .clickable { onCustomerClick(customer.contactName, customer.sourceClass) }
+                                .clickable(role = Role.Button) { onCustomerClick(customer.contactName, customer.sourceClass) }
+                                .semantics {
+                                    contentDescription = "${customer.contactName}, ${customer.lastMessage}"
+                                }
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -268,7 +276,14 @@ fun AutoReplyMasterToggleCard(
     )
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .toggleable(
+                value = isEnabled,
+                role = Role.Switch,
+                onValueChange = onToggle
+            ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = toggleColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -293,7 +308,7 @@ fun AutoReplyMasterToggleCard(
             }
             Switch(
                 checked = isEnabled,
-                onCheckedChange = onToggle,
+                onCheckedChange = null,
                 colors = SwitchDefaults.colors(
                     checkedTrackColor = MaterialTheme.colorScheme.primary
                 )
@@ -311,48 +326,91 @@ fun B2BOperationalMetricsHub(
     totalReplies: Int,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            StatCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.AutoMirrored.Filled.ReceiptLong,
-                value = todayOrders.toString(),
-                label = stringResource(R.string.home_stat_today_orders),
-                iconTint = MaterialTheme.colorScheme.primary
-            )
-            StatCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Default.MonetizationOn,
-                value = "${pendingRevenue.coerceAtLeast(0.0).roundToInt()} EGP",
-                label = stringResource(R.string.home_stat_pending_revenue),
-                iconTint = MaterialTheme.colorScheme.tertiary
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            StatCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Default.SupportAgent,
-                value = waitingCount.toString(),
-                label = stringResource(R.string.home_stat_waiting_customers),
-                iconTint = if (waitingCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
-            )
-            StatCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Default.SmartToy,
-                value = todayReplies.toString(),
-                label = stringResource(R.string.home_stat_bot_replies),
-                subLabel = stringResource(R.string.home_stat_total_prefix, totalReplies),
-                iconTint = MaterialTheme.colorScheme.primary
-            )
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val isWide = maxWidth >= 600.dp
+        val currencySuffix = stringResource(R.string.currency_egp)
+        val formattedRevenue = "\u202A${com.example.persona.features.orders.domain.EgyptianOrderUtils.formatMoney(pendingRevenue.coerceAtLeast(0.0))} $currencySuffix\u202C"
+
+        if (isWide) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                StatCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                    value = todayOrders.toString(),
+                    label = stringResource(R.string.home_stat_today_orders),
+                    iconTint = MaterialTheme.colorScheme.primary
+                )
+                StatCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.MonetizationOn,
+                    value = formattedRevenue,
+                    label = stringResource(R.string.home_stat_pending_revenue),
+                    iconTint = MaterialTheme.colorScheme.tertiary
+                )
+                StatCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.SupportAgent,
+                    value = waitingCount.toString(),
+                    label = stringResource(R.string.home_stat_waiting_customers),
+                    iconTint = if (waitingCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
+                )
+                StatCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.SmartToy,
+                    value = todayReplies.toString(),
+                    label = stringResource(R.string.home_stat_bot_replies),
+                    subLabel = stringResource(R.string.home_stat_total_prefix, totalReplies),
+                    iconTint = MaterialTheme.colorScheme.primary
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    StatCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                        value = todayOrders.toString(),
+                        label = stringResource(R.string.home_stat_today_orders),
+                        iconTint = MaterialTheme.colorScheme.primary
+                    )
+                    StatCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.MonetizationOn,
+                        value = formattedRevenue,
+                        label = stringResource(R.string.home_stat_pending_revenue),
+                        iconTint = MaterialTheme.colorScheme.tertiary
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    StatCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.SupportAgent,
+                        value = waitingCount.toString(),
+                        label = stringResource(R.string.home_stat_waiting_customers),
+                        iconTint = if (waitingCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
+                    )
+                    StatCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.SmartToy,
+                        value = todayReplies.toString(),
+                        label = stringResource(R.string.home_stat_bot_replies),
+                        subLabel = stringResource(R.string.home_stat_total_prefix, totalReplies),
+                        iconTint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
     }
 }
@@ -362,7 +420,6 @@ fun QuickActionsSection(
     onNavigateToKnowledge: () -> Unit,
     onNavigateToImport: () -> Unit,
     onNavigateToOrders: () -> Unit,
-    onEmergencyStop: (() -> Unit)? = null,
     onNavigateToContacts: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -434,7 +491,7 @@ private fun QuickActionButton(
         modifier = modifier
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         color = containerColor
     ) {
@@ -452,45 +509,6 @@ private fun QuickActionButton(
             )
         }
     }
-}
-
-@Composable
-fun EmergencyStopDialog(
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                Text(text = stringResource(R.string.home_emergency_kill_title), fontWeight = FontWeight.Bold)
-            }
-        },
-        text = {
-            Text(
-                text = stringResource(R.string.home_emergency_kill_message),
-                style = MaterialTheme.typography.bodyMedium
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier.heightIn(min = 48.dp)
-            ) {
-                Text(text = stringResource(R.string.home_emergency_kill_confirm))
-            }
-        },
-        dismissButton = {
-            OutlinedButton(
-                onClick = onDismiss,
-                modifier = Modifier.heightIn(min = 48.dp)
-            ) {
-                Text(text = stringResource(R.string.common_cancel))
-            }
-        }
-    )
 }
 
 @Composable
@@ -540,33 +558,6 @@ fun StatCard(
 }
 
 @Composable
-fun HomeOverviewRow(
-    totalRepliesSent: Int,
-    knowledgeChunkCount: Int,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        StatCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.CheckCircle,
-            value = totalRepliesSent.toString(),
-            label = stringResource(R.string.home_stat_total_replies_sent),
-            iconTint = MaterialTheme.colorScheme.primary
-        )
-        StatCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.Person,
-            value = knowledgeChunkCount.toString(),
-            label = stringResource(R.string.home_stat_knowledge_chunks),
-            iconTint = MaterialTheme.colorScheme.tertiary
-        )
-    }
-}
-
-@Composable
 fun RecentActivityRow(
     item: AuditLogItem,
     onClick: () -> Unit,
@@ -581,7 +572,10 @@ fun RecentActivityRow(
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+            }
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

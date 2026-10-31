@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.database.entity.OrderStatusCount
+import com.example.persona.core.database.entity.TodayOrdersAggregate
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -250,4 +251,17 @@ interface OrderDao {
      */
     @Query("SELECT * FROM orders_table WHERE timestamp BETWEEN :fromTimestamp AND :toTimestamp ORDER BY timestamp DESC")
     fun observeOrdersByDateRange(fromTimestamp: Long, toTimestamp: Long): Flow<List<OrderEntity>>
+
+    /**
+     * Efficiently calculates today's total orders and pending Cash On Delivery revenue
+     * directly in SQLite, avoiding loading all order records into memory.
+     */
+    @Query("""
+        SELECT 
+            COUNT(*) AS order_count,
+            COALESCE(SUM(CASE WHEN UPPER(TRIM(status)) IN ('PENDING', 'IN_PREPARATION') THEN total_amount ELSE 0.0 END), 0.0) AS pending_revenue
+        FROM orders_table
+        WHERE timestamp >= :startOfToday
+    """)
+    fun observeTodayOrdersAggregate(startOfToday: Long): Flow<TodayOrdersAggregate>
 }

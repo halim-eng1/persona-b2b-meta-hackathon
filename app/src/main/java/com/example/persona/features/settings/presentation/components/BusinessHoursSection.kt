@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -178,11 +179,9 @@ fun BusinessHoursSection(
                 )
             } else {
                 state.blacklistedNumbers.forEach { number ->
-                    Card(
+                    Surface(
                         shape = RoundedCornerShape(10.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                        ),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 3.dp)
@@ -200,12 +199,11 @@ fun BusinessHoursSection(
                                 fontWeight = FontWeight.Medium
                             )
                             IconButton(
-                                onClick = { onRemoveBlacklistNumber(number) },
-                                modifier = Modifier.size(32.dp)
+                                onClick = { onRemoveBlacklistNumber(number) }
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
-                                    contentDescription = "Remove",
+                                    contentDescription = stringResource(R.string.common_remove),
                                     tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(16.dp)
                                 )
