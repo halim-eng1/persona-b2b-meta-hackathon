@@ -327,9 +327,9 @@
     <string name="chat_toast_whatsapp_takeover">Switched to WhatsApp — auto-reply paused for this customer</string>
     <string name="chat_badge_business">WhatsApp Business</string>
     <string name="chat_badge_main">WhatsApp</string>
-    <string name="chat_pill_active">🤖 Active</string>
-    <string name="chat_pill_paused">⏸️ Paused</string>
-    <string name="chat_pill_override">⚡ Exception</string>
+    <string name="chat_pill_active">Active</string>
+    <string name="chat_pill_paused">Paused</string>
+    <string name="chat_pill_override">Exception</string>
     <string name="chat_status_assistant_ready">Assistant ready</string>
     <string name="chat_status_generating_clean">Generating reply…</string>
     <string name="chat_profile_sheet_title">Customer Profile</string>

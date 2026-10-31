@@ -9,11 +9,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,7 +41,7 @@ import com.example.persona.ui.theme.chatColors
 @Composable
 fun CompactChatTopBar(
     contactName: String,
-    sourceClass: String,
+    @Suppress("UNUSED_PARAMETER") sourceClass: String = "",
     replyCapability: ReplyCapability,
     isAiPaused: Boolean,
     botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
@@ -50,7 +52,7 @@ fun CompactChatTopBar(
     effectiveAiActive: Boolean = if (isGlobalAutoReplyEnabled) !isAiPaused else isAiOverrideEnabled,
     onNavigateBack: () -> Unit,
     onToggleAi: () -> Unit,
-    onOpenWhatsApp: (() -> Unit)? = null,
+    @Suppress("UNUSED_PARAMETER") onOpenWhatsApp: (() -> Unit)? = null,
     onResolveAttention: (() -> Unit)? = null,
     onOpenContactProfile: (() -> Unit)? = null,
     onExportChat: () -> Unit = {},
@@ -121,46 +123,17 @@ fun CompactChatTopBar(
                     .padding(vertical = 4.dp, horizontal = 4.dp),
                 verticalArrangement = Arrangement.Center
             ) {
-                // Customer Name + Localized WhatsApp Source Badge
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = EgyptianOrderUtils.formatContactDisplayName(contactName),
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            color = chatColors.onSurface
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-
-                    val localizedSource = when (sourceClass.uppercase()) {
-                        "BUSINESS" -> stringResource(R.string.chat_badge_business)
-                        "MAIN_APP" -> stringResource(R.string.chat_badge_main)
-                        else -> sourceClass
-                    }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = when (sourceClass.uppercase()) {
-                            "BUSINESS" -> chatColors.badgeBusiness
-                            "MAIN_APP" -> chatColors.badgeMainApp
-                            else -> chatColors.badgeOther
-                        }
-                    ) {
-                        Text(
-                            text = localizedSource,
-                            color = chatColors.onBadge,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
-                        )
-                    }
-                }
+                // Customer Name (Full horizontal width without badge truncation)
+                Text(
+                    text = EgyptianOrderUtils.formatContactDisplayName(contactName),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = chatColors.onSurface
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
 
                 // Subtitle: Clean status without technical background leaks
                 val subtitleColor = when {
@@ -184,46 +157,48 @@ fun CompactChatTopBar(
                     else -> stringResource(R.string.chat_status_awaiting)
                 }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f, fill = false)
-                ) {
-                    Text(
-                        text = if (botName.isNotBlank() && !isAiGenerating) "$statusText • $botName" else statusText,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
-                            textDirection = TextDirection.Content
-                        ),
-                        color = subtitleColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    text = if (botName.isNotBlank() && !isAiGenerating) "$statusText • $botName" else statusText,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        textDirection = TextDirection.Content
+                    ),
+                    color = subtitleColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             Spacer(modifier = Modifier.width(6.dp))
 
-            // ── Right Actions: Compact Copilot Pill, External WhatsApp, Overflow ──
+            // ── Right Actions: Compact Copilot Pill, Overflow ───────────────
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.padding(end = 2.dp)
             ) {
-                // 1. Sleek Tactile Copilot Status Pill (Replaces bulky Switch)
+                // 1. Sleek Tactile Copilot Status Pill (Vector Icon + Clean Text)
                 val isOverride = !isGlobalAutoReplyEnabled && isAiOverrideEnabled
-                val (pillText, pillBg, pillFg) = when {
-                    isOverride -> Triple(
-                        stringResource(R.string.chat_pill_override),
+                val pillIcon = when {
+                    isOverride -> Icons.Default.Bolt
+                    effectiveAiActive -> Icons.Default.SmartToy
+                    else -> Icons.Default.PauseCircle
+                }
+                val pillText = when {
+                    isOverride -> stringResource(R.string.chat_pill_override)
+                    effectiveAiActive -> stringResource(R.string.chat_pill_active)
+                    else -> stringResource(R.string.chat_pill_paused)
+                }
+                val (pillBg, pillFg) = when {
+                    isOverride -> Pair(
                         MaterialTheme.colorScheme.tertiaryContainer,
                         MaterialTheme.colorScheme.onTertiaryContainer
                     )
-                    effectiveAiActive -> Triple(
-                        stringResource(R.string.chat_pill_active),
+                    effectiveAiActive -> Pair(
                         MaterialTheme.colorScheme.primaryContainer,
                         MaterialTheme.colorScheme.onPrimaryContainer
                     )
-                    else -> Triple(
-                        stringResource(R.string.chat_pill_paused),
+                    else -> Pair(
                         chatColors.surfaceAlt,
                         chatColors.statusIdle
                     )
@@ -247,10 +222,17 @@ fun CompactChatTopBar(
                             stateDescription = if (effectiveAiActive) "Active" else "Paused"
                         }
                 ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         modifier = Modifier.padding(horizontal = 8.dp)
                     ) {
+                        Icon(
+                            imageVector = pillIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = pillFg
+                        )
                         Text(
                             text = pillText,
                             style = MaterialTheme.typography.labelSmall.copy(
@@ -262,22 +244,7 @@ fun CompactChatTopBar(
                     }
                 }
 
-                // 2. 1-Tap External WhatsApp Launcher (Explicit OpenInNew Vector)
-                if (onOpenWhatsApp != null) {
-                    IconButton(
-                        onClick = onOpenWhatsApp,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                            contentDescription = stringResource(R.string.chat_open_whatsapp),
-                            tint = chatColors.accentText,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-
-                // 3. 3-Dot Overflow Menu (Sole home for Export and Clear)
+                // 2. 3-Dot Overflow Menu (Sole home for Export and Clear)
                 Box {
                     IconButton(
                         onClick = { menuExpanded = true },

@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.persona.R
@@ -102,11 +103,42 @@ fun ChatDetailScreen(
                         shape = AvatarShape.ROUNDED
                     )
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = EgyptianOrderUtils.formatContactDisplayName(state.contactName),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = EgyptianOrderUtils.formatContactDisplayName(state.contactName),
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            val localizedSource = when (state.sourceClass.uppercase()) {
+                                "BUSINESS" -> stringResource(R.string.chat_badge_business)
+                                "MAIN_APP" -> stringResource(R.string.chat_badge_main)
+                                else -> state.sourceClass
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = when (state.sourceClass.uppercase()) {
+                                    "BUSINESS" -> chatColors.badgeBusiness
+                                    "MAIN_APP" -> chatColors.badgeMainApp
+                                    else -> chatColors.badgeOther
+                                }
+                            ) {
+                                Text(
+                                    text = localizedSource,
+                                    color = chatColors.onBadge,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                         val phone = state.contactPhoneNumber ?: stringResource(R.string.chat_profile_no_phone)
                         Text(
                             text = phone,
@@ -295,20 +327,6 @@ fun ChatDetailScreen(
             effectiveAiActive = state.effectiveAiActive,
             onNavigateBack = onNavigateBack,
             onToggleAi = { viewModel.toggleAiActive() },
-            onOpenWhatsApp = {
-                viewModel.onManualTakeover()
-                WhatsAppLauncher.openChat(
-                    context = context,
-                    phoneNumber = state.contactPhoneNumber,
-                    contactName = state.contactName,
-                    preferBusiness = (state.sourceClass.uppercase() == "BUSINESS")
-                )
-                Toast.makeText(
-                    context,
-                    context.getString(R.string.chat_toast_whatsapp_takeover),
-                    Toast.LENGTH_SHORT
-                ).show()
-            },
             onResolveAttention = { viewModel.resolveAttention() },
             onOpenContactProfile = { showContactProfileSheet = true },
             onExportChat = { showExportDialog = true },
