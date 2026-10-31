@@ -1,7 +1,10 @@
 package com.example.persona
 
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.res.Configuration
+import android.content.res.Resources
 import android.os.Build
 import android.os.Bundle
 import android.os.LocaleList
@@ -42,6 +45,21 @@ import dagger.hilt.android.AndroidEntryPoint
 import java.util.Locale
 import javax.inject.Inject
 
+/**
+ * ContextWrapper that overrides [getResources] to provide localized resources
+ * while preserving the underlying [Activity] in its base context chain.
+ *
+ * This ensures:
+ * 1. Hilt's [HiltViewModelFactory] unwraps `baseContext` and finds the Activity.
+ * 2. Jetpack Compose's [stringResource] reads strings from the localized [Resources].
+ */
+private class LocalizedContextWrapper(
+    base: Context,
+    private val localizedResources: Resources
+) : ContextWrapper(base) {
+    override fun getResources(): Resources = localizedResources
+}
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
@@ -68,11 +86,6 @@ class MainActivity : ComponentActivity() {
             val appLanguage by userPreferencesRepository.appLanguageFlow.collectAsStateWithLifecycle(
                 initialValue = UserPreferencesRepository.DEFAULT_APP_LANGUAGE
             )
-            // Keep a reference to the Activity context — Hilt's HiltViewModelFactory
-            // requires an Activity context and will crash if it receives a plain ContextImpl
-            // (which createConfigurationContext() returns). We apply locale config only to
-            // LocalConfiguration so that string resources respect the chosen language, while
-            // LocalContext always stays as the Activity itself.
             val activityContext = LocalContext.current   // this IS the Activity
             val layoutDirection = if (appLanguage == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
 
@@ -85,7 +98,22 @@ class MainActivity : ComponentActivity() {
                 config
             }
 
-            LaunchedEffect(appLanguage) {
+            val localizedContext = remember(appLanguage, localizedConfiguration) {
+                val configContext = activityContext.createConfigurationContext(localizedConfiguration)
+                LocalizedContextWrapper(
+                    base = activityContext,
+                    localizedResources = configContext.resources
+                )
+            }
+
+            LaunchedEffect(appLanguage, localizedConfiguration) {
+                // Update Activity resources for non-compose dialogs/toasts
+                @Suppress("DEPRECATION")
+                activityContext.resources.updateConfiguration(
+                    localizedConfiguration,
+                    activityContext.resources.displayMetrics
+                )
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     try {
                         val localeManager = getSystemService(android.app.LocaleManager::class.java)
@@ -96,9 +124,8 @@ class MainActivity : ComponentActivity() {
 
             CompositionLocalProvider(
                 LocalLayoutDirection provides layoutDirection,
-                // ✅ Do NOT override LocalContext — keep it as the Activity so Hilt works.
-                // ✅ Override only LocalConfiguration so Compose picks up the locale.
-                LocalConfiguration provides localizedConfiguration
+                LocalConfiguration provides localizedConfiguration,
+                LocalContext provides localizedContext
             ) {
                 PersonaTheme {
                     val navController = rememberNavController()
