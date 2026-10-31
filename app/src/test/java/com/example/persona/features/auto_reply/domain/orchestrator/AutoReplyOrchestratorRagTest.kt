@@ -529,7 +529,7 @@ class AutoReplyOrchestratorRagTest {
     @Test
     fun `empty RAG candidates proceed to LLM generation without Tier-B HITL trigger`() = runBlocking {
         val semanticRepo = mockk<SemanticRetrievalRepository>()
-        val replyRepo = mockk<ReplyGenerationRepository>()
+        val replyRepo = mockk<ReplyGenerationRepository>(relaxed = true)
         val directReplyUseCase = mockk<DirectReplyExecutionUseCase>(relaxed = true)
         val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
         val orderDao = mockk<OrderDao>(relaxed = true)
@@ -644,7 +644,7 @@ class AutoReplyOrchestratorRagTest {
     @Test
     fun `Pass 1 LLM with action UPDATE and valid reply text dispatches as normal reply without HITL fallback`() = runBlocking {
         val semanticRepo = mockk<SemanticRetrievalRepository>()
-        val replyRepo = mockk<ReplyGenerationRepository>()
+        val replyRepo = mockk<ReplyGenerationRepository>(relaxed = true)
         val directReplyUseCase = mockk<DirectReplyExecutionUseCase>(relaxed = true)
         val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
         val orderDao = mockk<OrderDao>(relaxed = true)

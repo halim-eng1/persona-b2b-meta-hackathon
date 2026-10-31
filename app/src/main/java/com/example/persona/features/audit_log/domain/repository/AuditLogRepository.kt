@@ -1,6 +1,7 @@
 package com.example.persona.features.audit_log.domain.repository
 
 import com.example.persona.features.audit_log.domain.model.AuditLogItem
+import com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import kotlinx.coroutines.flow.Flow
@@ -10,7 +11,8 @@ interface AuditLogRepository {
     suspend fun logExecutedReply(
         notification: ProcessedNotification,
         candidate: RetrievalCandidate,
-        replyText: String
+        replyText: String,
+        telemetry: ExecutionTelemetry = ExecutionTelemetry()
     )
 
     suspend fun queuePendingReply(

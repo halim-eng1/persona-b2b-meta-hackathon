@@ -7,12 +7,10 @@ import com.example.persona.core.database.dao.*
 import com.example.persona.core.database.entity.*
 
 /**
- * Room database — version 9.
+ * Room database — version 12.
  *
- * WhatsApp Live Inbox & CRM Migration (v8 → v9):
- *  - Added: conversation_metadata table ([ConversationMetadataEntity]) with composite (contact_name, source_class) PK.
- *  - Extended: chat_history with source_class, sender_type, delivery_status, and is_read columns.
- *  - Added: composite indices on chat_history for (contact_name, source_class, timestamp).
+ * Migration (v11 → v12):
+ *  - Added: enterprise telemetry columns to `reply_log` table (gatekeeper_tier, provider_model, latency_ms, prompt_tokens, completion_tokens, decision_reason).
  */
 @Database(
     entities = [
@@ -26,7 +24,7 @@ import com.example.persona.core.database.entity.*
         ConversationMetadataEntity::class,
         ContactEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

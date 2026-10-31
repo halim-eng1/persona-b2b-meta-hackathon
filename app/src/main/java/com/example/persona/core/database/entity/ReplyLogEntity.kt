@@ -33,5 +33,11 @@ data class ReplyLogEntity(
     @ColumnInfo(name = "was_approved") val wasApproved: Boolean?,
     @ColumnInfo(name = "timestamp") val timestamp: Instant,
     /** Chunk IDs that contributed to generating this reply. */
-    @ColumnInfo(name = "retrieved_chunk_ids") val retrievedChunkIds: List<String>
+    @ColumnInfo(name = "retrieved_chunk_ids") val retrievedChunkIds: List<String>,
+    @ColumnInfo(name = "gatekeeper_tier", defaultValue = "'MODEL'") val gatekeeperTier: String = "MODEL",
+    @ColumnInfo(name = "provider_model", defaultValue = "'Unknown'") val providerModel: String = "Unknown",
+    @ColumnInfo(name = "latency_ms", defaultValue = "0") val latencyMs: Long = 0L,
+    @ColumnInfo(name = "prompt_tokens", defaultValue = "0") val promptTokens: Int = 0,
+    @ColumnInfo(name = "completion_tokens", defaultValue = "0") val completionTokens: Int = 0,
+    @ColumnInfo(name = "decision_reason") val decisionReason: String? = null
 )

@@ -38,7 +38,13 @@ interface ReplyLogDao {
             generated_reply       AS generated_reply,
             similarity_score      AS similarity_score,
             was_auto_sent         AS was_auto_sent,
-            timestamp             AS timestamp
+            timestamp             AS timestamp,
+            gatekeeper_tier       AS gatekeeper_tier,
+            provider_model        AS provider_model,
+            latency_ms            AS latency_ms,
+            prompt_tokens         AS prompt_tokens,
+            completion_tokens     AS completion_tokens,
+            decision_reason       AS decision_reason
         FROM reply_log
         ORDER BY timestamp DESC
         LIMIT :limit

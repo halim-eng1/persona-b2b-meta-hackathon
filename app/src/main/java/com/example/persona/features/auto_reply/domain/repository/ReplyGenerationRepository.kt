@@ -55,4 +55,10 @@ interface ReplyGenerationRepository {
         lastOrder: OrderEntity? = null,
         orderStatusCounts: List<OrderStatusCount> = emptyList()
     ): String?
+
+    /**
+     * Retrieves the execution telemetry (provider, model, duration, token usage)
+     * of the most recent successful LLM call.
+     */
+    fun getLastExecutionTelemetry(): com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry?
 }

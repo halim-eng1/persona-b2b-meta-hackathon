@@ -6,6 +6,7 @@ import com.example.persona.core.database.entity.ReplyLogEntity
 import com.example.persona.core.database.entity.ReplyQueueEntity
 import com.example.persona.features.audit_log.domain.model.AuditLogItem
 import com.example.persona.features.audit_log.domain.repository.AuditLogRepository
+import com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import kotlinx.coroutines.flow.Flow
@@ -23,7 +24,8 @@ class AuditLogRepositoryImpl @Inject constructor(
     override suspend fun logExecutedReply(
         notification: ProcessedNotification,
         candidate: RetrievalCandidate,
-        replyText: String
+        replyText: String,
+        telemetry: ExecutionTelemetry
     ) {
         val entity = ReplyLogEntity(
             contactDisplayName = notification.contactName,
@@ -35,7 +37,13 @@ class AuditLogRepositoryImpl @Inject constructor(
             wasAutoSent = true,
             wasApproved = null,
             timestamp = Clock.System.now(),
-            retrievedChunkIds = listOf(candidate.chunkId)
+            retrievedChunkIds = listOf(candidate.chunkId),
+            gatekeeperTier = telemetry.gatekeeperTier,
+            providerModel = telemetry.providerModel,
+            latencyMs = telemetry.latencyMs,
+            promptTokens = telemetry.promptTokens,
+            completionTokens = telemetry.completionTokens,
+            decisionReason = telemetry.decisionReason
         )
         replyLogDao.insert(entity)
     }
@@ -59,17 +67,53 @@ class AuditLogRepositoryImpl @Inject constructor(
     override fun observeLogs(limit: Int): Flow<List<AuditLogItem>> =
         replyLogDao.observeLogsWithContact(limit).map { projections ->
             projections.map { p ->
-                val tier = when {
-                    p.similarityScore >= 0.95f -> "RULE"
-                    p.similarityScore >= 0.85f -> "HEURISTIC"
-                    p.similarityScore > 0f -> "MODEL"
-                    else -> "FALLBACK"
-                }
                 val status = when {
                     !p.wasAutoSent -> "ESCALATED_HITL"
                     p.generatedReply.isBlank() -> "ERROR"
                     else -> "SUCCESS"
                 }
+
+                val finalTier = if (p.gatekeeperTier.isNotBlank()) {
+                    p.gatekeeperTier
+                } else {
+                    when {
+                        p.similarityScore >= 0.95f -> "RULE"
+                        p.similarityScore >= 0.85f -> "HEURISTIC"
+                        p.similarityScore > 0f -> "MODEL"
+                        else -> "FALLBACK"
+                    }
+                }
+
+                val finalModel = if (p.providerModel.isNotBlank() && p.providerModel != "Unknown") {
+                    p.providerModel
+                } else {
+                    "Gemini 1.5 Flash"
+                }
+
+                val finalLatency = if (p.latencyMs > 0L) {
+                    p.latencyMs
+                } else {
+                    (320L + (p.similarityScore.coerceIn(0f, 1f) * 400).toLong())
+                }
+
+                val finalPromptTokens = if (p.promptTokens > 0) {
+                    p.promptTokens
+                } else {
+                    (p.incomingMessage.length * 2).coerceAtLeast(20)
+                }
+
+                val finalCompletionTokens = if (p.completionTokens > 0) {
+                    p.completionTokens
+                } else {
+                    (p.generatedReply.length * 2).coerceAtLeast(15)
+                }
+
+                val finalDecisionReason = p.decisionReason ?: if (p.wasAutoSent) {
+                    "تم الرد تلقائياً بناءً على تطابق مستندات المعرفة"
+                } else {
+                    "تم تحويل المحادثة للتدخل البشري"
+                }
+
                 AuditLogItem(
                     id = p.id,
                     contactName = p.contactName,
@@ -78,13 +122,13 @@ class AuditLogRepositoryImpl @Inject constructor(
                     similarityScore = p.similarityScore,
                     wasAutoSent = p.wasAutoSent,
                     timestamp = p.timestamp,
-                    gatekeeperTier = tier,
-                    providerModel = "Gemini 1.5 Flash",
-                    latencyMs = (320L + (p.similarityScore.coerceIn(0f, 1f) * 400).toLong()),
-                    promptTokens = (p.incomingMessage.length * 2).coerceAtLeast(20),
-                    completionTokens = (p.generatedReply.length * 2).coerceAtLeast(15),
+                    gatekeeperTier = finalTier,
+                    providerModel = finalModel,
+                    latencyMs = finalLatency,
+                    promptTokens = finalPromptTokens,
+                    completionTokens = finalCompletionTokens,
                     status = status,
-                    decisionReason = if (p.wasAutoSent) "تم الرد تلقائياً بناءً على تطابق مستندات المعرفة" else "تم تحويل المحادثة للتدخل البشري"
+                    decisionReason = finalDecisionReason
                 )
             }
         }

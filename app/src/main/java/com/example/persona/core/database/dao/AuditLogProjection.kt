@@ -16,5 +16,11 @@ data class AuditLogProjection(
     @ColumnInfo(name = "generated_reply") val generatedReply: String,
     @ColumnInfo(name = "similarity_score") val similarityScore: Float,
     @ColumnInfo(name = "was_auto_sent") val wasAutoSent: Boolean,
-    @ColumnInfo(name = "timestamp") val timestamp: Instant
+    @ColumnInfo(name = "timestamp") val timestamp: Instant,
+    @ColumnInfo(name = "gatekeeper_tier") val gatekeeperTier: String = "MODEL",
+    @ColumnInfo(name = "provider_model") val providerModel: String = "Unknown",
+    @ColumnInfo(name = "latency_ms") val latencyMs: Long = 0L,
+    @ColumnInfo(name = "prompt_tokens") val promptTokens: Int = 0,
+    @ColumnInfo(name = "completion_tokens") val completionTokens: Int = 0,
+    @ColumnInfo(name = "decision_reason") val decisionReason: String? = null
 )

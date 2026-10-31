@@ -1220,7 +1220,18 @@ class AutoReplyOrchestrator @Inject constructor(
                         similarityScore = 1.0f,
                         baseSimilarityScore = 1.0f
                     )
-                    auditLogRepository.logExecutedReply(processed, auditCandidate, styledReplyText)
+                    val baseTelemetry = replyGenerationRepository.getLastExecutionTelemetry()
+                    val calculatedTokensIn = (effectiveProcessed.originalText.length * 2).coerceAtLeast(20)
+                    val calculatedTokensOut = (styledReplyText.length * 2).coerceAtLeast(15)
+                    val fullTelemetry = com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry(
+                        providerModel = baseTelemetry?.providerModel ?: "Unknown",
+                        gatekeeperTier = resolvedTier,
+                        latencyMs = baseTelemetry?.latencyMs ?: 0L,
+                        promptTokens = calculatedTokensIn,
+                        completionTokens = calculatedTokensOut,
+                        decisionReason = "تم الرد تلقائياً بناءً على نية ($inboundIntent)"
+                    )
+                    auditLogRepository.logExecutedReply(processed, auditCandidate, styledReplyText, fullTelemetry)
                     PersonaLogger.d(PersonaLogTags.ORCHESTRATOR, "Reply executed")
                     Log.i(TAG, "Auto-replied to ${processed.contactName}: '$styledReplyText'")
                 
@@ -1322,7 +1333,15 @@ class AutoReplyOrchestrator @Inject constructor(
                     similarityScore = 1.0f,
                     baseSimilarityScore = 1.0f
                 )
-                auditLogRepository.logExecutedReply(processed, dummyCandidate, text)
+                val templateTelemetry = com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry(
+                    providerModel = "Rule Template",
+                    gatekeeperTier = "RULE",
+                    latencyMs = 50L,
+                    promptTokens = (processed.originalText.length * 2).coerceAtLeast(20),
+                    completionTokens = (text.length * 2).coerceAtLeast(15),
+                    decisionReason = "تم الإرسال كقالب تدخّل / رد جاهز (Interception Template)"
+                )
+                auditLogRepository.logExecutedReply(processed, dummyCandidate, text, templateTelemetry)
                 Log.i(TAG, "Interception template sent to ${processed.contactName}: '$text'")
             }
             is ReplyExecutionResult.Failed -> {

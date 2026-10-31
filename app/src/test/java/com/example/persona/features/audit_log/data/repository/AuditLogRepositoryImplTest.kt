@@ -97,7 +97,13 @@ class AuditLogRepositoryImplTest {
             generatedReply = "شارع التحرير الدقي",
             similarityScore = 0.92f,
             wasAutoSent = true,
-            timestamp = Clock.System.now()
+            timestamp = Clock.System.now(),
+            gatekeeperTier = "Tier 1: Cloudflare Clef",
+            providerModel = "Qwen / deepseek-v4.1-flash",
+            latencyMs = 1120L,
+            promptTokens = 905,
+            completionTokens = 71,
+            decisionReason = "تم الرد تلقائياً بناءً على نية (BANTER)"
         )
         every { replyLogDao.observeLogsWithContact(100) } returns flowOf(listOf(projection))
 
@@ -106,10 +112,13 @@ class AuditLogRepositoryImplTest {
         assertEquals(42L, result[0].id)
         assertEquals("علي", result[0].contactName)
         assertEquals("شارع التحرير الدقي", result[0].generatedReply)
-        assertEquals("HEURISTIC", result[0].gatekeeperTier)
+        assertEquals("Tier 1: Cloudflare Clef", result[0].gatekeeperTier)
         assertEquals("SUCCESS", result[0].status)
-        assertEquals("Gemini 1.5 Flash", result[0].providerModel)
-        assertTrue(result[0].latencyMs > 0)
+        assertEquals("Qwen / deepseek-v4.1-flash", result[0].providerModel)
+        assertEquals(1120L, result[0].latencyMs)
+        assertEquals(905, result[0].promptTokens)
+        assertEquals(71, result[0].completionTokens)
+        assertEquals("تم الرد تلقائياً بناءً على نية (BANTER)", result[0].decisionReason)
     }
 
     @Test
