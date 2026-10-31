@@ -485,11 +485,49 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 return phone
             }
         }
+
+        // Try querying phone number directly from personUri if it's a contacts URI
+        if (!personUri.isNullOrBlank() && personUri.startsWith("content://com.android.contacts/")) {
+            val contactPhone = resolvePhoneFromContactsUri(personUri)
+            if (!contactPhone.isNullOrBlank()) {
+                return contactPhone
+            }
+        }
+
         return null
+    }
+
+    private fun resolvePhoneFromContactsUri(uriString: String): String? {
+        return runCatching {
+            val contactUri = android.net.Uri.parse(uriString)
+            val phoneUri = android.net.Uri.withAppendedPath(contactUri, android.provider.ContactsContract.Contacts.Data.CONTENT_DIRECTORY)
+            contentResolver.query(
+                phoneUri,
+                arrayOf(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER),
+                "${android.provider.ContactsContract.Data.MIMETYPE} = ?",
+                arrayOf(android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE),
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val numberIndex = cursor.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    if (numberIndex != -1) {
+                        val rawNumber = cursor.getString(numberIndex)
+                        return@runCatching EgyptianOrderUtils.extractEgyptianMobilePhone(rawNumber) ?: rawNumber
+                    }
+                }
+                null
+            }
+        }.getOrNull()
     }
 
     internal fun extractPhoneFromToken(token: String?): String? {
         if (token.isNullOrBlank()) return null
+
+        // Ignore privacy/linked identity identifiers (LID) and non-phone hashes
+        if (token.contains("@lid", ignoreCase = true)) return null
+
+        // Ignore android contacts lookup URIs here (they contain random IDs/hashes that confuse regex)
+        if (token.startsWith("content:", ignoreCase = true)) return null
 
         // 1. WhatsApp JID format: digits before @s.whatsapp.net or @c.us
         val jidMatch = Regex("""(\d+)@(s\.whatsapp\.net|c\.us)""").find(token)
