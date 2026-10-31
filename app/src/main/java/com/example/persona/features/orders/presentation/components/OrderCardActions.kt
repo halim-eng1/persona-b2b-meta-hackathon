@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.persona.R
 import com.example.persona.core.database.entity.OrderStatus
+import com.example.persona.ui.theme.PersonaTheme
 
 @Composable
 fun OrderCardActions(
@@ -33,6 +34,7 @@ fun OrderCardActions(
     onCancelOrder: (() -> Unit)? = null
 ) {
     val orderStatus = OrderStatus.fromString(status)
+    val statusColors = PersonaTheme.statusColors
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -130,7 +132,10 @@ fun OrderCardActions(
                 Button(
                     onClick = { onAdvanceStatus?.invoke() },
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = OrderBlue),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = statusColors.inPreparationContainer,
+                        contentColor = statusColors.inPreparation
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
@@ -152,7 +157,10 @@ fun OrderCardActions(
                 Button(
                     onClick = { onAdvanceStatus?.invoke() },
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = OrderIndigo),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = statusColors.shippingContainer,
+                        contentColor = statusColors.shipping
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
@@ -174,7 +182,10 @@ fun OrderCardActions(
                 Button(
                     onClick = { onAdvanceStatus?.invoke() },
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = OrderGreen),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = statusColors.completedContainer,
+                        contentColor = statusColors.completed
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
@@ -195,8 +206,8 @@ fun OrderCardActions(
             OrderStatus.SHIPPED -> {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = OrderGreen.copy(alpha = 0.15f),
-                    border = BorderStroke(1.dp, OrderGreen.copy(alpha = 0.4f)),
+                    color = statusColors.completedContainer.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, statusColors.completed.copy(alpha = 0.4f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
@@ -206,14 +217,14 @@ fun OrderCardActions(
                             Icon(
                                 imageVector = Icons.Default.DoneAll,
                                 contentDescription = null,
-                                tint = OrderGreen,
+                                tint = statusColors.completed,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = stringResource(R.string.order_status_delivered_success),
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = OrderGreen
+                                color = statusColors.completed
                             )
                         }
                     }
@@ -222,8 +233,8 @@ fun OrderCardActions(
             OrderStatus.CANCELLED -> {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = OrderRed.copy(alpha = 0.12f),
-                    border = BorderStroke(1.dp, OrderRed.copy(alpha = 0.35f)),
+                    color = statusColors.cancelledContainer.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, statusColors.cancelled.copy(alpha = 0.35f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
@@ -232,7 +243,7 @@ fun OrderCardActions(
                         Text(
                             text = stringResource(R.string.order_status_cancelled_badge),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = OrderRed
+                            color = statusColors.cancelled
                         )
                     }
                 }
@@ -240,8 +251,8 @@ fun OrderCardActions(
             OrderStatus.RETURNED -> {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = OrderBrown.copy(alpha = 0.15f),
-                    border = BorderStroke(1.dp, OrderBrown.copy(alpha = 0.4f)),
+                    color = statusColors.returnedContainer.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, statusColors.returned.copy(alpha = 0.4f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
@@ -250,7 +261,7 @@ fun OrderCardActions(
                         Text(
                             text = stringResource(R.string.order_status_returned_badge),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = OrderBrown
+                            color = statusColors.returned
                         )
                     }
                 }

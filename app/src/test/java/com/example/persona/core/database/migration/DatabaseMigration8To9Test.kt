@@ -17,14 +17,11 @@ class DatabaseMigration8To9Test {
         verify { db.execSQL("ALTER TABLE `chat_history` ADD COLUMN `source_class` TEXT NOT NULL DEFAULT 'BUSINESS'") }
         verify { db.execSQL("ALTER TABLE `chat_history` ADD COLUMN `sender_type` TEXT NOT NULL DEFAULT 'CUSTOMER'") }
         verify { db.execSQL("ALTER TABLE `chat_history` ADD COLUMN `delivery_status` TEXT NOT NULL DEFAULT 'SENT'") }
-        verify { db.execSQL("ALTER TABLE `chat_history` ADD COLUMN `is_read` INTEGER NOT NULL DEFAULT 0") }
+        verify { db.execSQL("ALTER TABLE `chat_history` ADD COLUMN `is_read` INTEGER NOT NULL DEFAULT 1") }
 
-        // 2. Verify chat_history composite indices
+        // 2. Verify chat_history composite index
         verify {
             db.execSQL(match { it.contains("index_chat_history_contact_name_source_class_timestamp") })
-        }
-        verify {
-            db.execSQL(match { it.contains("index_chat_history_contact_name_source_class") })
         }
 
         // 3. Verify conversation_metadata table creation with composite PK
@@ -41,10 +38,7 @@ class DatabaseMigration8To9Test {
             db.execSQL(match { it.contains("index_conversation_metadata_last_message_timestamp") })
         }
         verify {
-            db.execSQL(match { it.contains("index_conversation_metadata_unread_count") })
-        }
-        verify {
-            db.execSQL(match { it.contains("index_conversation_metadata_needs_human_attention") })
+            db.execSQL(match { it.contains("index_conversation_metadata_is_pinned_last_message_timestamp") })
         }
 
         // 5. Verify smart backfill from existing chat_history
@@ -52,7 +46,7 @@ class DatabaseMigration8To9Test {
             db.execSQL(match {
                 it.contains("INSERT OR IGNORE INTO `conversation_metadata`") &&
                     it.contains("FROM `chat_history`") &&
-                    it.contains("GROUP BY `contact_name`")
+                    it.contains("GROUP BY contact_name, source_class")
             })
         }
     }

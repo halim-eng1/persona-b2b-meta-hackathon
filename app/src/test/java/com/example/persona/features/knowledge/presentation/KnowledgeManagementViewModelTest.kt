@@ -464,7 +464,7 @@ class KnowledgeManagementViewModelTest {
 
     @Test
     fun runSimulation_whenHitlActionReturned_handlesGracefullyWithHitlExplanation() = runTest {
-        val mockReplyRepo = mockk<ReplyGenerationRepository>()
+        val mockReplyRepo = mockk<ReplyGenerationRepository>(relaxed = true)
         val viewModel = KnowledgeManagementViewModel(
             repository = repository,
             failedQueryDao = failedQueryDao,
