@@ -25,7 +25,7 @@ fun ContactTagFilterChips(
         FilterChip(
             selected = selectedTag == null,
             onClick = { onTagSelected(null) },
-            label = { Text("الكل") }
+            label = { Text(androidx.compose.ui.res.stringResource(com.example.persona.R.string.common_all)) }
         )
 
         ContactTag.entries.forEach { tag ->

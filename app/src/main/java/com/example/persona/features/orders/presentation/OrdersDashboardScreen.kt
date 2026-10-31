@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,6 +46,7 @@ fun OrdersDashboardScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var noteEditingOrder by remember { mutableStateOf<OrderEntity?>(null) }
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -92,7 +94,7 @@ fun OrdersDashboardScreen(
                             onClick = viewModel::bulkAdvanceStatus,
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Icon(Icons.Default.DoneAll, contentDescription = "تقديم حالة المحددين")
+                            Icon(Icons.Default.DoneAll, contentDescription = stringResource(R.string.orders_dashboard_advance_selected_desc))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -103,12 +105,12 @@ fun OrdersDashboardScreen(
                 TopAppBar(
                     title = {
                         Column {
-                            Text(text = "الطلبات والتنفيذ والشحن", fontWeight = FontWeight.Bold)
+                            Text(text = stringResource(R.string.orders_dashboard_header_title), fontWeight = FontWeight.Bold)
                             Text(
                                 text = if (state.totalCount > 0)
-                                    "${state.totalCount} طلبات مسجلة • مزامنة حية"
+                                    stringResource(R.string.orders_dashboard_header_subtitle_count, state.totalCount)
                                 else
-                                    "إدارة ومتابعة طلبات المتجر",
+                                    stringResource(R.string.orders_dashboard_header_subtitle_empty),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -121,12 +123,12 @@ fun OrdersDashboardScreen(
                                 val manifest = viewModel.exportSelectedBulkManifest()
                                 clipboardManager.setText(AnnotatedString(manifest))
                                 coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("تم نسخ كشف شحنات اليوم (${state.ordersList.size} طلبات)")
+                                    snackbarHostState.showSnackbar(context.getString(R.string.orders_dashboard_copied_manifest_snackbar, state.ordersList.size))
                                 }
                             },
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Icon(Icons.Default.Print, contentDescription = "كشف الشحنات المجمع")
+                            Icon(Icons.Default.Print, contentDescription = stringResource(R.string.orders_dashboard_bulk_manifest_desc))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -139,7 +141,7 @@ fun OrdersDashboardScreen(
             ExtendedFloatingActionButton(
                 onClick = viewModel::openCreateOrderDialog,
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("طلب جديد", fontWeight = FontWeight.Bold) },
+                text = { Text(stringResource(R.string.orders_dashboard_fab_new_order), fontWeight = FontWeight.Bold) },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = RoundedCornerShape(16.dp),
@@ -197,7 +199,7 @@ fun OrdersDashboardScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp),
-                    placeholder = { Text("بحث باسم العميل، الهاتف، العنوان، أو الأصناف…") },
+                    placeholder = { Text(stringResource(R.string.orders_dashboard_search_placeholder)) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         if (state.searchQuery.isNotEmpty()) {
@@ -207,7 +209,7 @@ fun OrdersDashboardScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "مسح البحث",
+                                    contentDescription = stringResource(R.string.common_clear_content_desc),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -241,7 +243,7 @@ fun OrdersDashboardScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "إغلاق التنبيه",
+                                    contentDescription = stringResource(R.string.common_close_alert),
                                     tint = MaterialTheme.colorScheme.onErrorContainer,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -316,7 +318,7 @@ fun OrdersDashboardScreen(
                                     coroutineScope.launch {
                                         val customer = targetOrder.customerNameFromLlm?.takeIf { it.isNotBlank() }
                                             ?: targetOrder.contactName
-                                        snackbarHostState.showSnackbar("تم نسخ بوليصة الشحن للعميل $customer")
+                                        snackbarHostState.showSnackbar(context.getString(R.string.orders_dashboard_copied_waybill_snackbar, customer))
                                     }
                                 },
                                 onOpenChat = { contactName ->
@@ -432,14 +434,14 @@ private fun EmptyOrdersState(
                 }
             }
             Text(
-                text = if (isSearching) "لا توجد طلبات متطابقة" else "لا توجد طلبات حتى الآن",
+                text = if (isSearching) stringResource(R.string.orders_dashboard_empty_title_search) else stringResource(R.string.orders_dashboard_empty_title_general),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
             Text(
                 text = if (isSearching)
-                    "جرب تغيير كلمات البحث أو تغيير تاب الحالة أو الفترة الزمنية."
+                    stringResource(R.string.orders_dashboard_empty_desc_search)
                 else
-                    "الطلبات تظهر هنا تلقائياً بمجرد استخراجها من محادثات واتساب، أو يمكنك إدخال طلب يدوياً بالضغط على زر (+).",
+                    stringResource(R.string.orders_dashboard_empty_desc_general),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

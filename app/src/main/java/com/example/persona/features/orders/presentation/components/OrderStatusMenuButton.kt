@@ -33,7 +33,7 @@ fun OrderStatusMenuButton(
         ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
-                contentDescription = "تغيير حالة الطلب",
+                contentDescription = androidx.compose.ui.res.stringResource(com.example.persona.R.string.order_change_status_desc),
                 modifier = Modifier.size(20.dp)
             )
         }

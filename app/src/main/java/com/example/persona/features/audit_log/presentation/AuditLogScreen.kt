@@ -203,7 +203,7 @@ fun AuditLogScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "المزود:",
+                        text = stringResource(R.string.audit_log_provider_label),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -225,15 +225,15 @@ fun AuditLogScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "الحالة:",
+                        text = stringResource(R.string.audit_log_status_label),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     listOf(
                         "ALL" to stringResource(R.string.common_all),
-                        "SUCCESS" to "ناجح",
+                        "SUCCESS" to stringResource(R.string.audit_log_status_success),
                         "ESCALATED_HITL" to stringResource(R.string.audit_log_hitl_escalation),
-                        "ERROR" to "خطأ"
+                        "ERROR" to stringResource(R.string.audit_log_status_error)
                     ).forEach { (statusKey, label) ->
                         FilterChip(
                             selected = state.selectedStatus == statusKey,
@@ -272,16 +272,16 @@ fun AuditLogScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = if (state.items.isEmpty()) "لا توجد ردود مسجلة حتى الآن" else "لا توجد نتائج مطابقة لمعايير البحث",
+                            text = if (state.items.isEmpty()) stringResource(R.string.audit_log_empty_title) else stringResource(R.string.audit_log_no_search_results),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = if (state.items.isEmpty())
-                                "ستظهر الردود الآلية وتفاصيل كل محادثة هنا فور إرسالها."
+                                stringResource(R.string.audit_log_empty_desc)
                             else
-                                "جرّب تغيير كلمات البحث أو إعادة ضبط الفلاتر المحددة.",
+                                stringResource(R.string.audit_log_empty_desc_search),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
@@ -318,8 +318,8 @@ fun AuditLogScreen(
         if (showExportFormatDialog) {
             AlertDialog(
                 onDismissRequest = { showExportFormatDialog = false },
-                title = { Text(text = "تصدير سجل التدقيق", fontWeight = FontWeight.Bold) },
-                text = { Text(text = "اختر الصيغة المفضلة لتصدير السجلات (${state.filteredItems.size} سجل):") },
+                title = { Text(text = stringResource(R.string.audit_log_export_dialog_title), fontWeight = FontWeight.Bold) },
+                text = { Text(text = stringResource(R.string.audit_log_export_dialog_desc, state.filteredItems.size)) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -328,7 +328,7 @@ fun AuditLogScreen(
                         },
                         modifier = Modifier.heightIn(min = 48.dp)
                     ) {
-                        Text(text = "تصدير بتنسيق CSV")
+                        Text(text = stringResource(R.string.audit_log_export_csv))
                     }
                 },
                 dismissButton = {
@@ -339,7 +339,7 @@ fun AuditLogScreen(
                         },
                         modifier = Modifier.heightIn(min = 48.dp)
                     ) {
-                        Text(text = "تصدير بتنسيق JSON")
+                        Text(text = stringResource(R.string.audit_log_export_json))
                     }
                 }
             )
@@ -349,11 +349,11 @@ fun AuditLogScreen(
         state.exportPayload?.let { payload ->
             AlertDialog(
                 onDismissRequest = { viewModel.clearExportPayload() },
-                title = { Text(text = "تم تجهيز التقرير بنجاح", fontWeight = FontWeight.Bold) },
+                title = { Text(text = stringResource(R.string.audit_log_report_ready_title), fontWeight = FontWeight.Bold) },
                 text = {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            text = "تم إنشاء التقرير (${state.filteredItems.size} رد). يمكنك نسخه أو مشاركته:",
+                            text = stringResource(R.string.audit_log_report_ready_desc, state.filteredItems.size),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Spacer(modifier = Modifier.height(10.dp))
@@ -381,14 +381,14 @@ fun AuditLogScreen(
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             val clip = ClipData.newPlainText("Persona Audit Trail", payload)
                             clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, "تم نسخ التقرير إلى الحافظة بنجاح", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.audit_log_copied_toast), Toast.LENGTH_SHORT).show()
                             viewModel.clearExportPayload()
                         },
                         modifier = Modifier.heightIn(min = 48.dp)
                     ) {
                         Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = "نسخ للحافظة")
+                        Text(text = stringResource(R.string.audit_log_copy_clipboard))
                     }
                 },
                 dismissButton = {
@@ -408,7 +408,7 @@ fun AuditLogScreen(
                         },
                         modifier = Modifier.heightIn(min = 48.dp)
                     ) {
-                        Text(text = "مشاركة")
+                        Text(text = stringResource(R.string.audit_log_share_btn))
                     }
                 }
             )
@@ -487,7 +487,7 @@ private fun AuditLogCard(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "الرسالة الواردة من العميل:",
+                        text = stringResource(R.string.audit_log_incoming_message_label),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -510,13 +510,13 @@ private fun AuditLogCard(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "رد المساعد الآلي:",
+                        text = stringResource(R.string.audit_log_bot_reply_label),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = item.generatedReply.ifBlank { "(لم يتم إرسال رد تلقائي - تم تعليق المحادثة)" },
+                        text = item.generatedReply.ifBlank { stringResource(R.string.audit_log_no_reply_sent) },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -545,7 +545,7 @@ private fun AuditLogCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (isExpanded) "إخفاء التفاصيل العميقة" else "عرض تشخيص اتخاذ القرار والنموذج",
+                        text = if (isExpanded) stringResource(R.string.audit_log_hide_details) else stringResource(R.string.audit_log_show_details),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -573,8 +573,8 @@ private fun AuditLogCard(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        TelemetryBadge(label = "طبقة القرار", value = item.gatekeeperTier)
-                        TelemetryBadge(label = "النموذج", value = item.providerModel)
+                        TelemetryBadge(label = stringResource(R.string.audit_log_tier_badge), value = item.gatekeeperTier)
+                        TelemetryBadge(label = stringResource(R.string.audit_log_model_badge), value = item.providerModel)
                     }
 
                     Row(
@@ -582,7 +582,7 @@ private fun AuditLogCard(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         TelemetryBadge(label = stringResource(R.string.audit_log_tokens_badge), value = "إدخال: ${item.promptTokens} | إخراج: ${item.completionTokens}")
-                        TelemetryBadge(label = "سرعة الاستجابة", value = "${item.latencyMs} ملي ثانية")
+                        TelemetryBadge(label = stringResource(R.string.audit_log_latency_badge), value = stringResource(R.string.audit_log_latency_unit, item.latencyMs))
                     }
 
                     if (item.decisionReason != null) {
@@ -593,7 +593,7 @@ private fun AuditLogCard(
                         ) {
                             Column(modifier = Modifier.padding(8.dp)) {
                                 Text(
-                                    text = "سبب القرار والمنطق:",
+                                    text = stringResource(R.string.audit_log_reasoning_title),
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -650,10 +650,10 @@ private fun TelemetryBadge(label: String, value: String) {
 
 @Composable
 private fun StatusBadge(status: String) {
-    val (label, bgColor, textColor) = when (status.uppercase()) {
-        "SUCCESS" -> Triple("ناجح", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-        "ESCALATED_HITL" -> Triple("تدخل بشري", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
-        else -> Triple("خطأ", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error)
+    val (labelRes, bgColor, textColor) = when (status.uppercase()) {
+        "SUCCESS" -> Triple(R.string.audit_log_status_success, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+        "ESCALATED_HITL" -> Triple(R.string.audit_log_status_hitl, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+        else -> Triple(R.string.audit_log_status_error, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error)
     }
 
     Surface(
@@ -661,7 +661,7 @@ private fun StatusBadge(status: String) {
         color = bgColor
     ) {
         Text(
-            text = label,
+            text = stringResource(labelRes),
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
             color = textColor,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)

@@ -133,7 +133,7 @@ object WhatsAppLauncher {
                 return true
             } catch (_: Exception) {
                 try {
-                    Toast.makeText(context, "تطبيق واتساب غير مثبت على هذا الجهاز", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(com.example.persona.R.string.chat_whatsapp_not_installed), Toast.LENGTH_SHORT).show()
                 } catch (_: Exception) {}
             }
         }

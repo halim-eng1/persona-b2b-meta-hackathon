@@ -567,4 +567,45 @@
     <string name="onboarding_title">Setup Permissions &amp; Background Protection</string>
     <string name="onboarding_progress_indicator">Setup Progress Indicator</string>
     <string name="onboarding_step_of_total">Step %1$d of %2$d</string>
+
+    <string name="orders_dashboard_header_title">Orders, Fulfillment &amp; Shipping</string>
+    <string name="orders_dashboard_header_subtitle_count">%d orders recorded • live sync</string>
+    <string name="orders_dashboard_header_subtitle_empty">Manage and track store orders</string>
+    <string name="orders_dashboard_bulk_manifest_desc">Consolidated Shipments Manifest</string>
+    <string name="orders_dashboard_copied_manifest_snackbar">Copied today\'s shipments manifest (%d orders)</string>
+    <string name="orders_dashboard_advance_selected_desc">Advance Status for Selected</string>
+    <string name="orders_dashboard_fab_new_order">New Order</string>
+    <string name="orders_dashboard_search_placeholder">Search by customer name, phone, address, or items…</string>
+    <string name="orders_dashboard_copied_waybill_snackbar">Copied shipping waybill for customer %s</string>
+    <string name="orders_dashboard_empty_title_search">No matching orders found</string>
+    <string name="orders_dashboard_empty_title_general">No orders yet</string>
+    <string name="orders_dashboard_empty_desc_search">Try changing search terms, status tab, or date range.</string>
+    <string name="orders_dashboard_empty_desc_general">Orders appear here automatically once extracted from WhatsApp chats, or you can enter an order manually by tapping (+).</string>
+    <string name="filter_date_all">All</string>
+    <string name="filter_date_today">Today</string>
+    <string name="filter_date_yesterday">Yesterday</string>
+    <string name="filter_date_last_7_days">Last 7 Days</string>
+    <string name="filter_date_this_month">This Month</string>
+    <string name="filter_order_all">All</string>
+    <string name="filter_order_pending">New</string>
+    <string name="filter_order_in_prep">In Prep</string>
+    <string name="filter_order_shipping">Out for Delivery</string>
+    <string name="filter_order_completed">Delivered</string>
+    <string name="filter_order_cancelled">Cancelled</string>
+    <string name="filter_order_returned">Returned</string>
+    <string name="chat_export_title_prefix">Chat History: %s</string>
+    <string name="chat_export_store_prefix">Store: %s</string>
+    <string name="chat_export_date_prefix">Export Date: %s</string>
+    <string name="chat_export_range_prefix">Export Range: %s</string>
+    <string name="chat_export_sender_customer">Customer</string>
+    <string name="chat_export_sender_merchant">Merchant</string>
+    <string name="chat_export_range_all">Full Conversation</string>
+    <string name="chat_export_range_today">Today\'s Chat</string>
+    <string name="chat_export_range_last_2_hours">Last 2 Hours</string>
+    <string name="chat_whatsapp_not_installed">WhatsApp app is not installed on this device</string>
+
+    <string name="audit_log_empty_title">No recorded replies yet</string>
+    <string name="audit_log_no_search_results">No results match search criteria</string>
+    <string name="audit_log_empty_desc">Automated replies and chat details will appear here as soon as they are sent.</string>
+    <string name="audit_log_empty_desc_search">Try changing your search terms or resetting the selected filters.</string>
 </resources>

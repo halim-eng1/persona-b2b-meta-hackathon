@@ -567,4 +567,45 @@
     <string name="onboarding_title">تهيئة الصلاحيات وحماية التشغيل</string>
     <string name="onboarding_progress_indicator">مؤشر التقدم في الإعداد</string>
     <string name="onboarding_step_of_total">الخطوة %1$d من %2$d</string>
+
+    <string name="orders_dashboard_header_title">الطلبات والتنفيذ والشحن</string>
+    <string name="orders_dashboard_header_subtitle_count">%d طلبات مسجلة • مزامنة حية</string>
+    <string name="orders_dashboard_header_subtitle_empty">إدارة ومتابعة طلبات المتجر</string>
+    <string name="orders_dashboard_bulk_manifest_desc">كشف الشحنات المجمع</string>
+    <string name="orders_dashboard_copied_manifest_snackbar">تم نسخ كشف شحنات اليوم (%d طلبات)</string>
+    <string name="orders_dashboard_advance_selected_desc">تقديم حالة المحددين</string>
+    <string name="orders_dashboard_fab_new_order">طلب جديد</string>
+    <string name="orders_dashboard_search_placeholder">بحث باسم العميل، الهاتف، العنوان، أو الأصناف…</string>
+    <string name="orders_dashboard_copied_waybill_snackbar">تم نسخ بوليصة الشحن للعميل %s</string>
+    <string name="orders_dashboard_empty_title_search">لا توجد طلبات متطابقة</string>
+    <string name="orders_dashboard_empty_title_general">لا توجد طلبات حتى الآن</string>
+    <string name="orders_dashboard_empty_desc_search">جرب تغيير كلمات البحث أو تغيير تاب الحالة أو الفترة الزمنية.</string>
+    <string name="orders_dashboard_empty_desc_general">الطلبات تظهر هنا تلقائياً بمجرد استخراجها من محادثات واتساب، أو يمكنك إدخال طلب يدوياً بالضغط على زر (+).</string>
+    <string name="filter_date_all">الكل</string>
+    <string name="filter_date_today">اليوم</string>
+    <string name="filter_date_yesterday">أمس</string>
+    <string name="filter_date_last_7_days">آخر 7 أيام</string>
+    <string name="filter_date_this_month">هذا الشهر</string>
+    <string name="filter_order_all">الكل</string>
+    <string name="filter_order_pending">جديد</string>
+    <string name="filter_order_in_prep">قيد التجهيز</string>
+    <string name="filter_order_shipping">جاري التوصيل</string>
+    <string name="filter_order_completed">تم التسليم</string>
+    <string name="filter_order_cancelled">ملغي</string>
+    <string name="filter_order_returned">مرتجع</string>
+    <string name="chat_export_title_prefix">سجل محادثة: %s</string>
+    <string name="chat_export_store_prefix">المتجر: %s</string>
+    <string name="chat_export_date_prefix">تاريخ التصدير: %s</string>
+    <string name="chat_export_range_prefix">نطاق التصدير: %s</string>
+    <string name="chat_export_sender_customer">العميل</string>
+    <string name="chat_export_sender_merchant">التاجر</string>
+    <string name="chat_export_range_all">كامل المحادثة</string>
+    <string name="chat_export_range_today">محادثة اليوم</string>
+    <string name="chat_export_range_last_2_hours">آخر ساعتين</string>
+    <string name="chat_whatsapp_not_installed">تطبيق واتساب غير مثبت على هذا الجهاز</string>
+
+    <string name="audit_log_empty_title">لا توجد ردود مسجلة حتى الآن</string>
+    <string name="audit_log_no_search_results">لا توجد نتائج مطابقة لمعايير البحث</string>
+    <string name="audit_log_empty_desc">ستظهر الردود الآلية وتفاصيل كل محادثة هنا فور إرسالها.</string>
+    <string name="audit_log_empty_desc_search">جرّب تغيير كلمات البحث أو إعادة ضبط الفلاتر المحددة.</string>
 </resources>
