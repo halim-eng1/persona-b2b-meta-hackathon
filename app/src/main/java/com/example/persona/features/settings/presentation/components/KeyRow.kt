@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -46,7 +49,11 @@ fun KeyRow(
     onToggleReveal: () -> Unit,
     onTest: () -> Unit,
     onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
+    dragHandleModifier: Modifier = Modifier,
+    canReorder: Boolean = false
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { target ->
@@ -83,12 +90,32 @@ fun KeyRow(
         }
     ) {
         ListItem(
-            leadingContent = { StatusDot(status = status) },
+            leadingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (canReorder) {
+                        Box(
+                            modifier = dragHandleModifier.padding(end = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DragHandle,
+                                contentDescription = stringResource(R.string.reorder_drag_handle),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    StatusDot(status = status)
+                }
+            },
             overlineContent = {
                 Text(
-                    text = stringResource(R.string.settings_ai_key_label, index + 1),
+                    text = if (index == 0)
+                        stringResource(R.string.settings_ai_model_primary_badge)
+                    else
+                        stringResource(R.string.settings_ai_key_label, index + 1),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = if (index == 0) PersonaTheme.statusColors.success else MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -103,6 +130,28 @@ fun KeyRow(
             supportingContent = { StatusText(status = status) },
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (canReorder) {
+                        IconButton(
+                            onClick = { onMoveUp?.invoke() },
+                            enabled = onMoveUp != null
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowUpward,
+                                contentDescription = stringResource(R.string.reorder_move_up),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = { onMoveDown?.invoke() },
+                            enabled = onMoveDown != null
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowDownward,
+                                contentDescription = stringResource(R.string.reorder_move_down),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                     IconButton(onClick = onToggleReveal) {
                         Icon(
                             imageVector = if (revealed) Icons.Default.VisibilityOff else Icons.Default.Visibility,

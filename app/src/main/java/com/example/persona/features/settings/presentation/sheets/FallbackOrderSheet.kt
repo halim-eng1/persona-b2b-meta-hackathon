@@ -34,6 +34,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.persona.R
 
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.example.persona.features.settings.presentation.components.rememberReorderableLazyListState
+import com.example.persona.features.settings.presentation.components.reorderableHandle
+import com.example.persona.features.settings.presentation.components.reorderableItem
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FallbackOrderSheet(
@@ -42,9 +49,13 @@ fun FallbackOrderSheet(
     onMoveUp: (provider: String) -> Unit,
     onMoveDown: (provider: String) -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onMove: (from: Int, to: Int) -> Unit = { _, _ -> }
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val listState = rememberLazyListState()
+    val haptics = LocalHapticFeedback.current
+    val reorderState = rememberReorderableLazyListState(listState, onMove)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -73,6 +84,7 @@ fun FallbackOrderSheet(
             }
 
             LazyColumn(
+                state = listState,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -80,7 +92,10 @@ fun FallbackOrderSheet(
                     val keys = keyCounts[provider] ?: 0
                     Surface(
                         shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .reorderableItem(reorderState, provider, index, haptics)
                     ) {
                         ListItem(
                             leadingContent = {
@@ -130,6 +145,18 @@ fun FallbackOrderSheet(
                                         Icon(
                                             imageVector = Icons.Default.ArrowDownward,
                                             contentDescription = stringResource(R.string.reorder_move_down)
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(start = 4.dp, end = 2.dp)
+                                            .reorderableHandle(reorderState, provider, index, haptics),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DragHandle,
+                                            contentDescription = stringResource(R.string.reorder_drag_handle),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }

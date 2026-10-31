@@ -378,6 +378,88 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `setBotName with empty string falls back to default`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        viewModel.setBotName("   ")
+        advanceUntilIdle()
+
+        assertEquals(UserPreferencesRepository.DEFAULT_BOT_NAME, viewModel.uiState.value.botName)
+        coVerify { userPreferencesRepository.setBotName(UserPreferencesRepository.DEFAULT_BOT_NAME) }
+    }
+
+    @Test
+    fun `setStoreName with empty string falls back to default`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        viewModel.setStoreName("")
+        advanceUntilIdle()
+
+        assertEquals(UserPreferencesRepository.DEFAULT_STORE_NAME, viewModel.uiState.value.storeName)
+        coVerify { userPreferencesRepository.setStoreName(UserPreferencesRepository.DEFAULT_STORE_NAME) }
+    }
+
+    @Test
+    fun `reordering API keys with moveApiKeyUp moveApiKeyDown and moveApiKey`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        secureCredentialsRepository.setApiKeys("gemini", listOf("key-1", "key-2", "key-3"))
+        viewModel.selectProviderForEdit("gemini")
+        advanceUntilIdle()
+
+        // Move key-2 up
+        viewModel.moveApiKeyUp("gemini", "key-2")
+        advanceUntilIdle()
+        assertEquals(listOf("key-2", "key-1", "key-3"), secureCredentialsRepository.getApiKeys("gemini"))
+
+        // Move key-2 down
+        viewModel.moveApiKeyDown("gemini", "key-2")
+        advanceUntilIdle()
+        assertEquals(listOf("key-1", "key-2", "key-3"), secureCredentialsRepository.getApiKeys("gemini"))
+
+        // Move key-3 to index 0 (drag from 2 to 0)
+        viewModel.moveApiKey("gemini", 2, 0)
+        advanceUntilIdle()
+        assertEquals(listOf("key-3", "key-1", "key-2"), secureCredentialsRepository.getApiKeys("gemini"))
+    }
+
+    @Test
+    fun `reordering providers with moveProvider updates uiState and repository`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        // Drag provider from index 0 (QWEN) to index 2
+        viewModel.moveProvider(0, 2)
+        advanceUntilIdle()
+
+        val newOrder = viewModel.uiState.value.providerOrder
+        assertEquals(ModelProviders.GEMINI, newOrder[0])
+        assertEquals(ModelProviders.GROQ, newOrder[1])
+        assertEquals(ModelProviders.QWEN, newOrder[2])
+        coVerify { userPreferencesRepository.setProviderOrder(newOrder) }
+    }
+
+    @Test
+    fun `reordering models with moveModel updates repository and config`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        val initialModels = listOf("model-a", "model-b", "model-c")
+        coEvery { userPreferencesRepository.getProviderModelsSync("gemini") } returns initialModels
+        viewModel.selectProviderForEdit("gemini")
+        advanceUntilIdle()
+
+        // Move model-a (index 0) to index 2
+        viewModel.moveModel("gemini", 0, 2)
+        advanceUntilIdle()
+
+        coVerify { userPreferencesRepository.setProviderModels("gemini", listOf("model-b", "model-c", "model-a")) }
+    }
+
+    @Test
     fun `exact production models are configured across all 8 providers`() {
         val models = UserPreferencesRepository.DEFAULT_PROVIDER_MODELS
 

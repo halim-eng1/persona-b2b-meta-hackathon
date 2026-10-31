@@ -86,7 +86,7 @@ fun WhatsAppScreen(
             )
         }
 
-        // Human-in-the-Loop & Fallback Messages
+        // Human-in-the-Loop
         SettingsGroup(title = R.string.settings_routing_hitl_section_title) {
             SwitchRow(
                 title = stringResource(R.string.settings_routing_pause_on_human_title),
@@ -105,22 +105,6 @@ fun WhatsAppScreen(
                     modifier = Modifier.settingFocus(SettingKey.HumanHolding)
                 )
             }
-
-            NavRow(
-                title = stringResource(R.string.settings_routing_media_fallback_label),
-                summary = state.mediaFallbackMessage.lineSequence().firstOrNull().takeUnless { it.isNullOrBlank() }
-                    ?: stringResource(R.string.msg_when_media),
-                onClick = { editor.open(MessageSlot.MediaFallback) },
-                modifier = Modifier.settingFocus(SettingKey.MediaFallback)
-            )
-
-            NavRow(
-                title = stringResource(R.string.settings_routing_blank_reply_label),
-                summary = state.blankReplyFallbackTemplate.lineSequence().firstOrNull().takeUnless { it.isNullOrBlank() }
-                    ?: stringResource(R.string.msg_when_blank),
-                onClick = { editor.open(MessageSlot.BlankReply) },
-                modifier = Modifier.settingFocus(SettingKey.BlankReply)
-            )
         }
     }
 }

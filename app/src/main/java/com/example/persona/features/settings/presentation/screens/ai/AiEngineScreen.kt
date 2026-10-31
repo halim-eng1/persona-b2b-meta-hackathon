@@ -120,6 +120,7 @@ fun AiEngineScreen(
             keyCounts = keyCounts,
             onMoveUp = actions::moveProviderUp,
             onMoveDown = actions::moveProviderDown,
+            onMove = actions::moveProvider,
             onDismiss = { showFallbackSheet = false }
         )
     }

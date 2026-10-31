@@ -35,7 +35,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.example.persona.features.settings.presentation.components.rememberReorderableLazyListState
+import com.example.persona.features.settings.presentation.components.reorderableHandle
+import com.example.persona.features.settings.presentation.components.reorderableItem
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,6 +64,11 @@ fun ModelsSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val undo = LocalUndoHost.current
     val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    val listState = rememberLazyListState()
+    val reorderState = rememberReorderableLazyListState(listState) { from, to ->
+        actions.moveModel(provider, from, to)
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -86,6 +98,7 @@ fun ModelsSheet(
             }
 
             LazyColumn(
+                state = listState,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -95,7 +108,9 @@ fun ModelsSheet(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .reorderableItem(reorderState, modelName, index, haptics)
                     ) {
                         Row(
                             modifier = Modifier
@@ -174,6 +189,19 @@ fun ModelsSheet(
                                         contentDescription = stringResource(R.string.common_delete),
                                         tint = MaterialTheme.colorScheme.error,
                                         modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .padding(start = 2.dp, end = 2.dp)
+                                        .reorderableHandle(reorderState, modelName, index, haptics),
+                                        contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DragHandle,
+                                        contentDescription = stringResource(R.string.reorder_drag_handle),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
                             }

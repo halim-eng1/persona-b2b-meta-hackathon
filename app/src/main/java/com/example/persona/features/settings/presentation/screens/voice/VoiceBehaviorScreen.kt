@@ -36,7 +36,8 @@ import com.example.persona.features.settings.presentation.SettingsSpoke
 import com.example.persona.features.settings.presentation.SettingsUiState
 import com.example.persona.features.settings.presentation.ThresholdLevel
 import com.example.persona.features.settings.presentation.VoiceActions
-import com.example.persona.features.settings.presentation.components.DebouncedTextField
+import com.example.persona.core.data.repository.UserPreferencesRepository
+import com.example.persona.features.settings.presentation.components.DraftSaveTextField
 import com.example.persona.features.settings.presentation.components.SettingsGroup
 import com.example.persona.features.settings.presentation.components.SpokeScaffold
 import com.example.persona.features.settings.presentation.components.rows.NavRow
@@ -65,19 +66,21 @@ fun VoiceBehaviorScreen(
         // ── 1. Store & Bot Identity ───────────────────────────────────────────
         SettingsGroup(title = R.string.settings_store_identity_title) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                DebouncedTextField(
+                DraftSaveTextField(
                     value = state.botName,
-                    onValueChange = actions::setBotName,
+                    onSave = actions::setBotName,
                     label = stringResource(R.string.settings_bot_name_label),
                     placeholder = stringResource(R.string.settings_bot_name_placeholder),
+                    fallbackDefault = UserPreferencesRepository.DEFAULT_BOT_NAME,
                     modifier = Modifier.settingFocus(SettingKey.BotName)
                 )
 
-                DebouncedTextField(
+                DraftSaveTextField(
                     value = state.storeName,
-                    onValueChange = actions::setStoreName,
+                    onSave = actions::setStoreName,
                     label = stringResource(R.string.settings_store_name_label),
                     placeholder = stringResource(R.string.settings_store_name_placeholder),
+                    fallbackDefault = UserPreferencesRepository.DEFAULT_STORE_NAME,
                     modifier = Modifier.settingFocus(SettingKey.StoreName)
                 )
             }

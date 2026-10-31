@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -61,6 +62,9 @@ import com.example.persona.features.settings.presentation.components.LocalSettin
 import com.example.persona.features.settings.presentation.components.LocalUndoHost
 import com.example.persona.features.settings.presentation.components.SettingFocusState
 import com.example.persona.features.settings.presentation.components.SettingsGroup
+import com.example.persona.features.settings.presentation.components.rememberReorderableColumnState
+import com.example.persona.features.settings.presentation.components.reorderableColumnHandle
+import com.example.persona.features.settings.presentation.components.reorderableColumnItem
 import com.example.persona.features.settings.presentation.components.rows.NavRow
 import com.example.persona.features.settings.presentation.components.settingFocus
 import com.example.persona.features.settings.presentation.model.SettingKey
@@ -88,6 +92,10 @@ fun ProviderDetailScreen(
 
     // SECURITY: Strictly volatile in memory, never rememberSaveable
     var revealedKeys by remember { mutableStateOf(emptySet<String>()) }
+    val haptics = LocalHapticFeedback.current
+    val reorderKeysState = rememberReorderableColumnState { from, to ->
+        actions.moveApiKey(providerId, from, to)
+    }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
@@ -253,6 +261,7 @@ fun ProviderDetailScreen(
                                     }
                                 }
                             } else {
+                                val canReorder = config.keys.size > 1
                                 config.keys.forEachIndexed { index, apiKey ->
                                     val status = config.verificationStates[apiKey] ?: VerificationState.Idle
                                     val revealed = apiKey in revealedKeys
@@ -262,6 +271,16 @@ fun ProviderDetailScreen(
                                         apiKey = apiKey,
                                         status = status,
                                         revealed = revealed,
+                                        canReorder = canReorder,
+                                        onMoveUp = if (index > 0) { { actions.moveApiKeyUp(providerId, apiKey) } } else null,
+                                        onMoveDown = if (index < config.keys.size - 1) { { actions.moveApiKeyDown(providerId, apiKey) } } else null,
+                                        dragHandleModifier = Modifier.reorderableColumnHandle(
+                                            state = reorderKeysState,
+                                            key = apiKey,
+                                            index = index,
+                                            totalItems = config.keys.size,
+                                            haptics = haptics
+                                        ),
                                         onToggleReveal = {
                                             revealedKeys = if (revealed) revealedKeys - apiKey else revealedKeys + apiKey
                                         },
@@ -275,6 +294,17 @@ fun ProviderDetailScreen(
                                             ) {
                                                 actions.addApiKeyAtIndex(providerId, apiKey, index)
                                             }
+                                        },
+                                        modifier = if (canReorder) {
+                                            Modifier.reorderableColumnItem(
+                                                state = reorderKeysState,
+                                                key = apiKey,
+                                                index = index,
+                                                totalItems = config.keys.size,
+                                                haptics = haptics
+                                            )
+                                        } else {
+                                            Modifier
                                         }
                                     )
                                 }

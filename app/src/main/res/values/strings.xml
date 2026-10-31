@@ -230,7 +230,7 @@
     <string name="bot_simulator_title">Bot Simulator</string>
 
     <!-- ── Settings Screen & Tabs ──────────────────────────────────────────────── -->
-    <string name="settings_title">Store &amp; Bot Settings</string>
+    <string name="settings_title">Store &amp; Assistant Settings</string>
     <string name="settings_subtitle">Manage AI engines, store identity, security, and WhatsApp routing</string>
 
     <string name="settings_tab_ai">AI Engines</string>
@@ -294,16 +294,16 @@
     <string name="settings_theme_system_sub">Follow device appearance</string>
 
     <!-- ── Store Identity Section ─────────────────────────────────────────────── -->
-    <string name="settings_store_identity_title">Store &amp; Bot Identity</string>
-    <string name="settings_store_identity_subtitle">Configure bot name and store brand for automated AI responses</string>
+    <string name="settings_store_identity_title">Store &amp; Assistant Identity</string>
+    <string name="settings_store_identity_subtitle">Configure assistant name and store brand for automated AI responses</string>
     <string name="settings_bot_name_label">Customer Support Representative Name</string>
     <string name="settings_bot_name_placeholder">e.g. Sarah / Sales Assistant</string>
     <string name="settings_store_name_label">Store or Brand Name</string>
     <string name="settings_store_name_placeholder">e.g. Elegance Boutique / Our Store</string>
 
     <!-- ── AI Persona Tone Section ────────────────────────────────────────────── -->
-    <string name="settings_persona_tone_title">Bot Persona Tone</string>
-    <string name="settings_persona_tone_subtitle">Choose the style and dialect the bot uses with WhatsApp customers</string>
+    <string name="settings_persona_tone_title">Assistant Persona Tone</string>
+    <string name="settings_persona_tone_subtitle">Choose the style and dialect the assistant uses with WhatsApp customers</string>
 
     <!-- ── Response Templates Section ─────────────────────────────────────────── -->
     <string name="settings_templates_title">Quick Response Templates</string>
@@ -502,9 +502,9 @@
     <string name="settings_routing_perm_granted_btn">Active ✓</string>
     <string name="settings_routing_grant_perm_btn">Grant Permission</string>
     <string name="settings_routing_hitl_section_title">Human Intervention &amp; Conversation Safety</string>
-    <string name="settings_routing_hitl_section_desc">Control how the bot automatically pauses when a customer requests to talk to a human.</string>
-    <string name="settings_routing_pause_on_human_title">Auto-pause bot when human agent requested</string>
-    <string name="settings_routing_pause_on_human_desc">Temporarily freeze bot replies to avoid interrupting merchant or customer service.</string>
+    <string name="settings_routing_hitl_section_desc">Control how the assistant automatically pauses when a customer requests to talk to a human.</string>
+    <string name="settings_routing_pause_on_human_title">Auto-pause assistant when human agent requested</string>
+    <string name="settings_routing_pause_on_human_desc">Temporarily freeze assistant replies to avoid interrupting merchant or customer service.</string>
     <string name="settings_routing_hitl_message_label">Holding message during human transfer</string>
     <string name="settings_routing_fallback_section_title">Emergency &amp; Fallback Messages</string>
     <string name="settings_routing_fallback_section_desc">Messages sent by system when media cannot be processed or no AI reply is available.</string>
@@ -518,20 +518,20 @@
     <string name="settings_hours_thu">Thursday</string>
     <string name="settings_hours_fri">Friday</string>
     <string name="settings_hours_title">Business Hours &amp; Schedule</string>
-    <string name="settings_hours_desc">Set operating store hours so bot replies with a custom message outside working hours.</string>
+    <string name="settings_hours_desc">Set operating store hours so assistant replies with a custom message outside working hours.</string>
     <string name="settings_hours_enable_title">Enable Business Hours Schedule</string>
-    <string name="settings_hours_enable_desc">When enabled, bot will send an off-hours message instead of attempting sales.</string>
+    <string name="settings_hours_enable_desc">When enabled, assistant will send an off-hours message instead of attempting sales.</string>
     <string name="settings_hours_official_days">Official Working Days:</string>
     <string name="settings_hours_start_label">Shift Start (e.g. 10:00)</string>
     <string name="settings_hours_end_label">Shift End (e.g. 23:00)</string>
     <string name="settings_hours_off_message_label">Off-hours auto-reply message</string>
     <string name="settings_hours_off_message_placeholder">Welcome to our store! Official hours are 10:00 AM to 11:00 PM...</string>
     <string name="settings_hours_privacy_title">Privacy &amp; Blocklist</string>
-    <string name="settings_hours_privacy_desc">Prevent bot from interacting with WhatsApp groups or specific numbers (e.g. family or suppliers).</string>
+    <string name="settings_hours_privacy_desc">Prevent assistant from interacting with WhatsApp groups or specific numbers (e.g. family or suppliers).</string>
     <string name="settings_hours_ignore_groups_title">Ignore WhatsApp Groups</string>
     <string name="settings_hours_ignore_groups_desc">Never reply inside group chats to protect privacy and save quota.</string>
     <string name="settings_hours_exempt_numbers">Numbers excluded from auto-reply:</string>
-    <string name="settings_hours_no_blocked_numbers">No numbers blocked currently. Bot will reply to all individual chats.</string>
+    <string name="settings_hours_no_blocked_numbers">No numbers blocked currently. Assistant will reply to all individual chats.</string>
     <string name="settings_hours_add_blocked_label">Add phone number to blocklist</string>
     <string name="settings_hours_add_blocked_placeholder">e.g. 01012345678 or 201012345678</string>
     <string name="settings_hours_block_btn">Block</string>
@@ -940,7 +940,7 @@
     <string name="setup_add_key">Add at least one API Key</string>
     <string name="setup_notification_access">Grant Notification Listener Access</string>
     <string name="setup_storage_access">Grant Media &amp; Voice Storage Access</string>
-    <string name="setup_name_store">Set your Bot &amp; Store Name</string>
+    <string name="setup_name_store">Set your Assistant &amp; Store Name</string>
 
     <string name="quick_hours">Working Hours</string>
     <string name="quick_groups">Ignore Groups</string>

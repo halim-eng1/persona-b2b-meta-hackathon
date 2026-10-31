@@ -279,6 +279,38 @@ class SettingsViewModel @Inject constructor(
         refreshProviderConfig(norm)
     }
 
+    fun moveApiKeyUp(provider: String, key: String) {
+        val norm = ModelProviders.normalize(provider)
+        val current = secureCredentialsRepository.getApiKeys(norm).toMutableList()
+        val idx = current.indexOf(key)
+        if (idx > 0) {
+            Collections.swap(current, idx, idx - 1)
+            secureCredentialsRepository.setApiKeys(norm, current)
+            refreshProviderConfig(norm)
+        }
+    }
+
+    fun moveApiKeyDown(provider: String, key: String) {
+        val norm = ModelProviders.normalize(provider)
+        val current = secureCredentialsRepository.getApiKeys(norm).toMutableList()
+        val idx = current.indexOf(key)
+        if (idx in 0 until current.size - 1) {
+            Collections.swap(current, idx, idx + 1)
+            secureCredentialsRepository.setApiKeys(norm, current)
+            refreshProviderConfig(norm)
+        }
+    }
+
+    fun moveApiKey(provider: String, from: Int, to: Int) {
+        val norm = ModelProviders.normalize(provider)
+        val current = secureCredentialsRepository.getApiKeys(norm).toMutableList()
+        if (from !in current.indices || to !in current.indices) return
+        val item = current.removeAt(from)
+        current.add(to, item)
+        secureCredentialsRepository.setApiKeys(norm, current)
+        refreshProviderConfig(norm)
+    }
+
     fun setCloudflareAccountId(id: String) {
         val trimmed = id.trim()
         secureCredentialsRepository.setCloudflareAccountId(trimmed)
@@ -498,13 +530,15 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setBotName(name: String) {
-        _uiState.update { it.copy(botName = name) }
-        viewModelScope.launch { userPreferencesRepository.setBotName(name) }
+        val sanitized = name.trim().ifEmpty { UserPreferencesRepository.DEFAULT_BOT_NAME }
+        _uiState.update { it.copy(botName = sanitized) }
+        viewModelScope.launch { userPreferencesRepository.setBotName(sanitized) }
     }
 
     fun setStoreName(name: String) {
-        _uiState.update { it.copy(storeName = name) }
-        viewModelScope.launch { userPreferencesRepository.setStoreName(name) }
+        val sanitized = name.trim().ifEmpty { UserPreferencesRepository.DEFAULT_STORE_NAME }
+        _uiState.update { it.copy(storeName = sanitized) }
+        viewModelScope.launch { userPreferencesRepository.setStoreName(sanitized) }
     }
 
     fun setGreetingTemplate(text: String) {
