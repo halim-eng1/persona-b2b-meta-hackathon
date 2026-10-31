@@ -25,10 +25,13 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -42,6 +45,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -88,6 +92,9 @@ fun AiEnginesSection(
     var newModelInput by remember(selectedProvider) { mutableStateOf("") }
     val visibleKeys = remember(selectedProvider) { mutableStateMapOf<String, Boolean>() }
     var showGuideDialogForProvider by remember { mutableStateOf<String?>(null) }
+    var keyToDelete by remember { mutableStateOf<String?>(null) }
+    var modelToDelete by remember { mutableStateOf<String?>(null) }
+    var isModelsExpanded by remember(selectedProvider) { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // ── 1. Provider Priority Chain ─────────────────────────────────────────
@@ -348,7 +355,7 @@ fun AiEnginesSection(
                                         )
                                     }
                                     IconButton(
-                                        onClick = { onRemoveApiKey(selectedProvider, apiKey) }
+                                        onClick = { keyToDelete = apiKey }
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Delete,
@@ -459,87 +466,247 @@ fun AiEnginesSection(
             }
         }
 
-        // ── 4. Provider Models Management ──────────────────────────────────────
+        // ── 4. Provider Models Management (Collapsible Progressive Disclosure) ──
+        val primaryModel = config.models.firstOrNull() ?: "-"
+        val modelsSummary = if (config.models.isNotEmpty()) {
+            stringResource(R.string.settings_ai_models_summary, config.models.size, primaryModel)
+        } else {
+            stringResource(R.string.settings_ai_models_summary_empty)
+        }
+
         PreferenceSection(
             title = stringResource(R.string.settings_ai_models_title, selectedProvider.uppercase()),
-            subtitle = stringResource(R.string.settings_ai_models_subtitle)
+            subtitle = if (isModelsExpanded) stringResource(R.string.settings_ai_models_subtitle) else modelsSummary
         ) {
-            config.models.forEachIndexed { modelIdx, modelName ->
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isModelsExpanded = !isModelsExpanded }
+            ) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 3.dp)
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = modelName,
+                            text = if (isModelsExpanded) stringResource(R.string.common_collapsed) else stringResource(R.string.common_expanded),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f)
+                            color = MaterialTheme.colorScheme.primary
                         )
-
-                        Row {
-                            IconButton(
-                                onClick = { onMoveModelUp(selectedProvider, modelName) },
-                                enabled = modelIdx > 0
-                            ) {
-                                Icon(Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.common_move_up), modifier = Modifier.size(16.dp))
-                            }
-                            IconButton(
-                                onClick = { onMoveModelDown(selectedProvider, modelName) },
-                                enabled = modelIdx < config.models.size - 1
-                            ) {
-                                Icon(Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.common_move_down), modifier = Modifier.size(16.dp))
-                            }
-                            IconButton(
-                                onClick = { onRemoveProviderModel(selectedProvider, modelName) }
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.common_delete), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                            }
-                        }
+                        Text(
+                            text = modelsSummary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(
+                        onClick = { isModelsExpanded = !isModelsExpanded }
+                    ) {
+                        Icon(
+                            imageVector = if (isModelsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (isModelsExpanded) stringResource(R.string.common_collapsed) else stringResource(R.string.common_expanded),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
 
-            // Add new model input row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = newModelInput,
-                    onValueChange = { newModelInput = it },
-                    label = { Text(stringResource(R.string.settings_ai_add_model_label)) },
-                    placeholder = { Text("e.g. qwen3.8-flash / deepseek-v4.1-flash") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(
-                    onClick = {
-                        if (newModelInput.isNotBlank()) {
-                            onAddProviderModel(selectedProvider, newModelInput)
-                            newModelInput = ""
+            AnimatedVisibility(visible = isModelsExpanded) {
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    config.models.forEachIndexed { modelIdx, modelName ->
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (modelIdx == 0)
+                                            PersonaTheme.statusColors.success.copy(alpha = 0.15f)
+                                        else
+                                            MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = if (modelIdx == 0)
+                                                stringResource(R.string.settings_ai_model_primary_badge)
+                                            else
+                                                stringResource(R.string.settings_ai_model_fallback_badge, modelIdx + 1),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (modelIdx == 0)
+                                                PersonaTheme.statusColors.success
+                                            else
+                                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = modelName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+
+                                Row {
+                                    IconButton(
+                                        onClick = { onMoveModelUp(selectedProvider, modelName) },
+                                        enabled = modelIdx > 0
+                                    ) {
+                                        Icon(Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.common_move_up), modifier = Modifier.size(16.dp))
+                                    }
+                                    IconButton(
+                                        onClick = { onMoveModelDown(selectedProvider, modelName) },
+                                        enabled = modelIdx < config.models.size - 1
+                                    ) {
+                                        Icon(Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.common_move_down), modifier = Modifier.size(16.dp))
+                                    }
+                                    IconButton(
+                                        onClick = { modelToDelete = modelName }
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.common_delete), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
                         }
-                    },
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.common_add))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.common_add))
+                    }
+
+                    // Add new model input row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = newModelInput,
+                            onValueChange = { newModelInput = it },
+                            label = { Text(stringResource(R.string.settings_ai_add_model_label)) },
+                            placeholder = { Text("e.g. qwen3.8-flash / deepseek-v4.1-flash") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                if (newModelInput.isNotBlank()) {
+                                    onAddProviderModel(selectedProvider, newModelInput)
+                                    newModelInput = ""
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.common_add))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(stringResource(R.string.common_add))
+                        }
+                    }
                 }
             }
         }
+    }
+
+    // Delete API Key Confirmation Dialog
+    keyToDelete?.let { key ->
+        AlertDialog(
+            onDismissRequest = { keyToDelete = null },
+            title = {
+                Text(
+                    text = stringResource(R.string.settings_ai_delete_key_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.settings_ai_delete_key_message),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onRemoveApiKey(selectedProvider, key)
+                        keyToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(stringResource(R.string.common_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { keyToDelete = null }
+                ) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
+
+    // Delete Model Confirmation Dialog
+    modelToDelete?.let { model ->
+        AlertDialog(
+            onDismissRequest = { modelToDelete = null },
+            title = {
+                Text(
+                    text = stringResource(R.string.settings_ai_delete_model_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.settings_ai_delete_model_message, model),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onRemoveProviderModel(selectedProvider, model)
+                        modelToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(stringResource(R.string.common_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { modelToDelete = null }
+                ) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
     }
 
     // Provider How to Get API Key Dialog

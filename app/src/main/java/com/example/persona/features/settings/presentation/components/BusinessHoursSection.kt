@@ -3,6 +3,8 @@ package com.example.persona.features.settings.presentation.components
 import com.example.persona.R
 import androidx.compose.ui.res.stringResource
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -18,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -35,8 +38,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import com.example.persona.features.settings.presentation.SettingsUiState
 
 private val ALL_DAYS = listOf(
@@ -66,6 +71,25 @@ fun BusinessHoursSection(
     var startTimeInput by remember(schedule.startTime) { mutableStateOf(schedule.startTime) }
     var endTimeInput by remember(schedule.endTime) { mutableStateOf(schedule.endTime) }
     var newNumberInput by remember { mutableStateOf("") }
+
+    val context = LocalContext.current
+
+    fun showTimePicker(currentTime: String, onTimeSelected: (String) -> Unit) {
+        val parts = currentTime.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull() ?: 9
+        val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
+
+        android.app.TimePickerDialog(
+            context,
+            { _, selectedHour, selectedMinute ->
+                val formatted = String.format(Locale.ROOT, "%02d:%02d", selectedHour, selectedMinute)
+                onTimeSelected(formatted)
+            },
+            hour,
+            minute,
+            android.text.format.DateFormat.is24HourFormat(context)
+        ).show()
+    }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // ── Business Hours Schedule ───────────────────────────────────────────
@@ -116,26 +140,91 @@ fun BusinessHoursSection(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    OutlinedTextField(
-                        value = startTimeInput,
-                        onValueChange = {
-                            startTimeInput = it
-                            onWorkingHoursChange(it, endTimeInput)
-                        },
-                        label = { Text(stringResource(R.string.settings_hours_start_label)) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = endTimeInput,
-                        onValueChange = {
-                            endTimeInput = it
-                            onWorkingHoursChange(startTimeInput, it)
-                        },
-                        label = { Text(stringResource(R.string.settings_hours_end_label)) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                showTimePicker(startTimeInput) { newStart ->
+                                    startTimeInput = newStart
+                                    onWorkingHoursChange(newStart, endTimeInput)
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.settings_hours_start_label),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = startTimeInput.ifBlank { "09:00" },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = stringResource(R.string.settings_hours_tap_to_change),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                showTimePicker(endTimeInput) { newEnd ->
+                                    endTimeInput = newEnd
+                                    onWorkingHoursChange(startTimeInput, newEnd)
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.settings_hours_end_label),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = endTimeInput.ifBlank { "22:00" },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = stringResource(R.string.settings_hours_tap_to_change),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))

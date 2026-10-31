@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -31,7 +32,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,6 +56,8 @@ fun SystemMaintenanceSection(
     onClearCache: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showClearCacheConfirm by remember { mutableStateOf(false) }
+
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Feedback message banner
         AnimatedVisibility(visible = state.maintenanceMessage != null) {
@@ -161,7 +169,7 @@ fun SystemMaintenanceSection(
             subtitle = stringResource(R.string.settings_cache_clean_desc)
         ) {
             OutlinedButton(
-                onClick = onClearCache,
+                onClick = { showClearCacheConfirm = true },
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = MaterialTheme.colorScheme.error
@@ -173,6 +181,47 @@ fun SystemMaintenanceSection(
                 Text(stringResource(R.string.settings_cache_clean_btn))
             }
         }
+    }
+
+    if (showClearCacheConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheConfirm = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.settings_cache_clean_confirm_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.settings_cache_clean_confirm_message),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onClearCache()
+                        showClearCacheConfirm = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(stringResource(R.string.settings_cache_clean_btn))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showClearCacheConfirm = false }
+                ) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
     }
 }
 
