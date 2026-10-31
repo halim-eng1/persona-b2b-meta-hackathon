@@ -7,9 +7,11 @@ import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import com.example.persona.features.settings.data.repository.InMemorySecureCredentialsRepository
 import com.example.persona.features.settings.domain.repository.ModelProviders
+import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -36,12 +38,14 @@ class SettingsViewModelTest {
 
     private val autoPauseFlow = MutableStateFlow(false)
     private val appLanguageFlow = MutableStateFlow("ar")
+    private val themeModeFlow = MutableStateFlow("dark")
     private val cloudflareAccountIdFlow = MutableStateFlow("")
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         every { userPreferencesRepository.appLanguageFlow } returns appLanguageFlow
+        every { userPreferencesRepository.themeModeFlow } returns themeModeFlow
         every { userPreferencesRepository.cloudflareAccountIdFlow } returns cloudflareAccountIdFlow
         every { userPreferencesRepository.stylePreferences } returns flowOf(
             StylePreferences(StyleProfile.CASUAL, 0.75f, 5, 2)
@@ -333,6 +337,21 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals("en", viewModel.uiState.value.appLanguage)
+    }
+
+    @Test
+    fun `default themeMode in uiState is dark and setThemeMode updates repository`() = runTest(testDispatcher) {
+        coEvery { userPreferencesRepository.setThemeMode(any()) } just Runs
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        assertEquals("dark", viewModel.uiState.value.themeMode)
+
+        viewModel.setThemeMode("light")
+        advanceUntilIdle()
+
+        assertEquals("light", viewModel.uiState.value.themeMode)
+        coVerify { userPreferencesRepository.setThemeMode("light") }
     }
 
     @Test

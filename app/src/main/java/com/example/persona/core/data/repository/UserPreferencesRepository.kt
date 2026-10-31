@@ -106,6 +106,13 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_APP_LANGUAGE = stringPreferencesKey("app_language")
         const val DEFAULT_APP_LANGUAGE = "ar"
 
+        // ── Theme Mode ("dark", "light", "system") ──────────────────────────────
+        val KEY_THEME_MODE = stringPreferencesKey("app_theme_mode")
+        const val THEME_MODE_DARK = "dark"
+        const val THEME_MODE_LIGHT = "light"
+        const val THEME_MODE_SYSTEM = "system"
+        const val DEFAULT_THEME_MODE = THEME_MODE_DARK
+
         // ── Business Hours & Blacklist ────────────────────────────────────────
         val KEY_BUSINESS_HOURS_ENABLED = booleanPreferencesKey("business_hours_enabled")
         val KEY_BUSINESS_HOURS_DAYS = stringPreferencesKey("business_hours_days")
@@ -148,6 +155,10 @@ class UserPreferencesRepository @Inject constructor(
 
     val appLanguageFlow: Flow<String> = dataStore.data.map { prefs ->
         prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+    }
+
+    val themeModeFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_THEME_MODE]?.takeIf { it.isNotBlank() } ?: DEFAULT_THEME_MODE
     }
 
     val stylePreferences: Flow<StylePreferences> = dataStore.data.map { prefs ->
@@ -445,6 +456,12 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
+    suspend fun setThemeMode(mode: String) {
+        dataStore.edit { prefs ->
+            prefs[KEY_THEME_MODE] = mode.trim().lowercase()
+        }
+    }
+
     suspend fun setStylePreferences(stylePreferences: StylePreferences) {
         dataStore.edit { prefs ->
             prefs[KEY_PERSONA_TONE] = stylePreferences.personaTone.name
@@ -531,6 +548,9 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun getAppLanguageSync(): String =
         dataStore.data.first()[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+
+    suspend fun getThemeModeSync(): String =
+        dataStore.data.first()[KEY_THEME_MODE]?.takeIf { it.isNotBlank() } ?: DEFAULT_THEME_MODE
 
     suspend fun getStylePreferencesSync(): StylePreferences {
         val prefs = dataStore.data.first()

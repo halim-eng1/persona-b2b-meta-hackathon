@@ -12,6 +12,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -86,6 +87,16 @@ class MainActivity : ComponentActivity() {
             val appLanguage by userPreferencesRepository.appLanguageFlow.collectAsStateWithLifecycle(
                 initialValue = UserPreferencesRepository.DEFAULT_APP_LANGUAGE
             )
+            val themeMode by userPreferencesRepository.themeModeFlow.collectAsStateWithLifecycle(
+                initialValue = UserPreferencesRepository.DEFAULT_THEME_MODE
+            )
+            val systemInDark = isSystemInDarkTheme()
+            val isDarkTheme = when (themeMode) {
+                UserPreferencesRepository.THEME_MODE_LIGHT -> false
+                UserPreferencesRepository.THEME_MODE_SYSTEM -> systemInDark
+                else -> true // default is dark terminal
+            }
+
             val activityContext = LocalContext.current   // this IS the Activity
             val layoutDirection = if (appLanguage == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
 
@@ -127,7 +138,10 @@ class MainActivity : ComponentActivity() {
                 LocalConfiguration provides localizedConfiguration,
                 LocalContext provides localizedContext
             ) {
-                PersonaTheme {
+                PersonaTheme(
+                    darkTheme = isDarkTheme,
+                    language = appLanguage
+                ) {
                     val navController = rememberNavController()
                     val currentBackStackEntry by navController.currentBackStackEntryAsState()
 

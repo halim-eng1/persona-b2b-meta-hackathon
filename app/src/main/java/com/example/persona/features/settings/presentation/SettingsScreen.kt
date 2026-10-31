@@ -233,6 +233,7 @@ fun SettingsScreen(
                             StoreIdentitySection(
                                 state = state,
                                 onLanguageChange = { viewModel.setAppLanguage(it) },
+                                onThemeModeChange = { viewModel.setThemeMode(it) },
                                 onBotNameChange = { viewModel.setBotName(it) },
                                 onStoreNameChange = { viewModel.setStoreName(it) },
                                 onPersonaToneChange = { viewModel.setPersonaTone(it) },

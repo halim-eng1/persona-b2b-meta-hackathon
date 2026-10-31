@@ -14,7 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Person
@@ -131,7 +131,7 @@ fun ChatImportScreen(
                         onClick = onNavigateBack,
                         modifier = Modifier.size(48.dp)
                     ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.import_screen_nav_back))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.import_screen_nav_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

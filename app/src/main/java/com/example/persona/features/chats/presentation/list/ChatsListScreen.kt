@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,6 +28,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -174,8 +176,18 @@ fun ChatsListScreen(
                                 stringResource(R.string.chats_empty_desc)
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
+                        if (state.searchQuery.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            OutlinedButton(
+                                onClick = { viewModel.onSearchQueryChanged("") },
+                                modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                            ) {
+                                Text(stringResource(R.string.chats_empty_clear_search_btn))
+                            }
+                        }
                     }
                 }
             } else {

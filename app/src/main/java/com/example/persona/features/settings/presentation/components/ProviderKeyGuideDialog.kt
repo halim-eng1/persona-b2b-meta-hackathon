@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -303,7 +304,7 @@ fun ProviderKeyGuideDialog(
                             }
                         ) {
                             Icon(
-                                imageVector = Icons.Default.OpenInNew,
+                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                                 contentDescription = stringResource(R.string.guide_open_portal_desc),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)

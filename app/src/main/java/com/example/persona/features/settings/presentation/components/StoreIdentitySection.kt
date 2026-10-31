@@ -1,4 +1,4 @@
-﻿package com.example.persona.features.settings.presentation.components
+package com.example.persona.features.settings.presentation.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -40,7 +40,8 @@ fun StoreIdentitySection(
     onGreetingTemplateChange: (String) -> Unit,
     onFarewellTemplateChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    onLanguageChange: (String) -> Unit = {}
+    onLanguageChange: (String) -> Unit = {},
+    onThemeModeChange: (String) -> Unit = {}
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // ── App Language Preference ───────────────────────────────────────────
@@ -64,6 +65,39 @@ fun StoreIdentitySection(
                     subtitle = stringResource(R.string.language_english_sub),
                     isSelected = state.appLanguage == "en",
                     onClick = { onLanguageChange("en") },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // ── App Appearance / Theme Mode ───────────────────────────────────────
+        PreferenceSection(
+            title = stringResource(R.string.settings_theme_title),
+            subtitle = stringResource(R.string.settings_theme_subtitle)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                LanguageOptionCard(
+                    title = stringResource(R.string.settings_theme_dark),
+                    subtitle = stringResource(R.string.settings_theme_dark_sub),
+                    isSelected = state.themeMode == "dark",
+                    onClick = { onThemeModeChange("dark") },
+                    modifier = Modifier.weight(1f)
+                )
+                LanguageOptionCard(
+                    title = stringResource(R.string.settings_theme_light),
+                    subtitle = stringResource(R.string.settings_theme_light_sub),
+                    isSelected = state.themeMode == "light",
+                    onClick = { onThemeModeChange("light") },
+                    modifier = Modifier.weight(1f)
+                )
+                LanguageOptionCard(
+                    title = stringResource(R.string.settings_theme_system),
+                    subtitle = stringResource(R.string.settings_theme_system_sub),
+                    isSelected = state.themeMode == "system",
+                    onClick = { onThemeModeChange("system") },
                     modifier = Modifier.weight(1f)
                 )
             }

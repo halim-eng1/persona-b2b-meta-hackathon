@@ -1,4 +1,4 @@
-﻿package com.example.persona.features.settings.presentation
+package com.example.persona.features.settings.presentation
 
 import androidx.annotation.StringRes
 import com.example.persona.R
@@ -73,6 +73,9 @@ data class SettingsUiState(
 
     // ── App Language & Locale ("ar" or "en")
     val appLanguage: String = UserPreferencesRepository.DEFAULT_APP_LANGUAGE,
+
+    // ── Theme Mode ("dark", "light", "system")
+    val themeMode: String = UserPreferencesRepository.DEFAULT_THEME_MODE,
 
     // ── 1. AI Engines, Keys & Models
     val providerOrder: List<String> = UserPreferencesRepository.DEFAULT_PROVIDER_ORDER,
@@ -246,10 +249,15 @@ class SettingsViewModel @Inject constructor(
             }.collect {}
         }
 
-        // Group 5: App Language & Localization
+        // Group 5: App Language & Localization & Theme
         viewModelScope.launch {
             userPreferencesRepository.appLanguageFlow.collect { lang ->
                 _uiState.update { it.copy(appLanguage = lang) }
+            }
+        }
+        viewModelScope.launch {
+            userPreferencesRepository.themeModeFlow.collect { mode ->
+                _uiState.update { it.copy(themeMode = mode) }
             }
         }
 
@@ -467,6 +475,14 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(appLanguage = sanitized) }
         viewModelScope.launch {
             userPreferencesRepository.setAppLanguage(sanitized)
+        }
+    }
+
+    fun setThemeMode(mode: String) {
+        val sanitized = mode.trim().lowercase()
+        _uiState.update { it.copy(themeMode = sanitized) }
+        viewModelScope.launch {
+            userPreferencesRepository.setThemeMode(sanitized)
         }
     }
 
