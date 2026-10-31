@@ -6,9 +6,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -22,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.persona.R
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
@@ -50,17 +53,19 @@ fun StoreIdentitySection(
             subtitle = stringResource(R.string.settings_language_subtitle)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectableGroup(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                LanguageOptionCard(
+                PersonaSelectionCard(
                     title = stringResource(R.string.language_arabic),
                     subtitle = stringResource(R.string.language_arabic_sub),
                     isSelected = state.appLanguage == "ar",
                     onClick = { onLanguageChange("ar") },
                     modifier = Modifier.weight(1f)
                 )
-                LanguageOptionCard(
+                PersonaSelectionCard(
                     title = stringResource(R.string.language_english),
                     subtitle = stringResource(R.string.language_english_sub),
                     isSelected = state.appLanguage == "en",
@@ -70,30 +75,32 @@ fun StoreIdentitySection(
             }
         }
 
-        // ── App Appearance / Theme Mode ───────────────────────────────────────
+        // ── App Appearance / Theme Mode (Adaptive & Accessible) ───────────────
         PreferenceSection(
             title = stringResource(R.string.settings_theme_title),
             subtitle = stringResource(R.string.settings_theme_subtitle)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectableGroup(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                LanguageOptionCard(
+                PersonaSelectionCard(
                     title = stringResource(R.string.settings_theme_dark),
                     subtitle = stringResource(R.string.settings_theme_dark_sub),
                     isSelected = state.themeMode == "dark",
                     onClick = { onThemeModeChange("dark") },
                     modifier = Modifier.weight(1f)
                 )
-                LanguageOptionCard(
+                PersonaSelectionCard(
                     title = stringResource(R.string.settings_theme_light),
                     subtitle = stringResource(R.string.settings_theme_light_sub),
                     isSelected = state.themeMode == "light",
                     onClick = { onThemeModeChange("light") },
                     modifier = Modifier.weight(1f)
                 )
-                LanguageOptionCard(
+                PersonaSelectionCard(
                     title = stringResource(R.string.settings_theme_system),
                     subtitle = stringResource(R.string.settings_theme_system_sub),
                     isSelected = state.themeMode == "system",
@@ -218,8 +225,12 @@ fun StoreIdentitySection(
     }
 }
 
+/**
+ * Reusable, accessible selectable card option for settings preferences (Language, Theme Mode, etc.).
+ * Includes semantic [Role.RadioButton] and respects dynamic font scaling.
+ */
 @Composable
-fun LanguageOptionCard(
+fun PersonaSelectionCard(
     title: String,
     subtitle: String,
     isSelected: Boolean,
@@ -243,7 +254,7 @@ fun LanguageOptionCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(horizontal = 10.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             RadioButton(
@@ -251,19 +262,34 @@ fun LanguageOptionCard(
                 onClick = null,
                 colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            Column {
+            Spacer(modifier = Modifier.width(6.dp))
+            Column(modifier = Modifier.weight(1f, fill = false)) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
     }
 }
+
+// Backward-compatibility alias for any legacy callers
+@Composable
+fun LanguageOptionCard(
+    title: String,
+    subtitle: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) = PersonaSelectionCard(title, subtitle, isSelected, onClick, modifier)
