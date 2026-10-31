@@ -43,8 +43,6 @@ fun ExecutionTraceCard(
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var isRagExpanded by remember { mutableStateOf(false) }
-    var isPromptExpanded by remember { mutableStateOf(false) }
-    val clipboardManager = LocalClipboardManager.current
 
     val seconds = String.format(Locale.US, "%.1f", trace.totalDurationMs / 1000.0)
 
@@ -368,99 +366,20 @@ fun ExecutionTraceCard(
                         }
                     }
 
-                    // 6. 📄 System Prompt
-                    if (trace.systemPrompt.isNotBlank()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(text = "📄", fontSize = 14.sp)
-                                    Text(
-                                        text = stringResource(R.string.trace_system_prompt_title),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Text(
-                                    text = if (isPromptExpanded) {
-                                        stringResource(R.string.trace_prompt_collapse)
-                                    } else {
-                                        stringResource(R.string.trace_prompt_expand, trace.systemPrompt.length)
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .clickable { isPromptExpanded = !isPromptExpanded }
-                                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                                )
-                            }
-
-                            AnimatedVisibility(visible = isPromptExpanded) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.surface,
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        1.dp,
-                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(modifier = Modifier.padding(10.dp)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = stringResource(R.string.trace_prompt_preview_header),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.secondary
-                                            )
-                                            IconButton(
-                                                onClick = {
-                                                    clipboardManager.setText(AnnotatedString(trace.systemPrompt))
-                                                },
-                                                modifier = Modifier.size(24.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.ContentCopy,
-                                                    contentDescription = stringResource(R.string.trace_copy_prompt),
-                                                    modifier = Modifier.size(14.dp),
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .heightIn(max = 240.dp)
-                                                .verticalScroll(rememberScrollState())
-                                        ) {
-                                            Text(
-                                                text = trace.systemPrompt,
-                                                style = MaterialTheme.typography.bodySmall.copy(
-                                                    fontFamily = FontFamily.Monospace,
-                                                    fontSize = 11.sp,
-                                                    lineHeight = 16.sp
-                                                ),
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    // 6. 🔢 Token Consumption
+                    TraceStepRow(
+                        icon = "🔢",
+                        title = stringResource(R.string.trace_tokens_title),
+                        badgeText = stringResource(R.string.trace_tokens_badge, trace.totalTokens),
+                        badgeColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        badgeTextColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        detail = stringResource(
+                            R.string.trace_tokens_detail,
+                            trace.promptTokens,
+                            trace.completionTokens,
+                            trace.totalTokens
+                        )
+                    )
                 }
             }
         }

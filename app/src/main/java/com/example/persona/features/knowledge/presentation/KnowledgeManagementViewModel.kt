@@ -407,7 +407,7 @@ class KnowledgeManagementViewModel @Inject constructor(
         // 1. Audio ASR transcription step
         val ext = extractor
         if (mediaType == SimulatorMediaType.AUDIO && !mediaUri.isNullOrBlank()) {
-            val audioFile = resolveFileFromUri(mediaUri)
+            val audioFile = resolveFileFromUri(mediaUri, SimulatorMediaType.AUDIO)
             if (audioFile != null && ext != null) {
                 val transcribed = runCatching { ext.transcribeVoiceNote(audioFile) }.getOrNull()
                 if (!transcribed.isNullOrBlank()) {
@@ -429,7 +429,7 @@ class KnowledgeManagementViewModel @Inject constructor(
         val isImagePresent = mediaType == SimulatorMediaType.IMAGE && !mediaUri.isNullOrBlank()
         var imageFilePath: String? = null
         if (isImagePresent && mediaUri != null) {
-            val imgFile = resolveFileFromUri(mediaUri)
+            val imgFile = resolveFileFromUri(mediaUri, SimulatorMediaType.IMAGE)
             imageFilePath = imgFile?.absolutePath ?: mediaUri
         }
 
@@ -539,15 +539,39 @@ class KnowledgeManagementViewModel @Inject constructor(
         )
 
         // 6. Call ReplyGenerationRepository.generateReply
-        val rawChatHistory = _uiState.value.simulatorMessages.map { msg ->
+        val priorMessages = _uiState.value.simulatorMessages.dropLast(1)
+        val rawChatHistory = priorMessages.reversed().mapIndexed { index, msg ->
+            val text = when {
+                msg.sender == SimulatorSender.USER && msg.mediaType == SimulatorMediaType.IMAGE -> {
+                    val nextBotMsg = priorMessages.getOrNull(priorMessages.indexOf(msg) + 1)
+                    val visDesc = nextBotMsg?.trace?.visionDescription
+                    if (!visDesc.isNullOrBlank()) {
+                        if (msg.text.isNotBlank()) "[صورة مرفقة من العميل: $visDesc]\n${msg.text}" else "[صورة مرفقة من العميل: $visDesc]"
+                    } else {
+                        if (msg.text.isNotBlank()) "[صورة مرفقة من العميل]\n${msg.text}" else "[صورة مرفقة من العميل]"
+                    }
+                }
+                msg.sender == SimulatorSender.USER && msg.mediaType == SimulatorMediaType.AUDIO -> {
+                    val nextBotMsg = priorMessages.getOrNull(priorMessages.indexOf(msg) + 1)
+                    val asrDesc = nextBotMsg?.trace?.asrTranscription
+                    if (!asrDesc.isNullOrBlank()) {
+                        if (msg.text.isNotBlank()) "[رسالة صوتية من العميل: $asrDesc]\n${msg.text}" else "[رسالة صوتية من العميل: $asrDesc]"
+                    } else {
+                        if (msg.text.isNotBlank()) "[رسالة صوتية من العميل]\n${msg.text}" else "[رسالة صوتية من العميل]"
+                    }
+                }
+                else -> msg.text
+            }
             ChatHistoryEntity(
+                id = (index + 1).toLong(),
                 contactName = "SimulatorCustomer",
-                messageText = msg.text,
+                messageText = text,
                 isFromUser = msg.sender == SimulatorSender.USER,
-                timestamp = msg.timestamp
+                timestamp = msg.timestamp,
+                senderType = if (msg.sender == SimulatorSender.USER) "CUSTOMER" else "BOT"
             )
         }
-        val isOngoing = rawChatHistory.size > 1
+        val isOngoing = priorMessages.isNotEmpty()
 
         val notification = ProcessedNotification(
             notificationKey = "sim_${System.currentTimeMillis()}",
@@ -703,6 +727,21 @@ class KnowledgeManagementViewModel @Inject constructor(
 
         val totalDurationMs = System.currentTimeMillis() - startTime
 
+        val telemetry = replyRepo?.getLastExecutionTelemetry()
+        val effectiveProvider = telemetry?.providerModel?.takeIf { it.isNotBlank() } ?: llmProviderName
+        val effectiveLatency = telemetry?.latencyMs?.takeIf { it > 0 } ?: llmLatencyMs
+        val promptTokens = if ((telemetry?.promptTokens ?: 0) > 0) {
+            telemetry!!.promptTokens
+        } else {
+            PromptContextBuilder.estimateTokens(fullSystemPrompt + effectiveText)
+        }
+        val completionTokens = if ((telemetry?.completionTokens ?: 0) > 0) {
+            telemetry!!.completionTokens
+        } else {
+            PromptContextBuilder.estimateTokens(finalReply)
+        }
+        val totalTokens = promptTokens + completionTokens
+
         val trace = ExecutionTrace(
             totalDurationMs = totalDurationMs,
             intent = decision.intent,
@@ -715,12 +754,15 @@ class KnowledgeManagementViewModel @Inject constructor(
             reQueryKeyword = refinedKeyword,
             reQueryVisualDescription = visionDescription,
             reQueryCandidates = pass2Candidates,
-            llmProvider = llmProviderName,
-            llmLatencyMs = llmLatencyMs,
+            llmProvider = effectiveProvider,
+            llmLatencyMs = effectiveLatency,
             llmAction = finalParsedResponse?.action ?: "REPLY",
+            promptTokens = promptTokens,
+            completionTokens = completionTokens,
+            totalTokens = totalTokens,
             orderAction = finalParsedResponse?.orderAction?.uppercase() ?: "NONE",
             extractedOrder = finalParsedResponse?.extractedOrder,
-            systemPrompt = fullSystemPrompt,
+            systemPrompt = "", // Removed from UI as requested
             asrTranscription = asrTranscription,
             visionDescription = visionDescription
         )
@@ -743,7 +785,7 @@ class KnowledgeManagementViewModel @Inject constructor(
         }
     }
 
-    private fun resolveFileFromUri(uriString: String): File? {
+    private fun resolveFileFromUri(uriString: String, mediaType: SimulatorMediaType? = null): File? {
         if (uriString.isBlank()) return null
         val ctx = context ?: return null
         return runCatching {
@@ -753,7 +795,14 @@ class KnowledgeManagementViewModel @Inject constructor(
                 val file = File(path)
                 if (file.exists()) return file
             }
+            val mimeType = ctx.contentResolver.getType(uri)
             val extension = when {
+                mimeType != null && mimeType.contains("jpeg", ignoreCase = true) -> ".jpg"
+                mimeType != null && mimeType.contains("png", ignoreCase = true) -> ".png"
+                mimeType != null && mimeType.contains("webp", ignoreCase = true) -> ".webp"
+                mimeType != null && mimeType.contains("ogg", ignoreCase = true) -> ".ogg"
+                mimeType != null && mimeType.contains("opus", ignoreCase = true) -> ".opus"
+                mimeType != null && mimeType.contains("audio", ignoreCase = true) -> ".m4a"
                 uriString.contains(".jpg", true) || uriString.contains("jpeg", true) -> ".jpg"
                 uriString.contains(".png", true) -> ".png"
                 uriString.contains(".webp", true) -> ".webp"
@@ -762,6 +811,8 @@ class KnowledgeManagementViewModel @Inject constructor(
                 uriString.contains(".mp3", true) -> ".mp3"
                 uriString.contains(".m4a", true) -> ".m4a"
                 uriString.contains(".wav", true) -> ".wav"
+                mediaType == SimulatorMediaType.IMAGE -> ".jpg"
+                mediaType == SimulatorMediaType.AUDIO -> ".ogg"
                 else -> ".tmp"
             }
             val stream = ctx.contentResolver.openInputStream(uri) ?: return null

@@ -276,7 +276,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     }
 
     sealed interface CallResult {
-        data class Success(val content: String) : CallResult
+        data class Success(
+            val content: String,
+            val promptTokens: Int = 0,
+            val completionTokens: Int = 0,
+            val actualModel: String? = null
+        ) : CallResult
         data object RateLimited : CallResult
         data class AuthOrQuotaError(val code: Int) : CallResult
         data class ServerError(val code: Int) : CallResult
@@ -533,11 +538,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                                     circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN)
                                     val durationMs = System.currentTimeMillis() - qwenStartTime
                                     PersonaLogger.i(TAG, "Vision Tier 1 (Qwen) succeeded with $model in ${durationMs}ms!")
-                                    lastTelemetry = com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry(
-                                        providerModel = "Qwen / $model",
-                                        gatekeeperTier = "MODEL",
-                                        latencyMs = durationMs
-                                    )
+                                    recordSuccessTelemetry("Qwen", model, durationMs, result, messages)
                                     return result.content
                                 }
                                 is CallResult.AuthOrQuotaError -> {
@@ -575,11 +576,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                                     circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ)
                                     val durationMs = System.currentTimeMillis() - groqStartTime
                                     PersonaLogger.i(TAG, "Vision Tier 2 (Groq) succeeded with $model in ${durationMs}ms!")
-                                    lastTelemetry = com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry(
-                                        providerModel = "Groq / $model",
-                                        gatekeeperTier = "MODEL",
-                                        latencyMs = durationMs
-                                    )
+                                    recordSuccessTelemetry("Groq", model, durationMs, result, messages)
                                     return result.content
                                 }
                                 is CallResult.AuthOrQuotaError -> {
@@ -617,11 +614,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                                     circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI)
                                     val durationMs = System.currentTimeMillis() - geminiStartTime
                                     PersonaLogger.i(TAG, "Vision Tier 2.5 (Gemini) succeeded with $model in ${durationMs}ms!")
-                                    lastTelemetry = com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry(
-                                        providerModel = "Gemini / $model",
-                                        gatekeeperTier = "MODEL",
-                                        latencyMs = durationMs
-                                    )
+                                    recordSuccessTelemetry("Gemini", model, durationMs, result, messages)
                                     return result.content
                                 }
                                 is CallResult.AuthOrQuotaError -> {
@@ -659,11 +652,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                                     circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA)
                                     val durationMs = System.currentTimeMillis() - nvidiaStartTime
                                     PersonaLogger.i(TAG, "Vision Tier 3 (NVIDIA NIM) succeeded with $model in ${durationMs}ms!")
-                                    lastTelemetry = com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry(
-                                        providerModel = "NVIDIA / $model",
-                                        gatekeeperTier = "MODEL",
-                                        latencyMs = durationMs
-                                    )
+                                    recordSuccessTelemetry("NVIDIA", model, durationMs, result, messages)
                                     return result.content
                                 }
                                 is CallResult.AuthOrQuotaError -> {
@@ -699,11 +688,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                                 is CallResult.Success -> {
                                     circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER)
                                     PersonaLogger.i(TAG, "Vision Tier 4 (OpenRouter) succeeded with $model")
-                                    lastTelemetry = com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry(
-                                        providerModel = "OpenRouter / $model",
-                                        gatekeeperTier = "MODEL",
-                                        latencyMs = 0L
-                                    )
+                                    recordSuccessTelemetry("OpenRouter", model, 0L, result, messages)
                                     return result.content
                                 }
                                 is CallResult.AuthOrQuotaError -> {
@@ -813,11 +798,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                                 ProviderCircuitBreakerAndKeyManager.PROVIDER_NARA -> "Nara"
                                 else -> providerId.replaceFirstChar { it.uppercase() }
                             }
-                            lastTelemetry = com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry(
-                                providerModel = "$providerLabel / $model",
-                                gatekeeperTier = "MODEL",
-                                latencyMs = durationMs
-                            )
+                            recordSuccessTelemetry(providerLabel, model, durationMs, result, messages)
                             return result.content
                         }
                         is CallResult.AuthOrQuotaError -> {
@@ -860,5 +841,24 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         Log.w(TAG, "All models failed across configured cascade tiers. Returning HITL fallback JSON.")
         PersonaLogger.d(TAG, "All models failed — HITL fallback")
         return HITL_FALLBACK_JSON
+    }
+
+    private fun recordSuccessTelemetry(
+        providerLabel: String,
+        fallbackModel: String,
+        durationMs: Long,
+        result: CallResult.Success,
+        messages: List<ChatMessage>
+    ) {
+        val actualModel = result.actualModel?.takeIf { it.isNotBlank() } ?: fallbackModel
+        val pTokens = if (result.promptTokens > 0) result.promptTokens else messages.sumOf { estimateTokens(it.content) }
+        val cTokens = if (result.completionTokens > 0) result.completionTokens else estimateTokens(result.content)
+        lastTelemetry = com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry(
+            providerModel = "$providerLabel / $actualModel",
+            gatekeeperTier = "MODEL",
+            latencyMs = durationMs,
+            promptTokens = pTokens,
+            completionTokens = cTokens
+        )
     }
 }

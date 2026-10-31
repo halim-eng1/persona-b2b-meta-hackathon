@@ -27,7 +27,9 @@ data class QwenChatRequest(
 @Serializable
 data class QwenChatResponse(
     val id: String? = null,
+    val model: String? = null,
     val choices: List<QwenChoice>? = null,
+    val usage: CommonUsageDto? = null,
     val error: QwenError? = null
 )
 

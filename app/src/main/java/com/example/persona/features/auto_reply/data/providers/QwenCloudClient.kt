@@ -187,7 +187,15 @@ class QwenCloudClient @Inject constructor(
                         } else {
                             try {
                                 ReasoningLeakSanitizer.decodeAgenticResponseSafely(content)
-                                CallResult.Success(content)
+                                val pTokens = body.usage?.effectivePromptTokens ?: 0
+                                val cTokens = body.usage?.effectiveCompletionTokens ?: 0
+                                val respModel = body.model?.takeIf { it.isNotBlank() } ?: model
+                                CallResult.Success(
+                                    content = content,
+                                    promptTokens = pTokens,
+                                    completionTokens = cTokens,
+                                    actualModel = respModel
+                                )
                             } catch (e: Exception) {
                                 Log.w(TAG, "Invalid JSON content in response from [QwenCloud] $model (key $keyMasked): $content", e)
                                 CallResult.Failed

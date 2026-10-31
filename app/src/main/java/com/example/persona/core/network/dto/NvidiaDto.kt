@@ -25,7 +25,9 @@ data class NvidiaRequest(
 @Serializable
 data class NvidiaResponse(
     val id: String? = null,
+    val model: String? = null,
     val choices: List<NvidiaChoice>? = null,
+    val usage: CommonUsageDto? = null,
     val error: NvidiaError? = null
 )
 

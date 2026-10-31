@@ -169,6 +169,9 @@
     <string name="trace_order_total">Total: %s EGP</string>
     <string name="trace_order_notes">Notes: %s</string>
     <string name="trace_order_none">No order details extracted from this response.</string>
+    <string name="trace_tokens_title">Token Consumption</string>
+    <string name="trace_tokens_badge">%d tokens</string>
+    <string name="trace_tokens_detail">Input: %1$d • Output: %2$d • Total: %3$d</string>
     <string name="trace_system_prompt_title">Full System Prompt</string>
     <string name="trace_prompt_expand">Preview prompt (%d chars) ▼</string>
     <string name="trace_prompt_collapse">Hide prompt ▲</string>

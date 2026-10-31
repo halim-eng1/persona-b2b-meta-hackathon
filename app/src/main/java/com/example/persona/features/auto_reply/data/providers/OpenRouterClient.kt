@@ -188,7 +188,15 @@ class OpenRouterClient @Inject constructor(
                             Log.w(TAG, "Empty content in successful response from $model (key $keyMasked)")
                             CallResult.Failed
                         } else {
-                            CallResult.Success(content)
+                            val pTokens = body.usage?.effectivePromptTokens ?: 0
+                            val cTokens = body.usage?.effectiveCompletionTokens ?: 0
+                            val respModel = body.model?.takeIf { it.isNotBlank() } ?: model
+                            CallResult.Success(
+                                content = content,
+                                promptTokens = pTokens,
+                                completionTokens = cTokens,
+                                actualModel = respModel
+                            )
                         }
                     }
                     else -> {

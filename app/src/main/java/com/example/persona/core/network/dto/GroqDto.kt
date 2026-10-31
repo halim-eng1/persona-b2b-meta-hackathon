@@ -27,7 +27,9 @@ data class GroqRequest(
 @Serializable
 data class GroqResponse(
     val id: String? = null,
+    val model: String? = null,
     val choices: List<GroqChoice>? = null,
+    val usage: CommonUsageDto? = null,
     val error: GroqError? = null
 )
 

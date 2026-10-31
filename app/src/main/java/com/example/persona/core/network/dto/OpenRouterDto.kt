@@ -196,7 +196,10 @@ typealias ChoiceMessage = OpenRouterMessageDto
 
 @Serializable
 data class OpenRouterResponse(
+    val id: String? = null,
+    val model: String? = null,
     val choices: List<Choice>? = null,
+    val usage: CommonUsageDto? = null,
     val error: OpenRouterError? = null
 )
 
