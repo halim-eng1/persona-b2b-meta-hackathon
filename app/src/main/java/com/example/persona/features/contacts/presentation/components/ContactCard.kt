@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.sp
 import com.example.persona.core.database.entity.ContactEntity
 import com.example.persona.core.database.entity.ContactTag
 import com.example.persona.features.chats.presentation.detail.WhatsAppLauncher
+import com.example.persona.features.orders.domain.EgyptianOrderUtils
+import com.example.persona.ui.components.extractMonogram
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -85,7 +87,7 @@ fun ContactCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = contact.contactName.take(1).uppercase(),
+                        text = extractMonogram(contact.contactName, 1),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -97,7 +99,7 @@ fun ContactCard(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = contact.contactName,
+                        text = EgyptianOrderUtils.formatContactDisplayName(contact.contactName),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -105,7 +107,7 @@ fun ContactCard(
                     if (contact.phoneNumber.isNotBlank()) {
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = contact.phoneNumber,
+                            text = EgyptianOrderUtils.formatDisplayPhone(contact.phoneNumber),
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.outline)
                         )
                     }

@@ -66,6 +66,39 @@ object EgyptianOrderUtils {
     }
 
     /**
+     * Formats an Egyptian phone number for consistent BiDi display across Arabic (RTL)
+     * and English (LTR) layouts without number inversion or '+' sign swapping.
+     *
+     * Example: "01012460925" or "+20 10 1246 0925" -> "\u202A010 1246 0925\u202C"
+     */
+    fun formatDisplayPhone(rawPhone: String?): String {
+        if (rawPhone.isNullOrBlank()) return ""
+        val normalized = extractEgyptianMobilePhone(rawPhone)
+        val formatted = if (normalized != null && normalized.length == 11) {
+            "${normalized.substring(0, 3)} ${normalized.substring(3, 7)} ${normalized.substring(7)}"
+        } else {
+            rawPhone.trim()
+        }
+        // Wrap in Left-to-Right Embedding (LRE \u202A ... PDF \u202C) to lock phone direction
+        return "\u202A$formatted\u202C"
+    }
+
+    /**
+     * Formats a contact or phone display string: if the input is a valid phone number,
+     * it formats it cleanly and locks its LTR direction so it never inverts in Arabic UI.
+     */
+    fun formatContactDisplayName(nameOrPhone: String?): String {
+        if (nameOrPhone.isNullOrBlank()) return ""
+        val clean = nameOrPhone.trim()
+        val extracted = extractEgyptianMobilePhone(clean)
+        // If the entire text or almost all of it is an Egyptian phone number
+        if (extracted != null && (clean.startsWith("+") || clean.startsWith("0") || clean.startsWith("2") || clean.all { it.isDigit() || it.isWhitespace() || it in "+-()" })) {
+            return formatDisplayPhone(clean)
+        }
+        return clean
+    }
+
+    /**
      * Parses numeric/monetary inputs entered with Arabic or English digits,
      * supporting decimal points (.), Arabic decimal separators (٫), commas (، ,),
      * and currency suffixes.

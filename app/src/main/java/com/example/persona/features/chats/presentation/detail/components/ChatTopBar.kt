@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.sp
 import com.example.persona.R
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.chats.presentation.detail.ReplyCapability
+import com.example.persona.features.orders.domain.EgyptianOrderUtils
+import com.example.persona.ui.components.extractMonogram
 import com.example.persona.ui.theme.chatColors
 
 @Composable
@@ -93,7 +95,7 @@ fun CompactChatTopBar(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = contactName.take(1).uppercase(),
+                    text = extractMonogram(contactName, 1),
                     color = chatColors.onSurface,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                 )
@@ -116,7 +118,7 @@ fun CompactChatTopBar(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = contactName,
+                        text = EgyptianOrderUtils.formatContactDisplayName(contactName),
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,

@@ -44,8 +44,19 @@ private val DefaultAvatarTints = listOf(
  * - Single-word Arabic/Latin names safely
  */
 fun extractMonogram(name: String, letterCount: Int = 2): String {
-    val clean = name.trim()
+    val clean = name.trim().replace("\u202A", "").replace("\u202C", "").replace("\u200E", "").replace("\u200F", "")
     if (clean.isEmpty()) return "?"
+
+    // If the contact name is a phone number (e.g. starts with + or digits), return "#" or last 2 digits
+    if (clean.startsWith("+") || clean.take(2).all { it.isDigit() }) {
+        val digitsOnly = clean.filter { it.isDigit() }
+        return if (digitsOnly.length >= 2) {
+            digitsOnly.takeLast(2)
+        } else {
+            "#"
+        }
+    }
+
     val words = clean.split("\\s+".toRegex()).filter { it.isNotEmpty() }
 
     val compoundPrefixes = setOf("عبد", "أبو", "ابو", "أم", "ام", "آل", "ابن", "بن")

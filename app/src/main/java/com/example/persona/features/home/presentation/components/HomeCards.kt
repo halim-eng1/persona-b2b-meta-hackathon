@@ -602,7 +602,7 @@ fun RecentActivityRow(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = item.contactName,
+                    text = com.example.persona.features.orders.domain.EgyptianOrderUtils.formatContactDisplayName(item.contactName),
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(

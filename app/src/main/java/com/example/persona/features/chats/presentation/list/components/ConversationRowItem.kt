@@ -20,6 +20,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.persona.features.chats.presentation.list.ConversationItemUiModel
+import com.example.persona.features.orders.domain.EgyptianOrderUtils
+import com.example.persona.ui.components.extractMonogram
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -50,7 +52,7 @@ fun ConversationRowItem(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
-                        text = item.contactName.take(2).uppercase(),
+                        text = extractMonogram(item.contactName, 2),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -88,7 +90,7 @@ fun ConversationRowItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = item.contactName,
+                    text = EgyptianOrderUtils.formatContactDisplayName(item.contactName),
                     style = MaterialTheme.typography.bodyLarge.copy(
                         fontWeight = if (item.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
                         // BiDi: contact names mix Arabic with Latin (store/brand names)

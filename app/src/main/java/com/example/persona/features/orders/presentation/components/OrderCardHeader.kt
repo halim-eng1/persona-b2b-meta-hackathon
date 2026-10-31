@@ -78,14 +78,14 @@ fun OrderCardHeader(
         Column(modifier = Modifier.weight(1f)) {
             val displayName = customerName?.takeIf { it.isNotBlank() } ?: contactName
             Text(
-                text = displayName,
+                text = EgyptianOrderUtils.formatContactDisplayName(displayName),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             if (!customerName.isNullOrBlank() && customerName != contactName) {
                 Text(
-                    text = contactName,
+                    text = EgyptianOrderUtils.formatContactDisplayName(contactName),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
