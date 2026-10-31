@@ -1,5 +1,8 @@
 package com.example.persona.features.settings.presentation.components
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -80,13 +83,13 @@ fun SystemMaintenanceSection(
 
         // ── Permissions Health Check ──────────────────────────────────────────
         PreferenceSection(
-            title = "فحص سلامة النظام والصلاحيات",
-            subtitle = "مراجعة فورية لحالة الأذونات الحيوية لضمان عدم توقف الرد الآلي في الخلفية."
+            title = stringResource(R.string.settings_perm_check_title),
+            subtitle = stringResource(R.string.settings_perm_check_desc)
         ) {
             HealthItemRow(
-                title = "صلاحية قراءة إشعارات واتساب",
+                title = stringResource(R.string.settings_perm_notification_title),
                 isOk = state.isNotificationListenerGranted,
-                okText = "مفعلة وتعمل بنجاح",
+                okText = stringResource(R.string.settings_perm_notification_active),
                 missingText = "غير مفعلة (مطلوبة للرد الآلي)"
             )
             HealthItemRow(
@@ -99,13 +102,13 @@ fun SystemMaintenanceSection(
                 title = "التشغيل التلقائي مع فتح الهاتف",
                 isOk = state.isAutoStartConfirmed,
                 okText = "مؤكد ومفعل",
-                missingText = "في انتظار التأكيد"
+                missingText = stringResource(R.string.settings_perm_notification_missing)
             )
             HealthItemRow(
-                title = "الوصول لوسائط ورسائل واتساب الصوتية",
+                title = stringResource(R.string.settings_perm_storage_title),
                 isOk = state.isStorageAccessGranted,
-                okText = "مفعلة (جاهز للصور والصوتيات)",
-                missingText = "غير مفعلة (اختياري للوسائط)"
+                okText = stringResource(R.string.settings_perm_storage_active),
+                missingText = stringResource(R.string.settings_perm_storage_missing)
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -117,14 +120,14 @@ fun SystemMaintenanceSection(
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("إعادة فحص الصلاحيات الآن")
+                Text(stringResource(R.string.settings_perm_recheck_btn))
             }
         }
 
         // ── Encrypted Local Backup & Restore ──────────────────────────────────
         PreferenceSection(
-            title = "النسخ الاحتياطي المحلي واستعادة البيانات",
-            subtitle = "تصدير تفضيلات المتجر وقاعدة المعرفة مشفرة محلياً أو استعادتها عند تغيير الهاتف."
+            title = stringResource(R.string.settings_backup_title),
+            subtitle = stringResource(R.string.settings_backup_desc)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -137,7 +140,7 @@ fun SystemMaintenanceSection(
                 ) {
                     Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("تصدير نسخة مشفرة", fontSize = 12.sp)
+                    Text(stringResource(R.string.settings_backup_export_btn), fontSize = 12.sp)
                 }
 
                 OutlinedButton(
@@ -147,15 +150,15 @@ fun SystemMaintenanceSection(
                 ) {
                     Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("استعادة نسخة سابقة", fontSize = 12.sp)
+                    Text(stringResource(R.string.settings_backup_restore_btn), fontSize = 12.sp)
                 }
             }
         }
 
         // ── Cache Cleaner ─────────────────────────────────────────────────────
         PreferenceSection(
-            title = "صيانة الذاكرة المؤقتة",
-            subtitle = "مسح الملفات المؤقتة وسجلات الفحص السريعة لتحرير مساحة التخزين."
+            title = stringResource(R.string.settings_cache_clean_title),
+            subtitle = stringResource(R.string.settings_cache_clean_desc)
         ) {
             OutlinedButton(
                 onClick = onClearCache,
@@ -167,7 +170,7 @@ fun SystemMaintenanceSection(
             ) {
                 Icon(Icons.Default.CleaningServices, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("مسح الذاكرة المؤقتة")
+                Text(stringResource(R.string.settings_cache_clean_btn))
             }
         }
     }

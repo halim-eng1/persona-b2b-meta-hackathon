@@ -71,12 +71,12 @@ object ProviderGuideRegistry {
         return when (ModelProviders.normalize(provider)) {
             ModelProviders.QWEN -> ProviderGuideDetails(
                 provider = ModelProviders.QWEN,
-                title = "Alibaba Cloud DashScope (Qwen)",
-                platformName = "DashScope Aliyun",
-                portalUrl = "https://dashscope.console.aliyun.com",
+                title = "Qwen",
+                platformName = "Qwen Cloud",
+                portalUrl = "https://home.qwencloud.com/",
                 keyOrIdLabel = "API Key",
                 steps = listOf(
-                    "ادخل إلى منصة DashScope عبر الرابط الرسمي وسجل الدخول باستخدام حساب Alibaba Cloud.",
+                    "ادخل إلى منصة Qwen Cloud عبر الرابط الرسمي وسجل الدخول باستخدام حساب .",
                     "من القائمة الجانبية في Model Studio، توجه إلى قسم مفاتيح الواجهة (API-KEY).",
                     "اضغط على Create API-KEY وانسخ الرمز السري المتولد فوراً (يبدأ بـ sk-...).",
                     "يدعم جميع نماذج Qwen 3.8 Max و Qwen 3.8 Flash و DeepSeek v4.1 السريعة."
@@ -135,7 +135,7 @@ object ProviderGuideRegistry {
                     "سجل الدخول إلى بوابة OpenRouter عبر حساب Google أو GitHub.",
                     "انتقل إلى صفحة المفاتيح (Keys) ثم اضغط على (Create Key).",
                     "انسخ المفتاح السري الذي يبدأ بـ (sk-or-v1-...).",
-                    "يدعم تلقائياً مئات النماذج المجانية الدائمة مثل Nemotron Free و Liquid Free."
+                    "يدعم تلقائياً مئات النماذج المجانية والمدفوعة الدائمة مثل Nemotron Free و Liquid Free."
                 ),
                 tips = "البديل الاحتياطي الأمثل (Failover Gateway) الذي يضمن عدم توقف الردود أبداً."
             )

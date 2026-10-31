@@ -136,13 +136,13 @@ fun HomeScreen(
                             viewModel.refreshSystemHealth()
                             Toast.makeText(
                                 context,
-                                "تمت إعادة تشغيل خدمة الإشعارات بنجاح",
+                                context.getString(R.string.home_service_restart_success),
                                 Toast.LENGTH_SHORT
                             ).show()
                         } catch (e: Exception) {
                             Toast.makeText(
                                 context,
-                                "تعذر إعادة تشغيل الخدمة: ${e.message}",
+                                context.getString(R.string.home_service_restart_failed, e.message ?: ""),
                                 Toast.LENGTH_SHORT
                             ).show()
                         }

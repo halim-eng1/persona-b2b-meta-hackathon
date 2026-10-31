@@ -96,11 +96,11 @@ fun AuditLogScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "سجل التدقيق والمراقبة",
+                                text = stringResource(R.string.audit_log_title),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             Text(
-                                text = "تم تسجيل ${state.filteredItems.size} من أصل ${state.items.size} رد",
+                                text = stringResource(R.string.audit_log_recorded_count, state.filteredItems.size, state.items.size),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -115,11 +115,11 @@ fun AuditLogScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Share,
-                            contentDescription = "تصدير السجل",
+                            contentDescription = stringResource(R.string.audit_log_export_desc),
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = "تصدير", style = MaterialTheme.typography.labelMedium)
+                        Text(text = stringResource(R.string.audit_log_export_btn), style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
@@ -139,12 +139,12 @@ fun AuditLogScreen(
                         .fillMaxWidth()
                         .heightIn(min = 48.dp),
                     placeholder = {
-                        Text(text = "بحث بالاسم، رقم الهاتف، أو نص الرسالة...", style = MaterialTheme.typography.bodyMedium)
+                        Text(text = stringResource(R.string.audit_log_search_placeholder), style = MaterialTheme.typography.bodyMedium)
                     },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
-                            contentDescription = "بحث",
+                            contentDescription = stringResource(R.string.common_search_content_desc),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     },
@@ -154,7 +154,7 @@ fun AuditLogScreen(
                                 onClick = { viewModel.onSearchQueryChange("") },
                                 modifier = Modifier.size(48.dp)
                             ) {
-                                Icon(imageVector = Icons.Default.Clear, contentDescription = "مسح")
+                                Icon(imageVector = Icons.Default.Clear, contentDescription = stringResource(R.string.common_clear_content_desc))
                             }
                         }
                     },
@@ -175,16 +175,16 @@ fun AuditLogScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "الطبقة:",
+                        text = stringResource(R.string.audit_log_filter_layer),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     listOf(
                         "ALL" to stringResource(R.string.common_all),
                         "RULE" to stringResource(R.string.audit_log_rule_tier),
-                        "HEURISTIC" to "سياقي",
-                        "MODEL" to "نموذج ذكي",
-                        "FALLBACK" to "احتياطي"
+                        "HEURISTIC" to stringResource(R.string.audit_log_layer_heuristic),
+                        "MODEL" to stringResource(R.string.audit_log_layer_model),
+                        "FALLBACK" to stringResource(R.string.audit_log_layer_fallback)
                     ).forEach { (tierKey, label) ->
                         FilterChip(
                             selected = state.selectedTier == tierKey,

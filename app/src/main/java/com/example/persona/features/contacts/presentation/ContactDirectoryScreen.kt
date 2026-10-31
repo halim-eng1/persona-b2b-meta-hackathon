@@ -69,7 +69,7 @@ fun ContactDirectoryScreen(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "إضافة عميل جديد")
+                Icon(imageVector = Icons.Default.Add, contentDescription = stringResource(R.string.contacts_add_new))
             }
         }
     ) { innerPadding ->
@@ -86,11 +86,11 @@ fun ContactDirectoryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("ابحث بالاسم أو رقم الهاتف...") },
+                placeholder = { Text(stringResource(R.string.contacts_search_placeholder)) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
-                        contentDescription = "بحث",
+                        contentDescription = stringResource(R.string.common_search_content_desc),
                         tint = MaterialTheme.colorScheme.outline
                     )
                 },
@@ -99,7 +99,7 @@ fun ContactDirectoryScreen(
                         IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
-                                contentDescription = "مسح",
+                                contentDescription = stringResource(R.string.common_clear_content_desc),
                                 tint = MaterialTheme.colorScheme.outline
                             )
                         }
@@ -129,9 +129,9 @@ fun ContactDirectoryScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = if (state.searchQuery.isNotBlank() || state.selectedTagFilter != null) {
-                                "لا توجد نتائج مطابقة للبحث"
+                                stringResource(R.string.contacts_no_search_results)
                             } else {
-                                "لا يوجد عملاء مسجلين حالياً"
+                                stringResource(R.string.contacts_empty_list)
                             },
                             style = MaterialTheme.typography.bodyLarge.copy(
                                 color = MaterialTheme.colorScheme.outline
@@ -139,7 +139,7 @@ fun ContactDirectoryScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "المحادثات الواردة من واتساب تسجل تلقائياً هنا",
+                            text = stringResource(R.string.contacts_empty_desc),
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.outline
                             )
@@ -195,27 +195,27 @@ fun ContactDirectoryScreen(
 
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
-            title = { Text("إضافة عميل جديد", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.contacts_add_new), fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
                         value = newName,
                         onValueChange = { newName = it },
-                        label = { Text("اسم العميل *") },
+                        label = { Text(stringResource(R.string.contacts_dialog_name_label)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = newPhone,
                         onValueChange = { newPhone = it },
-                        label = { Text("رقم الهاتف") },
+                        label = { Text(stringResource(R.string.contacts_dialog_phone_label)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = newNotes,
                         onValueChange = { newNotes = it },
-                        label = { Text("ملاحظات") },
+                        label = { Text(stringResource(R.string.contacts_dialog_notes_label)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -230,12 +230,12 @@ fun ContactDirectoryScreen(
                     },
                     enabled = newName.isNotBlank()
                 ) {
-                    Text("إضافة")
+                    Text(stringResource(R.string.common_add))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false }) {
-                    Text("إلغاء")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )

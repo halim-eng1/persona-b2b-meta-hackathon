@@ -1,5 +1,8 @@
 package com.example.persona.features.orders.presentation.components
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -50,14 +53,14 @@ fun OrderMetricsRow(
     ) {
         MetricChip(
             count = pendingCount,
-            label = "جديد",
+            label = stringResource(R.string.order_status_new),
             color = statusColors.pending,
             isSelected = selectedFilter == OrderFilter.PENDING,
             onClick = { onFilterClick(OrderFilter.PENDING) }
         )
         MetricChip(
             count = inPreparationCount,
-            label = "قيد التجهيز",
+            label = stringResource(R.string.order_status_in_prep),
             color = statusColors.inPreparation,
             isSelected = selectedFilter == OrderFilter.IN_PREPARATION,
             onClick = { onFilterClick(OrderFilter.IN_PREPARATION) }
@@ -65,7 +68,7 @@ fun OrderMetricsRow(
         if (shippingCount > 0) {
             MetricChip(
                 count = shippingCount,
-                label = "جاري التوصيل",
+                label = stringResource(R.string.order_status_shipping),
                 color = statusColors.shipping,
                 isSelected = selectedFilter == OrderFilter.SHIPPING_IN_PROGRESS,
                 onClick = { onFilterClick(OrderFilter.SHIPPING_IN_PROGRESS) }
@@ -73,7 +76,7 @@ fun OrderMetricsRow(
         }
         MetricChip(
             count = completedCount,
-            label = "تم التسليم",
+            label = stringResource(R.string.order_status_delivered_card),
             color = statusColors.completed,
             isSelected = selectedFilter == OrderFilter.COMPLETED,
             onClick = { onFilterClick(OrderFilter.COMPLETED) }

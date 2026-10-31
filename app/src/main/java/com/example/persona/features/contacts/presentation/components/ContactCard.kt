@@ -1,5 +1,8 @@
 package com.example.persona.features.contacts.presentation.components
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -130,11 +133,11 @@ fun ContactCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "الطلبات: ${contact.totalOrders}",
+                    text = stringResource(R.string.contacts_total_orders_stat, contact.totalOrders),
                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
                 )
                 Text(
-                    text = "المشتريات: ${contact.totalSpent.toInt()} ج.م",
+                    text = stringResource(R.string.contacts_total_spent_stat, contact.totalSpent.toInt()),
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -158,7 +161,7 @@ fun ContactCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "ملاحظات: ${contact.notes}",
+                        text = stringResource(R.string.contacts_notes_label, contact.notes ?: ""),
                         style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -182,11 +185,11 @@ fun ContactCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "تعديل",
+                        contentDescription = stringResource(R.string.common_edit),
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("تعديل", style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.common_edit), style = MaterialTheme.typography.labelSmall)
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -210,12 +213,12 @@ fun ContactCard(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Chat,
-                        contentDescription = "فتح واتساب",
+                        contentDescription = stringResource(R.string.contacts_action_whatsapp_desc),
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "واتساب",
+                        text = stringResource(R.string.contacts_action_whatsapp),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }

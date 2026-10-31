@@ -47,8 +47,8 @@ fun SystemHealthCard(
             bgColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
             icon = Icons.Default.CheckCircle,
             iconTint = MaterialTheme.colorScheme.primary,
-            title = "المساعد الآلي نشط وجاهز للرد",
-            message = "الخدمة متصلة وتستمع لرسائل واتساب الواردة وترد عليها تلقائياً.",
+            title = stringResource(R.string.home_health_active_title),
+            message = stringResource(R.string.home_health_active_desc),
             buttonText = null,
             buttonAction = null
         )
@@ -56,8 +56,8 @@ fun SystemHealthCard(
             bgColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
             icon = Icons.Default.PauseCircle,
             iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-            title = "الرد الآلي متوقف مؤقتاً",
-            message = "يتم جمع الرسائل في صندوق الوارد دون إرسال ردود تلقائية للعملاء.",
+            title = stringResource(R.string.home_health_paused_title),
+            message = stringResource(R.string.home_health_paused_desc),
             buttonText = null,
             buttonAction = null
         )
@@ -65,18 +65,18 @@ fun SystemHealthCard(
             bgColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
             icon = Icons.Default.Warning,
             iconTint = MaterialTheme.colorScheme.error,
-            title = "صلاحية قراءة الإشعارات غير مفعلة!",
-            message = "النظام بحاجة لصلاحية الوصول إلى الإشعارات ليتمكن من التقاط رسائل الواتساب والرد عليها.",
-            buttonText = "فتح إعدادات الهاتف ومنح الصلاحية",
+            title = stringResource(R.string.home_health_perm_missing_title),
+            message = stringResource(R.string.home_health_perm_missing_desc),
+            buttonText = stringResource(R.string.home_health_perm_missing_btn),
             buttonAction = onOpenSettings
         )
         SystemHealthStatus.SERVICE_KILLED -> HealthConfig(
             bgColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
             icon = Icons.Default.Error,
             iconTint = MaterialTheme.colorScheme.error,
-            title = "تم إيقاف الخدمة بواسطة نظام الهاتف!",
-            message = "قد يكون نظام توفير الطاقة أوقف الخدمة في الخلفية. اضغط لإعادة تشغيلها فوراً.",
-            buttonText = "إعادة تشغيل الخدمة الآن",
+            title = stringResource(R.string.home_health_service_killed_title),
+            message = stringResource(R.string.home_health_service_killed_desc),
+            buttonText = stringResource(R.string.home_health_service_killed_btn),
             buttonAction = onRestartService
         )
     }
@@ -181,12 +181,12 @@ fun UrgentAttentionBanner(
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "⚠️ يوجد $pendingCount عملاء ينتظرون تدخل بشري عاجل",
+                        text = stringResource(R.string.home_attention_customers_waiting, pendingCount),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.error
                     )
                     Text(
-                        text = "تم تعليق الرد الآلي لهؤلاء العملاء بانتظار ردك المباشر لمنع فقدان المبيعات.",
+                        text = stringResource(R.string.home_attention_customers_waiting_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -196,7 +196,7 @@ fun UrgentAttentionBanner(
             if (waitingCustomers.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "العملاء في الانتظار (اضغط لفتح المحادثة):",
+                    text = stringResource(R.string.home_attention_click_to_open),
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -282,11 +282,11 @@ fun AutoReplyMasterToggleCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "الرد الآلي على الرسائل",
+                    text = stringResource(R.string.home_toggle_auto_reply_title),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
-                    text = if (isEnabled) "نشط — استجابة فورية لمحادثات واتساب" else "متوقف — جمع الرسائل في صندوق الوارد",
+                    text = if (isEnabled) stringResource(R.string.home_toggle_auto_reply_active) else stringResource(R.string.home_toggle_auto_reply_paused),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -464,12 +464,12 @@ fun EmergencyStopDialog(
         title = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                Text(text = "تأكيد إيقاف الطوارئ", fontWeight = FontWeight.Bold)
+                Text(text = stringResource(R.string.home_emergency_kill_title), fontWeight = FontWeight.Bold)
             }
         },
         text = {
             Text(
-                text = "هل أنت متأكد من رغبتك في إيقاف الرد الآلي فوراً لجميع العملاء؟ سيتم تعطيل البوت فورياً لحين إعادة تفعيله يدوياً.",
+                text = stringResource(R.string.home_emergency_kill_message),
                 style = MaterialTheme.typography.bodyMedium
             )
         },
@@ -479,7 +479,7 @@ fun EmergencyStopDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                 modifier = Modifier.heightIn(min = 48.dp)
             ) {
-                Text(text = "نعم، إيقاف فوري")
+                Text(text = stringResource(R.string.home_emergency_kill_confirm))
             }
         },
         dismissButton = {
@@ -487,7 +487,7 @@ fun EmergencyStopDialog(
                 onClick = onDismiss,
                 modifier = Modifier.heightIn(min = 48.dp)
             ) {
-                Text(text = "إلغاء")
+                Text(text = stringResource(R.string.common_cancel))
             }
         }
     )
@@ -553,14 +553,14 @@ fun HomeOverviewRow(
             modifier = Modifier.weight(1f),
             icon = Icons.Default.CheckCircle,
             value = totalRepliesSent.toString(),
-            label = "إجمالي الردود المرسلة",
+            label = stringResource(R.string.home_stat_total_replies_sent),
             iconTint = MaterialTheme.colorScheme.primary
         )
         StatCard(
             modifier = Modifier.weight(1f),
             icon = Icons.Default.Person,
             value = knowledgeChunkCount.toString(),
-            label = "عناصر قاعدة المعرفة",
+            label = stringResource(R.string.home_stat_knowledge_chunks),
             iconTint = MaterialTheme.colorScheme.tertiary
         )
     }
@@ -620,7 +620,7 @@ fun RecentActivityRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "الرد: " + item.generatedReply,
+                text = stringResource(R.string.home_recent_reply_prefix, item.generatedReply),
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

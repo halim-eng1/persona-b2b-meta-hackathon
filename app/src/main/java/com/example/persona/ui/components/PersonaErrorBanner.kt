@@ -9,7 +9,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.persona.R
 
 /**
  * Standardized dismissible error banner supporting retry/action callbacks.
@@ -34,7 +36,7 @@ fun PersonaErrorBanner(
         ) {
             Icon(
                 imageVector = Icons.Default.Warning,
-                contentDescription = "تحذير خطأ",
+                contentDescription = stringResource(R.string.common_error_alert),
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(20.dp)
             )
@@ -60,7 +62,7 @@ fun PersonaErrorBanner(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "إغلاق التنبيه",
+                        contentDescription = stringResource(R.string.common_close_alert),
                         tint = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.size(20.dp)
                     )
