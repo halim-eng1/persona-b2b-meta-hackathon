@@ -284,7 +284,7 @@
     <string name="language_english_sub">الإنجليزية (LTR)</string>
 
     <!-- ── Theme Preference ───────────────────────────────────────────────────── -->
-    <string name="settings_theme_title">المظهر ووضع الإضاءة</string>
+    <string name="settings_theme_title">المظهر</string>
     <string name="settings_theme_subtitle">اختر وضع الرؤية المناسب لبيئة العمل وشمس الشارع</string>
     <string name="settings_theme_dark">داكن</string>
     <string name="settings_theme_dark_sub">موفر للبطارية وراعي للعين ليلاً</string>

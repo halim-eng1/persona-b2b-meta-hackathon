@@ -284,7 +284,7 @@
     <string name="language_english_sub">English (LTR)</string>
 
     <!-- ── Theme Preference ───────────────────────────────────────────────────── -->
-    <string name="settings_theme_title">Display &amp; Appearance</string>
+    <string name="settings_theme_title">Appearance</string>
     <string name="settings_theme_subtitle">Select operational appearance for shop floor or daylight</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_dark_sub">OLED battery saver, shop terminal</string>
