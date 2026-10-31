@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.example.persona.features.chats.presentation.list.ConversationItemUiModel
 import com.example.persona.features.orders.domain.EgyptianOrderUtils
 import com.example.persona.ui.components.extractMonogram
+import com.example.persona.ui.theme.chatColors
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -31,6 +32,8 @@ fun ConversationRowItem(
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val chatColors = MaterialTheme.chatColors
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -66,14 +69,14 @@ fun ConversationRowItem(
                     .offset(x = 2.dp, y = 2.dp),
                 shape = RoundedCornerShape(6.dp),
                 color = when (item.sourceClass.uppercase()) {
-                    "BUSINESS" -> Color(0xFF25D366)
-                    "MAIN_APP" -> MaterialTheme.colorScheme.secondary
-                    else -> MaterialTheme.colorScheme.tertiary
+                    "BUSINESS" -> chatColors.badgeBusiness
+                    "MAIN_APP" -> chatColors.badgeMainApp
+                    else -> chatColors.badgeOther
                 }
             ) {
                 Text(
                     text = item.sourceLabel.take(1),
-                    color = Color.White,
+                    color = chatColors.onBadge,
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                 )

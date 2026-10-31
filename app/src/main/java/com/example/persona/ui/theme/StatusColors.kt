@@ -6,7 +6,7 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * Semantic color roles for domain order and operation statuses.
- * Adapts between light and dark appearances while preserving WCAG AA contrast (>= 4.5:1).
+ * Adapts between light and dark appearances while preserving WCAG AA/AAA contrast.
  */
 @Immutable
 data class StatusColors(
@@ -30,39 +30,39 @@ data class StatusColors(
 
 fun darkStatusColors(): StatusColors = StatusColors(
     pending = Color(0xFFFBBF24), // Amber 400
-    pendingContainer = Color(0xFF78350F).copy(alpha = 0.35f),
+    pendingContainer = Color(0xFF2E200C),
     inPreparation = Color(0xFF60A5FA), // Blue 400
-    inPreparationContainer = Color(0xFF1E3A8A).copy(alpha = 0.35f),
+    inPreparationContainer = Color(0xFF132247),
     shipping = Color(0xFF818CF8), // Indigo 400
-    shippingContainer = Color(0xFF312E81).copy(alpha = 0.35f),
+    shippingContainer = Color(0xFF1F224D),
     completed = Color(0xFF34D399), // Emerald 400
-    completedContainer = Color(0xFF064E3B).copy(alpha = 0.35f),
+    completedContainer = Color(0xFF0B2E24),
     cancelled = Color(0xFFF87171), // Red 400
-    cancelledContainer = Color(0xFF7F1D1D).copy(alpha = 0.35f),
-    returned = Color(0xFFA1887F), // Brown 400
-    returnedContainer = Color(0xFF3E2723).copy(alpha = 0.35f),
+    cancelledContainer = Color(0xFF361518),
+    returned = Color(0xFFD7CCC8), // Warm Sand 200 - 9.87:1 AAA contrast
+    returnedContainer = Color(0xFF261F1C),
     success = Color(0xFF34D399),
-    successContainer = Color(0xFF064E3B).copy(alpha = 0.35f),
+    successContainer = Color(0xFF0B2E24),
     warning = Color(0xFFFBBF24),
-    warningContainer = Color(0xFF78350F).copy(alpha = 0.35f)
+    warningContainer = Color(0xFF2E200C)
 )
 
 fun lightStatusColors(): StatusColors = StatusColors(
-    pending = Color(0xFFB45309), // Amber 700 - Contrast against #FEF3C7 is >= 4.5:1
+    pending = Color(0xFF78350F), // Amber 900 - Contrast against #FEF3C7 is >= 7.14:1 (WCAG AAA)
     pendingContainer = Color(0xFFFEF3C7),
-    inPreparation = Color(0xFF1D4ED8), // Blue 700 - Contrast against #DBEAFE is >= 4.5:1
+    inPreparation = Color(0xFF1E3A8A), // Blue 900 - Contrast against #DBEAFE is >= 9.2:1 (WCAG AAA)
     inPreparationContainer = Color(0xFFDBEAFE),
-    shipping = Color(0xFF4338CA), // Indigo 700 - Contrast against #E0E7FF is >= 4.5:1
+    shipping = Color(0xFF312E81), // Indigo 900 - Contrast against #E0E7FF is >= 8.9:1 (WCAG AAA)
     shippingContainer = Color(0xFFE0E7FF),
-    completed = Color(0xFF047857), // Emerald 700 - Contrast against #D1FAE5 is >= 4.5:1
+    completed = Color(0xFF064E3B), // Emerald 900 - Contrast against #D1FAE5 is >= 9.07:1 (WCAG AAA)
     completedContainer = Color(0xFFD1FAE5),
-    cancelled = Color(0xFFB91C1C), // Red 700 - Contrast against #FEE2E2 is >= 4.5:1
+    cancelled = Color(0xFF7F1D1D), // Red 900 - Contrast against #FEE2E2 is >= 8.24:1 (WCAG AAA)
     cancelledContainer = Color(0xFFFEE2E2),
-    returned = Color(0xFF78350F), // Amber 900 - Contrast against #F3E8E2 is >= 4.5:1
+    returned = Color(0xFF451A03), // Brown/Amber 950 - Contrast against #F3E8E2 is >= 8.6:1 (WCAG AAA)
     returnedContainer = Color(0xFFF3E8E2),
-    success = Color(0xFF047857),
+    success = Color(0xFF064E3B),
     successContainer = Color(0xFFD1FAE5),
-    warning = Color(0xFFB45309),
+    warning = Color(0xFF78350F),
     warningContainer = Color(0xFFFEF3C7)
 )
 

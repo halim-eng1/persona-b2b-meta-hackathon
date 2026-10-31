@@ -61,6 +61,7 @@ import com.example.persona.features.settings.presentation.components.AppRoutingS
 import com.example.persona.features.settings.presentation.components.BusinessHoursSection
 import com.example.persona.features.settings.presentation.components.StoreIdentitySection
 import com.example.persona.features.settings.presentation.components.SystemMaintenanceSection
+import com.example.persona.ui.components.personaScreenBackground
 
 @Composable
 fun SettingsScreen(
@@ -91,21 +92,10 @@ fun SettingsScreen(
         scrollState.scrollTo(0)
     }
 
-    val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
-    val backgroundColor = MaterialTheme.colorScheme.background
-    val backgroundBrush = remember(surfaceVariantColor, backgroundColor) {
-        Brush.verticalGradient(
-            colors = listOf(
-                surfaceVariantColor.copy(alpha = 0.25f),
-                backgroundColor
-            )
-        )
-    }
-
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(backgroundBrush)
+            .personaScreenBackground()
     ) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             // ── Top Bar Header ────────────────────────────────────────────────

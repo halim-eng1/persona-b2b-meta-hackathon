@@ -3,6 +3,7 @@ package com.example.persona.features.contacts.presentation.components
 import com.example.persona.R
 import androidx.compose.ui.res.stringResource
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -30,6 +31,8 @@ import com.example.persona.core.database.entity.ContactTag
 import com.example.persona.features.chats.presentation.detail.WhatsAppLauncher
 import com.example.persona.features.orders.domain.EgyptianOrderUtils
 import com.example.persona.ui.components.extractMonogram
+import com.example.persona.ui.theme.chatColors
+import com.example.persona.ui.theme.statusColors
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -44,14 +47,16 @@ fun ContactCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val statusColors = MaterialTheme.statusColors
+    val chatColors = MaterialTheme.chatColors
     val tagEnum = runCatching { ContactTag.valueOf(contact.tag) }.getOrDefault(ContactTag.REGULAR)
 
     val (badgeBgColor, badgeTextColor) = when (tagEnum) {
-        ContactTag.VIP -> Color(0xFFFFF8E1) to Color(0xFFB78103)
-        ContactTag.DEBTOR -> Color(0xFFFFF3E0) to Color(0xFFE65100)
-        ContactTag.PROBLEMATIC -> Color(0xFFFFEBEE) to Color(0xFFC62828)
-        ContactTag.BLOCKED -> Color(0xFFEEEEEE) to Color(0xFF616161)
-        ContactTag.REGULAR -> Color(0xFFE3F2FD) to Color(0xFF1565C0)
+        ContactTag.VIP -> statusColors.pendingContainer to statusColors.pending
+        ContactTag.DEBTOR -> statusColors.warningContainer to statusColors.warning
+        ContactTag.PROBLEMATIC -> statusColors.cancelledContainer to statusColors.cancelled
+        ContactTag.BLOCKED -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+        ContactTag.REGULAR -> statusColors.inPreparationContainer to statusColors.inPreparation
     }
 
     Card(
@@ -67,6 +72,7 @@ fun ContactCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -213,8 +219,8 @@ fun ContactCard(
                         )
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF25D366), // WhatsApp Green
-                        contentColor = Color.White
+                        containerColor = chatColors.badgeBusiness, // WhatsApp Green
+                        contentColor = chatColors.onBadge
                     ),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     modifier = Modifier.heightIn(min = 48.dp)

@@ -1,5 +1,6 @@
 package com.example.persona.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
@@ -20,6 +21,8 @@ import com.example.persona.ui.theme.PersonaTheme
 
 /**
  * Standardized status pill badge for displaying semantic status labels.
+ * Features a subtle 0.5dp translucent border stroke so status chips appear
+ * as crisp, illuminated terminal elements under dark and light appearances.
  */
 @Composable
 fun PersonaStatusBadge(
@@ -28,12 +31,14 @@ fun PersonaStatusBadge(
     contentColor: Color,
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(8.dp),
-    style: TextStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+    style: TextStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+    border: BorderStroke? = BorderStroke(0.5.dp, contentColor.copy(alpha = 0.35f))
 ) {
     Surface(
         modifier = modifier,
         shape = shape,
-        color = containerColor
+        color = containerColor,
+        border = border
     ) {
         Text(
             text = label,

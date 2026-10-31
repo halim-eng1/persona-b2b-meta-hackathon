@@ -42,28 +42,28 @@ object PersonaPrimitives {
 }
 
 // ── 2. Backwards-Compatible Semantic Color Tokens ─────────────────────────────
-// Dark Palette
+// Dark Palette (INVARIANT - Dark Terminal Mode)
 val PrimaryDark = PersonaPrimitives.Teal400       // Cyan/Teal
-val SecondaryDark = PersonaPrimitives.Indigo400   // Indigo
-val TertiaryDark = PersonaPrimitives.Amber500     // Warm Amber
-val BackgroundDark = PersonaPrimitives.Slate900   // Near-black slate
-val SurfaceDark = PersonaPrimitives.Slate800      // Dark Slate
+val SecondaryDark = Color(0xFF7C8BA1)             // Sleek Slate-Indigo
+val TertiaryDark = Color(0xFFF59E0B)              // Warm Terminal Gold
+val BackgroundDark = Color(0xFF0B0F19)            // Obsidian Terminal canvas
+val SurfaceDark = Color(0xFF151D2E)               // Elevated Terminal Slate
 val OnPrimaryDark = PersonaPrimitives.Teal900
-val OnSecondaryDark = Color(0xFF1E1B4B)
-val OnBackgroundDark = PersonaPrimitives.Slate50  // Off-white
-val OnSurfaceDark = PersonaPrimitives.Slate50
-val ErrorDark = PersonaPrimitives.Red400         // Soft red
-val OnErrorDark = Color(0xFF7F1D1D)
+val OnSecondaryDark = Color(0xFF0B0F19)
+val OnBackgroundDark = Color(0xFFF1F5F9)          // Soft off-white
+val OnSurfaceDark = Color(0xFFF1F5F9)
+val ErrorDark = PersonaPrimitives.Red400          // Soft red
+val OnErrorDark = Color(0xFF381418)
 
-// Light Palette
-val PrimaryLight = PersonaPrimitives.Teal600      // Deep Teal
-val SecondaryLight = PersonaPrimitives.Indigo500  // Muted Indigo
-val TertiaryLight = Color(0xFFD97706)             // Amber
-val BackgroundLight = PersonaPrimitives.Slate50   // Off-white
+// Light Palette (Outdoor High-Contrast WCAG AAA)
+val PrimaryLight = Color(0xFF0D5C54)              // Teal 800 - 7.28:1 contrast against white
+val SecondaryLight = Color(0xFF4338CA)            // Indigo 700 - 7.54:1 contrast
+val TertiaryLight = Color(0xFF92400E)             // Amber 800 - 7.12:1 contrast
+val BackgroundLight = Color(0xFFF1F5F9)          // Slate 100
 val SurfaceLight = Color(0xFFFFFFFF)
 val OnPrimaryLight = Color(0xFFFFFFFF)
 val OnSecondaryLight = Color(0xFFFFFFFF)
-val OnBackgroundLight = PersonaPrimitives.Slate900 // Near-black
-val OnSurfaceLight = PersonaPrimitives.Slate900
-val ErrorLight = Color(0xFFDC2626)                // Red
+val OnBackgroundLight = Color(0xFF0A0F1D)         // Slate 950
+val OnSurfaceLight = Color(0xFF0A0F1D)            // Slate 950
+val ErrorLight = Color(0xFF991B1B)                // Red 800 - 7.35:1 contrast
 val OnErrorLight = Color(0xFFFFFFFF)

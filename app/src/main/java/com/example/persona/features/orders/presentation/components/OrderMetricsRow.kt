@@ -23,13 +23,13 @@ import com.example.persona.features.orders.domain.EgyptianOrderUtils
 import com.example.persona.features.orders.presentation.OrderFilter
 import com.example.persona.ui.theme.PersonaTheme
 
-// WCAG 2.1 AA compliant status colors (>= 4.5:1 contrast against light background)
-val OrderAmber = Color(0xFFB45309)
-val OrderBlue = Color(0xFF1D4ED8)
-val OrderIndigo = Color(0xFF4338CA)
-val OrderGreen = Color(0xFF047857)
-val OrderRed = Color(0xFFB91C1C)
-val OrderBrown = Color(0xFF78350F)
+// High-contrast status colors calibrated for outdoor sunlight (WCAG AAA)
+val OrderAmber = Color(0xFF78350F)
+val OrderBlue = Color(0xFF1E3A8A)
+val OrderIndigo = Color(0xFF312E81)
+val OrderGreen = Color(0xFF064E3B)
+val OrderRed = Color(0xFF7F1D1D)
+val OrderBrown = Color(0xFF451A03)
 
 @Composable
 fun OrderMetricsRow(
@@ -88,6 +88,7 @@ fun OrderMetricsRow(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Row(
@@ -147,7 +148,7 @@ fun MetricChip(
         border = if (isSelected) {
             BorderStroke(1.5.dp, color.copy(alpha = 0.8f))
         } else {
-            null
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         },
         elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 2.dp else 1.dp)
     ) {

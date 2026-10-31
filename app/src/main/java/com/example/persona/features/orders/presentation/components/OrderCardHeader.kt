@@ -95,7 +95,7 @@ fun OrderCardHeader(
             Text(
                 text = formatOrderTimestamp(timestamp),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 

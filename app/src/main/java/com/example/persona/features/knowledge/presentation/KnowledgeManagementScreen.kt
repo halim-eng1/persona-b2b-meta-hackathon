@@ -39,6 +39,7 @@ import com.example.persona.features.knowledge.presentation.components.EditKnowle
 import com.example.persona.features.knowledge.presentation.components.FailedQueryRow
 import com.example.persona.features.knowledge.presentation.components.KnowledgeEntryRow
 import com.example.persona.features.knowledge.presentation.components.ManualKnowledgeInputCard
+import com.example.persona.ui.components.personaScreenBackground
 import kotlinx.coroutines.launch
 
 private val KnowledgeFilters = listOf(
@@ -149,26 +150,14 @@ fun KnowledgeManagementScreen(
         simulationError = state.simulationError
     )
 
-    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
-    val background = MaterialTheme.colorScheme.background
-    val backgroundGradient = remember(surfaceVariant, background) {
-        Brush.verticalGradient(
-            colors = listOf(
-                surfaceVariant.copy(alpha = 0.3f),
-                background
-            )
-        )
-    }
-
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(backgroundGradient)
+            .personaScreenBackground()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
                 .imePadding()
                 .widthIn(max = 760.dp)
                 .align(Alignment.TopCenter)

@@ -61,7 +61,9 @@ fun OrderCard(
         ),
         border = if (isSelected) {
             BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
-        } else null,
+        } else {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        },
         elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 3.dp else 1.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

@@ -76,14 +76,14 @@ fun ChatComposerBar(
                     if (isSending) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
-                            color = chatColors.onSurface,
+                            color = if (inputText.isNotBlank()) chatColors.onAccent else chatColors.onSurface,
                             strokeWidth = 2.dp
                         )
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = stringResource(R.string.common_send),
-                            tint = if (inputText.isNotBlank()) chatColors.onSurface else chatColors.statusIdle
+                            tint = if (inputText.isNotBlank()) chatColors.onAccent else chatColors.statusIdle
                         )
                     }
                 }

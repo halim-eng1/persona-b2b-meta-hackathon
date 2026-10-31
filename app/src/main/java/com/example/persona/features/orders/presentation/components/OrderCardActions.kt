@@ -50,7 +50,7 @@ fun OrderCardActions(
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .height(42.dp),
+                    .heightIn(min = 48.dp),
                 contentPadding = PaddingValues(horizontal = 6.dp)
             ) {
                 Text(
@@ -73,7 +73,7 @@ fun OrderCardActions(
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .height(42.dp),
+                    .heightIn(min = 48.dp),
                 contentPadding = PaddingValues(horizontal = 6.dp)
             ) {
                 Icon(
@@ -95,7 +95,7 @@ fun OrderCardActions(
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier
                         .weight(1f)
-                        .height(42.dp),
+                        .heightIn(min = 48.dp),
                     contentPadding = PaddingValues(horizontal = 6.dp)
                 ) {
                     Icon(

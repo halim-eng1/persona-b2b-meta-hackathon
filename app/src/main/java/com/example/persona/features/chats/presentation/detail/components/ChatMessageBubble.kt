@@ -1,5 +1,6 @@
 package com.example.persona.features.chats.presentation.detail.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -9,6 +10,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
@@ -22,6 +25,8 @@ import com.example.persona.ui.theme.chatColors
 @Composable
 fun DateHeaderChip(dateText: String) {
     val chatColors = MaterialTheme.chatColors
+    val isLight = chatColors.background.luminance() > 0.5f
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -30,7 +35,8 @@ fun DateHeaderChip(dateText: String) {
     ) {
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = chatColors.surface
+            color = chatColors.surface,
+            border = if (isLight) BorderStroke(1.dp, Color(0xFFCBD5E1)) else null
         ) {
             Text(
                 text = dateText,
@@ -53,6 +59,8 @@ fun MessageBubble(
     val isOutbound = !message.isFromUser
     val alignment = if (isOutbound) Alignment.CenterEnd else Alignment.CenterStart
     val chatColors = MaterialTheme.chatColors
+    val isLight = chatColors.background.luminance() > 0.5f
+
     val bubbleColor = if (isOutbound) {
         if (message.senderType == "MERCHANT_MANUAL") {
             chatColors.bubbleOutboundManual
@@ -61,6 +69,16 @@ fun MessageBubble(
         }
     } else {
         chatColors.bubbleInbound
+    }
+
+    val bubbleBorder = if (isLight) {
+        if (isOutbound) {
+            BorderStroke(1.dp, Color(0xFFA7E0A2))
+        } else {
+            BorderStroke(1.dp, Color(0xFFCBD5E1))
+        }
+    } else {
+        null
     }
 
     Box(
@@ -79,6 +97,7 @@ fun MessageBubble(
                     bottomEnd = if (isOutbound) 4.dp else 16.dp
                 ),
                 color = bubbleColor,
+                border = bubbleBorder,
                 tonalElevation = 1.dp
             ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -244,6 +263,7 @@ fun MessageBubble(
                 ) {
                     TextButton(
                         onClick = onRetry,
+                        modifier = Modifier.heightIn(min = 48.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Icon(
@@ -258,6 +278,7 @@ fun MessageBubble(
 
                     TextButton(
                         onClick = onOpenWhatsApp,
+                        modifier = Modifier.heightIn(min = 48.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Icon(
@@ -266,7 +287,7 @@ fun MessageBubble(
                             tint = chatColors.accentText,
                             modifier = Modifier.size(14.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(text = stringResource(R.string.chat_action_open_in_whatsapp), color = chatColors.accentText, style = MaterialTheme.typography.labelSmall)
                     }
                 }

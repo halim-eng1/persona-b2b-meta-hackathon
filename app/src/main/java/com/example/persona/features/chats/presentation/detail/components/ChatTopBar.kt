@@ -295,7 +295,7 @@ fun CompactChatTopBar(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Chat,
                             contentDescription = stringResource(R.string.chat_open_whatsapp),
-                            tint = Color(0xFF25D366),
+                            tint = chatColors.accentText,
                             modifier = Modifier.size(24.dp)
                         )
                     }
