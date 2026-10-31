@@ -76,6 +76,11 @@
     <string name="knowledge_catalog_items_count">عناصر الكتالوج (%d)</string>
     <string name="knowledge_hitl_inbox_title">صندوق الاستفسارات التي عجز عنها المساعد الآلي</string>
     <string name="knowledge_hitl_empty">رائع! لا توجد أي استفسارات معلقة من الزبائن.</string>
+    <string name="knowledge_failed_query_delete_title">حذف هذا الاستفسار؟</string>
+    <string name="knowledge_failed_query_delete_message">هل أنت متأكد من رغبتك في حذف وتجاهل استفسار العميل هذا؟ لن تتمكن من مراجعته أو استخدامه لتدريب البوت لاحقاً.</string>
+    <string name="knowledge_mark_reviewed">تحديد كمقروء ومعالج</string>
+    <string name="knowledge_use_as_input">استخدام كمدخل للتدريب</string>
+    <string name="knowledge_failed_match_icon">تنبيه استفسار يحتاج رد</string>
     <string name="bot_simulator_fab">محاكي البوت</string>
     <string name="knowledge_edit_dialog_title">تعديل معلومة / منتج</string>
     <string name="knowledge_edit_section_label">القسم: %s</string>
@@ -95,6 +100,7 @@
     <string name="knowledge_input_product_name_label">اسم المنتج أو الخدمة</string>
     <string name="knowledge_input_product_name_placeholder">مثال: سويت شيرت أوفر سايز قطن</string>
     <string name="knowledge_input_price_label">السعر (ج.م)</string>
+    <string name="knowledge_input_price_placeholder">350</string>
     <string name="knowledge_input_variations_label">المقاسات والألوان</string>
     <string name="knowledge_input_variations_placeholder">أسود، كحلي / L, XL</string>
     <string name="knowledge_input_category_label">التصنيف:</string>
@@ -181,6 +187,15 @@
     <string name="trace_chunk_accuracy">%d%% دقة</string>
     <string name="trace_chunk_expand">عرض النص كاملاً ▼</string>
     <string name="trace_chunk_collapse">إخفاء التفاصيل ▲</string>
+    <string name="knowledge_failed_best_score">أفضل تطابق: %d%%</string>
+    <string name="trace_requery_pass2_executed">تم تنفيذ جولة ثانية للبحث الدلالي (Pass 2).</string>
+    <string name="trace_requery_keyword">البحث: %s</string>
+    <string name="trace_requery_chunks">المقاطع المسترجعة: %d</string>
+    <string name="trace_requery_direct">رد مباشر دون الحاجة لجولة استرجاع ثانية.</string>
+    <string name="trace_order_total_with_shipping">%1$s (+ %2$s شحن = %3$s)</string>
+    <string name="common_expanded">مفتوح</string>
+    <string name="common_collapsed">مغلق</string>
+    <string name="default_customer_name">عميل</string>
 
     <!-- ── Navigation ──────────────────────────────────────────────────────────── -->
     <string name="nav_home">الرئيسية</string>

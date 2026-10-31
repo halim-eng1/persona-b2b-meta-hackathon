@@ -99,15 +99,18 @@ fun KnowledgeEntryRow(
                         else -> MaterialTheme.colorScheme.onTertiaryContainer
                     }
 
-                    SuggestionChip(
-                        onClick = {},
-                        label = { Text(text = badgeText, fontSize = 10.sp) },
-                        colors = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = badgeColor,
-                            labelColor = badgeTextColor
-                        ),
-                        border = null
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = badgeColor
+                    ) {
+                        Text(
+                            text = badgeText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = badgeTextColor,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
 
                     if (!entry.headerContext.isNullOrBlank()) {
                         Text(

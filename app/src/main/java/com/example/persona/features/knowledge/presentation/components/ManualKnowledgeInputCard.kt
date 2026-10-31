@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -16,12 +17,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.persona.R
+
+private val KnowledgeCategories = listOf("ملابس", "أحذية", "إلكترونيات", "عطور وتجميل", "أطعمة ومشروبات", "خدمات", "أخرى")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,8 +48,6 @@ fun ManualKnowledgeInputCard(
     var selectedCategory by remember { mutableStateOf("ملابس") }
     var variations by remember { mutableStateOf("") }
     var inStock by remember { mutableStateOf(true) }
-
-    val categories = listOf("ملابس", "أحذية", "إلكترونيات", "عطور وتجميل", "أطعمة ومشروبات", "خدمات", "أخرى")
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -114,7 +117,7 @@ fun ManualKnowledgeInputCard(
                             }
                         },
                         label = { Text(stringResource(R.string.knowledge_input_price_label)) },
-                        placeholder = { Text("350") },
+                        placeholder = { Text(stringResource(R.string.knowledge_input_price_placeholder)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
@@ -143,7 +146,7 @@ fun ManualKnowledgeInputCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(categories) { cat ->
+                        items(KnowledgeCategories) { cat ->
                             FilterChip(
                                 selected = selectedCategory == cat,
                                 onClick = { selectedCategory = cat },
@@ -160,6 +163,15 @@ fun ManualKnowledgeInputCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .toggleable(
+                                value = inStock,
+                                role = Role.Switch,
+                                onValueChange = { inStock = it }
+                            )
+                            .defaultMinSize(minHeight = 48.dp)
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -171,7 +183,7 @@ fun ManualKnowledgeInputCard(
                         )
                         Switch(
                             checked = inStock,
-                            onCheckedChange = { inStock = it }
+                            onCheckedChange = null
                         )
                     }
 
@@ -232,6 +244,15 @@ fun ManualKnowledgeInputCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .toggleable(
+                                value = isTemporaryOffer,
+                                role = Role.Switch,
+                                onValueChange = onTemporaryOfferToggled
+                            )
+                            .defaultMinSize(minHeight = 48.dp)
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -242,7 +263,7 @@ fun ManualKnowledgeInputCard(
                         )
                         Switch(
                             checked = isTemporaryOffer,
-                            onCheckedChange = onTemporaryOfferToggled
+                            onCheckedChange = null
                         )
                     }
 

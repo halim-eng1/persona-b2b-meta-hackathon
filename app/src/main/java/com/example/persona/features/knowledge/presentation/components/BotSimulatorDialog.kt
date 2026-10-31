@@ -43,18 +43,22 @@ import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.knowledge.presentation.model.SimulatorMediaType
 import com.example.persona.features.knowledge.presentation.model.SimulatorMessage
 import com.example.persona.features.knowledge.presentation.model.SimulatorSender
+import com.example.persona.ui.theme.statusColors
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@Suppress("UNUSED_PARAMETER")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BotSimulatorDialog(
     isOpen: Boolean,
     onDismiss: () -> Unit,
     onRunTest: (query: String) -> Unit,
-    onSendTurn: (query: String, mediaUri: String?, mediaType: SimulatorMediaType?) -> Unit = { q, u, t -> onRunTest(q) },
+    onSendTurn: (query: String, mediaUri: String?, mediaType: SimulatorMediaType?) -> Unit = { q, _, _ -> onRunTest(q) },
     onClearHistory: () -> Unit = {},
     onMediaSelected: (uri: String?, type: SimulatorMediaType?) -> Unit = { _, _ -> },
     onClearMedia: () -> Unit = {},
@@ -116,16 +120,21 @@ fun BotSimulatorDialog(
             decorFitsSystemWindows = false
         )
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.96f)
-                .fillMaxHeight(0.94f)
-                .imePadding()
-                .navigationBarsPadding(),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 8.dp
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
+            Surface(
+                modifier = Modifier
+                    .widthIn(max = 680.dp)
+                    .fillMaxWidth(0.96f)
+                    .fillMaxHeight(0.94f)
+                    .imePadding()
+                    .navigationBarsPadding(),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -164,12 +173,13 @@ fun BotSimulatorDialog(
                                         )
                                     }
                                 }
+                                val onlineColor = MaterialTheme.statusColors.completed
                                 // Online indicator dot
                                 Box(
                                     modifier = Modifier
                                         .size(12.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF2E7D32))
+                                        .background(onlineColor)
                                         .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
                                         .align(Alignment.BottomEnd)
                                 )
@@ -185,7 +195,7 @@ fun BotSimulatorDialog(
                                 Text(
                                     text = stringResource(R.string.sim_header_subtitle),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color(0xFF2E7D32),
+                                    color = MaterialTheme.statusColors.completed,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1
                                 )
@@ -200,7 +210,7 @@ fun BotSimulatorDialog(
                             IconButton(
                                 onClick = onClearHistory,
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
                             ) {
@@ -208,7 +218,7 @@ fun BotSimulatorDialog(
                                     imageVector = Icons.Default.Refresh,
                                     contentDescription = stringResource(R.string.sim_btn_new_chat),
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
 
@@ -216,7 +226,7 @@ fun BotSimulatorDialog(
                             IconButton(
                                 onClick = onDismiss,
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
                             ) {
@@ -224,7 +234,7 @@ fun BotSimulatorDialog(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = stringResource(R.string.sim_btn_close),
                                     tint = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
@@ -263,7 +273,7 @@ fun BotSimulatorDialog(
                     }
                 }
 
-                Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
                 // ── Error Banner if any ──────────────────────────────────────
                 if (simulationError != null) {
@@ -357,7 +367,7 @@ fun BotSimulatorDialog(
                     }
                 }
 
-                Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
                 // ── Selected Media Preview Strip ─────────────────────────────
                 if (selectedMediaUri != null) {
@@ -427,12 +437,12 @@ fun BotSimulatorDialog(
 
                             IconButton(
                                 onClick = onClearMedia,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = stringResource(R.string.sim_media_clear),
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -487,7 +497,7 @@ fun BotSimulatorDialog(
                         IconButton(
                             onClick = { imagePickerLauncher.launch("image/*") },
                             enabled = !isSimulating,
-                            modifier = Modifier.size(42.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Image,
@@ -504,7 +514,7 @@ fun BotSimulatorDialog(
                         IconButton(
                             onClick = { audioPickerLauncher.launch("audio/*") },
                             enabled = !isSimulating,
-                            modifier = Modifier.size(42.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Mic,
@@ -542,7 +552,7 @@ fun BotSimulatorDialog(
                                 onSendTurn(text, selectedMediaUri, selectedMediaType)
                             },
                             enabled = canSend,
-                            modifier = Modifier.size(44.dp),
+                            modifier = Modifier.size(48.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -567,6 +577,7 @@ fun BotSimulatorDialog(
             }
         }
     }
+}
 }
 
 @Composable
@@ -611,7 +622,9 @@ private fun ChatMessageItem(message: SimulatorMessage) {
                 1.dp,
                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             ) else null,
-            modifier = Modifier.widthIn(max = 320.dp)
+            modifier = Modifier
+                .widthIn(min = 60.dp, max = 520.dp)
+                .fillMaxWidth(0.85f)
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 // Attached Media thumbnail inside message
@@ -710,32 +723,57 @@ fun SimulatorMediaThumbnail(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val bitmap = remember(uriString) {
-        if (uriString.isBlank()) return@remember null
-        runCatching {
-            val uri = Uri.parse(uriString)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                val source = ImageDecoder.createSource(context.contentResolver, uri)
-                ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
-                    val maxDim = maxOf(info.size.width, info.size.height)
-                    if (maxDim > 600) {
-                        decoder.setTargetSampleSize(maxOf(1, maxDim / 400))
+    var bitmap by remember(uriString) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var isLoading by remember(uriString) { mutableStateOf(uriString.isNotBlank()) }
+
+    LaunchedEffect(uriString) {
+        if (uriString.isBlank()) {
+            bitmap = null
+            isLoading = false
+            return@LaunchedEffect
+        }
+        isLoading = true
+        bitmap = withContext(Dispatchers.IO) {
+            runCatching {
+                val uri = Uri.parse(uriString)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val source = ImageDecoder.createSource(context.contentResolver, uri)
+                    ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                        val maxDim = maxOf(info.size.width, info.size.height)
+                        if (maxDim > 600) {
+                            decoder.setTargetSampleSize(maxOf(1, maxDim / 400))
+                        }
                     }
+                } else {
+                    @Suppress("DEPRECATION")
+                    MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
                 }
-            } else {
-                @Suppress("DEPRECATION")
-                MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
-            }
-        }.getOrNull()
+            }.getOrNull()
+        }
+        isLoading = false
     }
 
     if (bitmap != null) {
         Image(
-            bitmap = bitmap.asImageBitmap(),
+            bitmap = bitmap!!.asImageBitmap(),
             contentDescription = stringResource(R.string.sim_media_preview_desc),
             modifier = modifier.clip(RoundedCornerShape(8.dp)),
             contentScale = ContentScale.Crop
         )
+    } else if (isLoading) {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = modifier
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
     } else {
         Surface(
             shape = RoundedCornerShape(8.dp),

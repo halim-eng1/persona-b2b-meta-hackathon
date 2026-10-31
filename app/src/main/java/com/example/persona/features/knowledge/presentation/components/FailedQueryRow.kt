@@ -10,12 +10,14 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.persona.R
 import com.example.persona.core.database.entity.FailedQueryEntity
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
@@ -30,6 +32,48 @@ fun FailedQueryRow(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.knowledge_failed_query_delete_title),
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.knowledge_failed_query_delete_message)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                ) {
+                    Text(stringResource(R.string.common_delete))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showDeleteConfirmation = false },
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                ) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
+
     val localDt = Instant.fromEpochMilliseconds(query.timestamp).toLocalDateTime(TimeZone.currentSystemDefault())
     val formattedTime = "%02d:%02d".format(localDt.hour, localDt.minute)
     val pctScore = (query.bestScore * 100).roundToInt()
@@ -60,7 +104,7 @@ fun FailedQueryRow(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Warning,
-                        contentDescription = "Failed Match",
+                        contentDescription = stringResource(R.string.knowledge_failed_match_icon),
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(16.dp)
                     )
@@ -80,15 +124,18 @@ fun FailedQueryRow(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    SuggestionChip(
-                        onClick = {},
-                        label = { Text(text = "Best: $pctScore%", fontSize = 10.sp) },
-                        colors = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
-                            labelColor = MaterialTheme.colorScheme.error
-                        ),
-                        border = null
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.knowledge_failed_best_score, pctScore),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                 }
             }
 
@@ -110,24 +157,33 @@ fun FailedQueryRow(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onUseAsInput) {
+                IconButton(
+                    onClick = onUseAsInput,
+                    modifier = Modifier.size(48.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "Use as Input",
+                        contentDescription = stringResource(R.string.knowledge_use_as_input),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
-                IconButton(onClick = onMarkReviewed) {
+                IconButton(
+                    onClick = onMarkReviewed,
+                    modifier = Modifier.size(48.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = "Mark Reviewed",
+                        contentDescription = stringResource(R.string.knowledge_mark_reviewed),
                         tint = MaterialTheme.colorScheme.secondary
                     )
                 }
-                IconButton(onClick = onDelete) {
+                IconButton(
+                    onClick = { showDeleteConfirmation = true },
+                    modifier = Modifier.size(48.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = stringResource(R.string.common_delete),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }

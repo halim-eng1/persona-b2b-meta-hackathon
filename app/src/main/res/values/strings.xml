@@ -76,6 +76,11 @@
     <string name="knowledge_catalog_items_count">Catalog Items (%d)</string>
     <string name="knowledge_hitl_inbox_title">Inquiries requiring merchant attention</string>
     <string name="knowledge_hitl_empty">Great! No pending inquiries from customers.</string>
+    <string name="knowledge_failed_query_delete_title">Delete Unanswered Query?</string>
+    <string name="knowledge_failed_query_delete_message">Are you sure you want to dismiss and delete this customer query? You won\'t be able to review or train the bot with it later.</string>
+    <string name="knowledge_mark_reviewed">Mark as Reviewed</string>
+    <string name="knowledge_use_as_input">Use as Training Input</string>
+    <string name="knowledge_failed_match_icon">Unanswered query alert</string>
     <string name="bot_simulator_fab">Bot Simulator</string>
     <string name="knowledge_edit_dialog_title">Edit Fact / Product</string>
     <string name="knowledge_edit_section_label">Section: %s</string>
@@ -95,6 +100,7 @@
     <string name="knowledge_input_product_name_label">Product or Service Name</string>
     <string name="knowledge_input_product_name_placeholder">e.g. Cotton Oversized Sweatshirt</string>
     <string name="knowledge_input_price_label">Price (EGP)</string>
+    <string name="knowledge_input_price_placeholder">350</string>
     <string name="knowledge_input_variations_label">Sizes &amp; Colors</string>
     <string name="knowledge_input_variations_placeholder">Black, Navy / L, XL</string>
     <string name="knowledge_input_category_label">Category:</string>
@@ -181,6 +187,15 @@
     <string name="trace_chunk_accuracy">%d%% accuracy</string>
     <string name="trace_chunk_expand">Show full text ▼</string>
     <string name="trace_chunk_collapse">Hide details ▲</string>
+    <string name="knowledge_failed_best_score">Best Match: %d%%</string>
+    <string name="trace_requery_pass2_executed">Pass 2 re-query executed.</string>
+    <string name="trace_requery_keyword">Query: %s</string>
+    <string name="trace_requery_chunks">Chunks retrieved: %d</string>
+    <string name="trace_requery_direct">Direct response without second pass retrieval.</string>
+    <string name="trace_order_total_with_shipping">%1$s (+ %2$s shipping = %3$s)</string>
+    <string name="common_expanded">Expanded</string>
+    <string name="common_collapsed">Collapsed</string>
+    <string name="default_customer_name">Customer</string>
 
     <!-- ── Navigation ──────────────────────────────────────────────────────────── -->
     <string name="nav_home">Home</string>

@@ -41,6 +41,7 @@ import com.example.persona.features.knowledge.presentation.model.SimulatorMessag
 import com.example.persona.features.knowledge.presentation.model.SimulatorSender
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,11 +49,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
 data class KnowledgeManagementUiState(
     val entries: List<KnowledgeEntry> = emptyList(),
+    val filteredEntries: List<KnowledgeEntry> = emptyList(),
     val unansweredQueries: List<FailedQueryEntity> = emptyList(),
     val inputQuery: String = "",
     val isTemporaryOffer: Boolean = false,
@@ -74,35 +77,7 @@ data class KnowledgeManagementUiState(
     val simulatorMessages: List<SimulatorMessage> = emptyList(),
     val selectedMediaUri: String? = null,
     val selectedMediaType: SimulatorMediaType? = null
-) {
-    val filteredEntries: List<KnowledgeEntry>
-        get() {
-            var list = entries
-            if (searchQuery.isNotBlank()) {
-                val q = searchQuery.trim().lowercase()
-                list = list.filter {
-                    it.chunkText.lowercase().contains(q) ||
-                        (it.headerContext?.lowercase()?.contains(q) == true)
-                }
-            }
-            return when (selectedFilter) {
-                "PRODUCT" -> list.filter {
-                    it.chunkText.contains("[منتج]") ||
-                        it.headerContext?.contains("منتج") == true ||
-                        it.chunkText.contains("ج.م") ||
-                        it.chunkText.contains("جنيه")
-                }
-                "POLICY" -> list.filter {
-                    it.headerContext?.contains("شحن") == true ||
-                        it.headerContext?.contains("سياس") == true ||
-                        it.headerContext?.contains("استرجاع") == true ||
-                        it.sourceType == "CORE_DOCUMENT"
-                }
-                "OFFER" -> list.filter { it.sourceType == "TEMPORARY_OFFER" }
-                else -> list
-            }
-        }
-}
+)
 
 @HiltViewModel
 class KnowledgeManagementViewModel @Inject constructor(
@@ -147,7 +122,10 @@ class KnowledgeManagementViewModel @Inject constructor(
                         }
                     }
                     .collect { knowledgeEntries ->
-                        _uiState.update { it.copy(entries = knowledgeEntries) }
+                        _uiState.update { current ->
+                            val filtered = computeFilteredEntries(knowledgeEntries, current.searchQuery, current.selectedFilter)
+                            current.copy(entries = knowledgeEntries, filteredEntries = filtered)
+                        }
                     }
             }
             launch {
@@ -167,11 +145,17 @@ class KnowledgeManagementViewModel @Inject constructor(
     }
 
     fun onSearchQueryChanged(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
+        _uiState.update { current ->
+            val filtered = computeFilteredEntries(current.entries, query, current.selectedFilter)
+            current.copy(searchQuery = query, filteredEntries = filtered)
+        }
     }
 
     fun onFilterSelected(filter: String) {
-        _uiState.update { it.copy(selectedFilter = filter) }
+        _uiState.update { current ->
+            val filtered = computeFilteredEntries(current.entries, current.searchQuery, filter)
+            current.copy(selectedFilter = filter, filteredEntries = filtered)
+        }
     }
 
     fun addManualEntry() {
@@ -717,8 +701,8 @@ class KnowledgeManagementViewModel @Inject constructor(
             )
         }
 
-        val isHitl = finalParsedResponse?.action.equals("HITL", ignoreCase = true)
-        val finalReply = finalParsedResponse?.finalReplyText?.takeIf { it.isNotBlank() }
+        val isHitl = finalParsedResponse.action.equals("HITL", ignoreCase = true)
+        val finalReply = finalParsedResponse.finalReplyText?.takeIf { it.isNotBlank() }
             ?: when {
                 isHitl -> "⚠️ تم توجيه الاستفسار للمراجعة البشرية لعدم توفر رد مؤكد أو لحاجة الإجراء لتدخل يدوي."
                 candidates.isNotEmpty() -> candidates.first().chunkText
@@ -756,12 +740,12 @@ class KnowledgeManagementViewModel @Inject constructor(
             reQueryCandidates = pass2Candidates,
             llmProvider = effectiveProvider,
             llmLatencyMs = effectiveLatency,
-            llmAction = finalParsedResponse?.action ?: "REPLY",
+            llmAction = finalParsedResponse.action,
             promptTokens = promptTokens,
             completionTokens = completionTokens,
             totalTokens = totalTokens,
-            orderAction = finalParsedResponse?.orderAction?.uppercase() ?: "NONE",
-            extractedOrder = finalParsedResponse?.extractedOrder,
+            orderAction = finalParsedResponse.orderAction?.uppercase() ?: "NONE",
+            extractedOrder = finalParsedResponse.extractedOrder,
             systemPrompt = "", // Removed from UI as requested
             asrTranscription = asrTranscription,
             visionDescription = visionDescription
@@ -785,15 +769,15 @@ class KnowledgeManagementViewModel @Inject constructor(
         }
     }
 
-    private fun resolveFileFromUri(uriString: String, mediaType: SimulatorMediaType? = null): File? {
-        if (uriString.isBlank()) return null
-        val ctx = context ?: return null
-        return runCatching {
+    private suspend fun resolveFileFromUri(uriString: String, mediaType: SimulatorMediaType? = null): File? = withContext(Dispatchers.IO) {
+        if (uriString.isBlank()) return@withContext null
+        val ctx = context ?: return@withContext null
+        runCatching {
             val uri = Uri.parse(uriString)
             if (uri.scheme == "file") {
-                val path = uri.path ?: return null
+                val path = uri.path ?: return@withContext null
                 val file = File(path)
-                if (file.exists()) return file
+                if (file.exists()) return@withContext file
             }
             val mimeType = ctx.contentResolver.getType(uri)
             val extension = when {
@@ -815,7 +799,7 @@ class KnowledgeManagementViewModel @Inject constructor(
                 mediaType == SimulatorMediaType.AUDIO -> ".ogg"
                 else -> ".tmp"
             }
-            val stream = ctx.contentResolver.openInputStream(uri) ?: return null
+            val stream = ctx.contentResolver.openInputStream(uri) ?: return@withContext null
             val tempFile = File(ctx.cacheDir, "sim_upload_${System.currentTimeMillis()}$extension")
             stream.use { input ->
                 tempFile.outputStream().use { output ->
@@ -841,8 +825,42 @@ class KnowledgeManagementViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     entries = emptyList(),
+                    filteredEntries = emptyList(),
                     isProcessing = false
                 )
+            }
+        }
+    }
+
+    companion object {
+        fun computeFilteredEntries(
+            entries: List<KnowledgeEntry>,
+            searchQuery: String,
+            selectedFilter: String
+        ): List<KnowledgeEntry> {
+            var list = entries
+            if (searchQuery.isNotBlank()) {
+                val q = searchQuery.trim().lowercase()
+                list = list.filter {
+                    it.chunkText.lowercase().contains(q) ||
+                        (it.headerContext?.lowercase()?.contains(q) == true)
+                }
+            }
+            return when (selectedFilter) {
+                "PRODUCT" -> list.filter {
+                    it.chunkText.contains("[منتج]") ||
+                        it.headerContext?.contains("منتج") == true ||
+                        it.chunkText.contains("ج.م") ||
+                        it.chunkText.contains("جنيه")
+                }
+                "POLICY" -> list.filter {
+                    it.headerContext?.contains("شحن") == true ||
+                        it.headerContext?.contains("سياس") == true ||
+                        it.headerContext?.contains("استرجاع") == true ||
+                        it.sourceType == "CORE_DOCUMENT"
+                }
+                "OFFER" -> list.filter { it.sourceType == "TEMPORARY_OFFER" }
+                else -> list
             }
         }
     }

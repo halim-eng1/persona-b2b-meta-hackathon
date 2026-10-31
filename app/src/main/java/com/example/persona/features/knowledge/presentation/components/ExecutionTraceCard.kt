@@ -13,18 +13,31 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.AdsClick
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -34,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.example.persona.R
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.knowledge.presentation.model.ExecutionTrace
+import com.example.persona.ui.theme.statusColors
 import java.util.Locale
 
 @Composable
@@ -52,6 +66,8 @@ fun ExecutionTraceCard(
             .padding(bottom = 6.dp)
     ) {
         // Collapsible Thinking Trigger Chip
+        val expandedDesc = stringResource(R.string.common_expanded)
+        val collapsedDesc = stringResource(R.string.common_collapsed)
         Surface(
             onClick = { isExpanded = !isExpanded },
             shape = RoundedCornerShape(12.dp),
@@ -64,7 +80,11 @@ fun ExecutionTraceCard(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
             ),
-            modifier = Modifier.wrapContentWidth()
+            modifier = Modifier
+                .wrapContentWidth()
+                .semantics {
+                    stateDescription = if (isExpanded) expandedDesc else collapsedDesc
+                }
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -112,9 +132,9 @@ fun ExecutionTraceCard(
                     modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // 1. 🎯 Detected Intent
+                    // 1. Detected Intent
                     TraceStepRow(
-                        icon = "🎯",
+                        icon = Icons.Default.AdsClick,
                         title = stringResource(R.string.trace_intent_title),
                         badgeText = trace.intent.name,
                         badgeColor = MaterialTheme.colorScheme.primaryContainer,
@@ -125,7 +145,7 @@ fun ExecutionTraceCard(
                     // Optional ASR info if audio
                     if (!trace.asrTranscription.isNullOrBlank()) {
                         TraceStepRow(
-                            icon = "🎙️",
+                            icon = Icons.Default.Mic,
                             title = stringResource(R.string.trace_asr_title),
                             badgeText = "FunASR / Whisper",
                             badgeColor = MaterialTheme.colorScheme.tertiaryContainer,
@@ -137,7 +157,7 @@ fun ExecutionTraceCard(
                     // Optional Vision info if image
                     if (!trace.visionDescription.isNullOrBlank()) {
                         TraceStepRow(
-                            icon = "👁️",
+                            icon = Icons.Default.Visibility,
                             title = stringResource(R.string.trace_vision_title),
                             badgeText = "Multimodal Pass",
                             badgeColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -146,7 +166,7 @@ fun ExecutionTraceCard(
                         )
                     }
 
-                    // 2. 📚 Retrieved Catalog Chunks
+                    // 2. Retrieved Catalog Chunks
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -157,7 +177,12 @@ fun ExecutionTraceCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text(text = "📚", fontSize = 14.sp)
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
                                 Text(
                                     text = stringResource(R.string.trace_rag_title),
                                     style = MaterialTheme.typography.labelMedium,
@@ -183,20 +208,22 @@ fun ExecutionTraceCard(
                         }
 
                         if (trace.ragCandidates.isNotEmpty()) {
-                            Text(
-                                text = if (isRagExpanded) {
-                                    stringResource(R.string.trace_rag_collapse)
-                                } else {
-                                    stringResource(R.string.trace_rag_expand, trace.ragCandidates.size)
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .clickable { isRagExpanded = !isRagExpanded }
-                                    .padding(vertical = 2.dp)
-                            )
+                            TextButton(
+                                onClick = { isRagExpanded = !isRagExpanded },
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                                modifier = Modifier.defaultMinSize(minHeight = 44.dp)
+                            ) {
+                                Text(
+                                    text = if (isRagExpanded) {
+                                        stringResource(R.string.trace_rag_collapse)
+                                    } else {
+                                        stringResource(R.string.trace_rag_expand, trace.ragCandidates.size)
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
 
                             AnimatedVisibility(visible = isRagExpanded) {
                                 Column(
@@ -217,9 +244,11 @@ fun ExecutionTraceCard(
                         }
                     }
 
-                    // 3. 🔄 Re-Query
+                    // 3. Re-Query
+                    val pass2ExecutedStr = stringResource(R.string.trace_requery_pass2_executed)
+                    val requeryDirectStr = stringResource(R.string.trace_requery_direct)
                     TraceStepRow(
-                        icon = "🔄",
+                        icon = Icons.Default.Autorenew,
                         title = stringResource(R.string.trace_requery_title),
                         badgeText = if (trace.reQueryTriggered) {
                             stringResource(R.string.trace_requery_active)
@@ -230,22 +259,24 @@ fun ExecutionTraceCard(
                         badgeTextColor = if (trace.reQueryTriggered) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         detail = if (trace.reQueryTriggered) {
                             buildString {
-                                append("Pass 2 re-query executed.")
+                                append(pass2ExecutedStr)
                                 if (!trace.reQueryKeyword.isNullOrBlank()) {
-                                    append("\n• Query: ${trace.reQueryKeyword}")
+                                    append("\n• ")
+                                    append(stringResource(R.string.trace_requery_keyword, trace.reQueryKeyword))
                                 }
                                 if (trace.reQueryCandidates.isNotEmpty()) {
-                                    append("\n• Chunks retrieved: ${trace.reQueryCandidates.size}")
+                                    append("\n• ")
+                                    append(stringResource(R.string.trace_requery_chunks, trace.reQueryCandidates.size))
                                 }
                             }
                         } else {
-                            "Direct response without second pass retrieval."
+                            requeryDirectStr
                         }
                     )
 
-                    // 4. 🧠 Responding Model (LLM)
+                    // 4. Responding Model (LLM)
                     TraceStepRow(
-                        icon = "🧠",
+                        icon = Icons.Default.SmartToy,
                         title = stringResource(R.string.trace_llm_title),
                         badgeText = trace.llmAction,
                         badgeColor = MaterialTheme.colorScheme.primaryContainer,
@@ -253,10 +284,10 @@ fun ExecutionTraceCard(
                         detail = "${trace.llmProvider} (${trace.llmLatencyMs}ms) • Action: ${trace.llmAction}"
                     )
 
-                    // 5. 📦 Order Action
+                    // 5. Order Action
                     val orderActionColor = when (trace.orderAction) {
-                        "CREATE" -> Color(0xFF2E7D32)
-                        "UPDATE" -> Color(0xFFF57F17)
+                        "CREATE" -> MaterialTheme.statusColors.completed
+                        "UPDATE" -> MaterialTheme.statusColors.pending
                         "CANCEL" -> MaterialTheme.colorScheme.error
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
@@ -270,7 +301,12 @@ fun ExecutionTraceCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text(text = "📦", fontSize = 14.sp)
+                                Icon(
+                                    imageVector = Icons.Default.LocalShipping,
+                                    contentDescription = null,
+                                    tint = orderActionColor,
+                                    modifier = Modifier.size(16.dp)
+                                )
                                 Text(
                                     text = stringResource(R.string.trace_order_action_title),
                                     style = MaterialTheme.typography.labelMedium,
@@ -340,9 +376,19 @@ fun ExecutionTraceCard(
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
-                                    if (order.totalAmount != null) {
-                                        val totalWithShipping = order.totalAmount!! + (order.shippingFee ?: 0.0)
-                                        val totalText = "${order.totalAmount} ${if (order.shippingFee != null) "(+ ${order.shippingFee} shipping = $totalWithShipping)" else ""}"
+                                    val amount = order.totalAmount
+                                    if (amount != null) {
+                                        val totalWithShipping = amount + (order.shippingFee ?: 0.0)
+                                        val totalText = if (order.shippingFee != null) {
+                                            stringResource(
+                                                R.string.trace_order_total_with_shipping,
+                                                amount.toString(),
+                                                order.shippingFee.toString(),
+                                                totalWithShipping.toString()
+                                            )
+                                        } else {
+                                            amount.toString()
+                                        }
                                         Text(
                                             text = stringResource(R.string.trace_order_total, totalText),
                                             style = MaterialTheme.typography.bodySmall,
@@ -366,9 +412,9 @@ fun ExecutionTraceCard(
                         }
                     }
 
-                    // 6. 🔢 Token Consumption
+                    // 6. Token Consumption
                     TraceStepRow(
-                        icon = "🔢",
+                        icon = Icons.Default.Analytics,
                         title = stringResource(R.string.trace_tokens_title),
                         badgeText = stringResource(R.string.trace_tokens_badge, trace.totalTokens),
                         badgeColor = MaterialTheme.colorScheme.tertiaryContainer,
@@ -388,7 +434,7 @@ fun ExecutionTraceCard(
 
 @Composable
 private fun TraceStepRow(
-    icon: String,
+    icon: ImageVector,
     title: String,
     badgeText: String,
     badgeColor: Color,
@@ -406,7 +452,12 @@ private fun TraceStepRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.weight(1f, fill = false)
             ) {
-                Text(text = icon, fontSize = 14.sp)
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelMedium,
@@ -480,20 +531,22 @@ private fun CandidateChunkItem(idx: Int, candidate: RetrievalCandidate) {
                 overflow = TextOverflow.Ellipsis
             )
             if (candidate.chunkText.length > 180) {
-                Text(
-                    text = if (isChunkExpanded) {
-                        stringResource(R.string.trace_chunk_collapse)
-                    } else {
-                        stringResource(R.string.trace_chunk_expand)
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { isChunkExpanded = !isChunkExpanded }
-                        .padding(top = 4.dp, bottom = 2.dp)
-                )
+                TextButton(
+                    onClick = { isChunkExpanded = !isChunkExpanded },
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                    modifier = Modifier.defaultMinSize(minHeight = 40.dp)
+                ) {
+                    Text(
+                        text = if (isChunkExpanded) {
+                            stringResource(R.string.trace_chunk_collapse)
+                        } else {
+                            stringResource(R.string.trace_chunk_expand)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

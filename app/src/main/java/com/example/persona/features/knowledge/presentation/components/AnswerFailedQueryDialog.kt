@@ -1,12 +1,15 @@
 package com.example.persona.features.knowledge.presentation.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.persona.R
@@ -47,7 +50,8 @@ fun AnswerFailedQueryDialog(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        val name = query.contactDisplayName.ifBlank { "WhatsApp" }
+                        val defaultName = stringResource(R.string.default_customer_name)
+                        val name = query.contactDisplayName.ifBlank { defaultName }
                         Text(
                             text = stringResource(R.string.knowledge_answer_query_customer_prefix, name),
                             style = MaterialTheme.typography.labelSmall,
@@ -74,18 +78,29 @@ fun AnswerFailedQueryDialog(
                 )
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .toggleable(
+                            value = isOffer,
+                            role = Role.Switch,
+                            onValueChange = { isOffer = it }
+                        )
+                        .defaultMinSize(minHeight = 48.dp)
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = stringResource(R.string.knowledge_answer_query_is_offer),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Switch(
                         checked = isOffer,
-                        onCheckedChange = { isOffer = it }
+                        onCheckedChange = null
                     )
                 }
             }

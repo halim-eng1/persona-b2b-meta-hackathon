@@ -38,6 +38,13 @@ import com.example.persona.features.knowledge.presentation.components.FailedQuer
 import com.example.persona.features.knowledge.presentation.components.KnowledgeEntryRow
 import com.example.persona.features.knowledge.presentation.components.ManualKnowledgeInputCard
 
+private val KnowledgeFilters = listOf(
+    "ALL" to R.string.knowledge_filter_all,
+    "PRODUCT" to R.string.knowledge_filter_product,
+    "POLICY" to R.string.knowledge_filter_policy,
+    "OFFER" to R.string.knowledge_filter_offer
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KnowledgeManagementScreen(
@@ -130,22 +137,29 @@ fun KnowledgeManagementScreen(
         simulationError = state.simulationError
     )
 
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+    val background = MaterialTheme.colorScheme.background
+    val backgroundGradient = remember(surfaceVariant, background) {
+        Brush.verticalGradient(
+            colors = listOf(
+                surfaceVariant.copy(alpha = 0.3f),
+                background
+            )
+        )
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        MaterialTheme.colorScheme.background
-                    )
-                )
-            )
+            .background(backgroundGradient)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
+                .imePadding()
+                .widthIn(max = 760.dp)
+                .align(Alignment.TopCenter)
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -276,17 +290,11 @@ fun KnowledgeManagementScreen(
                     )
 
                     // Filter Chips
-                    val filters = listOf(
-                        "ALL" to R.string.knowledge_filter_all,
-                        "PRODUCT" to R.string.knowledge_filter_product,
-                        "POLICY" to R.string.knowledge_filter_policy,
-                        "OFFER" to R.string.knowledge_filter_offer
-                    )
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(filters) { (key, resId) ->
+                        items(KnowledgeFilters) { (key, resId) ->
                             FilterChip(
                                 selected = state.selectedFilter == key,
                                 onClick = { viewModel.onFilterSelected(key) },
