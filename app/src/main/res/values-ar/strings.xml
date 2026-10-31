@@ -51,7 +51,7 @@
     <string name="home_stat_bot_replies">ردود البوت اليوم</string>
     <string name="home_stat_total_prefix">إجمالي: %d</string>
     <string name="home_action_catalog">كتالوج المنتجات</string>
-    <string name="home_action_import">استيراد محادثات</string>
+    <string name="home_action_import">استيراد المعرفة</string>
     <string name="home_action_orders">تجهيز الطلبات</string>
     <string name="home_action_contacts">دليل العملاء CRM</string>
 

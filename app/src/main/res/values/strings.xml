@@ -51,7 +51,7 @@
     <string name="home_stat_bot_replies">Bot Replies Today</string>
     <string name="home_stat_total_prefix">Total: %d</string>
     <string name="home_action_catalog">Product Catalog</string>
-    <string name="home_action_import">Import Chats</string>
+    <string name="home_action_import">Import Knowledge</string>
     <string name="home_action_orders">Order Fulfillment</string>
     <string name="home_action_contacts">CRM Contacts</string>
 
