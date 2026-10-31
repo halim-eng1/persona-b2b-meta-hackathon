@@ -1,5 +1,8 @@
 package com.example.persona.features.orders.presentation.components
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -82,7 +85,7 @@ fun CreateOrderDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "إنشاء طلب جديد يدوياً",
+                        text = stringResource(R.string.orders_create_manual_title),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     IconButton(
@@ -93,7 +96,7 @@ fun CreateOrderDialog(
                         },
                         modifier = Modifier.size(48.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "إغلاق")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_close))
                     }
                 }
 
@@ -122,7 +125,7 @@ fun CreateOrderDialog(
                         customerName = it
                         validationError = null
                     },
-                    label = { Text("اسم العميل *") },
+                    label = { Text(stringResource(R.string.orders_customer_name_label)) },
                     placeholder = { Text("مثال: محمد أحمد") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -286,7 +289,7 @@ fun CreateOrderDialog(
                 OutlinedTextField(
                     value = customNotes,
                     onValueChange = { customNotes = it },
-                    label = { Text("ملاحظات إضافية") },
+                    label = { Text(stringResource(R.string.orders_customer_notes_label)) },
                     placeholder = { Text("ملاحظات خاصة بالتسليم أو المواعيد") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),

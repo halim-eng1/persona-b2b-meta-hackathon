@@ -1,5 +1,8 @@
 package com.example.persona.features.orders.presentation
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -54,7 +57,7 @@ fun OrdersDashboardScreen(
                 TopAppBar(
                     title = {
                         Text(
-                            text = "تم تحديد ${state.selectedOrderIds.size} طلبات",
+                            text = stringResource(R.string.orders_selected_count, state.selectedOrderIds.size),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                     },
@@ -63,7 +66,7 @@ fun OrdersDashboardScreen(
                             onClick = viewModel::clearSelection,
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "إلغاء التحديد")
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.orders_clear_selection_desc))
                         }
                     },
                     actions = {
@@ -71,7 +74,7 @@ fun OrdersDashboardScreen(
                             onClick = viewModel::selectAllOrders,
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Icon(Icons.Default.SelectAll, contentDescription = "تحديد الكل")
+                            Icon(Icons.Default.SelectAll, contentDescription = stringResource(R.string.orders_select_all_desc))
                         }
                         IconButton(
                             onClick = {

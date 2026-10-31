@@ -1,5 +1,8 @@
 package com.example.persona.features.orders.presentation.components
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -92,7 +95,7 @@ fun EditOrderDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "تعديل بيانات الطلب #${order.id}",
+                        text = stringResource(R.string.orders_edit_order_title, order.id),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     IconButton(
@@ -103,7 +106,7 @@ fun EditOrderDialog(
                         },
                         modifier = Modifier.size(48.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "إلغاء")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_cancel))
                     }
                 }
 
@@ -132,7 +135,7 @@ fun EditOrderDialog(
                         customerName = it
                         validationError = null
                     },
-                    label = { Text("اسم العميل") },
+                    label = { Text(stringResource(R.string.orders_customer_name_label)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth(),

@@ -1,5 +1,8 @@
 package com.example.persona.features.onboarding.presentation
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -105,7 +108,7 @@ fun PermissionOnboardingScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "تهيئة الصلاحيات وحماية التشغيل",
+                        text = stringResource(R.string.onboarding_title),
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -157,12 +160,12 @@ fun PermissionOnboardingScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "مؤشر التقدم في الإعداد",
+                                text = stringResource(R.string.onboarding_progress_indicator),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "الخطوة ${wizardState.currentStepIndex + 1} من ${wizardState.totalSteps}",
+                                text = stringResource(R.string.onboarding_step_of_total, wizardState.currentStepIndex + 1, wizardState.totalSteps),
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.primary
                             )

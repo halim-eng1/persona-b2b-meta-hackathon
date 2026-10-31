@@ -1,5 +1,8 @@
 package com.example.persona.features.orders.presentation.components
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -39,14 +43,15 @@ fun CancelOrderDialog(
 
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
 
     val quickReasons = listOf(
-        "العميل غير رأيه",
-        "تكرار بالخطأ",
-        "خارج نطاق التوصيل",
-        "لم يرد على مكالمة التأكيد",
-        "السعر غير مناسب",
-        "المنتج غير متوفر بالمخزن"
+        stringResource(R.string.orders_cancel_reason_changed_mind),
+        stringResource(R.string.orders_cancel_reason_duplicate),
+        stringResource(R.string.orders_cancel_reason_out_of_area),
+        stringResource(R.string.orders_cancel_reason_no_answer),
+        stringResource(R.string.orders_cancel_reason_price_unsuitable),
+        stringResource(R.string.orders_cancel_reason_out_of_stock)
     )
 
     Dialog(onDismissRequest = onDismiss) {
@@ -77,7 +82,7 @@ fun CancelOrderDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "تأكيد إلغاء الطلب #${order.id}",
+                            text = stringResource(R.string.orders_cancellation_title, order.id),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.error
                         )
@@ -90,7 +95,7 @@ fun CancelOrderDialog(
                         },
                         modifier = Modifier.size(48.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "إلغاء")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_cancel))
                     }
                 }
 
@@ -98,7 +103,7 @@ fun CancelOrderDialog(
 
                 val customerName = order.customerNameFromLlm?.takeIf { it.isNotBlank() } ?: order.contactName
                 Text(
-                    text = "هل أنت متأكد من إلغاء طلب العميل: $customerName؟ يرجى تحديد سبب الإلغاء:",
+                    text = stringResource(R.string.orders_cancellation_confirm_text, customerName),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -155,8 +160,8 @@ fun CancelOrderDialog(
                             errorMessage = null
                         }
                     },
-                    label = { Text("أو اكتب سبباً آخر...") },
-                    placeholder = { Text("تفاصيل سبب الإلغاء") },
+                    label = { Text(stringResource(R.string.orders_cancel_other_reason_label)) },
+                    placeholder = { Text(stringResource(R.string.orders_cancel_details_placeholder)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
@@ -181,7 +186,7 @@ fun CancelOrderDialog(
                             .weight(1f)
                             .heightIn(min = 48.dp)
                     ) {
-                        Text("تراجع")
+                        Text(stringResource(R.string.orders_cancel_back_btn))
                     }
 
                     Button(
@@ -191,7 +196,7 @@ fun CancelOrderDialog(
 
                             val finalReason = selectedReason.ifBlank { customReason.trim() }
                             if (finalReason.isBlank()) {
-                                errorMessage = "يرجى اختيار أو كتابة سبب الإلغاء"
+                                errorMessage = context.getString(R.string.orders_cancel_error_required)
                                 return@Button
                             }
                             errorMessage = null
@@ -204,7 +209,7 @@ fun CancelOrderDialog(
                             .heightIn(min = 48.dp)
                     ) {
                         Text(
-                            text = "تأكيد الإلغاء",
+                            text = stringResource(R.string.orders_cancel_confirm_btn),
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onError
                         )

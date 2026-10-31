@@ -1,5 +1,8 @@
 package com.example.persona.features.orders.presentation.components
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,7 +46,7 @@ fun MerchantNoteSheet(
         ) {
             val customer = order.customerNameFromLlm?.takeIf { it.isNotBlank() } ?: order.contactName
             Text(
-                text = "ملاحظة التجهيز — $customer",
+                text = stringResource(R.string.orders_note_sheet_customer_title, customer),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
             Spacer(modifier = Modifier.height(6.dp))
@@ -76,7 +79,7 @@ fun MerchantNoteSheet(
                 value = noteValue,
                 onValueChange = { noteValue = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("مثال: المندوب حيوصل بكرة الساعة 3") },
+                placeholder = { Text(stringResource(R.string.orders_note_sheet_placeholder)) },
                 minLines = 3,
                 shape = RoundedCornerShape(14.dp)
             )
@@ -97,7 +100,7 @@ fun MerchantNoteSheet(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "حفظ وإرسال للمساعد", fontWeight = FontWeight.Bold)
+                Text(text = stringResource(R.string.orders_note_sheet_save_btn), fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(28.dp))
         }

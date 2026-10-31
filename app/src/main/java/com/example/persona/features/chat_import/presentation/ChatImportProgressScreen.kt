@@ -1,5 +1,8 @@
 package com.example.persona.features.chat_import.presentation
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -42,8 +45,8 @@ fun ChatImportProgressScreen(
     if (showCancelDialog) {
         AlertDialog(
             onDismissRequest = { showCancelDialog = false },
-            title = { Text("إلغاء الاستيراد؟") },
-            text = { Text("هل تريد بالتأكيد إيقاف عملية الاستيراد؟ لن تتأثر قاعدة المعرفة السابقة.") },
+            title = { Text(stringResource(R.string.import_progress_cancel_title)) },
+            text = { Text(stringResource(R.string.import_progress_cancel_desc)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -53,7 +56,7 @@ fun ChatImportProgressScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                 ) {
-                    Text("إيقاف الاستيراد")
+                    Text(stringResource(R.string.import_progress_stop_btn))
                 }
             },
             dismissButton = {
@@ -61,7 +64,7 @@ fun ChatImportProgressScreen(
                     onClick = { showCancelDialog = false },
                     modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                 ) {
-                    Text("متابعة الاستيراد")
+                    Text(stringResource(R.string.import_progress_continue_btn))
                 }
             }
         )

@@ -1,5 +1,8 @@
 package com.example.persona.features.contacts.presentation.components
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,7 +39,7 @@ fun ContactStatsBanner(
             verticalAlignment = Alignment.CenterVertically
         ) {
             StatItem(
-                label = "إجمالي العملاء",
+                label = stringResource(R.string.contacts_stat_total_customers),
                 value = summary.totalContacts.toString(),
                 color = MaterialTheme.colorScheme.primary
             )
@@ -46,12 +49,12 @@ fun ContactStatsBanner(
                 color = Color(0xFFD4AF37) // Gold
             )
             StatItem(
-                label = "مرتجعات/مشاكل",
+                label = stringResource(R.string.contacts_stat_problematic),
                 value = summary.problematicCount.toString(),
                 color = MaterialTheme.colorScheme.error
             )
             StatItem(
-                label = "إجمالي المبيعات",
+                label = stringResource(R.string.contacts_stat_total_sales),
                 value = "${summary.totalRevenue.toInt()} ج.م",
                 color = Color(0xFF2E7D32) // Green
             )

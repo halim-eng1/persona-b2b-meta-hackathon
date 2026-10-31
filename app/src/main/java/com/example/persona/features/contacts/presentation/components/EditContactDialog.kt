@@ -32,7 +32,7 @@ fun EditContactDialog(
         shape = RoundedCornerShape(20.dp),
         title = {
             Text(
-                text = "تعديل بيانات العميل",
+                text = stringResource(R.string.contacts_edit_dialog_title),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
             )
         },
@@ -70,7 +70,7 @@ fun EditContactDialog(
                 OutlinedTextField(
                     value = phoneText,
                     onValueChange = { phoneText = it },
-                    label = { Text("رقم الهاتف") },
+                    label = { Text(stringResource(R.string.contacts_edit_dialog_phone_label)) },
                     placeholder = { Text("01xxxxxxxxx") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -80,7 +80,7 @@ fun EditContactDialog(
                 OutlinedTextField(
                     value = notesText,
                     onValueChange = { notesText = it },
-                    label = { Text("ملاحظات التاجر") },
+                    label = { Text(stringResource(R.string.contacts_edit_dialog_notes_label)) },
                     placeholder = { Text("مثال: يفضل الشحن الصباحي، عميل دائم...") },
                     maxLines = 4,
                     modifier = Modifier.fillMaxWidth()
@@ -98,7 +98,7 @@ fun EditContactDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismissRequest) {
-                Text("إلغاء")
+                Text(stringResource(R.string.common_cancel))
             }
         }
     )

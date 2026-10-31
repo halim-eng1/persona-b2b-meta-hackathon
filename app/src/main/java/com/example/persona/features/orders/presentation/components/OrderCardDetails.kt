@@ -1,5 +1,8 @@
 package com.example.persona.features.orders.presentation.components
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -62,14 +65,14 @@ fun OrderCardDetails(
                     Column {
                         val formattedTotal = EgyptianOrderUtils.formatMoney(codTotal)
                         Text(
-                            text = "المطلوب تحصيله عند الاستلام: $formattedTotal ج.م",
+                            text = stringResource(R.string.orders_card_amount_to_collect, formattedTotal),
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                             color = OrderGreen
                         )
                         if (shippingFee > 0.0) {
                             val formattedShipping = EgyptianOrderUtils.formatMoney(shippingFee)
                             Text(
-                                text = "يشمل مصاريف الشحن: $formattedShipping ج.م",
+                                text = stringResource(R.string.orders_card_shipping_included, formattedShipping),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -93,7 +96,7 @@ fun OrderCardDetails(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "محتويات الشحنة والأصناف",
+                            text = stringResource(R.string.orders_card_items_title),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
                         )
