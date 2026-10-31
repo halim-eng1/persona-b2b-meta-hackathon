@@ -622,6 +622,15 @@
     <string name="contact_tag_debtor">Credit / Debtor</string>
     <string name="contact_tag_problematic">Returns / Problems</string>
     <string name="contact_tag_blocked">Blocked</string>
+    <!-- Chats List Screen -->
+    <string name="chats_screen_title">Chats</string>
+    <string name="chats_search_placeholder">Search by name or message…</string>
+    <string name="chats_search_icon_desc">Search</string>
+    <string name="chats_clear_search_desc">Clear</string>
+    <string name="chats_empty_title">No conversations yet</string>
+    <string name="chats_empty_search_title">No matching conversations</string>
+    <string name="chats_empty_desc">Incoming WhatsApp and Business messages will appear here live</string>
+    <string name="chats_empty_search_desc">Try searching for a different name or message</string>
     <string name="chat_filter_all">All Chats</string>
     <string name="chat_filter_main_app">Main WhatsApp</string>
     <string name="chat_filter_business">WhatsApp Business</string>

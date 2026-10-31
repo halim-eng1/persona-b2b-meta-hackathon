@@ -622,6 +622,15 @@
     <string name="contact_tag_debtor">عميل آجل/مديونية</string>
     <string name="contact_tag_problematic">عميل مرتجعات/مشاكل</string>
     <string name="contact_tag_blocked">محظور</string>
+    <!-- Chats List Screen -->
+    <string name="chats_screen_title">المحادثات</string>
+    <string name="chats_search_placeholder">بحث باسم العميل أو نص الرسالة…</string>
+    <string name="chats_search_icon_desc">بحث</string>
+    <string name="chats_clear_search_desc">مسح</string>
+    <string name="chats_empty_title">لا توجد محادثات حتى الآن</string>
+    <string name="chats_empty_search_title">لا توجد محادثات مطابقة</string>
+    <string name="chats_empty_desc">رسائل واتساب الأساسي وللأعمال الواردة ستظهر هنا مباشرة ومحدثة</string>
+    <string name="chats_empty_search_desc">جرب البحث باسم مختلف أو كلمات أخرى من الرسالة</string>
     <string name="chat_filter_all">كل المحادثات</string>
     <string name="chat_filter_main_app">واتساب الأساسي</string>
     <string name="chat_filter_business">واتساب للأعمال</string>

@@ -68,7 +68,7 @@ fun ChatsListScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Chats",
+                        text = stringResource(R.string.chats_screen_title),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                     )
                 },
@@ -91,14 +91,14 @@ fun ChatsListScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Search by name or message...") },
+                placeholder = { Text(stringResource(R.string.chats_search_placeholder)) },
                 leadingIcon = {
-                    Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
+                    Icon(imageVector = Icons.Default.Search, contentDescription = stringResource(R.string.chats_search_icon_desc))
                 },
                 trailingIcon = {
                     if (state.searchQuery.isNotEmpty()) {
                         IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                            Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear")
+                            Icon(imageVector = Icons.Default.Clear, contentDescription = stringResource(R.string.chats_clear_search_desc))
                         }
                     }
                 },
@@ -124,7 +124,7 @@ fun ChatsListScreen(
                         selected = isSelected,
                         onClick = { viewModel.onFilterSelected(filter) },
                         label = {
-                            Text(text = filter.label)
+                            Text(text = stringResource(filter.labelResId))
                         },
                         leadingIcon = if (filter == ChatFilter.NEEDS_ATTENTION) {
                             {
@@ -162,16 +162,16 @@ fun ChatsListScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = if (state.searchQuery.isNotEmpty()) "No matching conversations" else "No conversations yet",
+                            text = if (state.searchQuery.isNotEmpty()) stringResource(R.string.chats_empty_search_title) else stringResource(R.string.chats_empty_title),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = if (state.searchQuery.isNotEmpty()) {
-                                "Try searching for a different name or message"
+                                stringResource(R.string.chats_empty_search_desc)
                             } else {
-                                "Incoming WhatsApp and Business messages will appear here live"
+                                stringResource(R.string.chats_empty_desc)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
