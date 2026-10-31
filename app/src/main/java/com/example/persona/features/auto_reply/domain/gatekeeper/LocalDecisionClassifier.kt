@@ -68,6 +68,17 @@ class LocalDecisionClassifier @Inject constructor() {
             "tshirt", "tshirts", "t-shirt", "t-shirts", "size", "sizes", 
             "oversize", "oversized", "colors", "color", "colours", "colour"
         )
+        private val STORE_INFO_AND_SOCIAL_KEYWORDS = listOf(
+            // Social Media Platforms & Channels
+            "تيك توك", "تيكتوك", "تيك", "فيسبوك", "فيس بوك", "فيس", "انستجرام", "انستقرام", "انستا",
+            "واتساب", "موقع", "الموقع", "موقعكم", "ويب سايت", "ويبسايت", "لينك", "اللينك", "لينكات",
+            "رابط", "الرابط", "صفحة", "صفحتكم", "حساب", "حسابكم", "أكونت", "اكونت", "رقم", "رقمكم",
+            "خدمة العملاء", "خدمه العملاء", "ارقام", "أرقام", "عنوان", "عنوانكم", "مكانكم", "فرع", "فروع",
+            // English & Social Handles / URLs / Protocols
+            "tiktok", "tik tok", "facebook", "fb", "instagram", "insta", "ig", "website", "site",
+            "link", "url", "http", "https", ".com", ".net", ".org", ".eg", ".shop", "@", "page",
+            "account", "social", "contact", "phone", "number", "tel"
+        )
 
         private sealed class KeywordMatcher {
             abstract fun matches(text: String): Boolean
@@ -147,6 +158,7 @@ class LocalDecisionClassifier @Inject constructor() {
         private val BANTER_MATCHERS = BANTER_KEYWORDS.map { buildMatcher(it) }
         private val ORDER_MATCHERS = ORDER_KEYWORDS.map { buildMatcher(it) }
         private val CATALOG_MATCHERS = CATALOG_KEYWORDS.map { buildMatcher(it) }
+        private val STORE_INFO_MATCHERS = STORE_INFO_AND_SOCIAL_KEYWORDS.map { buildMatcher(it) }
 
         private val CENTROID_GREETING = floatArrayOf(
             0.037092f, 0.051966f, 0.055985f, 0.032466f, -0.037546f, -0.042706f, 0.130584f, 0.042225f,
@@ -374,6 +386,15 @@ class LocalDecisionClassifier @Inject constructor() {
         if (ORDER_MATCHERS.any { it.matches(text) }) orderScore += 0.35f
         if (BANTER_MATCHERS.any { it.matches(text) }) banterScore += 0.25f
         if (CATALOG_MATCHERS.any { it.matches(text) }) catalogScore += 0.30f
+
+        val isStoreInfoOrSocial = STORE_INFO_MATCHERS.any { it.matches(text) } ||
+                text.contains("http://") || text.contains("https://") ||
+                text.contains(".com") || text.contains("@")
+        if (isStoreInfoOrSocial) {
+            catalogScore += 0.55f
+            // Strictly prohibit BANTER for store URLs, social channels, and customer service queries
+            banterScore = (banterScore - 0.50f).coerceAtLeast(0f)
+        }
 
         val scores = listOf(
             InboundIntent.GREETING to greetingScore,

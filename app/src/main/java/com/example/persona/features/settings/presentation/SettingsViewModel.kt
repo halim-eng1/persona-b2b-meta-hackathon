@@ -643,11 +643,13 @@ class SettingsViewModel @Inject constructor(
         val granted = permissionChecker?.isManageStorageGranted() ?: false
         val notif = permissionChecker?.isNotificationListenerEnabled() ?: false
         val battery = permissionChecker?.isBatteryOptimizationIgnored() ?: false
+        val contacts = permissionChecker?.isContactsPermissionGranted() ?: false
         _uiState.update {
             it.copy(
                 isStorageAccessGranted = granted,
                 isNotificationListenerGranted = notif,
-                isBatteryOptimizationIgnored = battery
+                isBatteryOptimizationIgnored = battery,
+                isContactsPermissionGranted = contacts
             )
         }
         viewModelScope.launch {

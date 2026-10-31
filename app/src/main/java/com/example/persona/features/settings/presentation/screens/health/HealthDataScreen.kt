@@ -1,7 +1,10 @@
 package com.example.persona.features.settings.presentation.screens.health
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +22,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -59,12 +63,19 @@ fun HealthDataScreen(
     var showRestoreBackupDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
 
+    val contactsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        actions.refreshHealth()
+    }
+
     val checks = remember(state) {
         listOf(
             state.isNotificationListenerGranted,
             state.isBatteryOptimizationIgnored,
             state.isAutoStartConfirmed,
-            state.isStorageAccessGranted
+            state.isStorageAccessGranted,
+            state.isContactsPermissionGranted
         )
     }
     val passedChecks = checks.count { it }
@@ -123,6 +134,16 @@ fun HealthDataScreen(
                     isOk = state.isStorageAccessGranted,
                     okText = stringResource(R.string.settings_perm_storage_active),
                     missingText = stringResource(R.string.settings_perm_storage_missing)
+                )
+
+                HealthItemRow(
+                    title = stringResource(R.string.settings_perm_contacts_title),
+                    isOk = state.isContactsPermissionGranted,
+                    okText = stringResource(R.string.settings_perm_contacts_active),
+                    missingText = stringResource(R.string.settings_perm_contacts_missing),
+                    onRequestPermission = {
+                        contactsPermissionLauncher.launch(android.Manifest.permission.READ_CONTACTS)
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -258,7 +279,8 @@ private fun HealthItemRow(
     isOk: Boolean,
     okText: String,
     missingText: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRequestPermission: (() -> Unit)? = null
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -290,12 +312,37 @@ private fun HealthItemRow(
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Icon(
-                imageVector = if (isOk) Icons.Default.CheckCircle else Icons.Default.Error,
-                contentDescription = null,
-                tint = if (isOk) PersonaTheme.statusColors.success else MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(20.dp)
-            )
+            if (isOk) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = PersonaTheme.statusColors.success,
+                    modifier = Modifier.size(20.dp)
+                )
+            } else if (onRequestPermission != null) {
+                FilledTonalButton(
+                    onClick = onRequestPermission,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_perm_contacts_grant_btn),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Error,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }

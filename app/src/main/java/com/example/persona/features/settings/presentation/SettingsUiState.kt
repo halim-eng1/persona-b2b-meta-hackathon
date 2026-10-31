@@ -91,6 +91,7 @@ data class SettingsUiState(
     val isNotificationListenerGranted: Boolean = false,
     val isBatteryOptimizationIgnored: Boolean = false,
     val isAutoStartConfirmed: Boolean = false,
+    val isContactsPermissionGranted: Boolean = false,
     val maintenanceMessage: String? = null,
 
     val isLoading: Boolean = true

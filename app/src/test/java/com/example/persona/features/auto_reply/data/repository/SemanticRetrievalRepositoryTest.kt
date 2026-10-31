@@ -120,4 +120,39 @@ class SemanticRetrievalRepositoryTest {
         // Assert: Garbage chunk at 0.25f must NOT pass because floor is enforced (>= 0.36f + dynamic bump)
         assertTrue(candidates.isEmpty())
     }
+
+    @Test
+    fun retrieveCandidates_appliesLexicalBoostForSocialUrlsAndHandles(): Unit = runBlocking {
+        // Arrange: Chunks with low base vector similarity (0.30f)
+        val projections = listOf(
+            ChunkVectorProjection("chunk_tiktok", floatArrayOf(0.30f, 0.0f)),
+            ChunkVectorProjection("chunk_hoodie", floatArrayOf(0.40f, 0.0f))
+        )
+        coEvery { embeddingIndexDao.getAllVectors() } returns projections
+        coEvery { businessKnowledgeDao.getChunkTextsByIds(any()) } returns listOf(
+            ChunkTextProjection(
+                "chunk_tiktok",
+                "حساب التيك توك الرسمي: https://www.tiktok.com/@velo.egypt",
+                "حسابات التواصل الاجتماعي"
+            ),
+            ChunkTextProjection(
+                "chunk_hoodie",
+                "سعر الهودي الأسود 450 جنيه",
+                "المنتجات والأسعار"
+            )
+        )
+
+        // Act: Query asking about tiktok URL
+        val (candidates, bestScore) = repository.retrieveCandidates(
+            queryEmbedding = floatArrayOf(1.0f, 0.0f),
+            minimumSimilarityThreshold = 0.38f,
+            queryText = "tiktok.com/@velo.egypt"
+        )
+
+        // Assert: chunk_tiktok receives lexical boost to >= 0.85f and ranks first
+        assertTrue(candidates.isNotEmpty())
+        assertEquals("chunk_tiktok", candidates[0].chunkId)
+        assertTrue("Lexical score must be >= 0.85f, was ${candidates[0].similarityScore}", candidates[0].similarityScore >= 0.85f)
+        assertTrue("Best score must be >= 0.85f", bestScore >= 0.85f)
+    }
 }

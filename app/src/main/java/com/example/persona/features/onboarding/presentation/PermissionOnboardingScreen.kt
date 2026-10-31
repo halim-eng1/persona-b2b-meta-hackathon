@@ -103,6 +103,13 @@ fun PermissionOnboardingScreen(
         viewModel.refreshPermissions()
     }
 
+    // Contacts runtime permission launcher
+    val contactsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        viewModel.refreshPermissions()
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -279,6 +286,18 @@ fun PermissionOnboardingScreen(
                         }
                     )
                 }
+
+                // ── Step 4: Contacts Access (Phone Resolution & CRM Linking) ──
+                Spacer(modifier = Modifier.height(16.dp))
+                PermissionCard(
+                    title = stringResource(R.string.onboarding_perm_contacts_title),
+                    description = stringResource(R.string.onboarding_perm_contacts_desc),
+                    isGranted = state.isContactsPermissionGranted,
+                    isActiveStep = false,
+                    onGrantClick = {
+                        contactsPermissionLauncher.launch(android.Manifest.permission.READ_CONTACTS)
+                    }
+                )
 
                 // ── Step 4: AutoStart Configuration (Chinese / OEM ROMs) ───────
                 if (state.isAutoStartEnabled != null) {

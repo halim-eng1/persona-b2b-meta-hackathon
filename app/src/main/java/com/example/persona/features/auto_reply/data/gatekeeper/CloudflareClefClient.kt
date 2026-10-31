@@ -58,11 +58,11 @@ class CloudflareClefClient @Inject constructor(
         val INTENT_CRITERIA: Map<String, String> = linkedMapOf(
             "GREETING" to "Hello, peace, welcome, good morning/evening",
             "CLOSING" to "Thanks, goodbye, parting, finishing conversation",
-            "BANTER" to "Jokes, flirting, riddles, dinner banter, teasing (strictly non-order, non-commercial small talk)",
+            "BANTER" to "Jokes, flirting, riddles, dinner banter, teasing (strictly non-order, non-commercial small talk; NEVER for social media, store links, websites, URLs, phone numbers, or account inquiries)",
             "ORDER_STATUS" to "Checking active order status, tracking, courier, delivery progress, or questions about whether an order is cancelled or shipped",
             "ORDER_CANCEL" to "Explicit request to cancel an order, modify an order, or asking if an order was cancelled or shipped (e.g., الغي طلبي, طيب اتلغي ؟؟, كنسل الأوردر, إلغاء, اتلغى)",
             "ORDER_UPDATE" to "Changing address, size, or notes on existing order",
-            "CATALOG_INQUIRY" to "Inquiring about hoodies, t-shirts, prices, sizes, fabric, shipping fees",
+            "CATALOG_INQUIRY" to "Inquiring about store items, hoodies, t-shirts, prices, sizes, fabric, shipping fees, store website, official store links, social media accounts (TikTok, Facebook, Instagram), phone numbers, or containing URLs/handles (e.g. tiktok, facebook, instagram, website, .com, @)",
             "GENUINE_COMPLAINT_HITL" to "Severe anger, damaged item, fraud accusation, demanding human manager"
         )
 
@@ -154,7 +154,7 @@ class CloudflareClefClient @Inject constructor(
                 questions = linkedMapOf(
                     "intent" to ClefQuestion(
                         type = "choice",
-                        instructions = "Classify the Egyptian Arabic customer turn into exactly one intent category.",
+                        instructions = "Classify the Egyptian Arabic customer turn into exactly one intent category. Any message asking about social media, accounts, websites, store links, customer service numbers, or containing URLs/handles (tiktok, facebook, instagram, website, .com, @) must be classified as CATALOG_INQUIRY (NEVER BANTER).",
                         criteria = INTENT_CRITERIA
                     ),
                     "is_urgent" to ClefQuestion(
@@ -239,7 +239,7 @@ class CloudflareClefClient @Inject constructor(
             "GREETING" -> InboundIntent.GREETING
             "CLOSING", "BANTER", "PRESENCE_CHECK" -> InboundIntent.BANTER
             "ORDER_STATUS", "ORDER_UPDATE", "ORDER_CANCEL" -> InboundIntent.ORDER_STATUS
-            "CATALOG_INQUIRY", "ORDER_CREATE", "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
+            "CATALOG_INQUIRY", "STORE_INFO", "ORDER_CREATE", "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
             else -> InboundIntent.CATALOG_INQUIRY
         }
     }

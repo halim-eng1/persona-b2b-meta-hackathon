@@ -809,11 +809,16 @@ class AutoReplyOrchestrator @Inject constructor(
                 "⚡ Gatekeeper resolved via $resolvedTier -> intent=${decision.intent} (conf=${decision.confidence}, latency=${decision.latencyMs}ms)"
             )
 
-            val inboundIntent = if (isImagePresent) InboundIntent.CATALOG_INQUIRY else decision.intent
-            Log.i(TAG, "🎯 Gatekeeper decision: intent=$inboundIntent via $resolvedTier (conf=${decision.confidence}, latency=${decision.latencyMs}ms)")
+            val containsExplicitEntityOrUrl = hasExplicitEntityOrUrl(queryTextForEmbedding)
+            var resolvedIntent = if (isImagePresent || containsExplicitEntityOrUrl) {
+                InboundIntent.CATALOG_INQUIRY
+            } else {
+                decision.intent
+            }
+            Log.i(TAG, "🎯 Gatekeeper decision: intent=$resolvedIntent via $resolvedTier (conf=${decision.confidence}, latency=${decision.latencyMs}ms, forcedRag=$containsExplicitEntityOrUrl)")
 
-            // Only retrieve RAG candidates if intent is CATALOG_INQUIRY
-            if (inboundIntent == InboundIntent.CATALOG_INQUIRY && queryEmbedding != null) {
+            // Only retrieve RAG candidates if intent is CATALOG_INQUIRY or forced via entity/URL match
+            if ((resolvedIntent == InboundIntent.CATALOG_INQUIRY || containsExplicitEntityOrUrl) && queryEmbedding != null) {
                 val (retrievedCandidates, bestScore) = semanticRetrievalRepository.retrieveCandidates(
                     queryEmbedding = queryEmbedding,
                     minimumSimilarityThreshold = ragBaseThreshold,
@@ -822,9 +827,14 @@ class AutoReplyOrchestrator @Inject constructor(
                 )
                 candidates = retrievedCandidates.filter { it.similarityScore >= 0.38f }
                 maxScore = bestScore
+                if (candidates.isNotEmpty()) {
+                    resolvedIntent = InboundIntent.CATALOG_INQUIRY
+                }
             } else {
-                Log.d(TAG, "⚡ Bypassing RAG retrieval for intent $inboundIntent (candidates=0)")
+                Log.d(TAG, "⚡ Bypassing RAG retrieval for intent $resolvedIntent (candidates=0)")
             }
+
+            val inboundIntent = resolvedIntent
 
             val finalCandidates = candidates
 
@@ -1377,6 +1387,25 @@ class AutoReplyOrchestrator @Inject constructor(
 
     internal fun containsMediaIndicators(text: String): Boolean =
         com.example.persona.features.auto_reply.data.repository.NotificationProcessorImpl.containsMediaIndicators(text)
+
+    internal fun hasExplicitEntityOrUrl(text: String): Boolean {
+        if (text.isBlank()) return false
+        val lower = text.lowercase()
+        if (lower.contains("http://") || lower.contains("https://") || lower.contains("www.") ||
+            lower.contains(".com") || lower.contains(".net") || lower.contains(".org") ||
+            lower.contains(".eg") || lower.contains(".shop") || lower.contains("@")
+        ) {
+            return true
+        }
+        val entityKeywords = listOf(
+            "tiktok", "tik tok", "facebook", "fb", "instagram", "insta", "whatsapp",
+            "تيك توك", "تيكتوك", "فيسبوك", "فيس بوك", "انستجرام", "انستقرام", "انستا", "واتساب",
+            "موقع", "الموقع", "موقعكم", "ويب سايت", "ويبسايت", "لينك", "اللينك", "رابط", "الرابط",
+            "صفحة", "صفحتكم", "حساب", "حسابكم", "أكونت", "اكونت", "رقم", "رقمكم", "ارقام", "أرقام",
+            "خدمة العملاء", "خدمه العملاء"
+        )
+        return entityKeywords.any { lower.contains(it) }
+    }
 
     // Delegated helpers for backward compatibility with existing tests
     internal suspend fun handleOrderCreation(

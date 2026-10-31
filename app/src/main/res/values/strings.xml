@@ -788,6 +788,11 @@
     <string name="settings_perm_battery_missing">Not exempted (service may pause when screen is off)</string>
     <string name="settings_perm_autostart_title">Auto-Start on Boot</string>
     <string name="settings_perm_autostart_ok">Confirmed &amp; Active</string>
+    <string name="settings_perm_contacts_title">Contacts Access</string>
+    <string name="settings_perm_contacts_desc">Required to link contact names and phone numbers</string>
+    <string name="settings_perm_contacts_active">Active (resolving customer phone numbers)</string>
+    <string name="settings_perm_contacts_missing">Inactive (tap to grant access)</string>
+    <string name="settings_perm_contacts_grant_btn">Grant Permission</string>
     <string name="settings_routing_media_desc">Enables reading incoming WhatsApp images and voice notes for local AI processing.</string>
     <string name="settings_hours_out_of_hours_desc">When enabled, the assistant sends an out-of-office message instead of handling sales outside working hours.</string>
 
@@ -806,6 +811,8 @@
     <string name="onboarding_perm_battery_desc">Prevents Android from killing the auto-reply background service when the screen is locked or idle.</string>
     <string name="onboarding_perm_post_notif_title">Status Bar Notifications</string>
     <string name="onboarding_perm_post_notif_desc">Required to display the AI engine status and urgent human intervention alerts.</string>
+    <string name="onboarding_perm_contacts_title">Contacts Access</string>
+    <string name="onboarding_perm_contacts_desc">Required to automatically link WhatsApp customer names with their real phone numbers.</string>
     <string name="onboarding_autostart_title">Auto-Start on Boot (%s)</string>
     <string name="onboarding_autostart_desc">(%s) devices restrict background apps after reboot. Tap below to configure auto-start and guarantee uninterrupted replies.</string>
     <string name="onboarding_open_autostart_btn">Open Auto-Start Settings</string>

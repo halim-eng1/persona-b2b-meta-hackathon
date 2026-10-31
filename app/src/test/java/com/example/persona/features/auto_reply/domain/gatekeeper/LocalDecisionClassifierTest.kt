@@ -189,6 +189,27 @@ class LocalDecisionClassifierTest {
     }
 
     @Test
+    fun `social media and store link inquiries are classified as CATALOG_INQUIRY and never BANTER`() {
+        val socialQueries = listOf(
+            "tiktok.com/@velo.egypt",
+            "ليكم حساب تيك توك؟",
+            "عندكم صفحة فيسبوك؟",
+            "لينك الانستجرام ايه؟",
+            "رقم خدمة العملاء",
+            "عايز رابط الموقع بتاعكم",
+            "https://www.tiktok.com/@velo.egypt",
+            "@velo.egypt"
+        )
+
+        for (query in socialQueries) {
+            val result = classifier.classify(query, null)
+            assertEquals("Expected CATALOG_INQUIRY for social/store query: '$query'", InboundIntent.CATALOG_INQUIRY, result.intent)
+            assertNotEquals("Should NEVER be BANTER for '$query'", InboundIntent.BANTER, result.intent)
+            assertTrue("Confidence should be > 0.3f for '$query'", result.confidence >= 0.3f)
+        }
+    }
+
+    @Test
     fun `classify executes in sub-millisecond range`() {
         // Warmup
         classifier.classify("سلام عليكم", null)

@@ -1576,6 +1576,89 @@ class AutoReplyOrchestratorRagTest {
     }
 
     @Test
+    fun `social media and url inquiries force RAG retrieval even if gatekeeper classified as BANTER`() = runBlocking {
+        val replyRepo = mockk<ReplyGenerationRepository>(relaxed = true)
+        val semanticRepo = mockk<SemanticRetrievalRepository>(relaxed = true)
+        val directReplyUseCase = mockk<DirectReplyExecutionUseCase>(relaxed = true)
+        val embeddingEngine = mockk<EmbeddingEngine>(relaxed = true)
+        val prefsRepo = mockk<UserPreferencesRepository>(relaxed = true)
+        val processor = mockk<NotificationProcessorImpl>()
+        val cfClient = mockk<CloudflareClefClient>()
+
+        coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
+        coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0)
+        coEvery { directReplyUseCase.execute(any(), any(), any(), any()) } returns com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResult.Success
+
+        // Gatekeeper returns BANTER for the URL turn
+        coEvery { cfClient.decide(any(), any()) } returns InboundIntent.BANTER
+
+        val inboundQuery = "tiktok.com/@velo.egypt"
+        val processed = ProcessedNotification(
+            contactName = "عميل تيك توك",
+            originalText = inboundQuery,
+            normalizedText = inboundQuery,
+            notificationKey = "key_tiktok_1",
+            postTime = System.currentTimeMillis(),
+            context = mockk(relaxed = true),
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+        coEvery { processor.process(any()) } returns processed
+        coEvery { embeddingEngine.embedForAutoReply(any()) } returns floatArrayOf(0.1f, 0.2f)
+
+        val candidateChunk = RetrievalCandidate(
+            chunkId = "chunk_tiktok",
+            headerContext = "حسابات التواصل الاجتماعي",
+            chunkText = "حساب التيك توك الرسمي: https://www.tiktok.com/@velo.egypt",
+            similarityScore = 0.90f
+        )
+        coEvery { semanticRepo.retrieveCandidates(any(), any(), any(), any()) } returns Pair(listOf(candidateChunk), 0.90f)
+
+        coEvery {
+            replyRepo.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns """{"action":"REPLY","refined_search_keyword":null,"order_action":null,"final_reply_text":"حسابنا الرسمي على تيك توك هو https://www.tiktok.com/@velo.egypt","extracted_order":null}"""
+
+        val orchestrator = createTestOrchestrator(
+            replyGenerationRepository = replyRepo,
+            semanticRetrievalRepository = semanticRepo,
+            directReplyExecutionUseCase = directReplyUseCase,
+            embeddingEngine = embeddingEngine,
+            prefsRepository = prefsRepo,
+            processor = processor,
+            cloudflareClefClient = cfClient
+        )
+
+        val notification = WhatsAppNotification(
+            title = "عميل تيك توك",
+            text = inboundQuery,
+            postTime = System.currentTimeMillis(),
+            notificationKey = "key_tiktok_1",
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+
+        orchestrator.processNotificationSequentially(notification)
+
+        // RAG retrieval MUST be called despite Gatekeeper returning BANTER
+        coVerify(atLeast = 1) {
+            semanticRepo.retrieveCandidates(any(), any(), any(), any())
+        }
+        // InboundIntent passed to reply generation MUST be CATALOG_INQUIRY so knowledge is included
+        coVerify {
+            replyRepo.generateReply(
+                notification = any(),
+                candidates = match { it.isNotEmpty() && it.first().chunkId == "chunk_tiktok" },
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = any(),
+                lastOrder = any(),
+                orderStatusCounts = any(),
+                inboundIntent = InboundIntent.CATALOG_INQUIRY
+            )
+        }
+    }
+
+    @Test
     fun `order_action normalization maps variations to canonical actions`() {
         assertEquals("CANCEL", OrderIngestionManager.normalizeOrderAction("CANCEL_ORDER"))
         assertEquals("CANCEL", OrderIngestionManager.normalizeOrderAction("CANCEL"))

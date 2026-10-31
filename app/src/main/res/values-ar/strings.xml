@@ -788,6 +788,11 @@
     <string name="settings_perm_battery_missing">غير مستثناة (قد يتوقف التطبيق بعد قفل الشاشة)</string>
     <string name="settings_perm_autostart_title">التشغيل التلقائي مع فتح الهاتف</string>
     <string name="settings_perm_autostart_ok">مؤكد ومفعل</string>
+    <string name="settings_perm_contacts_title">الوصول لجهات الاتصال</string>
+    <string name="settings_perm_contacts_desc">مطلوب لربط أرقام الهواتف وأسماء العملاء المسجلين</string>
+    <string name="settings_perm_contacts_active">مفعل (يتم ربط أرقام العملاء تلقائياً)</string>
+    <string name="settings_perm_contacts_missing">معطل (انقر لمنح الإذن)</string>
+    <string name="settings_perm_contacts_grant_btn">منح الإذن</string>
     <string name="settings_routing_media_desc">يتيح قراءة الصور والرسائل الصوتية الواردة ومعالجتها بنماذج الذكاء الاصطناعي محلياً.</string>
     <string name="settings_hours_out_of_hours_desc">عند التفعيل، سيرسل المساعد رسالة خارج أوقات العمل بدلاً من محاولة البيع في غير أوقات الدوام.</string>
 
@@ -806,6 +811,8 @@
     <string name="onboarding_perm_battery_desc">يمنع نظام أندرويد من إيقاف أو قتل خدمة الرد الآلي في الخلفية عندما يكون الهاتف في وضع الاستعداد أو الشاشة مغلقة.</string>
     <string name="onboarding_perm_post_notif_title">إشعارات شريط الحالة</string>
     <string name="onboarding_perm_post_notif_desc">مطلوبة لعرض حالة تشغيل محرك الذكاء الاصطناعي وتنبيهات التدخل البشري العاجلة.</string>
+    <string name="onboarding_perm_contacts_title">الوصول لجهات الاتصال</string>
+    <string name="onboarding_perm_contacts_desc">مطلوب لربط أسماء العملاء في واتساب بأرقام هواتفهم المسجلة تلقائياً دون تشتت المحادثات.</string>
     <string name="onboarding_autostart_title">التشغيل التلقائي مع فتح الهاتف (%s)</string>
     <string name="onboarding_autostart_desc">تقوم واجهات أجهزة (%s) بتقييد التطبيقات بعد إعادة تشغيل الهاتف. انقر بالأسفل لفتح إعدادات بدء التشغيل التلقائي وضمان استمرار عمل الردود.</string>
     <string name="onboarding_open_autostart_btn">فتح إعدادات التشغيل التلقائي</string>

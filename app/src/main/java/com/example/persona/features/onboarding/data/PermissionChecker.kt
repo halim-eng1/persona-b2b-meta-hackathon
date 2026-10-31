@@ -96,13 +96,19 @@ class PermissionChecker @Inject constructor(
         }
     }
 
+    fun isContactsPermissionGranted(context: Context = this.context): Boolean =
+        ContextCompat.checkSelfPermission(
+            context, Manifest.permission.READ_CONTACTS
+        ) == PackageManager.PERMISSION_GRANTED
+
     fun getFullState(): PermissionState = PermissionState(
         isNotificationListenerGranted = isNotificationListenerEnabled(),
         isBatteryOptimizationIgnored = isBatteryOptimizationIgnored(),
         isPostNotificationsGranted = isPostNotificationsGranted(),
         isPostNotificationsRequired = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU,
         isAutoStartEnabled = detectAutoStartCapability(),
-        isManageStorageGranted = isManageStorageGranted()
+        isManageStorageGranted = isManageStorageGranted(),
+        isContactsPermissionGranted = isContactsPermissionGranted()
     )
 
     private fun detectAutoStartCapability(): Boolean? {

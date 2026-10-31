@@ -487,10 +487,13 @@ class KnowledgeManagementViewModel @Inject constructor(
             }
         }
 
-        // 4. RAG Retrieval if intent is CATALOG_INQUIRY or RAG needed
+        // 4. RAG Retrieval if intent is CATALOG_INQUIRY or forced via entity/URL keywords
+        val containsEntityOrUrl = hasExplicitEntityOrUrl(effectiveText)
+        val effectiveIntent = if (isImagePresent || containsEntityOrUrl) InboundIntent.CATALOG_INQUIRY else decision.intent
+
         var candidates: List<RetrievalCandidate> = emptyList()
         var bestScore = 0f
-        val needsRag = decision.intent == InboundIntent.CATALOG_INQUIRY || isImagePresent
+        val needsRag = effectiveIntent == InboundIntent.CATALOG_INQUIRY || isImagePresent || containsEntityOrUrl
         if (needsRag) {
             val engine = embeddingEngine
             val repo = semanticRetrievalRepository
@@ -509,7 +512,8 @@ class KnowledgeManagementViewModel @Inject constructor(
             } else {
                 // In-memory matching against knowledge entries
                 val matches = _uiState.value.entries.filter {
-                    it.chunkText.contains(effectiveText, ignoreCase = true)
+                    it.chunkText.contains(effectiveText, ignoreCase = true) ||
+                    (containsEntityOrUrl && (it.chunkText.contains("http") || it.chunkText.contains("tiktok") || it.chunkText.contains("تيك توك") || it.chunkText.contains("@")))
                 }
                 if (matches.isNotEmpty()) {
                     candidates = matches.take(5).map {
@@ -618,7 +622,7 @@ class KnowledgeManagementViewModel @Inject constructor(
                 maxTokens = if (isImagePresent) 500 else 600,
                 lastOrder = null,
                 orderStatusCounts = emptyList(),
-                inboundIntent = decision.intent
+                inboundIntent = if (candidates.isNotEmpty() || containsEntityOrUrl) InboundIntent.CATALOG_INQUIRY else decision.intent
             )
         }.getOrNull()
         llmLatencyMs = System.currentTimeMillis() - llmStartTime
@@ -888,6 +892,24 @@ class KnowledgeManagementViewModel @Inject constructor(
                 "OFFER" -> list.filter { it.sourceType == "TEMPORARY_OFFER" }
                 else -> list
             }
+        }
+        fun hasExplicitEntityOrUrl(text: String): Boolean {
+            if (text.isBlank()) return false
+            val lower = text.lowercase()
+            if (lower.contains("http://") || lower.contains("https://") || lower.contains("www.") ||
+                lower.contains(".com") || lower.contains(".net") || lower.contains(".org") ||
+                lower.contains(".eg") || lower.contains(".shop") || lower.contains("@")
+            ) {
+                return true
+            }
+            val entityKeywords = listOf(
+                "tiktok", "tik tok", "facebook", "fb", "instagram", "insta", "whatsapp",
+                "تيك توك", "تيكتوك", "فيسبوك", "فيس بوك", "انستجرام", "انستقرام", "انستا", "واتساب",
+                "موقع", "الموقع", "موقعكم", "ويب سايت", "ويبسايت", "لينك", "اللينك", "رابط", "الرابط",
+                "صفحة", "صفحتكم", "حساب", "حسابكم", "أكونت", "اكونت", "رقم", "رقمكم", "ارقام", "أرقام",
+                "خدمة العملاء", "خدمه العملاء"
+            )
+            return entityKeywords.any { lower.contains(it) }
         }
     }
 }

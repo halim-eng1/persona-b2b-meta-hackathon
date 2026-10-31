@@ -62,11 +62,12 @@ class SemanticRetrievalRepository @Inject constructor(
             else           -> baseThreshold
         }.coerceAtLeast(if (minimumSimilarityThreshold < 0f) 0.36f else 0.0f)
 
-        // ── Step 3: In-memory dot-product sweep (top 50) ───────────────────────
+        // ── Step 3: In-memory dot-product sweep (top 50 or 100 for lexical sweep) ─────
+        val sweepSize = if (queryText.isNotBlank()) 100 else 50
         val topProjections = allVectorProjections.asSequence()
             .map { it to dotProduct(queryEmbedding, it.vectorBlob) }
             .sortedByDescending { it.second }
-            .take(50)
+            .take(sweepSize)
             .toList()
 
         if (topProjections.isEmpty()) {
@@ -79,11 +80,20 @@ class SemanticRetrievalRepository @Inject constructor(
         val chunkDetails = businessKnowledgeDao.getChunkTextsByIds(chunkIds)
             .associateBy { it.chunkId }
 
-        // ── Step 5: Apply repetition penalty & map to domain model ─────────────
+        // ── Step 5: Apply lexical boost, repetition penalty & map to domain model ──
         val candidates = topProjections.mapNotNull { (projection, similarity) ->
             val details = chunkDetails[projection.chunkId] ?: return@mapNotNull null
 
             var finalScore = similarity
+
+            // Lexical boost: exact token, URL, handle, or social platform matches score >= 0.85f
+            if (hasLexicalMatch(queryText, details.chunkText)) {
+                val boosted = maxOf(similarity + 0.50f, 0.85f).coerceAtMost(1.0f)
+                Log.d("SemanticRetrieval",
+                    "⚡ Lexical boost applied to chunk ${projection.chunkId}: " +
+                        "${"%.4f".format(similarity)} → ${"%.4f".format(boosted)}")
+                finalScore = boosted
+            }
 
             // Repetition Penalty: demote a chunk if its text was recently sent
             val textHash = details.chunkText.hashCode()
@@ -159,5 +169,74 @@ class SemanticRetrievalRepository @Inject constructor(
         var sum = 0f
         for (i in a.indices) sum += a[i] * b[i]
         return sum
+    }
+
+    /**
+     * Checks if [chunkText] contains exact lexical matches for URLs, handles,
+     * social channels, or distinctive entity keywords present in [queryText].
+     */
+    internal fun hasLexicalMatch(queryText: String, chunkText: String): Boolean {
+        if (queryText.isBlank() || chunkText.isBlank()) return false
+        val cleanQuery = queryText.trim().lowercase()
+        val cleanChunk = chunkText.trim().lowercase()
+
+        // Direct whole-query substring check
+        if (cleanQuery.length >= 4 && cleanChunk.contains(cleanQuery)) {
+            return true
+        }
+
+        // URL / domain extraction
+        val urlRegex = Regex("""(?:https?://)?(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?)""", RegexOption.IGNORE_CASE)
+        for (match in urlRegex.findAll(queryText)) {
+            val fullUrl = match.value.lowercase()
+            val hostAndPath = match.groupValues.getOrNull(1)?.lowercase().orEmpty()
+            if (cleanChunk.contains(fullUrl) || (hostAndPath.length >= 4 && cleanChunk.contains(hostAndPath))) {
+                return true
+            }
+        }
+
+        // Social handle extraction (@username)
+        val handleRegex = Regex("""@[a-zA-Z0-9._]+""")
+        for (match in handleRegex.findAll(queryText)) {
+            val handle = match.value.lowercase()
+            val handleName = handle.removePrefix("@")
+            if (cleanChunk.contains(handle) || (handleName.length >= 3 && cleanChunk.contains(handleName))) {
+                return true
+            }
+        }
+
+        // Distinct platform keywords mapping
+        val platformKeywords = listOf(
+            listOf("tiktok", "تيك توك", "تيكتوك", "تيك"),
+            listOf("facebook", "فيسبوك", "فيس بوك", "فيس"),
+            listOf("instagram", "انستجرام", "انستقرام", "انستا"),
+            listOf("whatsapp", "واتساب", "الواتس"),
+            listOf("website", "موقع", "الموقع", "ويب سايت", "ويبسايت"),
+            listOf("link", "لينك", "اللينك", "رابط", "الرابط"),
+            listOf("phone", "خدمة العملاء", "خدمه العملاء", "رقمكم", "ارقام", "أرقام", "هاتف")
+        )
+
+        for (synonyms in platformKeywords) {
+            val queryMatched = synonyms.any { cleanQuery.contains(it) }
+            if (queryMatched) {
+                val chunkMatched = synonyms.any { cleanChunk.contains(it) } ||
+                        (cleanChunk.contains("http") && (cleanQuery.contains("موقع") || cleanQuery.contains("لينك"))) ||
+                        (cleanChunk.contains(".com") && (cleanQuery.contains("موقع") || cleanQuery.contains("لينك")))
+                if (chunkMatched) return true
+            }
+        }
+
+        // Distinct alphanumeric terms (length >= 5, e.g. "velo.egypt")
+        val words = cleanQuery.split(Regex("""[\s,،؛?؟!]+"""))
+            .map { it.trim().removePrefix("@").removePrefix("https://").removePrefix("http://") }
+            .filter { it.length >= 5 }
+
+        for (word in words) {
+            if (cleanChunk.contains(word)) {
+                return true
+            }
+        }
+
+        return false
     }
 }

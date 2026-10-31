@@ -64,8 +64,8 @@ class LiquidDecisionClient @Inject constructor(
             "GREETING" to "Hello, welcome, peace, good morning/evening",
             "CLOSING" to "Thanks, goodbye, parting, finishing conversation",
             "PRESENCE_CHECK" to "Checking if anyone is there/online (e.g. ف حد هنا, موجودين, الو)",
-            "BANTER" to "Jokes, flirting, riddles, dinner banter, teasing (strictly non-order, non-commercial small talk)",
-            "CATALOG_INQUIRY" to "Inquiring about hoodies, t-shirts, prices, sizes, fabric, shipping fees",
+            "BANTER" to "Jokes, flirting, riddles, dinner banter, teasing (strictly non-order, non-commercial small talk; NEVER for social media, store links, websites, URLs, phone numbers, or account inquiries)",
+            "CATALOG_INQUIRY" to "Inquiring about store items, hoodies, t-shirts, prices, sizes, fabric, shipping fees, store website, official store links, social media accounts (TikTok, Facebook, Instagram), phone numbers, or containing URLs/handles (e.g. tiktok, facebook, instagram, website, .com, @)",
             "ORDER_CREATE" to "Submitting order with address/specs",
             "ORDER_UPDATE" to "Changing address, size, or notes on existing order",
             "ORDER_STATUS" to "Checking active order status, tracking, courier, delivery progress, or questions about whether an order is cancelled or shipped",
@@ -151,7 +151,7 @@ class LiquidDecisionClient @Inject constructor(
                 questions = linkedMapOf(
                     "intent" to SystemOneQuestion(
                         type = "choice",
-                        instructions = "Classify the Egyptian Arabic or Franco-Arab customer message into exactly one category.",
+                        instructions = "Classify the Egyptian Arabic or Franco-Arab customer message into exactly one category. Any message asking about social media, accounts, websites, store links, customer service numbers, or containing URLs/handles (tiktok, facebook, instagram, website, .com, @) must be classified as CATALOG_INQUIRY (NEVER BANTER).",
                         criteria = CATEGORY_CRITERIA
                     ),
                     "is_urgent_complaint" to SystemOneQuestion(
@@ -232,7 +232,7 @@ class LiquidDecisionClient @Inject constructor(
             "GREETING" -> InboundIntent.GREETING
             "CLOSING", "PRESENCE_CHECK", "BANTER" -> InboundIntent.BANTER
             "ORDER_STATUS", "ORDER_UPDATE", "ORDER_CANCEL" -> InboundIntent.ORDER_STATUS
-            "CATALOG_INQUIRY", "ORDER_CREATE", "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
+            "CATALOG_INQUIRY", "STORE_INFO", "ORDER_CREATE", "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
             else -> InboundIntent.CATALOG_INQUIRY
         }
     }

@@ -10,7 +10,8 @@ data class PermissionState(
     val isPostNotificationsGranted: Boolean = false,
     val isPostNotificationsRequired: Boolean = false, // Injected by caller/platform checker (e.g. true on API 33+)
     val isAutoStartEnabled: Boolean? = null,          // null = not applicable, false = applicable but not confirmed, true = confirmed
-    val isManageStorageGranted: Boolean = false
+    val isManageStorageGranted: Boolean = false,
+    val isContactsPermissionGranted: Boolean = false
 ) {
     /**
      * Pure domain validation of critical permissions required to run the auto-reply engine.

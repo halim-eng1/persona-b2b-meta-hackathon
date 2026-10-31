@@ -33,6 +33,7 @@ fun buildHubCards(s: SettingsUiState, r: Resources): List<HubCard> {
         s.isBatteryOptimizationIgnored,
         s.isAutoStartConfirmed,
         s.isStorageAccessGranted,
+        s.isContactsPermissionGranted
     )
     val listening = listOf(s.listenMainApp, s.listenBusinessApp, s.listenCloneApp).count { it }
 
