@@ -236,7 +236,7 @@ fun ProviderKeyGuideDialog(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "دليل استخراج المفتاح",
+                            text = stringResource(R.string.guide_dialog_title),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
@@ -378,7 +378,7 @@ fun ProviderKeyGuideDialog(
                         val clip = ClipData.newPlainText("AI Guide Prompt", aiPrompt)
                         clipboard.setPrimaryClip(clip)
 
-                        val notificationText = "انسخ هذا النص وأرسله لأي نموذج ذكاء اصطناعي (مثل ChatGPT أو Gemini): $aiPrompt"
+                        val notificationText = context.getString(R.string.guide_notification_copy_text) + "\n" + aiPrompt
                         Toast.makeText(context, notificationText, Toast.LENGTH_LONG).show()
                     },
                     modifier = Modifier.fillMaxWidth(),

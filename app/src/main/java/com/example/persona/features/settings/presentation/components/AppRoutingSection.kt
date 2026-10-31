@@ -1,5 +1,8 @@
 package com.example.persona.features.settings.presentation.components
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,24 +40,24 @@ fun AppRoutingSection(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // ── WhatsApp App Routing ──────────────────────────────────────────────
         PreferenceSection(
-            title = "توجيه تطبيقات واتساب",
-            subtitle = "حدد أي من تطبيقات واتساب المثبتة على هاتفك يجب على Persona مراقبتها والرد عليها."
+            title = stringResource(R.string.settings_routing_title),
+            subtitle = stringResource(R.string.settings_routing_subtitle)
         ) {
             PreferenceSwitchRow(
-                title = "تطبيق واتساب الأساسي",
-                subtitle = "com.whatsapp (النسخة العادية)",
+                title = stringResource(R.string.settings_routing_main_app_title),
+                subtitle = stringResource(R.string.settings_routing_main_app_desc),
                 checked = state.listenMainApp,
                 onCheckedChange = onListenMainAppChange
             )
             PreferenceSwitchRow(
-                title = "واتساب للأعمال",
-                subtitle = "com.whatsapp.w4b (نسخة الأعمال التجارية)",
+                title = stringResource(R.string.settings_routing_w4b_title),
+                subtitle = stringResource(R.string.settings_routing_w4b_desc),
                 checked = state.listenBusinessApp,
                 onCheckedChange = onListenBusinessAppChange
             )
             PreferenceSwitchRow(
-                title = "التطبيق المستنسخ / الشريحة الثانية",
-                subtitle = "مراقبة النسخة المستنسخة في واجهات شاومي وسامسونج وغيرها",
+                title = stringResource(R.string.settings_routing_cloned_title),
+                subtitle = stringResource(R.string.settings_routing_cloned_desc),
                 checked = state.listenCloneApp,
                 onCheckedChange = onListenCloneAppChange
             )
@@ -62,7 +65,7 @@ fun AppRoutingSection(
 
         // ── WhatsApp Media & Voice Notes Access ────────────────────────────────
         PreferenceSection(
-            title = "الوصول لوسائط ورسائل واتساب الصوتية",
+            title = stringResource(R.string.settings_routing_storage_title),
             subtitle = "يتيح قراءة الصور والرسائل الصوتية الواردة ومعالجتها بنماذج الذكاء الاصطناعي محلياً."
         ) {
             Row(
@@ -72,14 +75,14 @@ fun AppRoutingSection(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "صلاحية الوصول لكافة الملفات",
+                        text = stringResource(R.string.settings_routing_all_files_perm),
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
                         text = if (state.isStorageAccessGranted)
-                            "مفعل ✓ - يمكن قراءة صور ورسائل الواتساب الصوتية وتحويل الصوت لنص"
+                            stringResource(R.string.settings_routing_storage_active_desc)
                         else
-                            "غير مفعل - يلزم منح الإذن لقراءة وسائط الواتساب والرسائل الصوتية",
+                            stringResource(R.string.settings_routing_storage_inactive_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (state.isStorageAccessGranted)
                             MaterialTheme.colorScheme.primary
@@ -98,7 +101,7 @@ fun AppRoutingSection(
                     )
                 ) {
                     Text(
-                        text = if (state.isStorageAccessGranted) "مفعل ✓" else "منح الإذن",
+                        text = if (state.isStorageAccessGranted) stringResource(R.string.settings_routing_perm_granted_btn) else stringResource(R.string.settings_routing_grant_perm_btn),
                         color = if (state.isStorageAccessGranted)
                             MaterialTheme.colorScheme.onSecondaryContainer
                         else
@@ -110,12 +113,12 @@ fun AppRoutingSection(
 
         // ── Human Takeover & Safety (HITL) ────────────────────────────────────
         PreferenceSection(
-            title = "التدخل البشري وأمان المحادثة",
-            subtitle = "التحكم في آلية إيقاف الروبوت فور طلب العميل التحدث مع شخص بشري."
+            title = stringResource(R.string.settings_routing_hitl_section_title),
+            subtitle = stringResource(R.string.settings_routing_hitl_section_desc)
         ) {
             PreferenceSwitchRow(
-                title = "إيقاف الرد الآلي تلقائياً عند طلب ممثل بشري",
-                subtitle = "تجميد ردود الروبوت للعميل مؤقتاً لتجنب مقاطعة التاجر أو خدمة العملاء.",
+                title = stringResource(R.string.settings_routing_pause_on_human_title),
+                subtitle = stringResource(R.string.settings_routing_pause_on_human_desc),
                 checked = state.isAutoPauseOnHitl,
                 onCheckedChange = onAutoPauseOnHitlChange
             )
@@ -125,7 +128,7 @@ fun AppRoutingSection(
             OutlinedTextField(
                 value = state.hitlHoldingMessage,
                 onValueChange = onHitlHoldingMessageChange,
-                label = { Text("رسالة الانتظار عند التحويل البشري") },
+                label = { Text(stringResource(R.string.settings_routing_hitl_message_label)) },
                 placeholder = { Text(UserPreferencesRepository.DEFAULT_HITL_HOLDING_MESSAGE) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2
@@ -134,13 +137,13 @@ fun AppRoutingSection(
 
         // ── System Fallback Messages ──────────────────────────────────────────
         PreferenceSection(
-            title = "رسائل الطوارئ والاحتياط",
-            subtitle = "الرسائل التي يرسلها النظام عند تعذر معالجة الوسائط أو عدم توفر رد ذكاء اصطناعي."
+            title = stringResource(R.string.settings_routing_fallback_section_title),
+            subtitle = stringResource(R.string.settings_routing_fallback_section_desc)
         ) {
             OutlinedTextField(
                 value = state.mediaFallbackMessage,
                 onValueChange = onMediaFallbackMessageChange,
-                label = { Text("رسالة تعذر معالجة الوسائط") },
+                label = { Text(stringResource(R.string.settings_routing_media_fallback_label)) },
                 placeholder = { Text(UserPreferencesRepository.DEFAULT_MEDIA_FALLBACK_MESSAGE) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2
@@ -151,7 +154,7 @@ fun AppRoutingSection(
             OutlinedTextField(
                 value = state.blankReplyFallbackTemplate,
                 onValueChange = onBlankReplyFallbackChange,
-                label = { Text("قالب الرد عند عدم التأكد (%s = اسم المتجر)") },
+                label = { Text(stringResource(R.string.settings_routing_blank_reply_label)) },
                 placeholder = { Text(UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2

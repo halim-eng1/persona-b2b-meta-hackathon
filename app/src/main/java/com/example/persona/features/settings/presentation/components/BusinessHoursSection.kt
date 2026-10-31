@@ -1,5 +1,8 @@
 package com.example.persona.features.settings.presentation.components
 
+import com.example.persona.R
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -36,13 +39,13 @@ import androidx.compose.ui.unit.dp
 import com.example.persona.features.settings.presentation.SettingsUiState
 
 private val ALL_DAYS = listOf(
-    "SATURDAY" to "السبت",
-    "SUNDAY" to "الأحد",
-    "MONDAY" to "الإثنين",
-    "TUESDAY" to "الثلاثاء",
-    "WEDNESDAY" to "الأربعاء",
-    "THURSDAY" to "الخميس",
-    "FRIDAY" to "الجمعة"
+    "SATURDAY" to R.string.settings_hours_sat,
+    "SUNDAY" to R.string.settings_hours_sun,
+    "MONDAY" to R.string.settings_hours_mon,
+    "TUESDAY" to R.string.settings_hours_tue,
+    "WEDNESDAY" to R.string.settings_hours_wed,
+    "THURSDAY" to R.string.settings_hours_thu,
+    "FRIDAY" to R.string.settings_hours_fri
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -66,11 +69,11 @@ fun BusinessHoursSection(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // ── Business Hours Schedule ───────────────────────────────────────────
         PreferenceSection(
-            title = "مواعيد العمل والجدول الزمني",
-            subtitle = "حدد أوقات دوام المتجر ليقوم الروبوت بالرد برسالة مخصصة خارج ساعات العمل."
+            title = stringResource(R.string.settings_hours_title),
+            subtitle = stringResource(R.string.settings_hours_desc)
         ) {
             PreferenceSwitchRow(
-                title = "تفعيل جدول مواعيد العمل",
+                title = stringResource(R.string.settings_hours_enable_title),
                 subtitle = "عند التفعيل، سيرسل الروبوت رسالة خارج أوقات العمل بدلاً من محاولة البيع في غير أوقات الدوام.",
                 checked = schedule.isEnabled,
                 onCheckedChange = onBusinessHoursEnabledChange
@@ -79,7 +82,7 @@ fun BusinessHoursSection(
             if (schedule.isEnabled) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "أيام العمل الرسمية:",
+                    text = stringResource(R.string.settings_hours_official_days),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -89,7 +92,7 @@ fun BusinessHoursSection(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    ALL_DAYS.forEach { (code, arabicName) ->
+                    ALL_DAYS.forEach { (code, nameRes) ->
                         val isSelected = schedule.workingDays.contains(code)
                         FilterChip(
                             selected = isSelected,
@@ -101,7 +104,7 @@ fun BusinessHoursSection(
                                 }
                                 onWorkingDaysChange(updated)
                             },
-                            label = { Text(arabicName) }
+                            label = { Text(stringResource(nameRes)) }
                         )
                     }
                 }
@@ -118,7 +121,7 @@ fun BusinessHoursSection(
                             startTimeInput = it
                             onWorkingHoursChange(it, endTimeInput)
                         },
-                        label = { Text("بداية العمل (مثلاً 10:00)") },
+                        label = { Text(stringResource(R.string.settings_hours_start_label)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
@@ -128,7 +131,7 @@ fun BusinessHoursSection(
                             endTimeInput = it
                             onWorkingHoursChange(startTimeInput, it)
                         },
-                        label = { Text("نهاية العمل (مثلاً 23:00)") },
+                        label = { Text(stringResource(R.string.settings_hours_end_label)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
@@ -139,8 +142,8 @@ fun BusinessHoursSection(
                 OutlinedTextField(
                     value = schedule.outOfHoursMessage,
                     onValueChange = onOutOfHoursMessageChange,
-                    label = { Text("رسالة الرد خارج أوقات العمل") },
-                    placeholder = { Text("أهلاً بك في متجرنا! مواعيد العمل الرسمية من 10:00 ص إلى 11:00 م...") },
+                    label = { Text(stringResource(R.string.settings_hours_off_message_label)) },
+                    placeholder = { Text(stringResource(R.string.settings_hours_off_message_placeholder)) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2
                 )
@@ -149,12 +152,12 @@ fun BusinessHoursSection(
 
         // ── Privacy & Blacklist ───────────────────────────────────────────────
         PreferenceSection(
-            title = "الخصوصية وقائمة الحظر",
-            subtitle = "منع الروبوت من التفاعل مع مجموعات واتساب أو أرقام معينة (مثل الأهل أو الموردين)."
+            title = stringResource(R.string.settings_hours_privacy_title),
+            subtitle = stringResource(R.string.settings_hours_privacy_desc)
         ) {
             PreferenceSwitchRow(
-                title = "تجاهل مجموعات واتساب",
-                subtitle = "عدم الرد إطلاقاً داخل المحادثات الجماعية لحماية الخصوصية وتوفير الرصيد.",
+                title = stringResource(R.string.settings_hours_ignore_groups_title),
+                subtitle = stringResource(R.string.settings_hours_ignore_groups_desc),
                 checked = state.ignoreWhatsAppGroups,
                 onCheckedChange = onIgnoreGroupsChange
             )
@@ -162,14 +165,14 @@ fun BusinessHoursSection(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "الأرقام المستثناة من الرد التلقائي:",
+                text = stringResource(R.string.settings_hours_exempt_numbers),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold
             )
 
             if (state.blacklistedNumbers.isEmpty()) {
                 Text(
-                    text = "لا توجد أرقام محظورة حالياً. سيرد الروبوت على جميع المحادثات الفردية.",
+                    text = stringResource(R.string.settings_hours_no_blocked_numbers),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -222,8 +225,8 @@ fun BusinessHoursSection(
                 OutlinedTextField(
                     value = newNumberInput,
                     onValueChange = { newNumberInput = it },
-                    label = { Text("إضافة رقم هاتف للحظر") },
-                    placeholder = { Text("مثال: 01012345678 أو 201012345678") },
+                    label = { Text(stringResource(R.string.settings_hours_add_blocked_label)) },
+                    placeholder = { Text(stringResource(R.string.settings_hours_add_blocked_placeholder)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
@@ -239,7 +242,7 @@ fun BusinessHoursSection(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Add")
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("حظر")
+                    Text(stringResource(R.string.settings_hours_block_btn))
                 }
             }
         }

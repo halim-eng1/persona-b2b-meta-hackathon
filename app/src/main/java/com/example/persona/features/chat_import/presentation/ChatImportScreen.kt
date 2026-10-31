@@ -125,13 +125,13 @@ fun ChatImportScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("بناء واستيراد قاعدة المعرفة", fontWeight = FontWeight.SemiBold) },
+                title = { Text(stringResource(R.string.import_screen_title), fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateBack,
                         modifier = Modifier.size(48.dp)
                     ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "رجوع")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.import_screen_nav_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -229,9 +229,9 @@ fun ChatImportScreen(
                     OutlinedButton(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(BUSINESS_KNOWLEDGE_PROMPT))
-                            Toast.makeText(context, "تم نسخ برومبت الأنشطة التجارية!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.import_screen_copied_business_toast), Toast.LENGTH_SHORT).show()
                             coroutineScope.launch {
-                                snackbarHostState.showSnackbar("تم نسخ برومبت الأنشطة التجارية! الصقه في ChatGPT أو Claude")
+                                snackbarHostState.showSnackbar(context.getString(R.string.import_screen_copied_business_snackbar))
                             }
                         },
                         shape = RoundedCornerShape(12.dp),
@@ -245,7 +245,7 @@ fun ChatImportScreen(
                             modifier = Modifier.padding(end = 8.dp)
                         )
                         Text(
-                            text = "📋 نسخ برومبت الأنشطة التجارية والمتاجر",
+                            text = stringResource(R.string.import_screen_copy_business_btn),
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -254,9 +254,9 @@ fun ChatImportScreen(
                     OutlinedButton(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(PERSONAL_KNOWLEDGE_PROMPT))
-                            Toast.makeText(context, "تم نسخ برومبت المساعد الشخصي!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.import_screen_copied_personal_toast), Toast.LENGTH_SHORT).show()
                             coroutineScope.launch {
-                                snackbarHostState.showSnackbar("تم نسخ برومبت المساعد الشخصي! الصقه في ChatGPT أو Claude")
+                                snackbarHostState.showSnackbar(context.getString(R.string.import_screen_copied_personal_snackbar))
                             }
                         },
                         shape = RoundedCornerShape(12.dp),
@@ -270,7 +270,7 @@ fun ChatImportScreen(
                             modifier = Modifier.padding(end = 8.dp)
                         )
                         Text(
-                            text = "👤 نسخ برومبت المساعد الشخصي والأفراد",
+                            text = stringResource(R.string.import_screen_copy_personal_btn),
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -318,7 +318,7 @@ fun ChatImportScreen(
                             .heightIn(min = 160.dp, max = 260.dp),
                         placeholder = {
                             Text(
-                                text = "الصق نص المعرفة هنا مباشرة بعد نسخه من ChatGPT أو قوالب الماركداون...",
+                                text = stringResource(R.string.import_screen_paste_placeholder),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         },
@@ -395,14 +395,14 @@ fun ChatImportScreen(
                                 strokeWidth = 2.dp
                             )
                             Spacer(modifier = Modifier.width(10.dp))
-                            Text("جاري الفهرسة وتوليد التضمينات...")
+                            Text(stringResource(R.string.import_screen_indexing_indicator))
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Save,
                                 contentDescription = null,
                                 modifier = Modifier.padding(end = 8.dp)
                             )
-                            Text("💾 حفظ وفهرسة المعرفة الآن", fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.import_screen_save_index_btn), fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -420,7 +420,7 @@ fun ChatImportScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "📁 أو ارفع ملف من جهازك",
+                        text = stringResource(R.string.import_screen_upload_section_title),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -436,10 +436,10 @@ fun ChatImportScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "اختيار ملف",
+                            contentDescription = stringResource(R.string.import_screen_choose_file_desc),
                             modifier = Modifier.padding(end = 8.dp)
                         )
-                        Text("أو اختر ملف (.txt / .md) من جهازك")
+                        Text(stringResource(R.string.import_screen_choose_file_btn))
                     }
 
                     uiState.selectedFileUri?.let { uri ->
@@ -463,7 +463,7 @@ fun ChatImportScreen(
                                 contentDescription = "بدء",
                                 modifier = Modifier.padding(end = 8.dp)
                             )
-                            Text("بدء استيراد وفهرسة الملف", fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.import_screen_start_btn), fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -502,7 +502,7 @@ fun ChatImportScreen(
                                 onClick = onNavigateToSettings,
                                 modifier = Modifier.align(Alignment.End)
                             ) {
-                                Text("الانتقال للإعدادات", fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.import_screen_go_settings_btn), fontWeight = FontWeight.Bold)
                             }
                         }
                     }
