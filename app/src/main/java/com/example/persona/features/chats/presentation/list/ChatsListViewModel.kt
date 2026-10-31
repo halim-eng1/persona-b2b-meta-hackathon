@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.persona.core.database.dao.ChatHistoryDao
 import com.example.persona.core.database.dao.ContactDao
 import com.example.persona.core.database.dao.ConversationMetadataDao
+import com.example.persona.core.database.dao.OrderDao
 import com.example.persona.core.database.entity.ConversationMetadataEntity
+import com.example.persona.features.orders.domain.EgyptianOrderUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -53,7 +55,8 @@ data class ChatsListUiState(
 class ChatsListViewModel @Inject constructor(
     private val conversationMetadataDao: ConversationMetadataDao,
     private val chatHistoryDao: ChatHistoryDao? = null,
-    private val contactDao: ContactDao? = null
+    private val contactDao: ContactDao? = null,
+    private val orderDao: OrderDao? = null
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -117,15 +120,26 @@ class ChatsListViewModel @Inject constructor(
                 for (contact in contacts) {
                     val existing = conversationMetadataDao.getLatestConversationForContact(contact.contactName)
                     if (existing == null) {
-                        conversationMetadataDao.upsert(
-                            ConversationMetadataEntity(
-                                contactName = contact.contactName,
-                                sourceClass = "BUSINESS",
-                                lastMessageTimestamp = contact.lastActiveTimestamp,
-                                lastMessageText = null,
-                                lastMessageSenderType = ""
+                        // Check if an existing conversation exists under the raw phone number
+                        val normalizedPhone = EgyptianOrderUtils.extractEgyptianMobilePhone(contact.phoneNumber)
+                        val phoneCandidate = contact.phoneNumber.takeIf { it.isNotBlank() }
+                        val rawPhoneConv = phoneCandidate?.let { conversationMetadataDao.getLatestConversationForContact(it) }
+                            ?: normalizedPhone?.let { conversationMetadataDao.getLatestConversationForContact(it) }
+
+                        if (rawPhoneConv != null) {
+                            // Automatically merge raw phone conversation into this named contact
+                            mergeConversations(rawPhoneConv.contactName, contact.contactName)
+                        } else {
+                            conversationMetadataDao.upsert(
+                                ConversationMetadataEntity(
+                                    contactName = contact.contactName,
+                                    sourceClass = "BUSINESS",
+                                    lastMessageTimestamp = contact.lastActiveTimestamp,
+                                    lastMessageText = null,
+                                    lastMessageSenderType = ""
+                                )
                             )
-                        )
+                        }
                     }
                 }
             } catch (_: Exception) {
@@ -138,6 +152,25 @@ class ChatsListViewModel @Inject constructor(
         viewModelScope.launch {
             chatHistoryDao?.deleteMessagesSince(contactName, sourceClass, 0L)
             conversationMetadataDao.deleteConversation(contactName, sourceClass)
+            contactDao?.deleteContactByName(contactName)
+        }
+    }
+
+    /**
+     * Merges an unsaved/temporary contact conversation (like a raw phone number) into
+     * an existing or named contact conversation.
+     * Reassigns all chat history and orders to [targetContactName], then cleans up the old metadata.
+     */
+    fun mergeConversations(sourceContactName: String, targetContactName: String) {
+        if (sourceContactName.equals(targetContactName, ignoreCase = true)) return
+        viewModelScope.launch {
+            try {
+                chatHistoryDao?.reassignContactMessages(sourceContactName, targetContactName)
+                orderDao?.reassignContactOrders(sourceContactName, targetContactName)
+                conversationMetadataDao.deleteAllConversationsForContact(sourceContactName)
+                contactDao?.deleteContactByName(sourceContactName)
+            } catch (_: Exception) {
+            }
         }
     }
 

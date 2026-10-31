@@ -222,7 +222,10 @@ fun ChatsListScreen(
             },
             text = {
                 Text(
-                    text = stringResource(R.string.chat_delete_conversation_message, target.contactName),
+                    text = stringResource(
+                        R.string.chat_delete_conversation_message,
+                        com.example.persona.features.orders.domain.EgyptianOrderUtils.formatContactDisplayName(target.contactName)
+                    ),
                     style = MaterialTheme.typography.bodyMedium
                 )
             },

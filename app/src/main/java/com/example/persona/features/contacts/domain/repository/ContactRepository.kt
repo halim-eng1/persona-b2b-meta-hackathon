@@ -9,6 +9,7 @@ interface ContactRepository {
     fun observeContacts(query: String = "", tagFilter: ContactTag? = null): Flow<List<ContactEntity>>
     fun observeStatsSummary(): Flow<ContactStatsSummary>
     suspend fun getContactByName(contactName: String): ContactEntity?
+    suspend fun getContactByPhone(phone: String): ContactEntity?
     suspend fun getContactById(id: Long): ContactEntity?
     suspend fun upsertContact(contact: ContactEntity): Long
     suspend fun updateTag(id: Long, tag: ContactTag)

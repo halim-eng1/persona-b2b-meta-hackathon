@@ -109,6 +109,12 @@ interface ConversationMetadataDao {
     suspend fun deleteConversation(contactName: String, sourceClass: String)
 
     /**
+     * Deletes all conversation metadata rows for a specific contact across all sources.
+     */
+    @Query("DELETE FROM conversation_metadata WHERE contact_name = :contactName")
+    suspend fun deleteAllConversationsForContact(contactName: String): Int
+
+    /**
      * Updates the last message details in conversation metadata.
      */
     @Query("""

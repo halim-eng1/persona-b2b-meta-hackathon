@@ -239,6 +239,13 @@ interface OrderDao {
     fun observeOrdersByStatus(status: String): Flow<List<OrderEntity>>
 
     /**
+     * Reassigns all orders from [oldContactName] to [newContactName].
+     * Used when merging contacts.
+     */
+    @Query("UPDATE orders_table SET contact_name = :newContactName WHERE contact_name = :oldContactName")
+    suspend fun reassignContactOrders(oldContactName: String, newContactName: String): Int
+
+    /**
      * Reactive observable of orders within a specific timestamp date range.
      */
     @Query("SELECT * FROM orders_table WHERE timestamp BETWEEN :fromTimestamp AND :toTimestamp ORDER BY timestamp DESC")

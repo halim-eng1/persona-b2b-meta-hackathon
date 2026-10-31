@@ -63,6 +63,9 @@ class ContactRepositoryImpl @Inject constructor(
     override suspend fun getContactByName(contactName: String): ContactEntity? =
         contactDao.getContactByName(contactName)
 
+    override suspend fun getContactByPhone(phone: String): ContactEntity? =
+        contactDao.getContactByPhone(phone)
+
     override suspend fun getContactById(id: Long): ContactEntity? =
         contactDao.getContactById(id)
 

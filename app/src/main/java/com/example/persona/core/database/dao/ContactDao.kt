@@ -63,6 +63,15 @@ interface ContactDao {
     @Query("DELETE FROM contacts_table WHERE id = :id")
     suspend fun deleteContact(id: Long)
 
+    @Query("DELETE FROM contacts_table WHERE contact_name = :contactName")
+    suspend fun deleteContactByName(contactName: String): Int
+
+    @Query("SELECT * FROM contacts_table WHERE phone_number = :phone LIMIT 1")
+    suspend fun getContactByPhone(phone: String): ContactEntity?
+
+    @Query("SELECT * FROM contacts_table WHERE phone_number LIKE '%' || :phoneDigits || '%' LIMIT 1")
+    suspend fun getContactByPhoneContaining(phoneDigits: String): ContactEntity?
+
     @Query("SELECT COUNT(*) FROM contacts_table")
     suspend fun getTotalCount(): Int
 }

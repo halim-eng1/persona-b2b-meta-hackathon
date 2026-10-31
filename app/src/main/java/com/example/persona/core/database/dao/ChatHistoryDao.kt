@@ -242,6 +242,13 @@ interface ChatHistoryDao {
     suspend fun deleteMessagesSince(contactName: String, sourceClass: String, sinceTimestamp: Long)
 
     /**
+     * Reassigns all messages from [oldContactName] to [newContactName].
+     * Used when merging an unsaved phone number contact into a newly saved named contact.
+     */
+    @Query("UPDATE chat_history SET contact_name = :newContactName WHERE contact_name = :oldContactName")
+    suspend fun reassignContactMessages(oldContactName: String, newContactName: String): Int
+
+    /**
      * Returns the single latest message for a specific contact and source class, or null if no messages exist.
      */
     @Query("""
