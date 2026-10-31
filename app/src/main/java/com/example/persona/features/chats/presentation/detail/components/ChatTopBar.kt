@@ -1,5 +1,7 @@
 package com.example.persona.features.chats.presentation.detail.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -7,21 +9,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -55,16 +52,18 @@ fun CompactChatTopBar(
     onToggleAi: () -> Unit,
     onOpenWhatsApp: (() -> Unit)? = null,
     onResolveAttention: (() -> Unit)? = null,
+    onOpenContactProfile: (() -> Unit)? = null,
     onExportChat: () -> Unit = {},
     onClearChat: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val chatColors = MaterialTheme.chatColors
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            // Grows with the user's font scale: the two-line name/status column exceeds
-            // 56dp at large system font sizes, so 56dp is a floor, not a fixed height.
+            // Grows with font scale: minimum 56dp floor
             .heightIn(min = 56.dp),
         color = chatColors.surface,
         shadowElevation = 2.dp
@@ -75,6 +74,7 @@ fun CompactChatTopBar(
                 .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // ── Navigation Back Button ───────────────────────────────────────
             IconButton(
                 onClick = onNavigateBack,
                 modifier = Modifier.size(48.dp)
@@ -86,7 +86,7 @@ fun CompactChatTopBar(
                 )
             }
 
-            // Circular avatar (32.dp)
+            // ── Customer Avatar Monogram (32dp) ──────────────────────────────
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -103,19 +103,25 @@ fun CompactChatTopBar(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Contact info column - clicking header provides direct access to export chat
+            // ── Contact Info Column (Tapping opens Customer Profile, NEVER Export) ──
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
-                    .clickable(
-                        role = Role.Button,
-                        onClickLabel = stringResource(R.string.chat_export_chat),
-                        onClick = onExportChat
+                    .then(
+                        if (onOpenContactProfile != null) {
+                            Modifier.clickable(
+                                role = Role.Button,
+                                onClick = onOpenContactProfile
+                            )
+                        } else {
+                            Modifier
+                        }
                     )
                     .padding(vertical = 4.dp, horizontal = 4.dp),
                 verticalArrangement = Arrangement.Center
             ) {
+                // Customer Name + Localized WhatsApp Source Badge
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = EgyptianOrderUtils.formatContactDisplayName(contactName),
@@ -128,6 +134,13 @@ fun CompactChatTopBar(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
+
+                    val localizedSource = when (sourceClass.uppercase()) {
+                        "BUSINESS" -> stringResource(R.string.chat_badge_business)
+                        "MAIN_APP" -> stringResource(R.string.chat_badge_main)
+                        else -> sourceClass
+                    }
+
                     Spacer(modifier = Modifier.width(6.dp))
                     Surface(
                         shape = RoundedCornerShape(4.dp),
@@ -138,170 +151,133 @@ fun CompactChatTopBar(
                         }
                     ) {
                         Text(
-                            text = sourceClass.take(4),
+                            text = localizedSource,
                             color = chatColors.onBadge,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             ),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                         )
                     }
                 }
 
-                // Subtitle. The bot name is rendered as its own Text segment so a mixed
-                // Arabic/English name cannot invert the surrounding punctuation under
-                // the LTR root layout (BiDi first-strong rule).
+                // Subtitle: Clean status without technical background leaks
                 val subtitleColor = when {
                     isAiGenerating -> chatColors.statusGenerating
                     !isGlobalAutoReplyEnabled && isAiOverrideEnabled -> chatColors.statusReady
                     !effectiveAiActive -> chatColors.statusPaused
-                    replyCapability == ReplyCapability.READY_VIA_NOTIFICATION -> chatColors.statusReady
-                    else -> chatColors.statusIdle
+                    else -> chatColors.statusReady
+                }
+
+                val statusText = when {
+                    isAiGenerating -> stringResource(R.string.chat_status_generating_clean)
+                    !isGlobalAutoReplyEnabled && isAiOverrideEnabled -> stringResource(R.string.chat_active_exception_badge)
+                    !effectiveAiActive -> {
+                        if (!isGlobalAutoReplyEnabled) {
+                            stringResource(R.string.chat_status_ai_paused_global)
+                        } else {
+                            stringResource(R.string.chat_status_ai_paused)
+                        }
+                    }
+                    replyCapability == ReplyCapability.READY_VIA_NOTIFICATION -> stringResource(R.string.chat_status_assistant_ready)
+                    else -> stringResource(R.string.chat_status_awaiting)
                 }
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f, fill = false)
                 ) {
-                    when {
-                        isAiGenerating -> {
-                            // The thinking bubble in the stream says "…is generating reply…";
-                            // the top bar only carries who, so the sentence isn't said twice.
-                            Text(
-                                text = botName,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 11.sp,
-                                    textDirection = TextDirection.Content
-                                ),
-                                color = subtitleColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        !isGlobalAutoReplyEnabled && isAiOverrideEnabled -> {
-                            Text(
-                                text = "${stringResource(R.string.chat_active_exception_badge)} • ",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                color = subtitleColor
-                            )
-                            Text(
-                                text = botName,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 11.sp,
-                                    textDirection = TextDirection.Content
-                                ),
-                                color = subtitleColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        replyCapability == ReplyCapability.READY_VIA_NOTIFICATION -> {
-                            Text(
-                                text = stringResource(R.string.chat_status_ready),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                color = subtitleColor
-                            )
-                            Text(
-                                text = botName,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 11.sp,
-                                    textDirection = TextDirection.Content
-                                ),
-                                color = subtitleColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        !effectiveAiActive -> {
-                            Text(
-                                text = if (!isGlobalAutoReplyEnabled) stringResource(R.string.chat_status_ai_paused_global) else stringResource(R.string.chat_status_ai_paused),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                color = subtitleColor
-                            )
-                        }
-                        else -> {
-                            Text(
-                                text = stringResource(R.string.chat_status_awaiting),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                color = subtitleColor
-                            )
-                        }
-                    }
+                    Text(
+                        text = if (botName.isNotBlank() && !isAiGenerating) "$statusText • $botName" else statusText,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            textDirection = TextDirection.Content
+                        ),
+                        color = subtitleColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.width(6.dp))
 
-            var menuExpanded by remember { mutableStateOf(false) }
-
-            // Right row: AI Auto-Reply switch with clean label ("AI") & More options menu
+            // ── Right Actions: Compact Copilot Pill, External WhatsApp, Overflow ──
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(end = 4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(end = 2.dp)
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                // 1. Sleek Tactile Copilot Status Pill (Replaces bulky Switch)
+                val isOverride = !isGlobalAutoReplyEnabled && isAiOverrideEnabled
+                val (pillText, pillBg, pillFg) = when {
+                    isOverride -> Triple(
+                        stringResource(R.string.chat_pill_override),
+                        MaterialTheme.colorScheme.tertiaryContainer,
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    effectiveAiActive -> Triple(
+                        stringResource(R.string.chat_pill_active),
+                        MaterialTheme.colorScheme.primaryContainer,
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    else -> Triple(
+                        stringResource(R.string.chat_pill_paused),
+                        chatColors.surfaceAlt,
+                        chatColors.statusIdle
+                    )
+                }
+
+                val animatedBg by animateColorAsState(
+                    targetValue = pillBg,
+                    animationSpec = tween(250),
+                    label = "pill_bg"
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = animatedBg,
+                    modifier = Modifier
+                        .height(28.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(role = Role.Switch, onClick = onToggleAi)
+                        .semantics {
+                            contentDescription = "AI auto-reply toggle"
+                            stateDescription = if (effectiveAiActive) "Active" else "Paused"
+                        }
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.padding(horizontal = 8.dp)
                     ) {
                         Text(
-                            text = "AI",
+                            text = pillText,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = chatColors.onSurface
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Switch(
-                            checked = effectiveAiActive,
-                            onCheckedChange = { onToggleAi() },
-                            modifier = Modifier.semantics {
-                                contentDescription = "AI auto-reply"
-                                stateDescription = if (effectiveAiActive) "Active" else "Paused"
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = chatColors.onSurface,
-                                checkedTrackColor = chatColors.switchTrackChecked,
-                                uncheckedThumbColor = chatColors.statusIdle,
-                                uncheckedTrackColor = chatColors.surfaceAlt
-                            )
-                        )
-                    }
-
-                    if (!isGlobalAutoReplyEnabled && isAiOverrideEnabled) {
-                        Text(
-                            text = stringResource(R.string.chat_active_exception_badge),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = chatColors.statusReady
+                                fontSize = 11.sp
                             ),
-                            maxLines = 1
+                            color = pillFg
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(2.dp))
-
-                // 1-Tap WhatsApp button
+                // 2. 1-Tap External WhatsApp Launcher (Explicit OpenInNew Vector)
                 if (onOpenWhatsApp != null) {
                     IconButton(
                         onClick = onOpenWhatsApp,
                         modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Chat,
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                             contentDescription = stringResource(R.string.chat_open_whatsapp),
                             tint = chatColors.accentText,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(2.dp))
                 }
 
+                // 3. 3-Dot Overflow Menu (Sole home for Export and Clear)
                 Box {
                     IconButton(
                         onClick = { menuExpanded = true },

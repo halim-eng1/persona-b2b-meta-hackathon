@@ -64,17 +64,30 @@ fun extractMonogram(name: String, letterCount: Int = 2): String {
         val firstWord = words[0]
         val secondWord = words[1]
         if (firstWord in compoundPrefixes) {
-            val secondCore = if (secondWord.startsWith("ال") && secondWord.length > 2) {
-                secondWord.substring(2)
-            } else {
-                secondWord
-            }
+            val secondCore = stripArabicArticle(secondWord)
             (firstWord.take(1) + secondCore.take(1)).uppercase()
         } else {
-            (firstWord.take(1) + secondWord.take(1)).uppercase()
+            val firstCore = stripArabicArticle(firstWord)
+            val secondCore = stripArabicArticle(secondWord)
+            (firstCore.take(1) + secondCore.take(1)).uppercase()
         }
+    } else if (words.isNotEmpty()) {
+        val firstCore = stripArabicArticle(words[0])
+        firstCore.take(letterCount).uppercase()
     } else {
         clean.take(letterCount).uppercase()
+    }
+}
+
+/**
+ * Helper to strip Arabic definite articles ("ال", "أل", "إل", "آل") from a word
+ * to extract the meaningful core letter for avatar monograms (e.g. "المهندس" -> "مهندس").
+ */
+private fun stripArabicArticle(word: String): String {
+    return if ((word.startsWith("ال") || word.startsWith("أل") || word.startsWith("إل") || word.startsWith("آل")) && word.length > 2) {
+        word.substring(2)
+    } else {
+        word
     }
 }
 

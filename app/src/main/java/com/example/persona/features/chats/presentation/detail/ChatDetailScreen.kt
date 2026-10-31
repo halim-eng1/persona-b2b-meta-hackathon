@@ -3,6 +3,11 @@ package com.example.persona.features.chats.presentation.detail
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.widget.Toast
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import com.example.persona.features.orders.domain.EgyptianOrderUtils
+import com.example.persona.ui.components.AvatarShape
+import com.example.persona.ui.components.PersonaAvatar
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -49,6 +54,7 @@ import com.example.persona.ui.theme.chatColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatDetailScreen(
     onNavigateBack: () -> Unit,
@@ -70,6 +76,107 @@ fun ChatDetailScreen(
     var unreadCountBelow by remember(state.contactName) { mutableIntStateOf(0) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showClearChatDialog by remember { mutableStateOf(false) }
+    var showContactProfileSheet by remember { mutableStateOf(false) }
+
+    if (showContactProfileSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showContactProfileSheet = false },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    PersonaAvatar(
+                        name = state.contactName,
+                        size = 52.dp,
+                        shape = AvatarShape.ROUNDED
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = EgyptianOrderUtils.formatContactDisplayName(state.contactName),
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        val phone = state.contactPhoneNumber ?: stringResource(R.string.chat_profile_no_phone)
+                        Text(
+                            text = phone,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                    val activeOrder = state.activeOrder
+                    if (activeOrder != null) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Text(
+                                    text = stringResource(R.string.chat_active_order_banner, activeOrder.id.toString()),
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (activeOrder.orderDetails.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = activeOrder.orderDetails,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            showContactProfileSheet = false
+                            viewModel.onManualTakeover()
+                            WhatsAppLauncher.openChat(
+                                context = context,
+                                phoneNumber = state.contactPhoneNumber,
+                                contactName = state.contactName,
+                                preferBusiness = (state.sourceClass.uppercase() == "BUSINESS")
+                            )
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.chat_toast_whatsapp_takeover),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = stringResource(R.string.chat_open_whatsapp))
+                    }
+                }
+            }
+        }
+    }
 
     if (showClearChatDialog) {
         ClearChatDialog(
@@ -196,8 +303,14 @@ fun ChatDetailScreen(
                     contactName = state.contactName,
                     preferBusiness = (state.sourceClass.uppercase() == "BUSINESS")
                 )
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.chat_toast_whatsapp_takeover),
+                    Toast.LENGTH_SHORT
+                ).show()
             },
             onResolveAttention = { viewModel.resolveAttention() },
+            onOpenContactProfile = { showContactProfileSheet = true },
             onExportChat = { showExportDialog = true },
             onClearChat = { showClearChatDialog = true }
         )

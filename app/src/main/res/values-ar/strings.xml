@@ -324,6 +324,16 @@
     <string name="settings_cooldown_subtitle">أقل وقت انتظار مسموح به قبل إعادة الرد تلقائياً على نفس المحادثة</string>
 
     <!-- ── Chat Detail & TopBar ────────────────────────────────────────────────── -->
+    <string name="chat_toast_whatsapp_takeover">تم الانتقال إلى واتساب وتجميد الرد الآلي مؤقتاً لهذا العميل</string>
+    <string name="chat_badge_business">واتساب أعمال</string>
+    <string name="chat_badge_main">واتساب</string>
+    <string name="chat_pill_active">🤖 نشط</string>
+    <string name="chat_pill_paused">⏸️ متوقف</string>
+    <string name="chat_pill_override">⚡ استثناء</string>
+    <string name="chat_status_assistant_ready">المساعد جاهز</string>
+    <string name="chat_status_generating_clean">جاري تحضير الرد...</string>
+    <string name="chat_profile_sheet_title">بيانات العميل</string>
+    <string name="chat_profile_no_phone">رقم الهاتف غير مسجل</string>
     <string name="chat_composer_placeholder">اكتب رداً يدوياً للعميل...</string>
     <string name="chat_active_exception_badge">نشط (استثناء فردي)</string>
     <string name="chat_status_ready">● جاهز • </string>

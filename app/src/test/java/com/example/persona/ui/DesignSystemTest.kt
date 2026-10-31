@@ -56,6 +56,14 @@ class DesignSystemTest {
     }
 
     @Test
+    fun testExtractMonogramArabicDefiniteArticle() {
+        // "المهندس حازم" -> strips "ال" from "المهندس" -> core "مهندس" -> 'م'
+        assertEquals("م", extractMonogram("المهندس حازم", letterCount = 1))
+        assertEquals("مح", extractMonogram("المهندس حازم", letterCount = 2))
+        assertEquals("ش", extractMonogram("الشرقاوي", letterCount = 1))
+    }
+
+    @Test
     fun testExtractMonogramStandardArabicNames() {
         assertEquals("سع", extractMonogram("سارة علي"))
         assertEquals("مح", extractMonogram("محمد حسن"))
