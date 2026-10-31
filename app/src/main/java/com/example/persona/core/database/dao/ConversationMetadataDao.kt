@@ -121,7 +121,7 @@ interface ConversationMetadataDao {
     suspend fun updateLastMessage(
         contactName: String,
         sourceClass: String,
-        lastMessageText: String,
+        lastMessageText: String?,
         lastMessageTimestamp: Long,
         lastMessageSenderType: String
     )

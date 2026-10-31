@@ -37,6 +37,7 @@ fun ContactDirectoryScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
+    var contactToDelete by remember { mutableStateOf<ContactEntity?>(null) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -162,7 +163,8 @@ fun ContactDirectoryScreen(
                             onEditClicked = { viewModel.onSelectContactForEdit(contact) },
                             onNavigateToChat = if (onNavigateToChat != null) {
                                 { name -> onNavigateToChat(name, "BUSINESS") }
-                            } else null
+                            } else null,
+                            onDeleteClicked = { contactToDelete = contact }
                         )
                     }
                 }
@@ -182,6 +184,9 @@ fun ContactDirectoryScreen(
                     newNotes = newNotes,
                     newPhone = newPhone
                 )
+            },
+            onDeleteContact = {
+                viewModel.onDeleteContact(contactToEdit.id, contactToEdit.contactName)
             }
         )
     }
@@ -235,6 +240,42 @@ fun ContactDirectoryScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
+
+    contactToDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { contactToDelete = null },
+            title = {
+                Text(
+                    text = stringResource(R.string.contacts_delete_contact_title),
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.contacts_delete_contact_message, target.contactName)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.onDeleteContact(target.id, target.contactName)
+                        contactToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text(stringResource(R.string.common_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { contactToDelete = null }) {
                     Text(stringResource(R.string.common_cancel))
                 }
             }

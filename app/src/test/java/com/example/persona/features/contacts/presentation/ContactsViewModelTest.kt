@@ -195,4 +195,16 @@ class ContactsViewModelTest {
             )
         }
     }
+
+    @Test
+    fun `onDeleteContact with contactName deletes contact and conversation metadata`() = runTest(testDispatcher) {
+        val viewModel = ContactsViewModel(contactRepository, conversationMetadataDao)
+        viewModel.onDeleteContact(1L, "أحمد خالد")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            contactRepository.deleteContact(1L)
+            conversationMetadataDao.deleteConversation("أحمد خالد", "BUSINESS")
+        }
+    }
 }

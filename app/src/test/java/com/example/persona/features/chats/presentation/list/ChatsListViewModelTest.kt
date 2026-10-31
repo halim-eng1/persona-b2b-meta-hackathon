@@ -1,6 +1,11 @@
 package com.example.persona.features.chats.presentation.list
 
+import com.example.persona.core.database.dao.ChatHistoryDao
+import com.example.persona.core.database.dao.ContactDao
 import com.example.persona.core.database.dao.ConversationMetadataDao
+import com.example.persona.core.database.entity.ContactEntity
+import io.mockk.coEvery
+import io.mockk.coVerify
 import com.example.persona.core.database.entity.ConversationMetadataEntity
 import io.mockk.every
 import io.mockk.mockk
@@ -142,5 +147,51 @@ class ChatsListViewModelTest {
         val stateByText = viewModel.uiState.value
         assertEquals(1, stateByText.conversations.size)
         assertEquals("عميل 2", stateByText.conversations[0].contactName)
+    }
+
+    @Test
+    fun `deleteConversation deletes messages and metadata`() = runTest(testDispatcher) {
+        val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
+        coEvery { conversationMetadataDao.deleteConversation(any(), any()) } returns Unit
+
+        val viewModel = ChatsListViewModel(
+            conversationMetadataDao = conversationMetadataDao,
+            chatHistoryDao = chatHistoryDao
+        )
+        advanceUntilIdle()
+
+        viewModel.deleteConversation("عميل 1", "BUSINESS")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            chatHistoryDao.deleteMessagesSince("عميل 1", "BUSINESS", 0L)
+            conversationMetadataDao.deleteConversation("عميل 1", "BUSINESS")
+        }
+    }
+
+    @Test
+    fun `syncConversationsWithContacts inserts missing conversations for contacts`() = runTest(testDispatcher) {
+        val contactDao = mockk<ContactDao>()
+        val contact = ContactEntity(
+            id = 1L,
+            contactName = "My Number 2",
+            lastActiveTimestamp = 5000L
+        )
+        every { contactDao.observeAllContacts() } returns flowOf(listOf(contact))
+        coEvery { conversationMetadataDao.getLatestConversationForContact("My Number 2") } returns null
+        coEvery { conversationMetadataDao.upsert(any()) } returns Unit
+
+        val viewModel = ChatsListViewModel(
+            conversationMetadataDao = conversationMetadataDao,
+            contactDao = contactDao
+        )
+        viewModel.syncConversationsWithContacts()
+        advanceUntilIdle()
+
+        coVerify {
+            conversationMetadataDao.upsert(match {
+                it.contactName == "My Number 2" && it.sourceClass == "BUSINESS"
+            })
+        }
     }
 }

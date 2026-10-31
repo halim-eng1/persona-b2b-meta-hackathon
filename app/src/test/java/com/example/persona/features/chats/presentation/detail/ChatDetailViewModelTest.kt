@@ -493,7 +493,7 @@ class ChatDetailViewModelTest {
     }
 
     @Test
-    fun `clearChat when no messages remain deletes conversation metadata row`() = runTest(testDispatcher) {
+    fun `clearChat when no messages remain preserves conversation metadata and clears last message`() = runTest(testDispatcher) {
         val viewModel = ChatDetailViewModel(
             chatHistoryDao = chatHistoryDao,
             conversationMetadataDao = conversationMetadataDao,
@@ -503,6 +503,13 @@ class ChatDetailViewModelTest {
         )
         advanceUntilIdle()
 
+        val existingConv = ConversationMetadataEntity(
+            contactName = "أحمد مصطفى",
+            sourceClass = "BUSINESS",
+            lastMessageTimestamp = 1_699_000_000_000L,
+            lastMessageText = "رسالة قديمة"
+        )
+        coEvery { conversationMetadataDao.getConversation("أحمد مصطفى", "BUSINESS") } returns existingConv
         coEvery { chatHistoryDao.getLatestMessageForSource("أحمد مصطفى", "BUSINESS") } returns null
 
         viewModel.clearChat(ClearChatTimeRange.ALL_TIME)
@@ -510,7 +517,16 @@ class ChatDetailViewModelTest {
 
         coVerify(exactly = 1) {
             chatHistoryDao.deleteMessagesSince("أحمد مصطفى", "BUSINESS", 0L)
-            conversationMetadataDao.deleteConversation("أحمد مصطفى", "BUSINESS")
+            conversationMetadataDao.updateLastMessage(
+                contactName = "أحمد مصطفى",
+                sourceClass = "BUSINESS",
+                lastMessageText = null,
+                lastMessageTimestamp = 1_699_000_000_000L,
+                lastMessageSenderType = ""
+            )
+        }
+        coVerify(exactly = 0) {
+            conversationMetadataDao.deleteConversation(any(), any())
         }
     }
 

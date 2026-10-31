@@ -123,9 +123,14 @@ class ContactsViewModel @Inject constructor(
         }
     }
 
-    fun onDeleteContact(id: Long) {
+    fun onDeleteContact(id: Long, contactName: String? = null) {
         viewModelScope.launch {
             contactRepository.deleteContact(id)
+            if (contactName != null) {
+                conversationMetadataDao?.deleteConversation(contactName, "BUSINESS")
+                conversationMetadataDao?.deleteConversation(contactName, "MAIN_APP")
+                conversationMetadataDao?.deleteConversation(contactName, "CLONE")
+            }
             if (_selectedContactForEdit.value?.id == id) {
                 _selectedContactForEdit.value = null
             }

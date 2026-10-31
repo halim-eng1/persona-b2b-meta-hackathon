@@ -212,6 +212,7 @@ class ChatDetailViewModel @Inject constructor(
     )
 
     init {
+        ensureConversationMetadataExists()
         // Mark conversation and messages as read when thread is opened
         markAsRead()
         checkNotificationReadiness()
@@ -220,6 +221,25 @@ class ChatDetailViewModel @Inject constructor(
         viewModelScope.launch {
             chatHistoryDao.observeMessagesForContact(contactName, sourceClass).collect {
                 checkNotificationReadiness()
+            }
+        }
+    }
+
+    private fun ensureConversationMetadataExists() {
+        if (contactName.isNotBlank()) {
+            viewModelScope.launch {
+                val existing = conversationMetadataDao.getConversation(contactName, sourceClass)
+                if (existing == null) {
+                    conversationMetadataDao.upsert(
+                        com.example.persona.core.database.entity.ConversationMetadataEntity(
+                            contactName = contactName,
+                            sourceClass = sourceClass,
+                            lastMessageTimestamp = System.currentTimeMillis(),
+                            lastMessageText = null,
+                            lastMessageSenderType = ""
+                        )
+                    )
+                }
             }
         }
     }
@@ -488,8 +508,29 @@ class ChatDetailViewModel @Inject constructor(
             chatHistoryDao.deleteMessagesSince(contactName, sourceClass, sinceTimestamp)
 
             val latestRemaining = chatHistoryDao.getLatestMessageForSource(contactName, sourceClass)
+            val existing = conversationMetadataDao.getConversation(contactName, sourceClass)
+
             if (latestRemaining == null) {
-                conversationMetadataDao.deleteConversation(contactName, sourceClass)
+                // Preserves conversation metadata and AI paused flag instead of hard deletion.
+                if (existing != null) {
+                    conversationMetadataDao.updateLastMessage(
+                        contactName = contactName,
+                        sourceClass = sourceClass,
+                        lastMessageText = null,
+                        lastMessageTimestamp = existing.lastMessageTimestamp,
+                        lastMessageSenderType = ""
+                    )
+                } else {
+                    conversationMetadataDao.upsert(
+                        com.example.persona.core.database.entity.ConversationMetadataEntity(
+                            contactName = contactName,
+                            sourceClass = sourceClass,
+                            lastMessageText = null,
+                            lastMessageTimestamp = currentTimeMs,
+                            lastMessageSenderType = ""
+                        )
+                    )
+                }
             } else {
                 conversationMetadataDao.updateLastMessage(
                     contactName = contactName,
