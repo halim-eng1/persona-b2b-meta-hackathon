@@ -1,5 +1,6 @@
 package com.example.persona.features.settings.presentation
 
+import android.content.Context
 import androidx.compose.runtime.Stable
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
@@ -92,7 +93,13 @@ class AiActions(private val vm: SettingsViewModel) {
 
 @Stable
 class HealthActions(private val vm: SettingsViewModel) {
-    fun refreshHealth() = vm.refreshStoragePermission()
+    fun refreshHealth() = vm.recheckPermissions()
+    fun recheckPermissions() = vm.recheckPermissions()
+    fun requestBatteryOptimizationExemption(context: Context) = vm.requestBatteryOptimizationExemption(context)
+    fun openAutoStartSettings(context: Context) = vm.openAutoStartSettings(context)
+    fun setAutoStartConfirmed(confirmed: Boolean) = vm.setAutoStartConfirmed(confirmed)
+    fun requestStoragePermission(context: Context) = vm.requestStoragePermission(context)
+    fun openNotificationListenerSettings(context: Context) = vm.openNotificationListenerSettings(context)
     fun exportBackup() = vm.exportLocalBackup()
     fun restoreBackup() = vm.restoreLocalBackup()
     fun clearCache() = vm.clearCache()

@@ -50,6 +50,12 @@ class AutoStartHelper @Inject constructor(
                     "com.iqoo.secure.MainActivity"))
             ),
             "transsion" to listOf(
+                Intent().setComponent(ComponentName("com.transsion.phonemanager",
+                    "com.transsion.phonemanager.view.AutoStartListActivity")),
+                Intent().setComponent(ComponentName("com.transsion.phonemanager",
+                    "com.transsion.phonemanager.view.PowerConsumptionActivity")),
+                Intent().setComponent(ComponentName("com.transsion.powersaveschedule",
+                    "com.transsion.powersaveschedule.PowerSaveScheduleActivity")),
                 Intent().setComponent(ComponentName("com.transsion.phonemaster",
                     "com.transsion.phonemaster.autostart.AutoStartActivity")),
                 Intent().setComponent(ComponentName("com.transsion.phonemaster",
@@ -58,6 +64,12 @@ class AutoStartHelper @Inject constructor(
                     "com.itel.autobootmanager.activity.AutoBootMgrActivity"))
             ),
             "infinix" to listOf(
+                Intent().setComponent(ComponentName("com.transsion.phonemanager",
+                    "com.transsion.phonemanager.view.AutoStartListActivity")),
+                Intent().setComponent(ComponentName("com.transsion.phonemanager",
+                    "com.transsion.phonemanager.view.PowerConsumptionActivity")),
+                Intent().setComponent(ComponentName("com.transsion.powersaveschedule",
+                    "com.transsion.powersaveschedule.PowerSaveScheduleActivity")),
                 Intent().setComponent(ComponentName("com.transsion.phonemaster",
                     "com.transsion.phonemaster.autostart.AutoStartActivity")),
                 Intent().setComponent(ComponentName("com.transsion.phonemaster",
@@ -66,6 +78,12 @@ class AutoStartHelper @Inject constructor(
                     "com.itel.autobootmanager.activity.AutoBootMgrActivity"))
             ),
             "tecno" to listOf(
+                Intent().setComponent(ComponentName("com.transsion.phonemanager",
+                    "com.transsion.phonemanager.view.AutoStartListActivity")),
+                Intent().setComponent(ComponentName("com.transsion.phonemanager",
+                    "com.transsion.phonemanager.view.PowerConsumptionActivity")),
+                Intent().setComponent(ComponentName("com.transsion.powersaveschedule",
+                    "com.transsion.powersaveschedule.PowerSaveScheduleActivity")),
                 Intent().setComponent(ComponentName("com.transsion.phonemaster",
                     "com.transsion.phonemaster.autostart.AutoStartActivity")),
                 Intent().setComponent(ComponentName("com.transsion.phonemaster",

@@ -1,8 +1,14 @@
 package com.example.persona.features.settings.presentation.screens.health
 
+import android.Manifest
+import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,33 +18,47 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.persona.R
 import com.example.persona.features.settings.presentation.HealthActions
 import com.example.persona.features.settings.presentation.SettingsSpoke
@@ -60,13 +80,29 @@ fun HealthDataScreen(
     modifier: Modifier = Modifier,
     focus: SettingKey? = null
 ) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     var showRestoreBackupDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showRecentsDialog by rememberSaveable { mutableStateOf(false) }
+
+    // Auto-Refresh on Return: recheck permissions immediately whenever returning from system settings
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                actions.recheckPermissions()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     val contactsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ ->
-        actions.refreshHealth()
+        actions.recheckPermissions()
     }
 
     val checks = remember(state) {
@@ -93,76 +129,13 @@ fun HealthDataScreen(
             totalChecks = checks.size
         )
 
-        // Permissions Health Check Group
-        SettingsGroup(title = R.string.settings_perm_check_title) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .settingFocus(SettingKey.Permissions)
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_perm_check_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-
-                HealthItemRow(
-                    title = stringResource(R.string.settings_perm_notification_title),
-                    isOk = state.isNotificationListenerGranted,
-                    okText = stringResource(R.string.settings_perm_notification_active),
-                    missingText = stringResource(R.string.settings_perm_notification_disabled)
-                )
-
-                HealthItemRow(
-                    title = stringResource(R.string.settings_perm_battery_title),
-                    isOk = state.isBatteryOptimizationIgnored,
-                    okText = stringResource(R.string.settings_perm_battery_ok),
-                    missingText = stringResource(R.string.settings_perm_battery_missing)
-                )
-
-                HealthItemRow(
-                    title = stringResource(R.string.settings_perm_autostart_title),
-                    isOk = state.isAutoStartConfirmed,
-                    okText = stringResource(R.string.settings_perm_autostart_ok),
-                    missingText = stringResource(R.string.settings_perm_notification_missing)
-                )
-
-                HealthItemRow(
-                    title = stringResource(R.string.settings_perm_storage_title),
-                    isOk = state.isStorageAccessGranted,
-                    okText = stringResource(R.string.settings_perm_storage_active),
-                    missingText = stringResource(R.string.settings_perm_storage_missing)
-                )
-
-                HealthItemRow(
-                    title = stringResource(R.string.settings_perm_contacts_title),
-                    isOk = state.isContactsPermissionGranted,
-                    okText = stringResource(R.string.settings_perm_contacts_active),
-                    missingText = stringResource(R.string.settings_perm_contacts_missing),
-                    onRequestPermission = {
-                        contactsPermissionLauncher.launch(android.Manifest.permission.READ_CONTACTS)
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                OutlinedButton(
-                    onClick = actions::refreshHealth,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.settings_perm_recheck_btn))
-                }
-            }
-        }
+        // Permissions Health Check Group & Self-Healing Actions
+        SystemHealthSection(
+            state = state,
+            actions = actions,
+            onOpenRecentsTutorial = { showRecentsDialog = true },
+            contactsLauncher = contactsPermissionLauncher
+        )
 
         // Local Encrypted Backup & Restore Group
         SettingsGroup(title = R.string.settings_backup_title) {
@@ -201,7 +174,6 @@ fun HealthDataScreen(
                         )
                     }
 
-                    // FRANKENSTEIN 2: Explicit Confirmation Dialog before restoring
                     OutlinedButton(
                         onClick = { showRestoreBackupDialog = true },
                         shape = RoundedCornerShape(12.dp),
@@ -271,10 +243,16 @@ fun HealthDataScreen(
             onDismiss = { showClearCacheDialog = false }
         )
     }
+
+    if (showRecentsDialog) {
+        RecentsTutorialDialog(
+            onDismiss = { showRecentsDialog = false }
+        )
+    }
 }
 
 @Composable
-private fun HealthItemRow(
+fun HealthItemRow(
     title: String,
     isOk: Boolean,
     okText: String,
@@ -291,6 +269,11 @@ private fun HealthItemRow(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 3.dp)
+            .then(
+                if (onRequestPermission != null) {
+                    Modifier.clickable(onClick = onRequestPermission)
+                } else Modifier
+            )
     ) {
         Row(
             modifier = Modifier
@@ -315,7 +298,7 @@ private fun HealthItemRow(
             if (isOk) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Active",
                     tint = PersonaTheme.statusColors.success,
                     modifier = Modifier.size(20.dp)
                 )
@@ -323,14 +306,15 @@ private fun HealthItemRow(
                 FilledTonalButton(
                     onClick = onRequestPermission,
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
                     Text(
-                        text = stringResource(R.string.settings_perm_contacts_grant_btn),
+                        text = stringResource(R.string.settings_perm_fix_btn),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -341,6 +325,250 @@ private fun HealthItemRow(
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun RecentsLockGuidanceBanner(
+    onOpenTutorial: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isDismissed by rememberSaveable { mutableStateOf(false) }
+
+    if (isDismissed) return
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = RoundedCornerShape(8.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = stringResource(R.string.recents_lock_banner_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                IconButton(
+                    onClick = { isDismissed = true },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = stringResource(R.string.recents_lock_banner_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            FilledTonalButton(
+                onClick = onOpenTutorial,
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ),
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.recents_lock_banner_btn),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun RecentsTutorialDialog(
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(12.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        },
+        title = {
+            Text(
+                text = stringResource(R.string.recents_dialog_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                RecentsStepItem(
+                    stepNumber = "1",
+                    title = stringResource(R.string.recents_dialog_step1_title),
+                    description = stringResource(R.string.recents_dialog_step1_desc)
+                )
+                RecentsStepItem(
+                    stepNumber = "2",
+                    title = stringResource(R.string.recents_dialog_step2_title),
+                    description = stringResource(R.string.recents_dialog_step2_desc)
+                )
+                RecentsStepItem(
+                    stepNumber = "3",
+                    title = stringResource(R.string.recents_dialog_step3_title),
+                    description = stringResource(R.string.recents_dialog_step3_desc),
+                    highlighted = true
+                )
+                RecentsStepItem(
+                    stepNumber = "4",
+                    title = stringResource(R.string.recents_dialog_step4_title),
+                    description = stringResource(R.string.recents_dialog_step4_desc)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = stringResource(R.string.recents_dialog_confirm_btn),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+@Composable
+private fun RecentsStepItem(
+    stepNumber: String,
+    title: String,
+    description: String,
+    highlighted: Boolean = false
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (highlighted)
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        else
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .background(
+                        color = if (highlighted)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.secondaryContainer,
+                        shape = RoundedCornerShape(6.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stepNumber,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (highlighted)
+                        MaterialTheme.colorScheme.onPrimary
+                    else
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 16.sp
                 )
             }
         }

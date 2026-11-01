@@ -653,4 +653,51 @@ class SettingsViewModelTest {
 
         verify(atLeast = 1) { mockCircuitBreaker.setProviderCascadeOrder(any()) }
     }
+
+    @Test
+    fun `recheckPermissions updates all permissions in uiState`() = runTest(testDispatcher) {
+        val mockPermissionChecker = mockk<com.example.persona.features.onboarding.data.PermissionChecker>()
+        every { mockPermissionChecker.isManageStorageGranted() } returns true
+        every { mockPermissionChecker.isNotificationListenerEnabled() } returns true
+        every { mockPermissionChecker.isBatteryOptimizationIgnored() } returns true
+        every { mockPermissionChecker.isContactsPermissionGranted() } returns true
+        coEvery { userPreferencesRepository.isAutoStartConfirmedSync() } returns true
+
+        val viewModel = SettingsViewModel(
+            userPreferencesRepository = userPreferencesRepository,
+            secureCredentialsRepository = secureCredentialsRepository,
+            permissionChecker = mockPermissionChecker,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        viewModel.recheckPermissions()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.isStorageAccessGranted)
+        assertTrue(state.isNotificationListenerGranted)
+        assertTrue(state.isBatteryOptimizationIgnored)
+        assertTrue(state.isContactsPermissionGranted)
+        assertTrue(state.isAutoStartConfirmed)
+    }
+
+    @Test
+    fun `setAutoStartConfirmed persists value to repository and updates uiState`() = runTest(testDispatcher) {
+        coEvery { userPreferencesRepository.setAutoStartConfirmed(true) } returns Unit
+        coEvery { userPreferencesRepository.isAutoStartConfirmedSync() } returns true
+
+        val viewModel = SettingsViewModel(
+            userPreferencesRepository = userPreferencesRepository,
+            secureCredentialsRepository = secureCredentialsRepository,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        viewModel.setAutoStartConfirmed(true)
+        advanceUntilIdle()
+
+        coVerify { userPreferencesRepository.setAutoStartConfirmed(true) }
+        assertTrue(viewModel.uiState.value.isAutoStartConfirmed)
+    }
 }

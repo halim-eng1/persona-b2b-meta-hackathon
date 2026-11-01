@@ -786,6 +786,20 @@
     <string name="guide_default_tips">You can add multiple keys for the same provider for load balancing and rate limit avoidance.</string>
 
     <!-- Sprint 1: System Health & Maintenance -->
+    <string name="settings_perm_fix_btn">Fix / تفعيل</string>
+    <string name="recents_lock_banner_title">Protect Assistant from Auto-Kill (Lock App)</string>
+    <string name="recents_lock_banner_desc">To avoid stopping the assistant when cleaning recent apps (Trash can), open the Recents screen, long-press the Persona B2B icon and select \'Lock / قفل\'.</string>
+    <string name="recents_lock_banner_btn">View Guide / عرض الخطوات</string>
+    <string name="recents_dialog_title">Lock Persona B2B in Recents</string>
+    <string name="recents_dialog_step1_title">1. Open Recent Apps (Recents)</string>
+    <string name="recents_dialog_step1_desc">Swipe up from the bottom and hold, or tap the square overview button.</string>
+    <string name="recents_dialog_step2_title">2. Locate Persona B2B card</string>
+    <string name="recents_dialog_step2_desc">Scroll through open app previews until you find Persona B2B.</string>
+    <string name="recents_dialog_step3_title">3. Lock the App (Transsion / Infinix XOS)</string>
+    <string name="recents_dialog_step3_desc">Tap the padlock icon above the preview card or long-press the app icon and select \'Lock\'.</string>
+    <string name="recents_dialog_step4_title">4. Background Task Killer Immunity</string>
+    <string name="recents_dialog_step4_desc">A padlock icon 🔒 will appear on the card. Persona B2B will not be terminated when tapping the trash can cleaner.</string>
+    <string name="recents_dialog_confirm_btn">Got it ✓</string>
     <string name="settings_perm_notification_disabled">Inactive (required for auto-reply)</string>
     <string name="settings_perm_battery_title">Battery Optimization Exemption</string>
     <string name="settings_perm_battery_ok">Exempted (protected from background termination)</string>

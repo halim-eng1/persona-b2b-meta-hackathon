@@ -3,7 +3,12 @@ package com.example.persona.features.settings.presentation
 import androidx.annotation.StringRes
 import com.example.persona.R
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.persona.core.data.repository.BusinessHoursSchedule
@@ -725,6 +730,10 @@ class SettingsViewModel @Inject constructor(
 
     // ── 5. System Maintenance & Health Operations ─────────────────────────────
 
+    fun recheckPermissions() {
+        refreshStoragePermission()
+    }
+
     fun refreshStoragePermission() {
         val granted = permissionChecker?.isManageStorageGranted() ?: false
         val notif = permissionChecker?.isNotificationListenerEnabled() ?: false
@@ -741,6 +750,83 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val autoStart = userPreferencesRepository.isAutoStartConfirmedSync()
             _uiState.update { it.copy(isAutoStartConfirmed = autoStart) }
+        }
+    }
+
+    fun setAutoStartConfirmed(confirmed: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setAutoStartConfirmed(confirmed)
+            recheckPermissions()
+        }
+    }
+
+    fun requestBatteryOptimizationExemption(context: Context) {
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val packageName = context.packageName
+        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                context.startActivity(intent)
+            } catch (_: Exception) {
+                val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                try {
+                    context.startActivity(fallback)
+                } catch (_: Exception) {
+                    context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
+                }
+            }
+        }
+    }
+
+    fun openAutoStartSettings(context: Context) {
+        val intents = listOf(
+            // Transsion / Infinix / Tecno Phone Manager
+            Intent().setComponent(ComponentName("com.transsion.phonemanager", "com.transsion.phonemanager.view.AutoStartListActivity")),
+            Intent().setComponent(ComponentName("com.transsion.phonemanager", "com.transsion.phonemanager.view.PowerConsumptionActivity")),
+            // Transsion Power / Optimizer fallback
+            Intent().setComponent(ComponentName("com.transsion.powersaveschedule", "com.transsion.powersaveschedule.PowerSaveScheduleActivity")),
+            // Xiaomi / MIUI
+            Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
+            // Huawei / Honor
+            Intent().setComponent(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity")),
+            // Oppo / Realme
+            Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity")),
+            // Standard App Details Settings (Universal Fallback)
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:${context.packageName}")
+            }
+        )
+
+        for (intent in intents) {
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                setAutoStartConfirmed(true)
+                return
+            } catch (_: Exception) {
+                // Try next fallback
+            }
+        }
+        setAutoStartConfirmed(true)
+    }
+
+    fun openNotificationListenerSettings(context: Context) {
+        try {
+            val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
         }
     }
 

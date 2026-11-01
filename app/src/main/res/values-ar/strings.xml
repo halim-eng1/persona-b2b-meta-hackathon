@@ -786,6 +786,20 @@
     <string name="guide_default_tips">يمكنك إضافة أكثر من مفتاح لنفس المزود لتوزيع الحمل وتجنب حدود الاستخدام.</string>
 
     <!-- Sprint 1: System Health & Maintenance -->
+    <string name="settings_perm_fix_btn">تفعيل / Fix</string>
+    <string name="recents_lock_banner_title">حماية المساعد من الإغلاق التلقائي (قفل التطبيق)</string>
+    <string name="recents_lock_banner_desc">لتجنب إيقاف المساعد عند تنظيف التطبيقات (سلة المهملات)، افتح قائمة التطبيقات الحديثة (Recents)، اضغط مطولاً على أيقونة Persona B2B واختر \'Lock / قفل\'.</string>
+    <string name="recents_lock_banner_btn">عرض الخطوات / دليل القفل</string>
+    <string name="recents_dialog_title">خطوات قفل التطبيق في قائمة التطبيقات الحديثة (Recents)</string>
+    <string name="recents_dialog_step1_title">1. افتح قائمة التطبيقات الحديثة</string>
+    <string name="recents_dialog_step1_desc">اسحب لأعلى من أسفل الشاشة وتوقف قليلاً، أو اضغط زر المربع في شريط التنقل.</string>
+    <string name="recents_dialog_step2_title">2. حدد بطاقة تطبيق Persona B2B</string>
+    <string name="recents_dialog_step2_desc">مرر بين البطاقات حتى تصل إلى بطاقة التطبيق في شاشة المهام.</string>
+    <string name="recents_dialog_step3_title">3. تفعيل القفل (Infinix / Transsion XOS)</string>
+    <string name="recents_dialog_step3_desc">اضغط على أيقونة القفل أعلى البطاقة أو اضغط مطولاً على أيقونة التطبيق واختر \'Lock / قفل\'.</string>
+    <string name="recents_dialog_step4_title">4. حماية دائمة من زر سلة المهملات</string>
+    <string name="recents_dialog_step4_desc">سيظهر رمز القفل 🔒 أعلى البطاقة، ولن يُغلق التطبيق أبداً عند الضغط على زر سلة المهملات أو مسح الكل.</string>
+    <string name="recents_dialog_confirm_btn">فهمت الخطوات ✓</string>
     <string name="settings_perm_notification_disabled">غير مفعلة (مطلوبة للرد الآلي)</string>
     <string name="settings_perm_battery_title">استثناء توفير الطاقة والبطارية</string>
     <string name="settings_perm_battery_ok">مستثناة (حماية من القتل في الخلفية)</string>
