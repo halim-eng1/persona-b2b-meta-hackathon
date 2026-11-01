@@ -104,6 +104,11 @@ interface SecureCredentialsRepository {
     fun getApiKeys(provider: String): List<String>
 
     /**
+     * Checks if at least one valid API key is configured for [provider].
+     */
+    fun hasConfiguredKeys(provider: String): Boolean = getApiKeys(provider).isNotEmpty()
+
+    /**
      * Atomically replaces the list of API keys for [provider].
      */
     fun setApiKeys(provider: String, keys: List<String>)

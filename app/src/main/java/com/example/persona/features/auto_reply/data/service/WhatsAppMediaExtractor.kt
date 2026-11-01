@@ -70,16 +70,44 @@ class WhatsAppMediaExtractor @Inject constructor(
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
     private val groqPrimaryApiKey: String
-        get() = groqPrimaryApiKeyOverride ?: BuildConfig.GROQ_API_KEY
+        get() = groqPrimaryApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: secureCredentialsRepository?.getApiKeys(ModelProviders.GROQ)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: prefsRepository?.getApiKeys(ModelProviders.GROQ)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.GROQ_API_KEY.trim()
 
     private val groqFallbackApiKey: String
-        get() = groqFallbackApiKeyOverride ?: BuildConfig.GROQ_API_KEY_V2
+        get() = groqFallbackApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: secureCredentialsRepository?.getApiKeys(ModelProviders.GROQ)?.drop(1)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: prefsRepository?.getApiKeys(ModelProviders.GROQ)?.drop(1)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.GROQ_API_KEY_V2.trim()
 
     private val qwenApiKey: String
-        get() = qwenApiKeyOverride ?: BuildConfig.QWEN_API_KEY
+        get() = qwenApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: secureCredentialsRepository?.getApiKeys(ModelProviders.QWEN)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: prefsRepository?.getApiKeys(ModelProviders.QWEN)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.QWEN_API_KEY.trim()
 
     private val geminiApiKey: String
-        get() = geminiApiKeyOverride ?: (runCatching { BuildConfig.GEMINI_API_KEY }.getOrNull() ?: "")
+        get() = geminiApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: secureCredentialsRepository?.getApiKeys(ModelProviders.GEMINI)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: prefsRepository?.getApiKeys(ModelProviders.GEMINI)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: (runCatching { BuildConfig.GEMINI_API_KEY }.getOrNull()?.trim() ?: "")
+
+    fun hasConfiguredKeys(provider: String): Boolean {
+        val norm = provider.lowercase()
+        val fromRepo = secureCredentialsRepository?.hasConfiguredKeys(norm)
+            ?: prefsRepository?.hasConfiguredKeys(norm)
+            ?: false
+        if (fromRepo) return true
+
+        return when (norm) {
+            ModelProviders.OPENROUTER -> openRouterApiKeys.isNotEmpty()
+            ModelProviders.GROQ -> groqPrimaryApiKey.isNotBlank() || groqFallbackApiKey.isNotBlank()
+            ModelProviders.QWEN -> qwenApiKey.isNotBlank()
+            ModelProviders.GEMINI -> geminiApiKey.isNotBlank()
+            else -> false
+        }
+    }
 
     val openRouterApiKeys: List<String>
         get() {
@@ -849,6 +877,10 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     private suspend fun callQwenFunAsr(audioFile: File, apiKey: String, model: String = "fun-asr-flash-2026-06-15"): String? {
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "callQwenFunAsr aborted: empty apiKey")
+            return null
+        }
         return try {
             if (!audioFile.exists() || audioFile.length() <= 100L) {
                 delay(150L)
@@ -932,6 +964,10 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     internal suspend fun callGeminiAudioTranscription(audioFile: File, apiKey: String): String? {
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "callGeminiAudioTranscription aborted: empty apiKey")
+            return null
+        }
         return try {
             if (!audioFile.exists() || audioFile.length() <= 100L) {
                 delay(150L)
@@ -1044,6 +1080,10 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     private suspend fun callGroqWhisper(audioFile: File, apiKey: String): String? {
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "callGroqWhisper aborted: empty apiKey")
+            return null
+        }
         return try {
             if (!audioFile.exists() || audioFile.length() <= 500L) {
                 delay(150L)
@@ -1091,6 +1131,10 @@ class WhatsAppMediaExtractor @Inject constructor(
         apiKey: String,
         model: String = "openai/whisper-large-v3"
     ): String? {
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "callOpenRouterAudioTranscription aborted: empty apiKey")
+            return null
+        }
         return try {
             if (!audioFile.exists() || audioFile.length() <= 100L) {
                 delay(150L)

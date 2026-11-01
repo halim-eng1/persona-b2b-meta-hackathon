@@ -178,16 +178,42 @@ fun ProviderPrioritySheet(
                                 }
                             },
                             headlineContent = {
-                                Text(
-                                    text = provider.uppercase(),
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = provider.uppercase(),
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (keys == 0) {
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f)
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.settings_ai_key_required_badge),
+                                                color = MaterialTheme.colorScheme.error,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             },
                             supportingContent = {
+                                val subText = buildString {
+                                    append(stringResource(R.string.settings_ai_keys_count, keys))
+                                    if (keys == 0) {
+                                        append(" • ")
+                                        append(stringResource(R.string.settings_ai_key_required_badge))
+                                    }
+                                }
                                 Text(
-                                    text = stringResource(R.string.settings_ai_keys_count, keys),
+                                    text = subText,
                                     color = if (keys == 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 1,

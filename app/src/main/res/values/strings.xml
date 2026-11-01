@@ -989,6 +989,9 @@
     <string name="settings_ai_keys_title">API Keys Pool</string>
     <string name="settings_ai_providers_title">Supported AI Providers</string>
     <string name="settings_ai_no_keys_warning">No API keys registered</string>
+    <string name="settings_ai_no_primary_key_banner">No API keys configured yet. Please add a key for at least one provider to activate auto-reply.</string>
+    <string name="settings_ai_key_required_badge">Key Required</string>
+    <string name="settings_ai_no_active_keys_warning">Auto-reply unavailable: No active API key registered in settings.</string>
     <string name="settings_ai_key_deleted">API key removed</string>
     <string name="settings_ai_model_deleted">Model %s removed</string>
     <!-- New: Add Model Dialog strings -->

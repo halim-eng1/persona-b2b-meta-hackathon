@@ -89,18 +89,18 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
         val key = prefKey(norm)
         val encryptedData = readCredential(key)
 
-        var keys = deserializeKeys(encryptedData)
+        var keys = deserializeKeys(encryptedData).map { it.trim() }.filter { it.isNotBlank() }
 
         // Handle legacy single-key migration if needed
         if (keys.isEmpty()) {
             if (norm == ModelProviders.NVIDIA) {
-                val legacy = readCredential(LEGACY_KEY_NVIDIA)
+                val legacy = readCredential(LEGACY_KEY_NVIDIA).trim()
                 if (legacy.isNotBlank()) {
                     keys = listOf(legacy)
                     setApiKeys(norm, keys)
                 }
             } else if (norm == ModelProviders.QWEN) {
-                val legacy = readCredential(LEGACY_KEY_QWEN)
+                val legacy = readCredential(LEGACY_KEY_QWEN).trim()
                 if (legacy.isNotBlank()) {
                     keys = listOf(legacy)
                     setApiKeys(norm, keys)
@@ -109,6 +109,7 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
         }
 
         // If keys are STILL empty, seed from BuildConfig without overwriting existing
+        // Do NOT seed BuildConfig keys if they evaluate to empty strings
         if (keys.isEmpty()) {
             val buildConfigSeeds = getBuildConfigSeedKeys(norm)
             if (buildConfigSeeds.isNotEmpty()) {
@@ -119,6 +120,10 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
 
         getOrCreateFlow(norm).value = keys
         return keys
+    }
+
+    override fun hasConfiguredKeys(provider: String): Boolean {
+        return getApiKeys(provider).isNotEmpty()
     }
 
     override fun setApiKeys(provider: String, keys: List<String>) {
@@ -191,7 +196,7 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
         ModelProviders.ALL.forEach { provider ->
             val norm = ModelProviders.normalize(provider)
             val stored = readCredential(prefKey(norm))
-            val existing = deserializeKeys(stored)
+            val existing = deserializeKeys(stored).map { it.trim() }.filter { it.isNotBlank() }
             if (existing.isEmpty()) {
                 val seeds = getBuildConfigSeedKeys(norm)
                 if (seeds.isNotEmpty()) {

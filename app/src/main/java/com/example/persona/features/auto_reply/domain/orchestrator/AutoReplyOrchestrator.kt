@@ -229,6 +229,32 @@ class AutoReplyOrchestrator @Inject constructor(
         }
     }
 
+    fun hasAnyActiveApiKeys(): Boolean {
+        val providers = listOf(
+            ModelProviders.QWEN,
+            ModelProviders.GEMINI,
+            ModelProviders.GROQ,
+            ModelProviders.NVIDIA,
+            ModelProviders.OPENROUTER,
+            ModelProviders.NARA,
+            ModelProviders.CLOUDFLARE,
+            ModelProviders.LIQUID
+        )
+        val secRepo = secureCredentialsRepository
+        if (secRepo != null && providers.any { secRepo.hasConfiguredKeys(it) }) {
+            return true
+        }
+        if (providers.any { prefsRepository.hasConfiguredKeys(it) }) {
+            return true
+        }
+        if (replyGenerationRepository is ReplyGenerationRepositoryImpl) {
+            if (providers.any { replyGenerationRepository.hasConfiguredKeys(it) }) {
+                return true
+            }
+        }
+        return false
+    }
+
     fun cancelInFlightProcessing(contactKey: String) {
         val contactName = contactKey.substringAfter('_', "")
         if (contactName.isNotBlank()) {
@@ -618,6 +644,25 @@ class AutoReplyOrchestrator @Inject constructor(
             Log.i("PersonaMetrics", "metric=notification_drop_rate value=1 contact=${processed.contactName.hashCode()}")
             Log.i("PersonaMetrics", "metric=hitl_rate value=1 contact=${processed.contactName.hashCode()}")
 
+            sendHitlHoldingReply(processed)
+            return
+        }
+
+        // 9.5. Active API Keys Guard: graceful degradation if no provider has configured keys
+        if (!hasAnyActiveApiKeys()) {
+            val warningMsg = "تعذر الرد التلقائي: لم يتم تسجيل مفتاح API نشط في الإعدادات."
+            Log.w(TAG, warningMsg)
+            PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, warningMsg)
+
+            val alertMessage = "[API Key Missing Alert] $warningMsg"
+            auditLogRepository.queuePendingReply(processed, alertMessage)
+            hitlNotificationHandler.handleHitlEscalation(processed, 1.0f)
+            hitlNotificationHandler.triggerHitlAlarm(
+                contactName = processed.contactName,
+                queryText = warningMsg,
+                score = 1.0f,
+                sourceClass = sourceClassStr
+            )
             sendHitlHoldingReply(processed)
             return
         }

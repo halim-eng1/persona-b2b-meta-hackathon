@@ -131,33 +131,65 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     private var naraApiKeyOverride: String? = null
 
     internal val primaryApiKey: String
-        get() = primaryApiKeyOverride ?: BuildConfig.OPENROUTER_API_KEY
+        get() = primaryApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: userPreferencesRepository.getApiKeys(ModelProviders.OPENROUTER).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.OPENROUTER_API_KEY.trim()
 
     internal val fallbackApiKey: String
-        get() = fallbackApiKeyOverride ?: BuildConfig.OPENROUTER_API_KEY_V2
+        get() = fallbackApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: userPreferencesRepository.getApiKeys(ModelProviders.OPENROUTER).drop(1).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.OPENROUTER_API_KEY_V2.trim()
 
     internal val groqPrimaryApiKey: String
-        get() = groqPrimaryApiKeyOverride ?: BuildConfig.GROQ_API_KEY
+        get() = groqPrimaryApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: userPreferencesRepository.getApiKeys(ModelProviders.GROQ).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.GROQ_API_KEY.trim()
 
     internal val groqFallbackApiKey: String
-        get() = groqFallbackApiKeyOverride ?: BuildConfig.GROQ_API_KEY_V2
+        get() = groqFallbackApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: userPreferencesRepository.getApiKeys(ModelProviders.GROQ).drop(1).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.GROQ_API_KEY_V2.trim()
 
     internal val nvidiaApiKey: String
-        get() = nvidiaApiKeyOverride ?: BuildConfig.NVIDIA_API_KEY
+        get() = nvidiaApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: userPreferencesRepository.getApiKeys(ModelProviders.NVIDIA).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.NVIDIA_API_KEY.trim()
 
     internal val qwenApiKey: String
-        get() = qwenApiKeyOverride ?: BuildConfig.QWEN_API_KEY
+        get() = qwenApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: userPreferencesRepository.getApiKeys(ModelProviders.QWEN).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.QWEN_API_KEY.trim()
 
     internal val geminiApiKey: String
-        get() = geminiApiKeyOverride ?: BuildConfig.GEMINI_API_KEY
+        get() = geminiApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: userPreferencesRepository.getApiKeys(ModelProviders.GEMINI).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.GEMINI_API_KEY.trim()
 
     internal val geminiApiKey2: String
-        get() = geminiApiKey2Override ?: BuildConfig.GEMINI_API_KEY_2
+        get() = geminiApiKey2Override?.trim()?.takeIf { it.isNotBlank() }
+            ?: userPreferencesRepository.getApiKeys(ModelProviders.GEMINI).drop(1).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.GEMINI_API_KEY_2.trim()
 
     internal val naraApiKey: String
-        get() = naraApiKeyOverride ?: (runCatching {
-            BuildConfig::class.java.getField("NARA_API_KEY").get(null) as? String
-        }.getOrNull() ?: "")
+        get() = naraApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: userPreferencesRepository.getApiKeys(ModelProviders.NARA).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: (runCatching {
+                BuildConfig::class.java.getField("NARA_API_KEY").get(null) as? String
+            }.getOrNull()?.trim() ?: "")
+
+    fun hasConfiguredKeys(provider: String): Boolean {
+        val norm = ModelProviders.normalize(provider)
+        if (userPreferencesRepository.hasConfiguredKeys(norm)) return true
+        return when (norm) {
+            ModelProviders.QWEN -> qwenApiKey.isNotBlank()
+            ModelProviders.NVIDIA -> nvidiaApiKey.isNotBlank()
+            ModelProviders.GROQ -> groqPrimaryApiKey.isNotBlank() || groqFallbackApiKey.isNotBlank()
+            ModelProviders.GEMINI -> geminiApiKey.isNotBlank() || geminiApiKey2.isNotBlank()
+            ModelProviders.OPENROUTER -> primaryApiKey.isNotBlank() || fallbackApiKey.isNotBlank()
+            ModelProviders.NARA -> naraApiKey.isNotBlank()
+            else -> false
+        }
+    }
 
     companion object {
         private const val TAG = PersonaLogTags.LLM
@@ -330,8 +362,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         maxTokens: Int,
         apiKey: String? = null
     ): CallResult {
-        val key = apiKey?.takeIf { it.isNotBlank() }
+        val key = apiKey?.trim()?.takeIf { it.isNotBlank() }
             ?: qwenApiKey.ifBlank { userPreferencesRepository.getQwenApiKeySync() }.trim()
+        if (key.isBlank()) {
+            PersonaLogger.w(TAG, "callQwenCloud aborted: No API key configured")
+            return CallResult.AuthOrQuotaError(401)
+        }
         return qwenClient.call(model, messages, maxTokens, key)
     }
 
@@ -341,8 +377,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         maxTokens: Int,
         apiKey: String? = null
     ): CallResult {
-        val key = apiKey?.takeIf { it.isNotBlank() }
+        val key = apiKey?.trim()?.takeIf { it.isNotBlank() }
             ?: nvidiaApiKey.ifBlank { userPreferencesRepository.getNvidiaApiKeySync() }.trim()
+        if (key.isBlank()) {
+            PersonaLogger.w(TAG, "callNvidiaNim aborted: No API key configured")
+            return CallResult.AuthOrQuotaError(401)
+        }
         return nvidiaClient.call(model, messages, maxTokens, key)
     }
 
@@ -353,9 +393,15 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         apiKey: String? = null
     ): CallResult {
         if (apiKey != null && apiKey.isNotBlank()) {
-            return groqClient.executeSingleCall(model, messages, maxTokens, apiKey)
+            return groqClient.executeSingleCall(model, messages, maxTokens, apiKey.trim())
         }
-        return groqClient.call(model, messages, maxTokens, groqPrimaryApiKey, groqFallbackApiKey)
+        val primary = groqPrimaryApiKey.trim()
+        val fallback = groqFallbackApiKey.trim()
+        if (primary.isBlank() && fallback.isBlank()) {
+            PersonaLogger.w(TAG, "callGroq aborted: No API key configured")
+            return CallResult.AuthOrQuotaError(401)
+        }
+        return groqClient.call(model, messages, maxTokens, primary, fallback)
     }
 
     internal suspend fun callGemini(
@@ -365,9 +411,15 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         apiKey: String? = null
     ): CallResult {
         if (apiKey != null && apiKey.isNotBlank()) {
-            return geminiClient.executeSingleCall(model, messages, maxTokens, apiKey)
+            return geminiClient.executeSingleCall(model, messages, maxTokens, apiKey.trim())
         }
-        return geminiClient.call(model, messages, maxTokens, geminiApiKey, geminiApiKey2)
+        val primary = geminiApiKey.trim()
+        val secondary = geminiApiKey2.trim()
+        if (primary.isBlank() && secondary.isBlank()) {
+            PersonaLogger.w(TAG, "callGemini aborted: No API key configured")
+            return CallResult.AuthOrQuotaError(401)
+        }
+        return geminiClient.call(model, messages, maxTokens, primary, secondary)
     }
 
     internal suspend fun callOpenRouter(
@@ -377,9 +429,15 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         apiKey: String? = null
     ): CallResult {
         if (apiKey != null && apiKey.isNotBlank()) {
-            return openRouterClient.executeSingleCall(model, messages, maxTokens, apiKey)
+            return openRouterClient.executeSingleCall(model, messages, maxTokens, apiKey.trim())
         }
-        return openRouterClient.call(model, messages, maxTokens, primaryApiKey, fallbackApiKey)
+        val primary = primaryApiKey.trim()
+        val fallback = fallbackApiKey.trim()
+        if (primary.isBlank() && fallback.isBlank()) {
+            PersonaLogger.w(TAG, "callOpenRouter aborted: No API key configured")
+            return CallResult.AuthOrQuotaError(401)
+        }
+        return openRouterClient.call(model, messages, maxTokens, primary, fallback)
     }
 
     internal suspend fun callNaraRouter(
@@ -388,7 +446,11 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         maxTokens: Int,
         apiKey: String? = null
     ): CallResult {
-        val key = apiKey?.takeIf { it.isNotBlank() } ?: naraApiKey
+        val key = apiKey?.trim()?.takeIf { it.isNotBlank() } ?: naraApiKey.trim()
+        if (key.isBlank()) {
+            PersonaLogger.w(TAG, "callNaraRouter aborted: No API key configured")
+            return CallResult.AuthOrQuotaError(401)
+        }
         return naraRouterClient.call(model, messages, maxTokens, key)
     }
 

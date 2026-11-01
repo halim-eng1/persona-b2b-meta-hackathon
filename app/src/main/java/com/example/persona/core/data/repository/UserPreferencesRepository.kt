@@ -403,6 +403,7 @@ class UserPreferencesRepository @Inject constructor(
     }
 
     fun getApiKeys(provider: String): List<String> = secureCredentialsRepository.getApiKeys(provider)
+    fun hasConfiguredKeys(provider: String): Boolean = secureCredentialsRepository.hasConfiguredKeys(provider)
 
     private fun resolveModelConfigs(norm: String, prefs: Preferences): List<ModelConfig> {
         val newRaw = prefs[providerModelConfigsKey(norm)]

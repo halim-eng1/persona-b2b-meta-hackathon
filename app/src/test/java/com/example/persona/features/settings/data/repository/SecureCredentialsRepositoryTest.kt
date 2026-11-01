@@ -166,4 +166,28 @@ class SecureCredentialsRepositoryTest {
         assertEquals("merchant-custom-cf-account-id", repo.getCloudflareAccountId())
         assertEquals("merchant-custom-cf-account-id", repo.cloudflareAccountIdFlow.first())
     }
+
+    @Test
+    fun `hasConfiguredKeys returns false when empty and true when keys added`() = runTest {
+        val provider = ModelProviders.OPENROUTER
+        assertEquals(false, secureCredentialsRepository.hasConfiguredKeys(provider))
+
+        secureCredentialsRepository.addApiKey(provider, "sk-test-openrouter-key")
+        assertEquals(true, secureCredentialsRepository.hasConfiguredKeys(provider))
+
+        secureCredentialsRepository.removeApiKey(provider, "sk-test-openrouter-key")
+        assertEquals(false, secureCredentialsRepository.hasConfiguredKeys(provider))
+    }
+
+    @Test
+    fun `blank strings are rejected and not counted in hasConfiguredKeys`() = runTest {
+        val provider = ModelProviders.GROQ
+        secureCredentialsRepository.addApiKey(provider, "   ")
+        assertEquals(false, secureCredentialsRepository.hasConfiguredKeys(provider))
+        assertTrue(secureCredentialsRepository.getApiKeys(provider).isEmpty())
+
+        secureCredentialsRepository.setApiKeys(provider, listOf("", "  ", "\t"))
+        assertEquals(false, secureCredentialsRepository.hasConfiguredKeys(provider))
+        assertTrue(secureCredentialsRepository.getApiKeys(provider).isEmpty())
+    }
 }

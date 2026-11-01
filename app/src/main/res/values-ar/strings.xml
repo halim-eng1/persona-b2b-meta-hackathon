@@ -989,6 +989,9 @@
     <string name="settings_ai_keys_title">مجموعة مفاتيح API</string>
     <string name="settings_ai_providers_title">مزودو الذكاء الاصطناعي المدعومون</string>
     <string name="settings_ai_no_keys_warning">لا توجد مفاتيح مسجلة</string>
+    <string name="settings_ai_no_primary_key_banner">لم يتم ضبط مفاتيح API بعد. يرجى إضافة مفتاح لمزود واحد على الأقل لتفعيل الرد التلقائي.</string>
+    <string name="settings_ai_key_required_badge">مطلوب إضافة مفتاح</string>
+    <string name="settings_ai_no_active_keys_warning">تعذر الرد التلقائي: لم يتم تسجيل مفتاح API نشط في الإعدادات.</string>
     <string name="settings_ai_key_deleted">تم حذف مفتاح API</string>
     <string name="settings_ai_model_deleted">تم حذف النموذج %s</string>
     <!-- New: Add Model Dialog strings -->

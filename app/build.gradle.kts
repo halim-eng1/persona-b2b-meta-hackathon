@@ -3,24 +3,23 @@ import org.gradle.api.provider.ValueSource
 import org.gradle.api.provider.ValueSourceParameters
 
 /**
- * Reads secrets.properties and exposes its entries as configuration inputs.
+ * Reads secrets.local.properties and secrets.properties and exposes their entries as configuration inputs.
  *
  * Implemented as a [ValueSource] so the Configuration Cache treats the file as a
  * tracked invalidation input: when any key changes, the cached configuration is
- * invalidated and the new values land in BuildConfig. A plain
- * `Properties.load(FileInputStream)` inside the script is untracked — the stale
- * cached configuration would keep reintroducing the old key values.
+ * invalidated and the new values land in BuildConfig.
  */
 abstract class SecretsValueSource : ValueSource<Properties, SecretsValueSource.Params> {
     interface Params : ValueSourceParameters {
+        @get:org.gradle.api.tasks.Optional
         @get:org.gradle.api.tasks.InputFile
         @get:org.gradle.api.tasks.PathSensitive(org.gradle.api.tasks.PathSensitivity.NONE)
         val secretsFile: org.gradle.api.file.RegularFileProperty
     }
 
     override fun obtain(): Properties = Properties().apply {
-        val file = parameters.secretsFile.get().asFile
-        if (file.exists()) {
+        val file = parameters.secretsFile.orNull?.asFile
+        if (file != null && file.exists()) {
             file.inputStream().use { load(it) }
         }
     }
@@ -35,6 +34,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+val localSecretsProperties: Properties = providers.of(SecretsValueSource::class) {
+    parameters {
+        secretsFile.set(rootProject.file("secrets.local.properties"))
+    }
+}.get()
+
 val secretsProperties: Properties = providers.of(SecretsValueSource::class) {
     parameters {
         secretsFile.set(rootProject.file("secrets.properties"))
@@ -42,9 +47,19 @@ val secretsProperties: Properties = providers.of(SecretsValueSource::class) {
 }.get()
 
 fun resolveSecret(name: String): String? {
-    return System.getenv(name)
-        ?: secretsProperties.getProperty(name)
-        ?: project.findProperty(name)?.toString()
+    val env = System.getenv(name)?.trim()?.takeIf { it.isNotBlank() }
+    if (env != null) return env
+
+    val localProp = localSecretsProperties.getProperty(name)?.trim()?.takeIf { it.isNotBlank() }
+    if (localProp != null) return localProp
+
+    val prop = secretsProperties.getProperty(name)?.trim()?.takeIf { it.isNotBlank() }
+    if (prop != null) return prop
+
+    val projProp = project.findProperty(name)?.toString()?.trim()?.takeIf { it.isNotBlank() }
+    if (projProp != null) return projProp
+
+    return null
 }
 
 android {
@@ -135,14 +150,14 @@ android {
 
         // Google Gemini credentials — resolved from environment or secrets properties
         val resolvedGeminiKey = resolveSecret("GEMINI_API_KEY") ?: resolveSecret("GOOGLE_API_KEY") ?: ""
-        val resolvedGeminiKey2 = resolveSecret("GEMINI_API_KEY_2") ?: resolveSecret("GEMINI_API_KEY_V2") ?: "gemini_placeholder_key_2"
+        val resolvedGeminiKey2 = resolveSecret("GEMINI_API_KEY_2") ?: resolveSecret("GEMINI_API_KEY_V2") ?: ""
         buildConfigField("String", "GEMINI_API_KEY", "\"$resolvedGeminiKey\"")
         buildConfigField("String", "GEMINI_API_KEY_2", "\"$resolvedGeminiKey2\"")
         buildConfigField("String", "GEMINI_BASE_URL", "\"${resolveSecret("GEMINI_BASE_URL") ?: "https://generativelanguage.googleapis.com/v1beta"}\"")
 
         // Liquid API credentials — resolved from environment or secrets properties
         val resolvedLiquidKey = resolveSecret("LIQUID_API_KEY") ?: resolveSecret("LIQUD_API_KEY") ?: ""
-        val resolvedLiquidKey2 = resolveSecret("LIQUID_API_KEY_2") ?: resolveSecret("LIQUD_API_KEY_V2") ?: "liquid_placeholder_key_2"
+        val resolvedLiquidKey2 = resolveSecret("LIQUID_API_KEY_2") ?: resolveSecret("LIQUD_API_KEY_V2") ?: ""
         buildConfigField("String", "LIQUID_API_KEY", "\"$resolvedLiquidKey\"")
         buildConfigField("String", "LIQUID_API_KEY_2", "\"$resolvedLiquidKey2\"")
         buildConfigField("String", "LIQUID_BASE_URL", "\"${resolveSecret("LIQUID_BASE_URL") ?: "https://api.liquid.ai/decisions/v1/systemone"}\"")

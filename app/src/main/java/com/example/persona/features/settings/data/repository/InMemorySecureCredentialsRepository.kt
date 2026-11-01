@@ -48,6 +48,10 @@ class InMemorySecureCredentialsRepository(
         return getOrCreateFlow(norm).value
     }
 
+    override fun hasConfiguredKeys(provider: String): Boolean {
+        return getApiKeys(provider).isNotEmpty()
+    }
+
     override fun setApiKeys(provider: String, keys: List<String>) {
         val norm = ModelProviders.normalize(provider)
         val sanitized = keys.map { it.trim() }.filter { it.isNotBlank() }.distinct()
