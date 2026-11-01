@@ -123,6 +123,7 @@ fun AiEngineScreen(
             onMoveUp = actions::moveProviderUp,
             onMoveDown = actions::moveProviderDown,
             onMove = actions::moveProvider,
+            onMoveForCapability = actions::moveProviderForCapability,
             onDismiss = { showFallbackSheet = false }
         )
     }

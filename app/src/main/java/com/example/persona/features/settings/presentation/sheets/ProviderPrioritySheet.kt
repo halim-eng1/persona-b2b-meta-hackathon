@@ -60,12 +60,19 @@ fun ProviderPrioritySheet(
     onMoveDown: (provider: String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
-    onMove: (from: Int, to: Int) -> Unit = { _, _ -> }
+    onMove: (from: Int, to: Int) -> Unit = { _, _ -> },
+    onMoveForCapability: ((capability: ModelCapability, from: Int, to: Int) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val listState = rememberLazyListState()
     val haptics = LocalHapticFeedback.current
-    val reorderState = rememberReorderableLazyListState(listState, onMove)
+    val reorderState = rememberReorderableLazyListState(listState) { from, to ->
+        if (onMoveForCapability != null) {
+            onMoveForCapability(selectedCapability, from, to)
+        } else {
+            onMove(from, to)
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

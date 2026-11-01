@@ -28,6 +28,7 @@ import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormal
 import com.example.persona.features.settings.domain.repository.ModelCapability
 import com.example.persona.features.settings.domain.repository.ModelConfig
 import com.example.persona.features.settings.domain.repository.ModelProviders
+import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -149,5 +150,60 @@ class AutoReplyOrchestratorOpenRouterTest {
         assertEquals(InboundIntent.CATALOG_INQUIRY, outcome!!.first)
         assertEquals(0.96f, outcome.second, 0.001f)
         assertEquals("liquid/lfm-2.5-2.6b:free", outcome.third)
+    }
+
+    @Test
+    fun `decideWithOpenRouter queries secure credentials when keys parameter is omitted`() = runBlocking {
+        val mockSecureCreds = mockk<SecureCredentialsRepository>(relaxed = true)
+        coEvery { mockSecureCreds.getApiKeys(ModelProviders.OPENROUTER) } returns listOf("sk-custom-user-key")
+
+        val customOrchestrator = AutoReplyOrchestrator(
+            incomingMessageDispatcher = mockk(relaxed = true),
+            processor = mockk(relaxed = true),
+            embeddingEngine = mockk(relaxed = true),
+            semanticRetrievalRepository = mockk(relaxed = true),
+            replyGenerationRepository = mockk(relaxed = true),
+            directReplyExecutionUseCase = mockk(relaxed = true),
+            auditLogRepository = mockk(relaxed = true),
+            prefsRepository = prefsRepository,
+            stylePostProcessor = StylePostProcessor(),
+            normalizer = ArabicTextNormalizer(),
+            failedQueryDao = mockk(relaxed = true),
+            chatHistoryDao = chatHistoryDao,
+            orderDao = mockk(relaxed = true),
+            businessKnowledgeDao = mockk(relaxed = true),
+            conversationMetadataDao = mockk(relaxed = true),
+            context = context,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            cloudflareClefClient = cloudflareClefClient,
+            liquidDecisionClient = liquidDecisionClient,
+            localDecisionClassifier = localDecisionClassifier,
+            openRouterClient = openRouterClient,
+            secureCredentialsRepository = mockSecureCreds
+        )
+
+        val responseJson = """{"intent": "GREETING", "confidence": 0.99}"""
+        coEvery {
+            openRouterClient.executeSingleCall(
+                model = "test-model",
+                messages = any(),
+                maxTokens = any(),
+                apiKey = "sk-custom-user-key"
+            )
+        } returns ReplyGenerationRepositoryImpl.CallResult.Success(
+            content = responseJson,
+            promptTokens = 10,
+            completionTokens = 5,
+            actualModel = "test-model"
+        )
+
+        val outcome = customOrchestrator.decideWithOpenRouter(
+            gatekeeperInput = "السلام عليكم",
+            models = listOf("test-model")
+        )
+
+        assertNotNull(outcome)
+        assertEquals(InboundIntent.GREETING, outcome!!.first)
+        io.mockk.verify(atLeast = 1) { mockSecureCreds.getApiKeys(ModelProviders.OPENROUTER) }
     }
 }

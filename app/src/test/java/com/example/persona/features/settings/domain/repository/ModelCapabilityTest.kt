@@ -137,8 +137,18 @@ class ModelCapabilityTest {
 
     @Test
     fun `inferCapabilities detects DECISION for d1 models`() {
-        val caps = ModelConfig.inferCapabilities("d1:latest")
-        assertEquals(setOf(ModelCapability.DECISION), caps)
+        assertEquals(setOf(ModelCapability.DECISION), ModelConfig.inferCapabilities("d1:latest"))
+        assertEquals(setOf(ModelCapability.DECISION), ModelConfig.inferCapabilities("d1"))
+        assertEquals(setOf(ModelCapability.DECISION), ModelConfig.inferCapabilities("liquid/d1"))
+        assertEquals(setOf(ModelCapability.DECISION), ModelConfig.inferCapabilities("custom-gatekeeper-v1"))
+        assertEquals(setOf(ModelCapability.DECISION), ModelConfig.inferCapabilities("intent-decision-router"))
+    }
+
+    @Test
+    fun `inferCapabilities does not falsely match d1 substring in sd1, feed1, or model-prod1`() {
+        assertEquals(setOf(ModelCapability.TEXT), ModelConfig.inferCapabilities("stabilityai/sd1.5"))
+        assertEquals(setOf(ModelCapability.TEXT), ModelConfig.inferCapabilities("feed1"))
+        assertEquals(setOf(ModelCapability.TEXT), ModelConfig.inferCapabilities("model-prod1"))
     }
 
     @Test

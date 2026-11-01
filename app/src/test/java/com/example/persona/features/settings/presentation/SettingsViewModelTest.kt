@@ -15,6 +15,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -613,5 +614,43 @@ class SettingsViewModelTest {
                 listOf(ModelProviders.LIQUID, ModelProviders.CLOUDFLARE, ModelProviders.OPENROUTER)
             )
         }
+    }
+
+    @Test
+    fun `moving provider in DECISION tab does NOT corrupt global providerOrder or call setProviderOrder`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        val originalGlobalOrder = viewModel.uiState.value.providerOrder
+
+        viewModel.selectCapabilityFilter(ModelCapability.DECISION)
+        advanceUntilIdle()
+
+        // Move item 1 to 0 in DECISION tab
+        viewModel.moveProvider(1, 0)
+        advanceUntilIdle()
+
+        // Global providerOrder must NOT be mutated!
+        assertEquals(originalGlobalOrder, viewModel.uiState.value.providerOrder)
+        coVerify(exactly = 0) { userPreferencesRepository.setProviderOrder(any()) }
+    }
+
+    @Test
+    fun `moving provider in TEXT tab synchronizes with circuitBreaker setProviderCascadeOrder`() = runTest(testDispatcher) {
+        val mockCircuitBreaker = mockk<com.example.persona.features.auto_reply.data.providers.ProviderCircuitBreakerAndKeyManager>(relaxed = true)
+        val viewModel = SettingsViewModel(
+            userPreferencesRepository = userPreferencesRepository,
+            secureCredentialsRepository = secureCredentialsRepository,
+            circuitBreakerAndKeyManager = mockCircuitBreaker
+        )
+        advanceUntilIdle()
+
+        viewModel.selectCapabilityFilter(ModelCapability.TEXT)
+        advanceUntilIdle()
+
+        viewModel.moveProvider(0, 1)
+        advanceUntilIdle()
+
+        verify(atLeast = 1) { mockCircuitBreaker.setProviderCascadeOrder(any()) }
     }
 }

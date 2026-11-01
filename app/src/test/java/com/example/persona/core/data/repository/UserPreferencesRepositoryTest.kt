@@ -105,6 +105,39 @@ class UserPreferencesRepositoryTest {
     }
 
     @Test
+    fun `user-deleted backfilled models are not resurrected on subsequent reads`() = runTest(testDispatcher) {
+        // User starts with some Qwen models, backfill runs on initial migration
+        val initialStored = listOf("deepseek-v4.1-flash", "qwen3.8-max")
+        repository.setProviderModels(ModelProviders.QWEN, initialStored)
+
+        val firstRead = repository.getProviderModelConfigsSync(ModelProviders.QWEN)
+        assertTrue(firstRead.any { it.modelId == "fun-asr-flash-2026-06-15" })
+
+        // User explicitly deletes fun-asr-flash and saves configs
+        val filtered = firstRead.filter { it.modelId != "fun-asr-flash-2026-06-15" }
+        repository.setProviderModelConfigs(ModelProviders.QWEN, filtered)
+
+        // Subsequent read MUST NOT auto-resurrect fun-asr-flash
+        val secondRead = repository.getProviderModelConfigsSync(ModelProviders.QWEN)
+        val secondIds = secondRead.map { it.modelId }
+        assertTrue("deepseek-v4.1-flash should remain", secondIds.contains("deepseek-v4.1-flash"))
+        assertTrue("fun-asr-flash must NOT be resurrected", !secondIds.contains("fun-asr-flash-2026-06-15"))
+    }
+
+    @Test
+    fun `custom user capabilities for cloudflare and liquid are preserved`() = runTest(testDispatcher) {
+        val customCfConfig = listOf(
+            ModelConfig("@cf/cloudflare/custom-agent", setOf(ModelCapability.TEXT, ModelCapability.DECISION))
+        )
+        repository.setProviderModelConfigs(ModelProviders.CLOUDFLARE, customCfConfig)
+
+        val retrieved = repository.getProviderModelConfigsSync(ModelProviders.CLOUDFLARE)
+        assertEquals(1, retrieved.size)
+        assertEquals("@cf/cloudflare/custom-agent", retrieved[0].modelId)
+        assertEquals(setOf(ModelCapability.TEXT, ModelCapability.DECISION), retrieved[0].capabilities)
+    }
+
+    @Test
     fun `per-capability provider priority persistence and retrieval works`() = runTest(testDispatcher) {
         // Default check
         val defaultText = repository.getProviderPrioritySync(ModelCapability.TEXT)

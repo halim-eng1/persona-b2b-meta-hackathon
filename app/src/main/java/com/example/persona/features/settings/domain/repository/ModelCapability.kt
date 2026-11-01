@@ -68,7 +68,7 @@ data class ModelConfig(
             val caps = mutableSetOf<ModelCapability>()
 
             // Decision / Gatekeeper models (Cloudflare Clef, Liquid D1, Decision/Router classifiers)
-            if (id.contains("clef") || id.contains("d1") || id.contains("decision") || id.contains("gatekeeper")) {
+            if (id.contains("clef") || id == "d1" || id.startsWith("d1:") || id.contains("/d1") || id.contains("decision") || id.contains("gatekeeper")) {
                 caps += ModelCapability.DECISION
                 return caps
             }

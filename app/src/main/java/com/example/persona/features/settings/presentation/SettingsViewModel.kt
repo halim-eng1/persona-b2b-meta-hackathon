@@ -35,13 +35,15 @@ import java.net.URL
 import java.net.UnknownHostException
 import java.util.Collections
 import javax.inject.Inject
+import com.example.persona.features.auto_reply.data.providers.ProviderCircuitBreakerAndKeyManager
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
     private val secureCredentialsRepository: SecureCredentialsRepository,
     private val permissionChecker: PermissionChecker? = null,
-    @IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val circuitBreakerAndKeyManager: ProviderCircuitBreakerAndKeyManager? = null
 ) : ViewModel() {
 
     // Secondary constructor for existing unit tests
@@ -52,7 +54,8 @@ class SettingsViewModel @Inject constructor(
         userPreferencesRepository = userPreferencesRepository,
         secureCredentialsRepository = InMemorySecureCredentialsRepository(),
         permissionChecker = permissionChecker,
-        ioDispatcher = Dispatchers.Main.immediate
+        ioDispatcher = Dispatchers.Main.immediate,
+        circuitBreakerAndKeyManager = null
     )
 
     constructor(
@@ -63,7 +66,20 @@ class SettingsViewModel @Inject constructor(
         userPreferencesRepository = userPreferencesRepository,
         secureCredentialsRepository = secureCredentialsRepository,
         permissionChecker = null,
-        ioDispatcher = ioDispatcher
+        ioDispatcher = ioDispatcher,
+        circuitBreakerAndKeyManager = null
+    )
+
+    constructor(
+        userPreferencesRepository: UserPreferencesRepository,
+        secureCredentialsRepository: SecureCredentialsRepository,
+        circuitBreakerAndKeyManager: ProviderCircuitBreakerAndKeyManager?
+    ) : this(
+        userPreferencesRepository = userPreferencesRepository,
+        secureCredentialsRepository = secureCredentialsRepository,
+        permissionChecker = null,
+        ioDispatcher = Dispatchers.Main.immediate,
+        circuitBreakerAndKeyManager = circuitBreakerAndKeyManager
     )
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -273,49 +289,34 @@ class SettingsViewModel @Inject constructor(
     private fun updateAndPersistCapabilityPriority(cap: ModelCapability, newOrder: List<String>) {
         _uiState.update { s ->
             val updatedMap = s.capabilityProviderPriorities + (cap to newOrder)
-            s.copy(capabilityProviderPriorities = updatedMap)
+            if (cap == ModelCapability.TEXT) {
+                s.copy(
+                    capabilityProviderPriorities = updatedMap,
+                    providerOrder = newOrder
+                )
+            } else {
+                s.copy(capabilityProviderPriorities = updatedMap)
+            }
         }
         viewModelScope.launch {
             userPreferencesRepository.setProviderPriority(cap, newOrder)
+            if (cap == ModelCapability.TEXT) {
+                userPreferencesRepository.setProviderOrder(newOrder)
+                circuitBreakerAndKeyManager?.setProviderCascadeOrder(newOrder)
+            }
         }
     }
 
     fun moveProviderUp(provider: String) {
         moveProviderUpForCapability(_uiState.value.selectedCapabilityFilter, provider)
-        val current = _uiState.value.providerOrder.toMutableList()
-        val idx = current.indexOf(provider)
-        if (idx > 0) {
-            Collections.swap(current, idx, idx - 1)
-            _uiState.update { it.copy(providerOrder = current) }
-            viewModelScope.launch {
-                userPreferencesRepository.setProviderOrder(current)
-            }
-        }
     }
 
     fun moveProviderDown(provider: String) {
         moveProviderDownForCapability(_uiState.value.selectedCapabilityFilter, provider)
-        val current = _uiState.value.providerOrder.toMutableList()
-        val idx = current.indexOf(provider)
-        if (idx in 0 until current.size - 1) {
-            Collections.swap(current, idx, idx + 1)
-            _uiState.update { it.copy(providerOrder = current) }
-            viewModelScope.launch {
-                userPreferencesRepository.setProviderOrder(current)
-            }
-        }
     }
 
     fun moveProvider(from: Int, to: Int) {
         moveProviderForCapability(_uiState.value.selectedCapabilityFilter, from, to)
-        val order = _uiState.value.providerOrder.toMutableList()
-        if (from !in order.indices || to !in order.indices) return
-        val item = order.removeAt(from)
-        order.add(to, item)
-        _uiState.update { it.copy(providerOrder = order) }
-        viewModelScope.launch {
-            userPreferencesRepository.setProviderOrder(order)
-        }
     }
 
     fun addApiKey(provider: String, key: String) {

@@ -1312,4 +1312,99 @@ class WhatsAppMediaExtractorTest {
         assertTrue("Transcriptions endpoint should be tried first", transcriptionsCalled)
         assertTrue("Chat completions endpoint should be called as fallback", chatCompletionsCalled)
     }
+
+    @Test
+    fun `transcribeVoiceNote uses custom OpenRouter API key from secure credentials`() = runBlocking {
+        var authHeaderReceived: String? = null
+        val mockEngine = MockEngine { request ->
+            authHeaderReceived = request.headers[HttpHeaders.Authorization]
+            respond(
+                content = """{"text": "مرحبا بك"}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+
+        val mockCreds = mockk<com.example.persona.features.settings.domain.repository.SecureCredentialsRepository>(relaxed = true)
+        every { mockCreds.getApiKeys(com.example.persona.features.settings.domain.repository.ModelProviders.OPENROUTER) } returns listOf("sk-or-custom-vault-key")
+
+        val extractor = WhatsAppMediaExtractor(
+            mockContext,
+            HttpClient(mockEngine),
+            groqPrimaryApiKey = "",
+            groqFallbackApiKey = "",
+            qwenApiKey = "",
+            geminiApiKey = "",
+            openRouterPrimaryApiKey = "",
+            openRouterFallbackApiKey = "",
+            secureCredentialsRepository = mockCreds
+        )
+
+        val tempAudio = tempFolder.newFile("test_custom_or_voice.ogg").apply {
+            writeBytes(ByteArray(1024) { 5 })
+        }
+
+        val result = extractor.transcribeVoiceNote(
+            audioFile = tempAudio,
+            audioModelsOverride = null,
+            openRouterAudioModels = listOf("openai/whisper-large-v3"),
+            audioProviderPriority = listOf("openrouter")
+        )
+
+        assertNotNull(result)
+        assertEquals("Bearer sk-or-custom-vault-key", authHeaderReceived)
+    }
+
+    @Test
+    fun `transcribeVoiceNote respects audioProviderPriority order`() = runBlocking {
+        val providersAttempted = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            val url = request.url.toString()
+            when {
+                url.contains("groq.com") -> {
+                    providersAttempted.add("groq")
+                    respond(
+                        content = """{"text": "رد من جروك"}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                }
+                url.contains("openrouter.ai") -> {
+                    providersAttempted.add("openrouter")
+                    respond(
+                        content = """{"text": "رد من اوبن راوتر"}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                }
+                else -> respond("error", HttpStatusCode.InternalServerError)
+            }
+        }
+
+        val extractor = WhatsAppMediaExtractor(
+            mockContext,
+            HttpClient(mockEngine),
+            groqPrimaryApiKey = "gsk-test-key",
+            groqFallbackApiKey = "",
+            qwenApiKey = "",
+            geminiApiKey = "",
+            openRouterPrimaryApiKey = "sk-or-test-key",
+            openRouterFallbackApiKey = ""
+        )
+
+        val tempAudio = tempFolder.newFile("test_priority_voice.ogg").apply {
+            writeBytes(ByteArray(1024) { 7 })
+        }
+
+        // Groq prioritized first
+        val result = extractor.transcribeVoiceNote(
+            audioFile = tempAudio,
+            audioModelsOverride = null,
+            openRouterAudioModels = listOf("openai/whisper-large-v3"),
+            audioProviderPriority = listOf("groq", "openrouter")
+        )
+
+        assertNotNull(result)
+        assertEquals(listOf("groq"), providersAttempted)
+    }
 }

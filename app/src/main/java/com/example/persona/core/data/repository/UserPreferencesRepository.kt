@@ -98,6 +98,7 @@ class UserPreferencesRepository @Inject constructor(
 
         // ── Provider Ordering & Model Management ──────────────────────────────
         val KEY_PROVIDER_ORDER = stringPreferencesKey("provider_order")
+        val KEY_BACKFILL_APPLIED_V2 = booleanPreferencesKey("models_backfill_applied_v2")
 
         fun providerPriorityKey(capability: ModelCapability) =
             stringPreferencesKey("provider_priority_${capability.name}")
@@ -389,49 +390,48 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
+    fun getApiKeys(provider: String): List<String> = secureCredentialsRepository.getApiKeys(provider)
+
     private fun resolveModelConfigs(norm: String, prefs: Preferences): List<ModelConfig> {
-        val baseConfigs: List<ModelConfig> = run {
-            // Prefer new capability-annotated key
-            val newRaw = prefs[providerModelConfigsKey(norm)]
-            if (!newRaw.isNullOrBlank()) {
-                newRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
-                    .map { ModelConfig.parse(it) }
+        val newRaw = prefs[providerModelConfigsKey(norm)]
+        val hasCustomConfigs = !newRaw.isNullOrBlank()
+
+        val baseConfigs: List<ModelConfig> = if (hasCustomConfigs && newRaw != null) {
+            // User has explicitly customized/saved capability-annotated models:
+            // Parse configs AS-IS, preserving custom capabilities (including any custom tags for Cloudflare/Liquid)
+            newRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+                .map { ModelConfig.parse(it) }
+        } else {
+            // Fall back to legacy plain-model key or defaults
+            val legacyRaw = prefs[providerModelsKey(norm)]
+            val ids = if (!legacyRaw.isNullOrBlank()) {
+                legacyRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
             } else {
-                // Fall back to legacy plain-model key (backward compat)
-                val legacyRaw = prefs[providerModelsKey(norm)]
-                val ids = if (!legacyRaw.isNullOrBlank()) {
-                    legacyRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+                DEFAULT_PROVIDER_MODELS[norm] ?: emptyList()
+            }
+            ids.map { id ->
+                val caps = if (norm == ModelProviders.CLOUDFLARE || norm == ModelProviders.LIQUID) {
+                    setOf(ModelCapability.DECISION)
                 } else {
-                    DEFAULT_PROVIDER_MODELS[norm] ?: emptyList()
+                    PRESEEDED_CAPABILITIES[id] ?: ModelConfig.inferCapabilities(id)
                 }
-                ids.map { id ->
-                    val caps = PRESEEDED_CAPABILITIES[id] ?: ModelConfig.inferCapabilities(id)
-                    ModelConfig(modelId = id, capabilities = caps)
-                }
+                ModelConfig(modelId = id, capabilities = caps)
             }
         }
 
-        // Restrict Cloudflare & Liquid to ONLY DECISION capability (remove TEXT/VISION)
-        val restrictedConfigs = if (norm == ModelProviders.CLOUDFLARE || norm == ModelProviders.LIQUID) {
-            baseConfigs.map { config ->
-                config.copy(capabilities = setOf(ModelCapability.DECISION))
+        // Auto-backfill strictly once for legacy users who haven't saved custom configs
+        val backfillApplied = prefs[KEY_BACKFILL_APPLIED_V2] ?: false
+        val backfillList = REQUIRED_MODELS_BACKFILL[norm]
+        return if (!hasCustomConfigs && !backfillApplied && backfillList != null) {
+            val existingIds = baseConfigs.map { it.modelId }.toSet()
+            val missing = backfillList.filter { it.modelId !in existingIds }
+            if (missing.isNotEmpty()) {
+                baseConfigs + missing
+            } else {
+                baseConfigs
             }
         } else {
             baseConfigs
-        }
-
-        // Auto-backfill on read for existing users with Qwen / OpenRouter
-        val backfillList = REQUIRED_MODELS_BACKFILL[norm]
-        return if (backfillList != null) {
-            val existingIds = restrictedConfigs.map { it.modelId }.toSet()
-            val missing = backfillList.filter { it.modelId !in existingIds }
-            if (missing.isNotEmpty()) {
-                restrictedConfigs + missing
-            } else {
-                restrictedConfigs
-            }
-        } else {
-            restrictedConfigs
         }
     }
 
@@ -450,6 +450,8 @@ class UserPreferencesRepository @Inject constructor(
             prefs[providerModelConfigsKey(norm)] = sanitized.joinToString("\n") { it.serialize() }
             // Keep legacy plain key in sync for backward compat with old callers
             prefs[providerModelsKey(norm)] = sanitized.joinToString("\n") { it.modelId }
+            // Record that backfill migration has been applied so deleted models are not resurrected
+            prefs[KEY_BACKFILL_APPLIED_V2] = true
         }
     }
 
@@ -475,16 +477,10 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun setProviderModels(provider: String, models: List<String>) {
         val norm = ModelProviders.normalize(provider)
-        // Merge with existing capability data so we don't lose capability tags on reorder/delete
-        val existingConfigs = getProviderModelConfigsSync(norm).associateBy { it.modelId }
-        val newConfigs = models
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .distinct()
-            .map { id ->
-                existingConfigs[id] ?: ModelConfig(id, ModelConfig.inferCapabilities(id))
-            }
-        setProviderModelConfigs(norm, newConfigs)
+        val sanitized = models.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        dataStore.edit { preferences ->
+            preferences[providerModelsKey(norm)] = sanitized.joinToString("\n")
+        }
     }
 
     suspend fun addProviderModel(provider: String, model: String) {

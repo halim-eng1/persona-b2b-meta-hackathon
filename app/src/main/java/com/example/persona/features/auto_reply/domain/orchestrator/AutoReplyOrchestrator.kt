@@ -33,6 +33,7 @@ import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
 import com.example.persona.features.settings.domain.repository.ModelCapability
 import com.example.persona.features.settings.domain.repository.ModelProviders
+import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormalizer
 import com.example.persona.core.network.dto.AgenticLlmResponse
@@ -96,7 +97,8 @@ class AutoReplyOrchestrator @Inject constructor(
     private val localDecisionClassifier: LocalDecisionClassifier = LocalDecisionClassifier(),
     private val openRouterClient: OpenRouterClient = OpenRouterClient(HttpClient()),
     private val persistentDebounceBuffer: PersistentDebounceBuffer = PersistentDebounceBuffer(context),
-    private val threadIdentityResolver: ThreadIdentityResolver? = null
+    private val threadIdentityResolver: ThreadIdentityResolver? = null,
+    private val secureCredentialsRepository: SecureCredentialsRepository? = null
 ) {
     companion object {
         private const val TAG = "AutoReplyOrchestrator"
@@ -658,7 +660,10 @@ class AutoReplyOrchestrator @Inject constructor(
                                 .filter { ModelCapability.AUDIO in it.capabilities }
                                 .map { it.modelId }
                         }.getOrNull()
-                        val transcribed = mediaExtractor.transcribeVoiceNote(voiceFile, audioModels, openRouterAudioModels)
+                        val audioPriority = runCatching {
+                            prefsRepository.getProviderPrioritySync(ModelCapability.AUDIO)
+                        }.getOrNull()
+                        val transcribed = mediaExtractor.transcribeVoiceNote(voiceFile, audioModels, openRouterAudioModels, audioPriority)
                         if (!transcribed.isNullOrBlank()) {
                             val updatedText = "[رسالة صوتية من العميل]: $transcribed"
                             val retainMediaPath = if (isAudioFilePath(currentMediaFilePath)) null else currentMediaFilePath
@@ -808,58 +813,79 @@ class AutoReplyOrchestrator @Inject constructor(
                             .map { it.modelId }
                     }.getOrElse { emptyList() }
 
-                    val cfIntent = runCatching {
-                        cloudflareClefClient.decide(gatekeeperInput, timeoutMs = 1150L)
-                    }.onFailure { e ->
-                        Log.w(TAG, "Gatekeeper Tier 2 (Cloudflare Clef) threw exception: ${e.message}")
-                    }.getOrNull()
+                    val decisionPriority = runCatching {
+                        prefsRepository.getProviderPrioritySync(ModelCapability.DECISION)
+                    }.getOrNull()?.filter { it.isNotBlank() }?.ifEmpty { null }
+                        ?: ModelProviders.DEFAULT_CAPABILITY_PROVIDERS[ModelCapability.DECISION]
+                        ?: listOf(ModelProviders.CLOUDFLARE, ModelProviders.LIQUID, ModelProviders.OPENROUTER)
 
-                    if (cfIntent != null) {
-                        val latency = System.currentTimeMillis() - tGatekeeper
-                        DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Tier 2: Cloudflare Clef"
-                    } else {
-                        val latencyTier2 = System.currentTimeMillis() - tGatekeeper
-                        Log.w(TAG, "⚠️ Gatekeeper Tier 2 (Cloudflare Clef) failed or timed out (${latencyTier2}ms). Falling back to Tier 3 (Liquid AI)...")
-                        PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper Tier 2 (Cloudflare Clef) failed or timed out (${latencyTier2}ms). Falling back to Tier 3 (Liquid AI)")
+                    var resolvedOutcome: Pair<DecisionResult, String>? = null
 
-                        val tLiquid = System.currentTimeMillis()
-                        val liquidIntent = runCatching {
-                            liquidDecisionClient.decide(gatekeeperInput, timeoutMs = 800L)
-                        }.onFailure { e ->
-                            Log.w(TAG, "Gatekeeper Tier 3 (Liquid AI) threw exception: ${e.message}")
-                        }.getOrNull()
+                    for (provider in decisionPriority) {
+                        when (provider.lowercase()) {
+                            ModelProviders.CLOUDFLARE -> {
+                                val tCloudflare = System.currentTimeMillis()
+                                val cfIntent = runCatching {
+                                    cloudflareClefClient.decide(gatekeeperInput, timeoutMs = 1150L)
+                                }.onFailure { e ->
+                                    Log.w(TAG, "Gatekeeper (Cloudflare Clef) threw exception: ${e.message}")
+                                }.getOrNull()
 
-                        if (liquidIntent != null) {
-                            val latency = System.currentTimeMillis() - tGatekeeper
-                            DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Tier 3: Liquid AI"
-                        } else {
-                            val latencyTier3 = System.currentTimeMillis() - tLiquid
-                            if (openRouterDecisionModels.isNotEmpty()) {
-                                Log.w(TAG, "⚠️ Gatekeeper Tier 3 (Liquid AI) failed or timed out (${latencyTier3}ms). Falling back to Tier 4 (OpenRouter Gatekeeper)...")
-                                PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper Tier 3 (Liquid AI) failed or timed out (${latencyTier3}ms). Falling back to Tier 4 (OpenRouter Gatekeeper)")
-
-                                val orOutcome = try {
-                                    decideWithOpenRouter(gatekeeperInput, openRouterDecisionModels, timeoutMs = 1500L)
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Gatekeeper Tier 4 (OpenRouter) threw exception: ${e.message}")
-                                    null
-                                }
-
-                                if (orOutcome != null) {
+                                if (cfIntent != null) {
                                     val latency = System.currentTimeMillis() - tGatekeeper
-                                    DecisionResult(intent = orOutcome.first, confidence = orOutcome.second, latencyMs = latency) to "Tier 4: OpenRouter (${orOutcome.third})"
+                                    resolvedOutcome = DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Cloudflare Clef"
+                                    break
                                 } else {
-                                    val latency = System.currentTimeMillis() - tGatekeeper
-                                    localDecision.copy(latencyMs = latency) to "Tier 1: LocalDecisionClassifier (On-Device Test Fallback)"
+                                    val latencyStep = System.currentTimeMillis() - tCloudflare
+                                    Log.w(TAG, "⚠️ Gatekeeper (Cloudflare Clef) failed or timed out (${latencyStep}ms). Falling back...")
+                                    PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper (Cloudflare Clef) failed or timed out (${latencyStep}ms). Falling back...")
                                 }
-                            } else {
-                                Log.w(TAG, "⚠️ Gatekeeper Tier 3 (Liquid AI) failed or timed out (${latencyTier3}ms). Falling back to Tier 1 local decision...")
-                                PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper Tier 3 (Liquid AI) failed or timed out (${latencyTier3}ms). Falling back to Tier 1 local decision")
+                            }
+                            ModelProviders.LIQUID -> {
+                                val tLiquid = System.currentTimeMillis()
+                                val liquidIntent = runCatching {
+                                    liquidDecisionClient.decide(gatekeeperInput, timeoutMs = 800L)
+                                }.onFailure { e ->
+                                    Log.w(TAG, "Gatekeeper (Liquid AI) threw exception: ${e.message}")
+                                }.getOrNull()
 
-                                val latency = System.currentTimeMillis() - tGatekeeper
-                                localDecision.copy(latencyMs = latency) to "Tier 1: LocalDecisionClassifier (On-Device Test Fallback)"
+                                if (liquidIntent != null) {
+                                    val latency = System.currentTimeMillis() - tGatekeeper
+                                    resolvedOutcome = DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Liquid AI"
+                                    break
+                                } else {
+                                    val latencyStep = System.currentTimeMillis() - tLiquid
+                                    Log.w(TAG, "⚠️ Gatekeeper (Liquid AI) failed or timed out (${latencyStep}ms). Falling back...")
+                                    PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper (Liquid AI) failed or timed out (${latencyStep}ms). Falling back...")
+                                }
+                            }
+                            ModelProviders.OPENROUTER -> {
+                                if (openRouterDecisionModels.isNotEmpty()) {
+                                    val tOr = System.currentTimeMillis()
+                                    val orOutcome = try {
+                                        decideWithOpenRouter(gatekeeperInput, openRouterDecisionModels, timeoutMs = 1500L)
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Gatekeeper (OpenRouter) threw exception: ${e.message}")
+                                        null
+                                    }
+
+                                    if (orOutcome != null) {
+                                        val latency = System.currentTimeMillis() - tGatekeeper
+                                        resolvedOutcome = DecisionResult(intent = orOutcome.first, confidence = orOutcome.second, latencyMs = latency) to "OpenRouter (${orOutcome.third})"
+                                        break
+                                    } else {
+                                        val latencyStep = System.currentTimeMillis() - tOr
+                                        Log.w(TAG, "⚠️ Gatekeeper (OpenRouter) failed or timed out (${latencyStep}ms). Falling back...")
+                                        PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper (OpenRouter) failed or timed out (${latencyStep}ms). Falling back...")
+                                    }
+                                }
                             }
                         }
+                    }
+
+                    resolvedOutcome ?: run {
+                        val latency = System.currentTimeMillis() - tGatekeeper
+                        localDecision.copy(latencyMs = latency) to "Tier 1: LocalDecisionClassifier (On-Device Test Fallback)"
                     }
                 }
             }
@@ -1496,7 +1522,16 @@ class AutoReplyOrchestrator @Inject constructor(
         timeoutMs: Long = 1500L
     ): Triple<InboundIntent, Float, String>? = kotlinx.coroutines.withContext(Dispatchers.IO) {
         withTimeoutOrNull(timeoutMs) {
-            val validKeys = keys.map { it.trim() }.filter { it.isNotBlank() }.ifEmpty {
+            val userKeys = if (keys.isNotEmpty()) {
+                keys
+            } else {
+                (secureCredentialsRepository?.getApiKeys(ModelProviders.OPENROUTER)
+                    ?: runCatching { prefsRepository.getApiKeys(ModelProviders.OPENROUTER) }.getOrNull())
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotBlank() }
+                    .orEmpty()
+            }
+            val validKeys = userKeys.ifEmpty {
                 listOfNotNull(
                     runCatching { BuildConfig.OPENROUTER_API_KEY }.getOrNull()?.trim()?.takeIf { it.isNotBlank() },
                     runCatching { BuildConfig.OPENROUTER_API_KEY_V2 }.getOrNull()?.trim()?.takeIf { it.isNotBlank() }
