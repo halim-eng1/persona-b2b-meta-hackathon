@@ -683,12 +683,12 @@ class AutoReplyOrchestrator @Inject constructor(
                     val voiceFile = mediaExtractor.captureLatestVoiceNote(processed.sourceClass, processed.postTime, durationSeconds)
                     if (voiceFile != null) {
                         val audioModels = runCatching {
-                            prefsRepository.getProviderModelConfigsSync(ModelProviders.QWEN)
+                            prefsRepository.getProviderModelConfigsSync(ModelProviders.QWEN, ModelCapability.AUDIO)
                                 .filter { ModelCapability.AUDIO in it.capabilities }
                                 .map { it.modelId }
                         }.getOrNull()
                         val openRouterAudioModels = runCatching {
-                            prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER)
+                            prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER, ModelCapability.AUDIO)
                                 .filter { ModelCapability.AUDIO in it.capabilities }
                                 .map { it.modelId }
                         }.getOrNull()
@@ -840,7 +840,7 @@ class AutoReplyOrchestrator @Inject constructor(
                     }
 
                     val openRouterDecisionModels = runCatching {
-                        prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER)
+                        prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER, ModelCapability.DECISION)
                             .filter { ModelCapability.DECISION in it.capabilities }
                             .map { it.modelId }
                     }.getOrElse { emptyList() }

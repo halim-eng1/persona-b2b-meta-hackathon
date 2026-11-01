@@ -1,5 +1,8 @@
 package com.example.persona.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -17,6 +20,7 @@ import com.example.persona.features.chats.presentation.list.ChatsListScreen
 import com.example.persona.features.contacts.presentation.ContactDirectoryScreen
 import com.example.persona.features.home.presentation.HomeScreen
 import com.example.persona.features.knowledge.presentation.KnowledgeManagementScreen
+import com.example.persona.features.onboarding.presentation.FeatureOnboardingScreen
 import com.example.persona.features.onboarding.presentation.PermissionOnboardingScreen
 import com.example.persona.features.onboarding.presentation.model_download.ModelPreparationScreen
 import com.example.persona.features.orders.presentation.OrdersDashboardScreen
@@ -26,12 +30,18 @@ import com.example.persona.features.settings.presentation.SettingsScreen
 fun PersonaNavGraph(
     navController: NavHostController,
     modifier: Modifier = Modifier,
-    startDestination: Screen = Screen.Home
+    startDestination: Screen = Screen.Home,
+    isModelReady: Boolean = true,
+    onCompleteOnboarding: () -> Unit = {}
 ) {
     NavHost(
         navController = navController,
         startDestination = startDestination,
-        modifier = modifier
+        modifier = modifier,
+        enterTransition = { fadeIn(animationSpec = tween(140)) },
+        exitTransition = { fadeOut(animationSpec = tween(100)) },
+        popEnterTransition = { fadeIn(animationSpec = tween(140)) },
+        popExitTransition = { fadeOut(animationSpec = tween(100)) }
     ) {
         // ── Bottom nav destinations ───────────────────────────────────────────
         composable<Screen.Home> {
@@ -49,10 +59,16 @@ fun PersonaNavGraph(
                     navController.navigate(Screen.ChatDetail(contactName, sourceClass))
                 },
                 onNavigateToOrders = {
-                    navController.navigate(Screen.Orders)
+                    navController.navigate(Screen.Orders) {
+                        launchSingleTop = true
+                        restoreState = true
+                    }
                 },
                 onNavigateToKnowledge = {
-                    navController.navigate(Screen.KnowledgeManagement)
+                    navController.navigate(Screen.KnowledgeManagement) {
+                        launchSingleTop = true
+                        restoreState = true
+                    }
                 },
                 onNavigateToContacts = {
                     navController.navigate(Screen.Contacts)
@@ -111,6 +127,19 @@ fun PersonaNavGraph(
         composable<Screen.ChatDetail> {
             ChatDetailScreen(
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // ── First-Time Feature Onboarding ─────────────────────────────────────
+        composable<Screen.FeatureOnboarding> {
+            FeatureOnboardingScreen(
+                onComplete = {
+                    onCompleteOnboarding()
+                    val next = if (isModelReady) Screen.Home else Screen.ModelPreparation
+                    navController.navigate(next) {
+                        popUpTo(Screen.FeatureOnboarding) { inclusive = true }
+                    }
+                }
             )
         }
 

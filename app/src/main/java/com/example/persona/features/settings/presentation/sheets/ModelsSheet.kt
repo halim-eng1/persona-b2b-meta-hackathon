@@ -1,5 +1,7 @@
 package com.example.persona.features.settings.presentation.sheets
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -54,8 +57,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -63,6 +64,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import com.example.persona.R
 import com.example.persona.features.settings.domain.repository.ModelCapability
 import com.example.persona.features.settings.domain.repository.ModelConfig
@@ -104,11 +106,14 @@ private fun inferCapabilities(modelId: String): Set<ModelCapability> =
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AddProviderModelDialog(
+    initialCapability: ModelCapability = ModelCapability.TEXT,
     onDismiss: () -> Unit,
     onConfirm: (modelId: String, capabilities: Set<ModelCapability>) -> Unit
 ) {
+    BackHandler(onBack = onDismiss)
+
     var modelInput by rememberSaveable { mutableStateOf("") }
-    var selectedCaps by remember { mutableStateOf(setOf(ModelCapability.TEXT)) }
+    var selectedCaps by remember { mutableStateOf(setOf(initialCapability)) }
     var userHasManuallyEditedCaps by remember { mutableStateOf(false) }
 
     // Smart pre-selection: re-infer when user types, only if user hasn't manually customized chips
@@ -119,11 +124,12 @@ private fun AddProviderModelDialog(
         }
     }
 
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
-
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        ),
         icon = {
             Icon(
                 imageVector = Icons.Default.SmartToy,
@@ -146,9 +152,7 @@ private fun AddProviderModelDialog(
                     label = { Text(stringResource(R.string.settings_ai_add_model_label)) },
                     placeholder = { Text("e.g. qwen3.8-omni-flash") },
                     singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
 
@@ -208,7 +212,7 @@ private fun AddProviderModelDialog(
                     if (trimmed.isNotBlank()) {
                         onConfirm(
                             trimmed,
-                            selectedCaps.ifEmpty { setOf(ModelCapability.TEXT) }
+                            selectedCaps.ifEmpty { setOf(initialCapability) }
                         )
                     }
                 },
@@ -296,26 +300,54 @@ fun ModelsSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     /** Capability-tagged configs parallel to [models]; may be shorter on first load. */
-    modelConfigs: List<ModelConfig> = emptyList()
+    modelConfigs: List<ModelConfig> = emptyList(),
+    /** Per-capability ordered model configs. */
+    capabilityModelConfigs: Map<ModelCapability, List<ModelConfig>> = emptyMap()
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val undo = LocalUndoHost.current
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    val initialCapability = remember(modelConfigs) {
+        if (modelConfigs.any { ModelCapability.TEXT in it.capabilities }) {
+            ModelCapability.TEXT
+        } else {
+            modelConfigs.flatMap { it.capabilities }.firstOrNull() ?: ModelCapability.TEXT
+        }
+    }
+    var selectedCapability by rememberSaveable { mutableStateOf(initialCapability) }
+
+    val visibleConfigs = remember(selectedCapability, capabilityModelConfigs, modelConfigs, models) {
+        val fromCapMap = capabilityModelConfigs[selectedCapability]
+        if (!fromCapMap.isNullOrEmpty()) {
+            fromCapMap
+        } else {
+            val matching = modelConfigs.filter { selectedCapability in it.capabilities }
+            if (matching.isNotEmpty()) {
+                matching
+            } else {
+                models.map { id ->
+                    modelConfigs.firstOrNull { it.modelId == id }
+                        ?: ModelConfig(id, ModelConfig.inferCapabilities(id))
+                }.filter { selectedCapability in it.capabilities }
+            }
+        }
+    }
+
     val reorderState = rememberReorderableLazyListState(listState) { from, to ->
-        actions.moveModel(provider, from, to)
+        actions.moveModelForCapability(provider, selectedCapability, from, to)
     }
 
     var showAddDialog by remember { mutableStateOf(false) }
 
-    // Build a lookup: modelId -> ModelConfig (for badge rendering)
-    val configMap = remember(modelConfigs, models) {
-        val byId = modelConfigs.associateBy { it.modelId }
-        models.associate { id ->
-            id to (byId[id] ?: ModelConfig(id, ModelConfig.inferCapabilities(id)))
-        }
-    }
+    val capabilityChips = listOf(
+        ModelCapability.TEXT to (Icons.Default.TextFields to R.string.capability_text),
+        ModelCapability.VISION to (Icons.Default.Image to R.string.capability_vision),
+        ModelCapability.AUDIO to (Icons.Default.MicNone to R.string.capability_audio),
+        ModelCapability.DECISION to (Icons.Default.Bolt to R.string.capability_decision)
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -349,142 +381,208 @@ fun ModelsSheet(
                     )
                 }
 
-                // ── Model list ────────────────────────────────────────────────
-                LazyColumn(
-                    state = listState,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                // ── Capability Filter Chips ───────────────────────────────────
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f, fill = false)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    itemsIndexed(models, key = { _, m -> m }) { index, modelName ->
-                        val config = configMap[modelName]
-                            ?: ModelConfig(modelName, setOf(ModelCapability.TEXT))
+                    capabilityChips.forEach { (cap, iconAndLabel) ->
+                        val (icon, labelRes) = iconAndLabel
+                        val isSelected = cap == selectedCapability
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedCapability = cap },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = stringResource(labelRes),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+                }
 
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .reorderableItem(reorderState, modelName, index, haptics)
+                // ── Model list ────────────────────────────────────────────────
+                if (visibleConfigs.isEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column(
+                            Icon(
+                                imageVector = iconForCapability(selectedCapability),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Text(
+                                text = stringResource(R.string.settings_ai_no_models_for_capability),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false)
+                    ) {
+                        itemsIndexed(visibleConfigs, key = { _, m -> m.modelId }) { index, config ->
+                            val modelName = config.modelId
+
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    .reorderableItem(reorderState, modelName, index, haptics)
                             ) {
-                                // TOP ROW: Model ID (start, weight 1f) + Priority Badge (end)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Text(
-                                        text = modelName,
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.SemiBold
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = if (index == 0)
-                                            PersonaTheme.statusColors.success.copy(alpha = 0.15f)
-                                        else
-                                            MaterialTheme.colorScheme.surfaceVariant
+                                    // TOP ROW: Model ID (start, weight 1f) + Priority Badge (end)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = if (index == 0)
-                                                stringResource(R.string.settings_ai_model_primary_badge)
-                                            else
-                                                stringResource(R.string.settings_ai_model_fallback_badge, index + 1),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (index == 0)
-                                                PersonaTheme.statusColors.success
-                                            else
-                                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            text = modelName,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.SemiBold
+                                            ),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
                                         )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (index == 0)
+                                                PersonaTheme.statusColors.success.copy(alpha = 0.15f)
+                                            else
+                                                MaterialTheme.colorScheme.surfaceVariant
+                                        ) {
+                                            Text(
+                                                text = if (index == 0)
+                                                    stringResource(R.string.settings_ai_model_primary_badge)
+                                                else
+                                                    stringResource(R.string.settings_ai_model_fallback_badge, index + 1),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (index == 0)
+                                                    PersonaTheme.statusColors.success
+                                                else
+                                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
                                     }
-                                }
 
-                                // BOTTOM ROW: Badges & Controls
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Start side: Capability badges in a Row with Modifier.weight(1f)
-                                    CapabilityBadgeRow(
-                                        capabilities = config.capabilities,
-                                        modifier = Modifier.weight(1f)
-                                    )
-
-                                    Spacer(modifier = Modifier.width(4.dp))
-
-                                    // End side: Fixed action icons (Move Up, Move Down, Delete, Drag Handle)
+                                    // BOTTOM ROW: Badges & Controls
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        IconButton(
-                                            onClick = { actions.moveModelUp(provider, modelName) },
-                                            enabled = index > 0,
-                                            modifier = Modifier.size(36.dp)
+                                        // Start side: Capability badges in a Row with Modifier.weight(1f)
+                                        CapabilityBadgeRow(
+                                            capabilities = config.capabilities,
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        Spacer(modifier = Modifier.width(4.dp))
+
+                                        // End side: Fixed action icons (Move Up, Move Down, Delete, Drag Handle)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.ArrowUpward,
-                                                contentDescription = stringResource(R.string.reorder_move_up),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                        IconButton(
-                                            onClick = { actions.moveModelDown(provider, modelName) },
-                                            enabled = index < models.size - 1,
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.ArrowDownward,
-                                                contentDescription = stringResource(R.string.reorder_move_down),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                        IconButton(
-                                            onClick = {
-                                                actions.removeProviderModel(provider, modelName)
-                                                undo.offer(
-                                                    message = context.getString(R.string.settings_ai_model_deleted, modelName),
-                                                    actionLabel = context.getString(R.string.common_undo)
-                                                ) {
-                                                    actions.addProviderModelAtIndex(provider, modelName, index)
-                                                }
-                                            },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.DeleteOutline,
-                                                contentDescription = stringResource(R.string.common_delete),
-                                                tint = MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                        Box(
-                                            modifier = Modifier
-                                                .size(24.dp)
-                                                .reorderableHandle(reorderState, modelName, index, haptics),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.DragHandle,
-                                                contentDescription = stringResource(R.string.reorder_drag_handle),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(20.dp)
-                                            )
+                                            IconButton(
+                                                onClick = { actions.moveModelUpForCapability(provider, selectedCapability, modelName) },
+                                                enabled = index > 0,
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ArrowUpward,
+                                                    contentDescription = stringResource(R.string.reorder_move_up),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = { actions.moveModelDownForCapability(provider, selectedCapability, modelName) },
+                                                enabled = index < visibleConfigs.size - 1,
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ArrowDownward,
+                                                    contentDescription = stringResource(R.string.reorder_move_down),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = {
+                                                    actions.removeProviderModel(provider, modelName)
+                                                    undo.offer(
+                                                        message = context.getString(R.string.settings_ai_model_deleted, modelName),
+                                                        actionLabel = context.getString(R.string.common_undo)
+                                                    ) {
+                                                        actions.addProviderModelWithCapabilities(provider, modelName, config.capabilities)
+                                                    }
+                                                },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.DeleteOutline,
+                                                    contentDescription = stringResource(R.string.common_delete),
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(24.dp)
+                                                    .reorderableHandle(reorderState, modelName, index, haptics),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.DragHandle,
+                                                    contentDescription = stringResource(R.string.reorder_drag_handle),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -517,6 +615,7 @@ fun ModelsSheet(
     // ── Add Model Dialog ───────────────────────────────────────────────────────
     if (showAddDialog) {
         AddProviderModelDialog(
+            initialCapability = selectedCapability,
             onDismiss = { showAddDialog = false },
             onConfirm = { modelId, capabilities ->
                 actions.addProviderModelWithCapabilities(provider, modelId, capabilities)

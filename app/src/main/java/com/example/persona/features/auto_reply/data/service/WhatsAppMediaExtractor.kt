@@ -117,11 +117,12 @@ class WhatsAppMediaExtractor @Inject constructor(
                 .orEmpty()
             if (fromRepo.isNotEmpty()) return fromRepo
 
-            val overrides = listOfNotNull(
-                openRouterPrimaryApiKeyOverride?.trim()?.takeIf { it.isNotBlank() },
-                openRouterFallbackApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
-            )
-            if (overrides.isNotEmpty()) return overrides
+            if (openRouterPrimaryApiKeyOverride != null || openRouterFallbackApiKeyOverride != null) {
+                return listOfNotNull(
+                    openRouterPrimaryApiKeyOverride?.trim()?.takeIf { it.isNotBlank() },
+                    openRouterFallbackApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+                )
+            }
 
             return listOfNotNull(
                 runCatching { BuildConfig.OPENROUTER_API_KEY }.getOrNull()?.trim()?.takeIf { it.isNotBlank() },

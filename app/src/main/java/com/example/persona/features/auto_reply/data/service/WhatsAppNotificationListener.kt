@@ -311,12 +311,12 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                     try {
                         if (audioFile != null) {
                             val audioModels = runCatching {
-                                prefsRepository.getProviderModelConfigsSync(ModelProviders.QWEN)
+                                prefsRepository.getProviderModelConfigsSync(ModelProviders.QWEN, ModelCapability.AUDIO)
                                     .filter { ModelCapability.AUDIO in it.capabilities }
                                     .map { it.modelId }
                             }.getOrNull()
                             val openRouterAudioModels = runCatching {
-                                prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER)
+                                prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER, ModelCapability.AUDIO)
                                     .filter { ModelCapability.AUDIO in it.capabilities }
                                     .map { it.modelId }
                             }.getOrNull()

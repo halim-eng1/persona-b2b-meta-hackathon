@@ -84,6 +84,14 @@ class SettingsViewModelTest {
             (UserPreferencesRepository.DEFAULT_PROVIDER_MODELS[provider] ?: emptyList())
                 .map { ModelConfig(it, ModelConfig.inferCapabilities(it)) }
         }
+        coEvery { userPreferencesRepository.getProviderModelConfigsSync(any(), any()) } answers {
+            val provider = firstArg<String>()
+            val cap = secondArg<ModelCapability?>()
+            val all = (UserPreferencesRepository.DEFAULT_PROVIDER_MODELS[provider] ?: emptyList())
+                .map { ModelConfig(it, ModelConfig.inferCapabilities(it)) }
+            if (cap != null) all.filter { cap in it.capabilities } else all
+        }
+        coEvery { userPreferencesRepository.setProviderModelOrderForCapability(any(), any(), any()) } just Runs
     }
 
     @After
@@ -444,14 +452,14 @@ class SettingsViewModelTest {
         val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
         advanceUntilIdle()
 
-        // Drag provider from index 0 (QWEN) to index 2
+        // Drag provider from index 0 (OPENROUTER) to index 2
         viewModel.moveProvider(0, 2)
         advanceUntilIdle()
 
         val newOrder = viewModel.uiState.value.providerOrder
-        assertEquals(ModelProviders.GEMINI, newOrder[0])
-        assertEquals(ModelProviders.GROQ, newOrder[1])
-        assertEquals(ModelProviders.QWEN, newOrder[2])
+        assertEquals(ModelProviders.QWEN, newOrder[0])
+        assertEquals(ModelProviders.GEMINI, newOrder[1])
+        assertEquals(ModelProviders.OPENROUTER, newOrder[2])
         coVerify { userPreferencesRepository.setProviderOrder(newOrder) }
     }
 
@@ -522,10 +530,14 @@ class SettingsViewModelTest {
 
         assertEquals(
             listOf(
-                "nvidia/nemotron-3-ultra-550b-a55b:free",
                 "nvidia/nemotron-3.5-super-vl:free",
+                "nvidia/nemotron-3-ultra-550b-a55b:free",
                 "liquid/lfm-2.5-2.6b:free",
-                "openrouter/free"
+                "openrouter/free",
+                "liquid/d1.1",
+                "cloudflare/clef-flash",
+                "openai/whisper-large-v3",
+                "z-ai/glm-5.3-flash"
             ),
             models[ModelProviders.OPENROUTER]
         )
@@ -553,27 +565,50 @@ class SettingsViewModelTest {
 
         // Text
         assertEquals(
-            listOf(ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ, ModelProviders.NVIDIA, ModelProviders.OPENROUTER, ModelProviders.NARA),
+            listOf(ModelProviders.OPENROUTER, ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ, ModelProviders.NVIDIA, ModelProviders.NARA),
             viewModel.uiState.value.filteredProviderOrder(ModelCapability.TEXT)
         )
 
         // Vision
         assertEquals(
-            listOf(ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ, ModelProviders.NVIDIA, ModelProviders.OPENROUTER),
+            listOf(ModelProviders.OPENROUTER, ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ, ModelProviders.NVIDIA),
             viewModel.uiState.value.filteredProviderOrder(ModelCapability.VISION)
         )
 
         // Audio
         assertEquals(
-            listOf(ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ, ModelProviders.OPENROUTER),
+            listOf(ModelProviders.OPENROUTER, ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ),
             viewModel.uiState.value.filteredProviderOrder(ModelCapability.AUDIO)
         )
 
-        // Decision (base: Cloudflare, Liquid, OpenRouter)
+        // Decision (base: OpenRouter, Cloudflare, Liquid)
         assertEquals(
-            listOf(ModelProviders.CLOUDFLARE, ModelProviders.LIQUID, ModelProviders.OPENROUTER),
+            listOf(ModelProviders.OPENROUTER, ModelProviders.CLOUDFLARE, ModelProviders.LIQUID),
             viewModel.uiState.value.filteredProviderOrder(ModelCapability.DECISION)
         )
+    }
+
+    @Test
+    fun `moveModelForCapability delegates to userPreferencesRepository and refreshes`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        val initialConfigs = listOf(
+            ModelConfig("clef-flash", setOf(ModelCapability.DECISION)),
+            ModelConfig("d1.1", setOf(ModelCapability.DECISION))
+        )
+        coEvery { userPreferencesRepository.getProviderModelConfigsSync("openrouter", ModelCapability.DECISION) } returns initialConfigs
+
+        viewModel.moveModelForCapability("openrouter", ModelCapability.DECISION, 0, 1)
+        advanceUntilIdle()
+
+        coVerify {
+            userPreferencesRepository.setProviderModelOrderForCapability(
+                "openrouter",
+                ModelCapability.DECISION,
+                listOf("d1.1", "clef-flash")
+            )
+        }
     }
 
     @Test
@@ -604,14 +639,14 @@ class SettingsViewModelTest {
         viewModel.selectCapabilityFilter(ModelCapability.DECISION)
         advanceUntilIdle()
 
-        // Move liquid up (from index 1 to 0)
-        viewModel.moveProviderUpForCapability(ModelCapability.DECISION, ModelProviders.LIQUID)
+        // Move cloudflare up (from index 1 to 0)
+        viewModel.moveProviderUpForCapability(ModelCapability.DECISION, ModelProviders.CLOUDFLARE)
         advanceUntilIdle()
 
         coVerify {
             userPreferencesRepository.setProviderPriority(
                 ModelCapability.DECISION,
-                listOf(ModelProviders.LIQUID, ModelProviders.CLOUDFLARE, ModelProviders.OPENROUTER)
+                listOf(ModelProviders.CLOUDFLARE, ModelProviders.OPENROUTER, ModelProviders.LIQUID)
             )
         }
     }

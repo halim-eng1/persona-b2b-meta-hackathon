@@ -143,11 +143,11 @@ class UserPreferencesRepositoryTest {
         val defaultText = repository.getProviderPrioritySync(ModelCapability.TEXT)
         assertEquals(
             listOf(
+                ModelProviders.OPENROUTER,
                 ModelProviders.QWEN,
                 ModelProviders.GEMINI,
                 ModelProviders.GROQ,
                 ModelProviders.NVIDIA,
-                ModelProviders.OPENROUTER,
                 ModelProviders.NARA
             ),
             defaultText
@@ -156,9 +156,9 @@ class UserPreferencesRepositoryTest {
         val defaultDecision = repository.getProviderPrioritySync(ModelCapability.DECISION)
         assertEquals(
             listOf(
+                ModelProviders.OPENROUTER,
                 ModelProviders.CLOUDFLARE,
-                ModelProviders.LIQUID,
-                ModelProviders.OPENROUTER
+                ModelProviders.LIQUID
             ),
             defaultDecision
         )
@@ -189,5 +189,74 @@ class UserPreferencesRepositoryTest {
         assertEquals(true, repository.isModelPrepared())
         assertEquals(true, repository.isModelPreparedSync())
         assertEquals(true, repository.isModelPreparedFlow.first())
+    }
+
+    @Test
+    fun `hasSeenOnboarding defaults to false and persists true when set`() = runTest(testDispatcher) {
+        assertEquals(false, repository.hasSeenOnboardingSync())
+        assertEquals(false, repository.hasSeenOnboardingFlow.first())
+
+        repository.setHasSeenOnboarding(true)
+
+        assertEquals(true, repository.hasSeenOnboardingSync())
+        assertEquals(true, repository.hasSeenOnboardingFlow.first())
+    }
+
+    @Test
+    fun `default theme mode is light`() = runTest(testDispatcher) {
+        assertEquals(UserPreferencesRepository.THEME_MODE_LIGHT, UserPreferencesRepository.DEFAULT_THEME_MODE)
+        assertEquals(UserPreferencesRepository.THEME_MODE_LIGHT, repository.getThemeModeSync())
+    }
+
+    @Test
+    fun `default provider order has OPENROUTER as first provider`() = runTest(testDispatcher) {
+        val defaultOrder = repository.getProviderOrderSync()
+        assertEquals(ModelProviders.OPENROUTER, defaultOrder.first())
+        assertEquals(ModelProviders.OPENROUTER, UserPreferencesRepository.DEFAULT_PROVIDER_ORDER.first())
+    }
+
+    @Test
+    fun `per-capability model ordering persistence and retrieval works`() = runTest(testDispatcher) {
+        // OpenRouter models for DECISION default to liquid/d1.1 and cloudflare/clef-flash
+        val initialDecision = repository.getProviderModelConfigsSync(ModelProviders.OPENROUTER, ModelCapability.DECISION)
+        assertTrue(initialDecision.any { it.modelId == "liquid/d1.1" })
+        assertTrue(initialDecision.any { it.modelId == "cloudflare/clef-flash" })
+
+        // Reorder DECISION models: put cloudflare/clef-flash first
+        val reorderedIds = listOf("cloudflare/clef-flash", "liquid/d1.1")
+        repository.setProviderModelOrderForCapability(ModelProviders.OPENROUTER, ModelCapability.DECISION, reorderedIds)
+
+        val retrievedDecision = repository.getProviderModelConfigsSync(ModelProviders.OPENROUTER, ModelCapability.DECISION)
+        assertEquals("cloudflare/clef-flash", retrievedDecision[0].modelId)
+        assertEquals("liquid/d1.1", retrievedDecision[1].modelId)
+
+        // TEXT capability models should still return TEXT models
+        val textConfigs = repository.getProviderModelConfigsSync(ModelProviders.OPENROUTER, ModelCapability.TEXT)
+        assertTrue(textConfigs.any { it.modelId == "nvidia/nemotron-3.5-super-vl:free" })
+        assertTrue(textConfigs.any { it.modelId == "z-ai/glm-5.3-flash" })
+    }
+
+    @Test
+    fun `openrouter pre-seeded models include required text, vision, audio, and decision models`() = runTest(testDispatcher) {
+        val configs = repository.getProviderModelConfigsSync(ModelProviders.OPENROUTER)
+        val modelMap = configs.associate { it.modelId to it.capabilities }
+
+        // Text & Vision: nemotron super vl
+        assertTrue(modelMap.containsKey("nvidia/nemotron-3.5-super-vl:free"))
+        assertEquals(setOf(ModelCapability.TEXT, ModelCapability.VISION), modelMap["nvidia/nemotron-3.5-super-vl:free"])
+
+        // Paid fallback at bottom of text
+        assertTrue(modelMap.containsKey("z-ai/glm-5.3-flash"))
+        assertEquals(setOf(ModelCapability.TEXT), modelMap["z-ai/glm-5.3-flash"])
+
+        // Audio (STT): whisper-large-v3
+        assertTrue(modelMap.containsKey("openai/whisper-large-v3"))
+        assertEquals(setOf(ModelCapability.AUDIO), modelMap["openai/whisper-large-v3"])
+
+        // Decision (Gatekeeper): liquid/d1.1 and cloudflare/clef-flash
+        assertTrue(modelMap.containsKey("liquid/d1.1"))
+        assertEquals(setOf(ModelCapability.DECISION), modelMap["liquid/d1.1"])
+        assertTrue(modelMap.containsKey("cloudflare/clef-flash"))
+        assertEquals(setOf(ModelCapability.DECISION), modelMap["cloudflare/clef-flash"])
     }
 }

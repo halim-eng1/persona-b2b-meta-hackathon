@@ -38,7 +38,8 @@ import com.example.persona.features.knowledge.presentation.components.BotSimulat
 import com.example.persona.features.knowledge.presentation.components.EditKnowledgeDialog
 import com.example.persona.features.knowledge.presentation.components.FailedQueryRow
 import com.example.persona.features.knowledge.presentation.components.KnowledgeEntryRow
-import com.example.persona.features.knowledge.presentation.components.ManualKnowledgeInputCard
+import com.example.persona.features.knowledge.presentation.components.AddKnowledgeEntryDialog
+import androidx.compose.material.icons.filled.Add
 import com.example.persona.ui.components.personaScreenBackground
 import kotlinx.coroutines.launch
 
@@ -58,6 +59,7 @@ fun KnowledgeManagementScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableStateOf(0) }
     var showClearConfirmationDialog by remember { mutableStateOf(false) }
+    var showAddEntryDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -148,6 +150,23 @@ fun KnowledgeManagementScreen(
         simulationResults = state.simulationResults,
         simulationBestScore = state.simulationBestScore,
         simulationError = state.simulationError
+    )
+
+    // Keyboard-aware, vertically scrollable dialog to add product or free text knowledge
+    AddKnowledgeEntryDialog(
+        isOpen = showAddEntryDialog,
+        onDismiss = { showAddEntryDialog = false },
+        onAddEntry = { formattedText, isTemporaryOffer ->
+            viewModel.onInputQueryChanged(formattedText)
+            viewModel.onTemporaryOfferToggled(isTemporaryOffer)
+            viewModel.addManualEntry()
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(
+                    message = context.getString(R.string.knowledge_snackbar_entry_added),
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
     )
 
     Box(
@@ -250,24 +269,30 @@ fun KnowledgeManagementScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    ManualKnowledgeInputCard(
-                        inputQuery = state.inputQuery,
-                        onInputQueryChanged = { viewModel.onInputQueryChanged(it) },
-                        isTemporaryOffer = state.isTemporaryOffer,
-                        onTemporaryOfferToggled = { viewModel.onTemporaryOfferToggled(it) },
-                        isProcessing = state.isProcessing,
-                        errorMessage = state.errorMessage,
-                        onAddEntry = {
-                            viewModel.addManualEntry()
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar(
-                                    message = context.getString(R.string.knowledge_snackbar_entry_added),
-                                    duration = SnackbarDuration.Short
-                                )
-                            }
-                        },
-                        isInitiallyExpanded = state.entries.isEmpty()
-                    )
+                    // Prominent action button to open Add Knowledge/Product Dialog
+                    Button(
+                        onClick = { showAddEntryDialog = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.knowledge_btn_add_entry_full),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    }
 
                     // Search & Category Filter Bar
                     OutlinedTextField(
@@ -364,6 +389,16 @@ fun KnowledgeManagementScreen(
                                         modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                                     ) {
                                         Text(stringResource(R.string.knowledge_search_clear))
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = { showAddEntryDialog = true },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(stringResource(R.string.knowledge_empty_state_cta))
                                     }
                                 }
                             }

@@ -111,7 +111,7 @@ object PersonaTheme {
 
 @Composable
 fun PersonaTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,
     language: String = "ar",
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit

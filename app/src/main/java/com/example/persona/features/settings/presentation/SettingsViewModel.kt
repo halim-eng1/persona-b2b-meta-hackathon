@@ -270,10 +270,18 @@ class SettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val modelConfigs = userPreferencesRepository.getProviderModelConfigsSync(norm)
+            val capabilityModelConfigs = ModelCapability.entries.associateWith { cap ->
+                userPreferencesRepository.getProviderModelConfigsSync(norm, cap)
+            }
             val models = modelConfigs.map { it.modelId }
             _uiState.update { s ->
                 val existing = s.providerConfigs[norm] ?: ProviderConfigState(provider = norm)
-                val updated = existing.copy(keys = keys, models = models, modelConfigs = modelConfigs)
+                val updated = existing.copy(
+                    keys = keys,
+                    models = models,
+                    modelConfigs = modelConfigs,
+                    capabilityModelConfigs = capabilityModelConfigs
+                )
                 s.copy(providerConfigs = s.providerConfigs + (norm to updated))
             }
         }
@@ -504,11 +512,18 @@ class SettingsViewModel @Inject constructor(
         val trimmed = model.trim()
         if (trimmed.isBlank()) return
         viewModelScope.launch {
+            val caps = capabilities.ifEmpty { setOf(ModelCapability.TEXT) }
             val config = ModelConfig(
                 modelId = trimmed,
-                capabilities = capabilities.ifEmpty { setOf(ModelCapability.TEXT) }
+                capabilities = caps
             )
             userPreferencesRepository.addProviderModelConfig(norm, config)
+            caps.forEach { cap ->
+                val currentCapabilityOrder = userPreferencesRepository.getProviderModelConfigsSync(norm, cap).map { it.modelId }
+                if (trimmed !in currentCapabilityOrder) {
+                    userPreferencesRepository.setProviderModelOrderForCapability(norm, cap, currentCapabilityOrder + trimmed)
+                }
+            }
             refreshProviderConfig(norm)
         }
     }
@@ -517,6 +532,12 @@ class SettingsViewModel @Inject constructor(
         val norm = ModelProviders.normalize(provider)
         viewModelScope.launch {
             userPreferencesRepository.removeProviderModel(norm, model)
+            ModelCapability.entries.forEach { cap ->
+                val currentOrder = userPreferencesRepository.getProviderModelConfigsSync(norm, cap).map { it.modelId }
+                if (model in currentOrder) {
+                    userPreferencesRepository.setProviderModelOrderForCapability(norm, cap, currentOrder.filter { it != model })
+                }
+            }
             refreshProviderConfig(norm)
         }
     }
@@ -556,6 +577,44 @@ class SettingsViewModel @Inject constructor(
             current.add(to, item)
             userPreferencesRepository.setProviderModelConfigs(norm, current)
             refreshProviderConfig(norm)
+        }
+    }
+
+    fun moveModelForCapability(provider: String, capability: ModelCapability, from: Int, to: Int) {
+        val norm = ModelProviders.normalize(provider)
+        viewModelScope.launch {
+            val current = userPreferencesRepository.getProviderModelConfigsSync(norm, capability).toMutableList()
+            if (from !in current.indices || to !in current.indices) return@launch
+            val item = current.removeAt(from)
+            current.add(to, item)
+            userPreferencesRepository.setProviderModelOrderForCapability(norm, capability, current.map { it.modelId })
+            refreshProviderConfig(norm)
+        }
+    }
+
+    fun moveModelUpForCapability(provider: String, capability: ModelCapability, model: String) {
+        val norm = ModelProviders.normalize(provider)
+        viewModelScope.launch {
+            val current = userPreferencesRepository.getProviderModelConfigsSync(norm, capability).toMutableList()
+            val idx = current.indexOfFirst { it.modelId == model }
+            if (idx > 0) {
+                val tmp = current[idx]; current[idx] = current[idx - 1]; current[idx - 1] = tmp
+                userPreferencesRepository.setProviderModelOrderForCapability(norm, capability, current.map { it.modelId })
+                refreshProviderConfig(norm)
+            }
+        }
+    }
+
+    fun moveModelDownForCapability(provider: String, capability: ModelCapability, model: String) {
+        val norm = ModelProviders.normalize(provider)
+        viewModelScope.launch {
+            val current = userPreferencesRepository.getProviderModelConfigsSync(norm, capability).toMutableList()
+            val idx = current.indexOfFirst { it.modelId == model }
+            if (idx in 0 until current.size - 1) {
+                val tmp = current[idx]; current[idx] = current[idx + 1]; current[idx + 1] = tmp
+                userPreferencesRepository.setProviderModelOrderForCapability(norm, capability, current.map { it.modelId })
+                refreshProviderConfig(norm)
+            }
         }
     }
 

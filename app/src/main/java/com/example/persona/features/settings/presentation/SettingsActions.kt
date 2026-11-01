@@ -89,6 +89,12 @@ class AiActions(private val vm: SettingsViewModel) {
     fun moveModel(provider: String, from: Int, to: Int) = vm.moveModel(provider, from, to)
     fun moveModelUp(provider: String, model: String) = vm.moveModelUp(provider, model)
     fun moveModelDown(provider: String, model: String) = vm.moveModelDown(provider, model)
+    fun moveModelForCapability(provider: String, capability: ModelCapability, from: Int, to: Int) =
+        vm.moveModelForCapability(provider, capability, from, to)
+    fun moveModelUpForCapability(provider: String, capability: ModelCapability, model: String) =
+        vm.moveModelUpForCapability(provider, capability, model)
+    fun moveModelDownForCapability(provider: String, capability: ModelCapability, model: String) =
+        vm.moveModelDownForCapability(provider, capability, model)
 }
 
 @Stable

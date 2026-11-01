@@ -49,9 +49,9 @@
     <string name="home_dashboard_subtitle">Persona B2B — مركز القيادة والمتابعة</string>
     <string name="home_recent_activity_title">آخر العمليات والردود</string>
     <string name="home_view_all_audit_log">عرض الكل في سجل التدقيق</string>
-    <string name="home_empty_knowledge_title">كتالوج وقاعدة بيانات المتجر فارغة</string>
-    <string name="home_empty_knowledge_desc">أضف منتجاتك أو استورد محادثات الواتساب القديمة لتدريب المساعد على الأسعار وسياسات الشحن.</string>
-    <string name="home_btn_add_knowledge">إضافة معرفة ومنتجات للمتجر</string>
+    <string name="home_empty_knowledge_title">قاعدة المعرفة غير مهيأة بعد</string>
+    <string name="home_empty_knowledge_desc">أضف معلومات عنك وعن نشاطك أو متجرك لمساعدة الذكاء الاصطناعي في بناء قاعدة المعرفة اللازمة للردود الذكية.</string>
+    <string name="home_btn_add_knowledge">+ إضافة واستيراد المعرفة</string>
     <string name="home_stat_today_orders">طلبات اليوم</string>
     <string name="home_stat_pending_revenue">إيرادات قيد التجهيز</string>
     <string name="home_stat_waiting_customers">عملاء في الانتظار</string>
@@ -61,6 +61,54 @@
     <string name="home_action_import">استيراد المعرفة</string>
     <string name="home_action_orders">تجهيز الطلبات</string>
     <string name="home_action_contacts">دليل العملاء CRM</string>
+
+    <!-- ── Home Guided Permission Setup & Banner ──────────────────────────────── -->
+    <string name="home_permission_banner_step_prefix">إعداد الصلاحيات (خطوة %1$d من 3)</string>
+    <string name="home_permission_banner_step1_desc">صلاحيات الوصول الأساسية (جهات الاتصال والإشعارات)</string>
+    <string name="home_permission_banner_step2_desc">وصول إشعارات WhatsApp (الخطوة الأهم)</string>
+    <string name="home_permission_banner_step3_desc">استثناء تحسين البطارية</string>
+    <string name="home_permission_banner_step_complete_desc">إكمال الصلاحيات</string>
+    <string name="home_permission_banner_btn_continue">متابعة</string>
+    <string name="home_permission_banner_close_desc">إغلاق</string>
+    <string name="home_permission_sheet_title">إعداد صلاحيات النظام الذكي</string>
+    <string name="home_permission_sheet_subtitle">3 خطوات سريعة لتمكين Persona من قراءة إشعارات WhatsApp والرد على العملاء تلقائياً بدقة وأمان.</string>
+    <string name="home_permission_step1_title">صلاحيات الوصول الأساسية</string>
+    <string name="home_permission_step1_desc">قراءة جهات الاتصال وإشعارات التطبيق لعرض أسماء العملاء وإرسال التنبيهات المستعجلة.</string>
+    <string name="home_permission_step1_btn">منح الصلاحيات</string>
+    <string name="home_permission_step2_title">تفعيل قراءة إشعارات WhatsApp</string>
+    <string name="home_permission_step2_desc">الخطوة الأهم: سيتم نقلك لشاشة إعدادات النظام وتظليل خدمة Persona لتفعيلها بنقرة واحدة.</string>
+    <string name="home_permission_step2_btn">فتح الإعدادات (تظليل تلقائي)</string>
+    <string name="home_permission_step3_title">استثناء توفير استهلاك البطارية</string>
+    <string name="home_permission_step3_desc">يضمن استمرار عمل المساعد والرد على العملاء فوراً في الخلفية حتى عند قفل الشاشة.</string>
+    <string name="home_permission_step3_btn">استثناء توفير البطارية</string>
+    <string name="home_permission_status_completed">مكتملة ✓</string>
+    <string name="home_permission_all_granted_title">تم إعداد جميع الصلاحيات بنجاح! التطبيق جاهز للعمل.</string>
+    <string name="home_permission_btn_start_now">البدء الآن</string>
+    <string name="home_permission_btn_later">إكمال لاحقاً / تخطي الآن</string>
+
+    <!-- ── Feature Onboarding 3-Page Flow ────────────────────────────────────── -->
+    <string name="feature_onboarding_skip">تخطي</string>
+    <string name="feature_onboarding_back">السابق</string>
+    <string name="feature_onboarding_next">التالي</string>
+    <string name="feature_onboarding_get_started">ابدأ الآن</string>
+    <string name="feature_onboarding_page1_eyebrow">ذكاء اصطناعي متعدد الوسائط</string>
+    <string name="feature_onboarding_page1_title">المساعد الذكي الشامل</string>
+    <string name="feature_onboarding_page1_desc">ردود فورية وذكية على رسائل WhatsApp الصوتية والنصية والصور بدقة فائقة وبأسلوب متجرك الخاص.</string>
+    <string name="feature_onboarding_page1_tag1">الرسائل الصوتية</string>
+    <string name="feature_onboarding_page1_tag2">الردود النصية</string>
+    <string name="feature_onboarding_page1_tag3">استفسارات الصور</string>
+    <string name="feature_onboarding_page2_eyebrow">فائق السرعة والأمان</string>
+    <string name="feature_onboarding_page2_title">قاعدة معرفة ذكية لنشاطك</string>
+    <string name="feature_onboarding_page2_desc">استيراد كتالوج منتجاتك ومحادثاتك السابقة لبناء عقل ذكي محلي يعمل في جهازك بسرعة البرق وبدون إنترنت.</string>
+    <string name="feature_onboarding_page2_tag1">100% بدون إنترنت</string>
+    <string name="feature_onboarding_page2_tag2">استيراد الدردشات</string>
+    <string name="feature_onboarding_page2_tag3">خصوصية مشفرة</string>
+    <string name="feature_onboarding_page3_eyebrow">إدارة مبيعات مؤتمتة</string>
+    <string name="feature_onboarding_page3_title">إدارة الطلبات والعملاء تلقائياً</string>
+    <string name="feature_onboarding_page3_desc">استخراج تفاصيل الطلبات وعناوين الشحن تلقائياً، وتنظيم العملاء في CRM مصغر، وتنبيهك فوراً للحالات المستعجلة.</string>
+    <string name="feature_onboarding_page3_tag1">استخراج فوري للطلبات</string>
+    <string name="feature_onboarding_page3_tag2">CRM عملاء مدمج</string>
+    <string name="feature_onboarding_page3_tag3">تنبيهات فورية</string>
 
     <!-- ── Knowledge Management UI ────────────────────────────────────────────── -->
     <string name="knowledge_management_title">إدارة قاعدة المعرفة</string>
@@ -118,6 +166,10 @@
     <string name="knowledge_input_card_expand">توسيع نموذج الإضافة</string>
     <string name="knowledge_input_card_collapse">طي نموذج الإضافة</string>
     <string name="knowledge_empty_state_cta">إضافة أول منتج للكتالوج</string>
+    <string name="knowledge_btn_add_entry_full">+ إضافة معرفة أو منتج</string>
+    <string name="knowledge_dialog_free_title">عنوان المعلومة أو السياسة</string>
+    <string name="knowledge_dialog_free_title_hint">مثال: سياسة الاسترجاع، الشحن، مواعيد العمل</string>
+    <string name="knowledge_dialog_free_content">التفاصيل والمحتوى</string>
     <string name="knowledge_snackbar_entry_added">تمت إضافة المعلومة إلى ذاكرة البوت بنجاح</string>
     <string name="knowledge_snackbar_answer_saved">تم حفظ الرد وتحديث ذاكرة البوت بنجاح</string>
     <string name="knowledge_snackbar_entry_deleted">تم حذف المعلومة</string>
@@ -660,7 +712,7 @@
     <string name="orders_dashboard_copied_manifest_snackbar">تم نسخ كشف شحنات اليوم (%d طلبات)</string>
     <string name="orders_dashboard_advance_selected_desc">تقديم حالة المحددين</string>
     <string name="orders_dashboard_fab_new_order">طلب جديد</string>
-    <string name="orders_dashboard_search_placeholder">بحث باسم العميل، الهاتف، العنوان، أو الأصناف…</string>
+    <string name="orders_dashboard_search_placeholder">بحث بالاسم، الهاتف، العنوان، أو الأصناف</string>
     <string name="orders_dashboard_copied_waybill_snackbar">تم نسخ بوليصة الشحن للعميل %s</string>
     <string name="orders_dashboard_empty_title_search">لا توجد طلبات متطابقة</string>
     <string name="orders_dashboard_empty_title_general">لا توجد طلبات حتى الآن</string>
@@ -1004,8 +1056,11 @@
     <string name="settings_ai_keys_title">مجموعة مفاتيح API</string>
     <string name="settings_ai_providers_title">مزودو الذكاء الاصطناعي المدعومون</string>
     <string name="settings_ai_no_keys_warning">لا توجد مفاتيح مسجلة</string>
+    <string name="settings_ai_no_key_registered">لا يوجد مفتاح مسجل</string>
+    <string name="settings_ai_no_models_for_capability">لا توجد نماذج مخصصة لهذا التصنيف حالياً</string>
     <string name="settings_ai_no_primary_key_banner">لم يتم ضبط مفاتيح API بعد. يرجى إضافة مفتاح لمزود واحد على الأقل لتفعيل الرد التلقائي.</string>
-    <string name="settings_ai_key_required_badge">مطلوب إضافة مفتاح</string>
+    <string name="settings_ai_key_required_badge">يمكنك إضافة مفتاح</string>
+    <string name="settings_ai_openrouter_dependency_banner">إذا لم تكن تستخدم OpenRouter كبوابة شاملة، يرجى التأكد من إضافة مفتاح لمزود يدعم الصوت (مثل Qwen أو Groq) ومزود يدعم اتخاذ القرار (مثل Cloudflare أو Liquid) بجانب مزود النصوص.</string>
     <string name="settings_ai_no_active_keys_warning">تعذر الرد التلقائي: لم يتم تسجيل مفتاح API نشط في الإعدادات.</string>
     <string name="settings_ai_key_deleted">تم حذف مفتاح API</string>
     <string name="settings_ai_model_deleted">تم حذف النموذج %s</string>

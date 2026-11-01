@@ -103,11 +103,15 @@ class UserPreferencesRepository @Inject constructor(
         fun providerPriorityKey(capability: ModelCapability) =
             stringPreferencesKey("provider_priority_${capability.name}")
 
+        fun providerModelOrderForCapabilityKey(provider: String, capability: ModelCapability) =
+            stringPreferencesKey("provider_model_order_${provider.trim().lowercase()}_${capability.name.lowercase()}")
+
         private fun providerModelsKey(provider: String) =
             stringPreferencesKey("provider_models_${provider.trim().lowercase()}")
 
         // ── Auto-Start Onboarding Confirmation ─────────────────────────────────
         val KEY_AUTO_START_CONFIRMED = booleanPreferencesKey("is_auto_start_confirmed")
+        val KEY_HAS_SEEN_ONBOARDING = booleanPreferencesKey("has_seen_onboarding")
 
         // ── Model Preparation State ───────────────────────────────────────────
         val KEY_MODEL_PREPARED = booleanPreferencesKey("is_model_prepared")
@@ -121,7 +125,7 @@ class UserPreferencesRepository @Inject constructor(
         const val THEME_MODE_DARK = "dark"
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_SYSTEM = "system"
-        const val DEFAULT_THEME_MODE = THEME_MODE_DARK
+        const val DEFAULT_THEME_MODE = THEME_MODE_LIGHT
 
         // ── Business Hours & Blacklist ────────────────────────────────────────
         val KEY_BUSINESS_HOURS_ENABLED = booleanPreferencesKey("business_hours_enabled")
@@ -144,11 +148,11 @@ class UserPreferencesRepository @Inject constructor(
             "أنا معاك وسامعك كويس يا فندم، بس قولّي نقدر نجهزلك إيه النهارده من منتجاتنا في %s؟ 💙"
 
         val DEFAULT_PROVIDER_ORDER = listOf(
+            ModelProviders.OPENROUTER,
             ModelProviders.QWEN,
             ModelProviders.GEMINI,
             ModelProviders.GROQ,
             ModelProviders.NVIDIA,
-            ModelProviders.OPENROUTER,
             ModelProviders.CLOUDFLARE,
             ModelProviders.LIQUID,
             ModelProviders.NARA
@@ -185,9 +189,16 @@ class UserPreferencesRepository @Inject constructor(
 
             "@cf/cloudflare/clef-flash" to setOf(ModelCapability.DECISION),
             "@cf/cloudflare/clef-omni" to setOf(ModelCapability.DECISION),
+            "cloudflare/clef-flash" to setOf(ModelCapability.DECISION),
             "d1:latest" to setOf(ModelCapability.DECISION),
             "d1" to setOf(ModelCapability.DECISION),
-            "nvidia/nemotron-3.5-super-vl:free" to setOf(ModelCapability.TEXT, ModelCapability.VISION)
+            "liquid/d1.1" to setOf(ModelCapability.DECISION),
+            "nvidia/nemotron-3.5-super-vl:free" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
+            "nvidia/nemotron-3-ultra-550b-a55b:free" to setOf(ModelCapability.TEXT),
+            "liquid/lfm-2.5-2.6b:free" to setOf(ModelCapability.TEXT),
+            "openrouter/free" to setOf(ModelCapability.TEXT),
+            "z-ai/glm-5.3-flash" to setOf(ModelCapability.TEXT),
+            "openai/whisper-large-v3" to setOf(ModelCapability.AUDIO)
         )
 
         /**
@@ -201,7 +212,11 @@ class UserPreferencesRepository @Inject constructor(
                 ModelConfig("fun-asr-flash-2026-06-15", setOf(ModelCapability.AUDIO))
             ),
             ModelProviders.OPENROUTER to listOf(
-                ModelConfig("nvidia/nemotron-3.5-super-vl:free", setOf(ModelCapability.TEXT, ModelCapability.VISION))
+                ModelConfig("nvidia/nemotron-3.5-super-vl:free", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
+                ModelConfig("liquid/d1.1", setOf(ModelCapability.DECISION)),
+                ModelConfig("cloudflare/clef-flash", setOf(ModelCapability.DECISION)),
+                ModelConfig("openai/whisper-large-v3", setOf(ModelCapability.AUDIO)),
+                ModelConfig("z-ai/glm-5.3-flash", setOf(ModelCapability.TEXT))
             )
         )
     }
@@ -325,6 +340,37 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun isAutoStartConfirmedSync(): Boolean =
         dataStore.data.first()[KEY_AUTO_START_CONFIRMED] ?: false
 
+    // ── Onboarding Persistence ────────────────────────────────────────────────
+    @Volatile
+    private var cachedHasSeenOnboarding: Boolean? = null
+
+    val hasSeenOnboardingFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        val seen = prefs[KEY_HAS_SEEN_ONBOARDING] ?: false
+        cachedHasSeenOnboarding = seen
+        seen
+    }
+
+    suspend fun setHasSeenOnboarding(seen: Boolean) {
+        cachedHasSeenOnboarding = seen
+        dataStore.edit { prefs ->
+            prefs[KEY_HAS_SEEN_ONBOARDING] = seen
+        }
+    }
+
+    suspend fun hasSeenOnboarding(): Boolean =
+        dataStore.data.first()[KEY_HAS_SEEN_ONBOARDING] ?: false
+
+    fun hasSeenOnboardingSync(): Boolean {
+        cachedHasSeenOnboarding?.let { return it }
+        return runCatching {
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                val value = dataStore.data.first()[KEY_HAS_SEEN_ONBOARDING] ?: false
+                cachedHasSeenOnboarding = value
+                value
+            }
+        }.getOrDefault(false)
+    }
+
     // ── Provider Ordering Management ──────────────────────────────────────────
 
     val providerOrderFlow: Flow<List<String>> = dataStore.data.map { prefs ->
@@ -395,17 +441,21 @@ class UserPreferencesRepository @Inject constructor(
 
     // ── Capability-aware model config flows ───────────────────────────────────
 
-    fun getProviderModelConfigs(provider: String): Flow<List<ModelConfig>> {
+    fun getProviderModelConfigs(provider: String, capability: ModelCapability? = null): Flow<List<ModelConfig>> {
         val norm = ModelProviders.normalize(provider)
         return dataStore.data.map { prefs ->
-            resolveModelConfigs(norm, prefs)
+            resolveModelConfigs(norm, prefs, capability)
         }
     }
 
     fun getApiKeys(provider: String): List<String> = secureCredentialsRepository.getApiKeys(provider)
     fun hasConfiguredKeys(provider: String): Boolean = secureCredentialsRepository.hasConfiguredKeys(provider)
 
-    private fun resolveModelConfigs(norm: String, prefs: Preferences): List<ModelConfig> {
+    private fun resolveModelConfigs(
+        norm: String,
+        prefs: Preferences,
+        capability: ModelCapability? = null
+    ): List<ModelConfig> {
         val newRaw = prefs[providerModelConfigsKey(norm)]
         val hasCustomConfigs = !newRaw.isNullOrBlank()
 
@@ -435,7 +485,7 @@ class UserPreferencesRepository @Inject constructor(
         // Auto-backfill strictly once for legacy users who haven't saved custom configs
         val backfillApplied = prefs[KEY_BACKFILL_APPLIED_V2] ?: false
         val backfillList = REQUIRED_MODELS_BACKFILL[norm]
-        return if (!hasCustomConfigs && !backfillApplied && backfillList != null) {
+        val fullList = if (!hasCustomConfigs && !backfillApplied && backfillList != null) {
             val existingIds = baseConfigs.map { it.modelId }.toSet()
             val missing = backfillList.filter { it.modelId !in existingIds }
             if (missing.isNotEmpty()) {
@@ -446,12 +496,48 @@ class UserPreferencesRepository @Inject constructor(
         } else {
             baseConfigs
         }
+
+        if (capability == null) {
+            return fullList
+        }
+
+        // Filter to models matching the capability and sort by saved per-capability order
+        val matching = fullList.filter { capability in it.capabilities }
+        val savedOrderRaw = prefs[providerModelOrderForCapabilityKey(norm, capability)]
+        if (savedOrderRaw.isNullOrBlank()) {
+            return matching
+        }
+
+        val savedOrderIds = savedOrderRaw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        val matchingMap = matching.associateBy { it.modelId }
+        val orderedList = mutableListOf<ModelConfig>()
+        savedOrderIds.forEach { id ->
+            matchingMap[id]?.let { orderedList.add(it) }
+        }
+        matching.forEach { config ->
+            if (config.modelId !in savedOrderIds) {
+                orderedList.add(config)
+            }
+        }
+        return orderedList
     }
 
-    suspend fun getProviderModelConfigsSync(provider: String): List<ModelConfig> {
+    suspend fun getProviderModelConfigsSync(provider: String, capability: ModelCapability? = null): List<ModelConfig> {
         val norm = ModelProviders.normalize(provider)
         val prefs = dataStore.data.first()
-        return resolveModelConfigs(norm, prefs)
+        return resolveModelConfigs(norm, prefs, capability)
+    }
+
+    suspend fun setProviderModelOrderForCapability(
+        provider: String,
+        capability: ModelCapability,
+        orderedModelIds: List<String>
+    ) {
+        val norm = ModelProviders.normalize(provider)
+        val sanitized = orderedModelIds.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        dataStore.edit { prefs ->
+            prefs[providerModelOrderForCapabilityKey(norm, capability)] = sanitized.joinToString(",")
+        }
     }
 
     suspend fun setProviderModelConfigs(provider: String, configs: List<ModelConfig>) {

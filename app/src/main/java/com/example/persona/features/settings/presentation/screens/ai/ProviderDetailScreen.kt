@@ -356,6 +356,7 @@ fun ProviderDetailScreen(
             provider = providerId,
             models = config.models,
             modelConfigs = config.modelConfigs,
+            capabilityModelConfigs = config.capabilityModelConfigs,
             actions = actions,
             onDismiss = { showModelsSheet = false }
         )

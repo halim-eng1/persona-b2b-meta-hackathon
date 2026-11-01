@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -27,6 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.persona.R
+import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.presentation.AiActions
 import com.example.persona.features.settings.presentation.SettingsSpoke
 import com.example.persona.features.settings.presentation.SettingsUiState
@@ -52,9 +54,8 @@ fun AiEngineScreen(
         state.providerConfigs.mapValues { it.value.keys.size }
     }
 
-    val primaryProvider = state.providerOrder.firstOrNull()
-    val primaryKeyCount = primaryProvider?.let { keyCounts[it.lowercase()] ?: 0 } ?: 0
-    val isNoKeysConfigured = primaryKeyCount == 0
+    val hasAnyKeyConfigured = keyCounts.values.any { it > 0 }
+    val openRouterKeyCount = keyCounts[ModelProviders.OPENROUTER] ?: 0
 
     SpokeScaffold(
         spoke = SettingsSpoke.AiEngine,
@@ -63,15 +64,15 @@ fun AiEngineScreen(
         focus = focus,
         modifier = modifier
     ) {
-        // Informative banner if active primary provider has no keys configured
-        if (isNoKeysConfigured) {
+        // Smart Dependency Banner: If OpenRouter has no key, guide user on dependencies
+        if (openRouterKeyCount == 0) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f),
-                tonalElevation = 2.dp
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                tonalElevation = 1.dp
             ) {
                 Row(
                     modifier = Modifier.padding(14.dp),
@@ -79,15 +80,42 @@ fun AiEngineScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.WarningAmber,
+                        imageVector = Icons.Default.Info,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_ai_openrouter_dependency_banner),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+        } else if (!hasAnyKeyConfigured) {
+            // Calm tonal banner if no keys at all are configured
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                tonalElevation = 1.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = stringResource(R.string.settings_ai_no_primary_key_banner),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onErrorContainer
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -124,11 +152,11 @@ fun AiEngineScreen(
                             if (keyCount == 0) {
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
-                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f)
+                                    color = MaterialTheme.colorScheme.surfaceVariant
                                 ) {
                                     Text(
                                         text = stringResource(R.string.settings_ai_key_required_badge),
-                                        color = MaterialTheme.colorScheme.error,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -139,16 +167,12 @@ fun AiEngineScreen(
                     },
                     supportingContent = {
                         val subText = buildString {
-                            append(
-                                if (keyCount == 0) {
-                                    stringResource(R.string.settings_ai_keys_count, 0)
-                                } else {
-                                    stringResource(R.string.settings_ai_keys_count, keyCount)
-                                }
-                            )
                             if (keyCount == 0) {
+                                append(stringResource(R.string.settings_ai_no_key_registered))
                                 append(" • ")
                                 append(stringResource(R.string.settings_ai_key_required_badge))
+                            } else {
+                                append(stringResource(R.string.settings_ai_keys_count, keyCount))
                             }
                             if (!primaryModel.isNullOrBlank()) {
                                 append(" • ")
@@ -157,10 +181,7 @@ fun AiEngineScreen(
                         }
                         Text(
                             text = subText,
-                            color = if (keyCount == 0)
-                                MaterialTheme.colorScheme.error
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall
                         )
                     },

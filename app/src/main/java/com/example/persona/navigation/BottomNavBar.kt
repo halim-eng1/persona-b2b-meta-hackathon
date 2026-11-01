@@ -89,10 +89,21 @@ fun BottomNavBar(
                 selected = isSelected,
                 onClick = {
                     if (isSelected) {
-                        // P1 Fix: Re-selecting active tab pops to that tab's root destination
+                        // Re-selecting active tab pops to that tab's root destination
                         navController.popBackStack(destination.screen, inclusive = false)
+                    } else if (destination.screen == Screen.Home) {
+                        // Always guarantee returning to Home with a single tap on Home
+                        val popped = navController.popBackStack(Screen.Home, inclusive = false)
+                        if (!popped) {
+                            navController.navigate(Screen.Home) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
                     } else {
-                        // P1 Fix: Dynamic start destination resolution instead of hardcoded Screen.Home
                         navController.navigate(destination.screen) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true

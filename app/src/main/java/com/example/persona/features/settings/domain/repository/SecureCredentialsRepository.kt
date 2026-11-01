@@ -6,16 +6,16 @@ import kotlinx.coroutines.flow.Flow
  * Supported LLM / AI inference providers in Persona.
  */
 object ModelProviders {
+    const val OPENROUTER = "openrouter"
     const val QWEN = "qwen"
     const val GEMINI = "gemini"
     const val GROQ = "groq"
     const val NVIDIA = "nvidia"
-    const val OPENROUTER = "openrouter"
     const val CLOUDFLARE = "cloudflare"
     const val LIQUID = "liquid"
     const val NARA = "nara"
 
-    val ALL = listOf(QWEN, GEMINI, GROQ, NVIDIA, OPENROUTER, CLOUDFLARE, LIQUID, NARA)
+    val ALL = listOf(OPENROUTER, QWEN, GEMINI, GROQ, NVIDIA, CLOUDFLARE, LIQUID, NARA)
 
     fun normalize(provider: String): String = provider.trim().lowercase()
 
@@ -54,10 +54,14 @@ object ModelProviders {
             "qwen/qwen3.8-27b"
         ),
         OPENROUTER to listOf(
-            "nvidia/nemotron-3-ultra-550b-a55b:free",
             "nvidia/nemotron-3.5-super-vl:free",
+            "nvidia/nemotron-3-ultra-550b-a55b:free",
             "liquid/lfm-2.5-2.6b:free",
-            "openrouter/free"
+            "openrouter/free",
+            "liquid/d1.1",
+            "cloudflare/clef-flash",
+            "openai/whisper-large-v3",
+            "z-ai/glm-5.3-flash"
         ),
         NARA to listOf(
             "laguna-s-2.1"
@@ -73,10 +77,10 @@ object ModelProviders {
     )
 
     val DEFAULT_CAPABILITY_PROVIDERS: Map<ModelCapability, List<String>> = mapOf(
-        ModelCapability.TEXT to listOf(QWEN, GEMINI, GROQ, NVIDIA, OPENROUTER, NARA),
-        ModelCapability.VISION to listOf(QWEN, GEMINI, GROQ, NVIDIA, OPENROUTER),
-        ModelCapability.AUDIO to listOf(QWEN, GEMINI, GROQ, OPENROUTER),
-        ModelCapability.DECISION to listOf(CLOUDFLARE, LIQUID, OPENROUTER)
+        ModelCapability.TEXT to listOf(OPENROUTER, QWEN, GEMINI, GROQ, NVIDIA, NARA),
+        ModelCapability.VISION to listOf(OPENROUTER, QWEN, GEMINI, GROQ, NVIDIA),
+        ModelCapability.AUDIO to listOf(OPENROUTER, QWEN, GEMINI, GROQ),
+        ModelCapability.DECISION to listOf(OPENROUTER, CLOUDFLARE, LIQUID)
     )
 
     val DEFAULT_CAPABILITIES_BY_PROVIDER: Map<String, Set<ModelCapability>> = mapOf(

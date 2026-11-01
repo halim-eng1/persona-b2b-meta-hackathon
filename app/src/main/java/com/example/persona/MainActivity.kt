@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -47,6 +48,7 @@ import com.example.persona.navigation.Screen
 import com.example.persona.navigation.TopLevelDestination
 import com.example.persona.ui.theme.PersonaTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import java.util.Locale
 import javax.inject.Inject
 
@@ -98,9 +100,9 @@ class MainActivity : ComponentActivity() {
             )
             val systemInDark = isSystemInDarkTheme()
             val isDarkTheme = when (themeMode) {
-                UserPreferencesRepository.THEME_MODE_LIGHT -> false
+                UserPreferencesRepository.THEME_MODE_DARK -> true
                 UserPreferencesRepository.THEME_MODE_SYSTEM -> systemInDark
-                else -> true // default is dark terminal
+                else -> false // default is light mode
             }
 
             DisposableEffect(isDarkTheme) {
@@ -170,6 +172,10 @@ class MainActivity : ComponentActivity() {
                     darkTheme = isDarkTheme,
                     language = appLanguage
                 ) {
+                    val coroutineScope = rememberCoroutineScope()
+                    val hasSeenOnboardingPref by userPreferencesRepository.hasSeenOnboardingFlow.collectAsStateWithLifecycle(
+                        initialValue = userPreferencesRepository.hasSeenOnboardingSync()
+                    )
                     val isModelPreparedPref by userPreferencesRepository.isModelPreparedFlow.collectAsStateWithLifecycle(
                         initialValue = userPreferencesRepository.isModelPreparedSync()
                     )
@@ -177,8 +183,14 @@ class MainActivity : ComponentActivity() {
                     val isModelReady = remember(isModelPreparedPref) {
                         isModelPreparedPref && onnxModelManager.isModelReady() && huggingFaceTokenizer.isTokenizerReady()
                     }
-                    val startDestination = remember(isModelReady) {
-                        if (isModelReady) Screen.Home else Screen.ModelPreparation
+                    val startDestination = remember(hasSeenOnboardingPref, isModelReady) {
+                        if (!hasSeenOnboardingPref) {
+                            Screen.FeatureOnboarding
+                        } else if (isModelReady) {
+                            Screen.Home
+                        } else {
+                            Screen.ModelPreparation
+                        }
                     }
 
                     val navController = rememberNavController()
@@ -218,7 +230,13 @@ class MainActivity : ComponentActivity() {
                         PersonaNavGraph(
                             navController = navController,
                             modifier = Modifier.padding(innerPadding),
-                            startDestination = startDestination
+                            startDestination = startDestination,
+                            isModelReady = isModelReady,
+                            onCompleteOnboarding = {
+                                coroutineScope.launch {
+                                    userPreferencesRepository.setHasSeenOnboarding(true)
+                                }
+                            }
                         )
                     }
                 }

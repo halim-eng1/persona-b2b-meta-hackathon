@@ -11,6 +11,7 @@ import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import com.example.persona.core.util.PermissionHighlightHelper
 import com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener
 import com.example.persona.features.onboarding.domain.model.PermissionState
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -22,14 +23,21 @@ class PermissionChecker @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     fun startNotificationListenerSettings(context: Context) {
-        try {
-            val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            context.startActivity(Intent(Settings.ACTION_SETTINGS))
-        }
+        PermissionHighlightHelper.openNotificationListenerSettingsWithHighlight(context)
+    }
+
+    fun startBatteryOptimizationSettings(context: Context) {
+        PermissionHighlightHelper.openBatteryOptimizationSettings(context)
+    }
+
+    fun hasRuntimePermissions(context: Context = this.context): Boolean {
+        return isContactsPermissionGranted(context) && isPostNotificationsGranted()
+    }
+
+    fun areCriticalPermissionsGranted(context: Context = this.context): Boolean {
+        return isNotificationListenerEnabled() &&
+            isBatteryOptimizationIgnored() &&
+            hasRuntimePermissions(context)
     }
 
     fun isNotificationListenerEnabled(): Boolean {

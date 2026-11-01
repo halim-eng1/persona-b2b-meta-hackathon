@@ -350,7 +350,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     ): List<String> {
         val norm = ModelProviders.normalize(provider)
         val configs = runCatching {
-            userPreferencesRepository.getProviderModelConfigsSync(norm)
+            userPreferencesRepository.getProviderModelConfigsSync(norm, capability)
         }.getOrElse { emptyList() }
         val userDefined = configs.filter { capability in it.capabilities }.map { it.modelId }
         return userDefined.ifEmpty { hardcodedFallback }

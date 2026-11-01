@@ -42,13 +42,18 @@ data class ProviderConfigState(
     val models: List<String> = emptyList(),
     /** Capability-tagged model configs. Parallel to [models] list. */
     val modelConfigs: List<ModelConfig> = emptyList(),
+    /** Per-capability ordered model configs. */
+    val capabilityModelConfigs: Map<ModelCapability, List<ModelConfig>> = emptyMap(),
     val verificationStates: Map<String, VerificationState> = emptyMap()
 ) {
     val verification: Map<String, VerificationState> get() = verificationStates
 
-    /** Returns models that have a given capability. */
+    /** Returns models that have a given capability, ordered by that capability's priority. */
     fun modelsWithCapability(cap: ModelCapability): List<String> =
-        modelConfigs.filter { cap in it.capabilities }.map { it.modelId }
+        (capabilityModelConfigs[cap] ?: modelConfigs.filter { cap in it.capabilities }).map { it.modelId }
+
+    fun modelConfigsWithCapability(cap: ModelCapability): List<ModelConfig> =
+        capabilityModelConfigs[cap] ?: modelConfigs.filter { cap in it.capabilities }
 }
 
 data class SettingsUiState(
@@ -66,7 +71,7 @@ data class SettingsUiState(
     val selectedCapabilityFilter: ModelCapability = ModelCapability.TEXT,
     val capabilityProviderPriorities: Map<ModelCapability, List<String>> = emptyMap(),
     val providerConfigs: Map<String, ProviderConfigState> = emptyMap(),
-    val selectedProviderForEdit: String = ModelProviders.QWEN,
+    val selectedProviderForEdit: String = ModelProviders.OPENROUTER,
     val cloudflareAccountId: String = "",
 
     // ── 2. Store Identity & Bot Persona

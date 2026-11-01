@@ -21,6 +21,7 @@ class NavigationArchitectureTest {
         val settings = Screen.Settings
         val onboarding = Screen.Onboarding
         val permission = Screen.PermissionSetup
+        val featureOnboarding = Screen.FeatureOnboarding
         val importGraph = Screen.ChatImportGraph
         val importLeaf = Screen.ChatImport
         val progress = Screen.ChatImportProgress("Customer")
@@ -35,6 +36,7 @@ class NavigationArchitectureTest {
         assertNotNull(settings)
         assertNotNull(onboarding)
         assertNotNull(permission)
+        assertNotNull(featureOnboarding)
         assertNotNull(importGraph)
         assertNotNull(importLeaf)
         assertEquals("Customer", progress.contactName)

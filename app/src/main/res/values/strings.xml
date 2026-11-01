@@ -49,9 +49,9 @@
     <string name="home_dashboard_subtitle">Persona B2B — Command &amp; Operations Center</string>
     <string name="home_recent_activity_title">Recent Operations &amp; Replies</string>
     <string name="home_view_all_audit_log">View All in Audit Log</string>
-    <string name="home_empty_knowledge_title">Store Catalog &amp; Database is Empty</string>
-    <string name="home_empty_knowledge_desc">Add your products or import old WhatsApp chats to train the assistant on prices and shipping policies.</string>
-    <string name="home_btn_add_knowledge">Add Store Knowledge &amp; Products</string>
+    <string name="home_empty_knowledge_title">Knowledge Base Not Set Up Yet</string>
+    <string name="home_empty_knowledge_desc">Add information about yourself, your business, or your store to help the AI build the necessary knowledge base for smart replies.</string>
+    <string name="home_btn_add_knowledge">+ Add &amp; Import Knowledge</string>
     <string name="home_stat_today_orders">Today\'s Orders</string>
     <string name="home_stat_pending_revenue">Pending Revenue</string>
     <string name="home_stat_waiting_customers">Waiting Customers</string>
@@ -61,6 +61,54 @@
     <string name="home_action_import">Import Knowledge</string>
     <string name="home_action_orders">Order Fulfillment</string>
     <string name="home_action_contacts">CRM Contacts</string>
+
+    <!-- ── Home Guided Permission Setup & Banner ──────────────────────────────── -->
+    <string name="home_permission_banner_step_prefix">Permission Setup (Step %1$d of 3)</string>
+    <string name="home_permission_banner_step1_desc">Basic access permissions (Contacts &amp; Notifications)</string>
+    <string name="home_permission_banner_step2_desc">WhatsApp Notification Access (Critical Step)</string>
+    <string name="home_permission_banner_step3_desc">Battery Optimization Exemption</string>
+    <string name="home_permission_banner_step_complete_desc">Complete all permissions</string>
+    <string name="home_permission_banner_btn_continue">Continue</string>
+    <string name="home_permission_banner_close_desc">Dismiss</string>
+    <string name="home_permission_sheet_title">Smart System Permissions Setup</string>
+    <string name="home_permission_sheet_subtitle">3 quick steps to enable Persona to read WhatsApp notifications and reply to customers automatically with precision and security.</string>
+    <string name="home_permission_step1_title">Basic Access Permissions</string>
+    <string name="home_permission_step1_desc">Read contacts and app notifications to identify customers and send urgent alerts.</string>
+    <string name="home_permission_step1_btn">Grant Permissions</string>
+    <string name="home_permission_step2_title">Enable WhatsApp Notification Access</string>
+    <string name="home_permission_step2_desc">Most important step: You will be taken to system settings with the Persona service highlighted for one-tap activation.</string>
+    <string name="home_permission_step2_btn">Open Settings (Auto-highlighted)</string>
+    <string name="home_permission_step3_title">Battery Optimization Exemption</string>
+    <string name="home_permission_step3_desc">Ensures the assistant continues to operate and reply in the background even when screen is locked.</string>
+    <string name="home_permission_step3_btn">Exempt from Battery Optimization</string>
+    <string name="home_permission_status_completed">Completed ✓</string>
+    <string name="home_permission_all_granted_title">All permissions configured successfully! The app is ready to operate.</string>
+    <string name="home_permission_btn_start_now">Start Now</string>
+    <string name="home_permission_btn_later">Complete later / Skip for now</string>
+
+    <!-- ── Feature Onboarding 3-Page Flow ────────────────────────────────────── -->
+    <string name="feature_onboarding_skip">Skip</string>
+    <string name="feature_onboarding_back">Back</string>
+    <string name="feature_onboarding_next">Next</string>
+    <string name="feature_onboarding_get_started">Get Started</string>
+    <string name="feature_onboarding_page1_eyebrow">Multimodal Local AI</string>
+    <string name="feature_onboarding_page1_title">All-in-One Intelligent Assistant</string>
+    <string name="feature_onboarding_page1_desc">Instant, smart replies to WhatsApp voice notes, text messages, and images with exceptional precision and your unique style.</string>
+    <string name="feature_onboarding_page1_tag1">Voice Notes</string>
+    <string name="feature_onboarding_page1_tag2">Text Replies</string>
+    <string name="feature_onboarding_page1_tag3">Image Queries</string>
+    <string name="feature_onboarding_page2_eyebrow">Ultra-Fast &amp; Secure</string>
+    <string name="feature_onboarding_page2_title">Smart Knowledge Base for Your Business</string>
+    <string name="feature_onboarding_page2_desc">Import your product catalog and previous chats to build a lightning-fast on-device AI brain that works completely offline.</string>
+    <string name="feature_onboarding_page2_tag1">100% Offline</string>
+    <string name="feature_onboarding_page2_tag2">Import Chat History</string>
+    <string name="feature_onboarding_page2_tag3">End-to-End Privacy</string>
+    <string name="feature_onboarding_page3_eyebrow">Automated Sales Operations</string>
+    <string name="feature_onboarding_page3_title">Automate Orders &amp; Customer CRM</string>
+    <string name="feature_onboarding_page3_desc">Automatically extract order details and shipping addresses, organize customer CRM, and alert you instantly for urgent cases.</string>
+    <string name="feature_onboarding_page3_tag1">Instant Order Extraction</string>
+    <string name="feature_onboarding_page3_tag2">Built-in Customer CRM</string>
+    <string name="feature_onboarding_page3_tag3">Instant Alerts</string>
 
     <!-- ── Knowledge Management UI ────────────────────────────────────────────── -->
     <string name="knowledge_management_title">Knowledge Base</string>
@@ -118,6 +166,10 @@
     <string name="knowledge_input_card_expand">Expand creation form</string>
     <string name="knowledge_input_card_collapse">Collapse creation form</string>
     <string name="knowledge_empty_state_cta">Add First Product to Catalog</string>
+    <string name="knowledge_btn_add_entry_full">+ Add Knowledge or Product</string>
+    <string name="knowledge_dialog_free_title">Fact or Policy Title</string>
+    <string name="knowledge_dialog_free_title_hint">e.g. Return policy, shipping rates, working hours</string>
+    <string name="knowledge_dialog_free_content">Details and Content</string>
     <string name="knowledge_snackbar_entry_added">Knowledge added to bot memory successfully</string>
     <string name="knowledge_snackbar_answer_saved">Answer saved and bot knowledge updated</string>
     <string name="knowledge_snackbar_entry_deleted">Knowledge item deleted</string>
@@ -660,7 +712,7 @@
     <string name="orders_dashboard_copied_manifest_snackbar">Copied today\'s shipments manifest (%d orders)</string>
     <string name="orders_dashboard_advance_selected_desc">Advance Status for Selected</string>
     <string name="orders_dashboard_fab_new_order">New Order</string>
-    <string name="orders_dashboard_search_placeholder">Search by customer name, phone, address, or items…</string>
+    <string name="orders_dashboard_search_placeholder">Search by name, phone, address, or items</string>
     <string name="orders_dashboard_copied_waybill_snackbar">Copied shipping waybill for customer %s</string>
     <string name="orders_dashboard_empty_title_search">No matching orders found</string>
     <string name="orders_dashboard_empty_title_general">No orders yet</string>
@@ -1004,8 +1056,11 @@
     <string name="settings_ai_keys_title">API Keys Pool</string>
     <string name="settings_ai_providers_title">Supported AI Providers</string>
     <string name="settings_ai_no_keys_warning">No API keys registered</string>
+    <string name="settings_ai_no_key_registered">No key registered</string>
+    <string name="settings_ai_no_models_for_capability">No models configured for this capability</string>
     <string name="settings_ai_no_primary_key_banner">No API keys configured yet. Please add a key for at least one provider to activate auto-reply.</string>
-    <string name="settings_ai_key_required_badge">Key Required</string>
+    <string name="settings_ai_key_required_badge">Optional (Add Key)</string>
+    <string name="settings_ai_openrouter_dependency_banner">If not using OpenRouter as an all-in-one gateway, make sure to configure a provider for Audio (e.g. Qwen/Groq) and Decision (e.g. Cloudflare/Liquid) alongside Text.</string>
     <string name="settings_ai_no_active_keys_warning">Auto-reply unavailable: No active API key registered in settings.</string>
     <string name="settings_ai_key_deleted">API key removed</string>
     <string name="settings_ai_model_deleted">Model %s removed</string>

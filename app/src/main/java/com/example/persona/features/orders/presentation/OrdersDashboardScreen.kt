@@ -1,8 +1,6 @@
 package com.example.persona.features.orders.presentation
 
-import com.example.persona.R
-import androidx.compose.ui.res.stringResource
-
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -19,12 +17,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.persona.R
 import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.features.orders.presentation.components.*
 import kotlinx.coroutines.launch
@@ -34,9 +34,9 @@ import kotlinx.coroutines.launch
  *
  * Provides live WhatsApp/manual orders, 1-tap Kanban state transitions,
  * bulk manifest clipboard export, order creation/editing/cancellation,
- * and direct chat jumping.
+ * sticky collapsible search & status filters, and direct chat jumping.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun OrdersDashboardScreen(
     modifier: Modifier = Modifier,
@@ -101,40 +101,6 @@ fun OrdersDashboardScreen(
                         containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
                 )
-            } else {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(text = stringResource(R.string.orders_dashboard_header_title), fontWeight = FontWeight.Bold)
-                            Text(
-                                text = if (state.totalCount > 0)
-                                    stringResource(R.string.orders_dashboard_header_subtitle_count, state.totalCount)
-                                else
-                                    stringResource(R.string.orders_dashboard_header_subtitle_empty),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    },
-                    actions = {
-                        // Bulk export for all current orders
-                        IconButton(
-                            onClick = {
-                                val manifest = viewModel.exportSelectedBulkManifest()
-                                clipboardManager.setText(AnnotatedString(manifest))
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar(context.getString(R.string.orders_dashboard_copied_manifest_snackbar, state.ordersList.size))
-                                }
-                            },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(Icons.Default.Print, contentDescription = stringResource(R.string.orders_dashboard_bulk_manifest_desc))
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background
-                    )
-                )
             }
         },
         floatingActionButton = {
@@ -154,189 +120,306 @@ fun OrdersDashboardScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-
-                if (state.isUpdating) {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                // ── Interactive metrics chips ────────────────────────────────
-                OrderMetricsRow(
-                    pendingCount = state.pendingCount,
-                    inPreparationCount = state.inPreparationCount,
-                    shippingCount = state.shippingCount,
-                    completedCount = state.completedCount,
-                    totalCodAmount = state.totalCodAmount,
-                    selectedFilter = state.selectedTab,
-                    onFilterClick = viewModel::onFilterSelected
-                )
-
-                // ── Date range filter chips ──────────────────────────────────
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    DateFilter.entries.forEach { dateFilter ->
-                        FilterChip(
-                            selected = state.selectedDateFilter == dateFilter,
-                            onClick = { viewModel.onDateFilterSelected(dateFilter) },
-                            label = { Text(stringResource(dateFilter.labelResId), style = MaterialTheme.typography.labelSmall) },
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                    }
-                }
-
-                // ── Search field ─────────────────────────────────────────────
-                OutlinedTextField(
-                    value = state.searchQuery,
-                    onValueChange = viewModel::onSearchQueryChanged,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    placeholder = { Text(stringResource(R.string.orders_dashboard_search_placeholder)) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    trailingIcon = {
-                        if (state.searchQuery.isNotEmpty()) {
-                            IconButton(
-                                onClick = { viewModel.onSearchQueryChanged("") },
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = stringResource(R.string.common_clear_content_desc),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp)
-                )
-
-                // ── Error banner ─────────────────────────────────────────────
-                state.errorMessage?.let { message ->
-                    Surface(
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        shape = RoundedCornerShape(8.dp),
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 88.dp)
+            ) {
+                // ── Top Header Item: Dashboard Title & Manifest Export ────────
+                item(key = "orders_header_title") {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = message,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                text = stringResource(R.string.orders_dashboard_header_title),
+                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onBackground
                             )
-                            IconButton(
-                                onClick = viewModel::clearErrorMessage,
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = stringResource(R.string.common_close_alert),
-                                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = if (state.totalCount > 0)
+                                    stringResource(R.string.orders_dashboard_header_subtitle_count, state.totalCount)
+                                else
+                                    stringResource(R.string.orders_dashboard_header_subtitle_empty),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                val manifest = viewModel.exportSelectedBulkManifest()
+                                clipboardManager.setText(AnnotatedString(manifest))
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        context.getString(
+                                            R.string.orders_dashboard_copied_manifest_snackbar,
+                                            state.ordersList.size
+                                        )
+                                    )
+                                }
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Print,
+                                contentDescription = stringResource(R.string.orders_dashboard_bulk_manifest_desc),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }
 
-                // ── Status Filter Tabs ────────────────────────────────────────
-                val filters = OrderFilter.entries
-                val selectedTabIndex = filters.indexOf(state.selectedTab)
-                ScrollableTabRow(
-                    selectedTabIndex = if (selectedTabIndex >= 0) selectedTabIndex else 0,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    edgePadding = 4.dp,
-                    containerColor = Color.Transparent,
-                    divider = {}
-                ) {
-                    filters.forEach { filter ->
-                        val count = when (filter) {
-                            OrderFilter.ALL -> state.totalCount
-                            OrderFilter.PENDING -> state.pendingCount
-                            OrderFilter.IN_PREPARATION -> state.inPreparationCount
-                            OrderFilter.SHIPPING_IN_PROGRESS -> state.shippingCount
-                            OrderFilter.COMPLETED -> state.completedCount
-                            OrderFilter.CANCELLED -> state.cancelledCount
-                            OrderFilter.RETURNED -> state.returnedCount
-                        }
-                        val filterName = stringResource(filter.labelResId)
-                        val tabText = if (count > 0) "$filterName ($count)" else filterName
-                        Tab(
-                            selected = filter == state.selectedTab,
-                            onClick = { viewModel.onFilterSelected(filter) },
-                            text = {
-                                Text(
-                                    text = tabText,
-                                    fontWeight = if (filter == state.selectedTab) FontWeight.Bold else FontWeight.Normal
-                                )
-                            }
+                // ── Progress indicator when updating ─────────────────────────
+                if (state.isUpdating) {
+                    item(key = "orders_updating_indicator") {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
 
-                // ── Orders list / empty state ────────────────────────────────
-                when {
-                    state.isLoading -> Unit
-
-                    state.ordersList.isEmpty() -> EmptyOrdersState(
-                        isSearching = state.searchQuery.isNotBlank() || state.selectedDateFilter != DateFilter.ALL,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
+                // ── KPI Summary Cards (جديد / قيد التجهيز / تم التسليم) ──────
+                item(key = "orders_kpi_metrics") {
+                    OrderMetricsRow(
+                        pendingCount = state.pendingCount,
+                        inPreparationCount = state.inPreparationCount,
+                        shippingCount = state.shippingCount,
+                        completedCount = state.completedCount,
+                        totalCodAmount = state.totalCodAmount,
+                        selectedFilter = state.selectedTab,
+                        onFilterClick = viewModel::onFilterSelected
                     )
+                }
 
-                    else -> LazyColumn(
+                // ── Date range filter chips (الكل / اليوم / أمس...) ───────────
+                item(key = "orders_date_filters") {
+                    Row(
                         modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        contentPadding = PaddingValues(
-                            horizontal = 16.dp, vertical = 4.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        items(state.ordersList, key = { it.id }) { order ->
-                            OrderCard(
-                                order = order,
-                                onStatusChanged = viewModel::onStatusChanged,
-                                onAdvanceStatus = viewModel::advanceOrderStatus,
-                                onEditNote = { noteEditingOrder = order },
-                                onCopyCourierManifest = { targetOrder ->
-                                    val manifest = viewModel.formatCourierManifest(targetOrder)
-                                    clipboardManager.setText(AnnotatedString(manifest))
-                                    coroutineScope.launch {
-                                        val customer = targetOrder.customerNameFromLlm?.takeIf { it.isNotBlank() }
-                                            ?: targetOrder.contactName
-                                        snackbarHostState.showSnackbar(context.getString(R.string.orders_dashboard_copied_waybill_snackbar, customer))
-                                    }
+                        DateFilter.entries.forEach { dateFilter ->
+                            FilterChip(
+                                selected = state.selectedDateFilter == dateFilter,
+                                onClick = { viewModel.onDateFilterSelected(dateFilter) },
+                                label = {
+                                    Text(
+                                        text = stringResource(dateFilter.labelResId),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
                                 },
-                                onOpenChat = { contactName ->
-                                    coroutineScope.launch {
-                                        val resolvedSourceClass =
-                                            viewModel.getChatSourceClassForContact(contactName)
-                                        onNavigateToChat(contactName, resolvedSourceClass)
-                                    }
-                                },
-                                onEditOrder = viewModel::openEditOrderDialog,
-                                onCancelOrder = viewModel::openCancelOrderDialog,
-                                isSelected = order.id in state.selectedOrderIds,
-                                isSelectionMode = state.isMultiSelectMode,
-                                onToggleSelect = viewModel::toggleOrderSelection
+                                shape = RoundedCornerShape(10.dp)
                             )
                         }
-                        item { Spacer(modifier = Modifier.height(72.dp)) }
+                    }
+                }
+
+                // ── Sticky Header: Compact Search Bar + Status Tab Row ────────
+                stickyHeader(key = "orders_sticky_controls") {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surface,
+                        shadowElevation = 3.dp,
+                        tonalElevation = 2.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp)
+                        ) {
+                            // Slim, compact search bar with maxLines = 1, singleLine = true
+                            OutlinedTextField(
+                                value = state.searchQuery,
+                                onValueChange = viewModel::onSearchQueryChanged,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                placeholder = {
+                                    Text(
+                                        text = stringResource(R.string.orders_dashboard_search_placeholder),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
+                                trailingIcon = {
+                                    if (state.searchQuery.isNotEmpty()) {
+                                        IconButton(
+                                            onClick = { viewModel.onSearchQueryChanged("") },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = stringResource(R.string.common_clear_content_desc),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                maxLines = 1,
+                                shape = RoundedCornerShape(12.dp),
+                                textStyle = MaterialTheme.typography.bodyMedium
+                            )
+
+                            // Error banner if any
+                            state.errorMessage?.let { message ->
+                                Surface(
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = message,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                        IconButton(
+                                            onClick = viewModel::clearErrorMessage,
+                                            modifier = Modifier.size(48.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = stringResource(R.string.common_close_alert),
+                                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Status Filter Tabs
+                            val filters = OrderFilter.entries
+                            val selectedTabIndex = filters.indexOf(state.selectedTab)
+                            ScrollableTabRow(
+                                selectedTabIndex = if (selectedTabIndex >= 0) selectedTabIndex else 0,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                                edgePadding = 4.dp,
+                                containerColor = Color.Transparent,
+                                divider = {}
+                            ) {
+                                filters.forEach { filter ->
+                                    val count = when (filter) {
+                                        OrderFilter.ALL -> state.totalCount
+                                        OrderFilter.PENDING -> state.pendingCount
+                                        OrderFilter.IN_PREPARATION -> state.inPreparationCount
+                                        OrderFilter.SHIPPING_IN_PROGRESS -> state.shippingCount
+                                        OrderFilter.COMPLETED -> state.completedCount
+                                        OrderFilter.CANCELLED -> state.cancelledCount
+                                        OrderFilter.RETURNED -> state.returnedCount
+                                    }
+                                    val filterName = stringResource(filter.labelResId)
+                                    val tabText = if (count > 0) "$filterName ($count)" else filterName
+                                    Tab(
+                                        selected = filter == state.selectedTab,
+                                        onClick = { viewModel.onFilterSelected(filter) },
+                                        text = {
+                                            Text(
+                                                text = tabText,
+                                                fontWeight = if (filter == state.selectedTab) FontWeight.Bold else FontWeight.Normal,
+                                                style = MaterialTheme.typography.labelMedium
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider(
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+                }
+
+                // ── Orders list / empty state / loading state ────────────────
+                when {
+                    state.isLoading && state.ordersList.isEmpty() -> {
+                        item(key = "orders_loading_indicator") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 64.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(36.dp))
+                            }
+                        }
+                    }
+
+                    state.ordersList.isEmpty() -> {
+                        item(key = "orders_empty_state") {
+                            EmptyOrdersState(
+                                isSearching = state.searchQuery.isNotBlank() || state.selectedDateFilter != DateFilter.ALL,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 48.dp)
+                            )
+                        }
+                    }
+
+                    else -> {
+                        items(items = state.ordersList, key = { it.id }) { order ->
+                            Box(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                            ) {
+                                OrderCard(
+                                    order = order,
+                                    onStatusChanged = viewModel::onStatusChanged,
+                                    onAdvanceStatus = viewModel::advanceOrderStatus,
+                                    onEditNote = { noteEditingOrder = order },
+                                    onCopyCourierManifest = { targetOrder ->
+                                        val manifest = viewModel.formatCourierManifest(targetOrder)
+                                        clipboardManager.setText(AnnotatedString(manifest))
+                                        coroutineScope.launch {
+                                            val customer = targetOrder.customerNameFromLlm?.takeIf { it.isNotBlank() }
+                                                ?: targetOrder.contactName
+                                            snackbarHostState.showSnackbar(
+                                                context.getString(
+                                                    R.string.orders_dashboard_copied_waybill_snackbar,
+                                                    customer
+                                                )
+                                            )
+                                        }
+                                    },
+                                    onOpenChat = { contactName ->
+                                        coroutineScope.launch {
+                                            val resolvedSourceClass =
+                                                viewModel.getChatSourceClassForContact(contactName)
+                                            onNavigateToChat(contactName, resolvedSourceClass)
+                                        }
+                                    },
+                                    onEditOrder = viewModel::openEditOrderDialog,
+                                    onCancelOrder = viewModel::openCancelOrderDialog,
+                                    isSelected = order.id in state.selectedOrderIds,
+                                    isSelectionMode = state.isMultiSelectMode,
+                                    onToggleSelect = viewModel::toggleOrderSelection
+                                )
+                            }
+                        }
                     }
                 }
             }
