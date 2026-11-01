@@ -9,9 +9,10 @@ package com.example.persona.features.settings.domain.repository
  * Legacy entries that have no pipe separator are treated as TEXT-only.
  */
 enum class ModelCapability(val key: String, val label: String) {
-    TEXT("TEXT", "نص ومحادثة"),
-    VISION("VISION", "رؤية وصور"),
-    AUDIO("AUDIO", "تفريغ صوتي");
+    TEXT("TEXT", "نص"),
+    VISION("VISION", "صور"),
+    AUDIO("AUDIO", "صوت"),
+    DECISION("DECISION", "قرار");
 
     companion object {
         fun fromKey(key: String): ModelCapability? = entries.firstOrNull { it.key == key }
@@ -65,6 +66,13 @@ data class ModelConfig(
         fun inferCapabilities(modelId: String): Set<ModelCapability> {
             val id = modelId.lowercase()
             val caps = mutableSetOf<ModelCapability>()
+
+            // Decision / Gatekeeper models (Cloudflare Clef, Liquid D1, Decision/Router classifiers)
+            if (id.contains("clef") || id.contains("d1") || id.contains("decision") || id.contains("gatekeeper")) {
+                caps += ModelCapability.DECISION
+                return caps
+            }
+
             // Audio / ASR models
             if (id.contains("asr") || id.contains("whisper") || id.contains("funasr") ||
                 id.contains("speech") || id.contains("stt")

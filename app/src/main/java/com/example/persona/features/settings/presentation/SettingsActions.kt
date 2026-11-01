@@ -64,9 +64,13 @@ class WhatsAppActions(private val vm: SettingsViewModel) {
 @Stable
 class AiActions(private val vm: SettingsViewModel) {
     fun selectProvider(id: String) = vm.selectProviderForEdit(id)
+    fun selectCapabilityFilter(cap: ModelCapability) = vm.selectCapabilityFilter(cap)
     fun moveProvider(from: Int, to: Int) = vm.moveProvider(from, to)
     fun moveProviderUp(provider: String) = vm.moveProviderUp(provider)
     fun moveProviderDown(provider: String) = vm.moveProviderDown(provider)
+    fun moveProviderForCapability(cap: ModelCapability, from: Int, to: Int) = vm.moveProviderForCapability(cap, from, to)
+    fun moveProviderUpForCapability(cap: ModelCapability, provider: String) = vm.moveProviderUpForCapability(cap, provider)
+    fun moveProviderDownForCapability(cap: ModelCapability, provider: String) = vm.moveProviderDownForCapability(cap, provider)
     fun addApiKey(provider: String, key: String) = vm.addApiKey(provider, key)
     fun addApiKeyAtIndex(provider: String, key: String, index: Int) = vm.addApiKeyAtIndex(provider, key, index)
     fun removeApiKey(provider: String, key: String) = vm.removeApiKey(provider, key)

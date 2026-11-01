@@ -1202,4 +1202,114 @@ class WhatsAppMediaExtractorTest {
         val parsed = extractor.parseGeminiAudioResponse(responseWithPreamble)
         assertEquals("عايز هودي مقاس لارج لو سمحت", parsed)
     }
+
+    @Test
+    fun `transcribeVoiceNote routes through OpenRouter when OpenRouter model is tagged with AUDIO`() = runBlocking {
+        var openRouterCalled = false
+        var capturedModel: String? = null
+
+        val mockEngine = MockEngine { request ->
+            val url = request.url.toString()
+            if (url.contains("openrouter.ai/api/v1/audio/transcriptions")) {
+                openRouterCalled = true
+                val bodyStr = (request.body as? io.ktor.http.content.TextContent)?.text
+                    ?: (request.body as? io.ktor.http.content.ByteArrayContent)?.let { String(it.bytes(), Charsets.UTF_8) }
+                    ?: ""
+                val json = Json.parseToJsonElement(bodyStr).jsonObject
+                capturedModel = json["model"]?.jsonPrimitive?.content
+                respond(
+                    content = """{"text": "عايز اطلب هودي اسود مقاس XL"}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond(
+                    content = "error",
+                    status = HttpStatusCode.InternalServerError,
+                    headers = headersOf(HttpHeaders.ContentType, "text/plain")
+                )
+            }
+        }
+
+        val extractor = WhatsAppMediaExtractor(
+            mockContext,
+            HttpClient(mockEngine),
+            groqPrimaryApiKey = "",
+            groqFallbackApiKey = "",
+            qwenApiKey = "",
+            geminiApiKey = "",
+            openRouterPrimaryApiKey = "sk-or-test-key",
+            openRouterFallbackApiKey = ""
+        )
+
+        val tempAudio = tempFolder.newFile("test_openrouter_voice.ogg").apply {
+            writeBytes(ByteArray(1024) { 8 })
+        }
+
+        val result = extractor.transcribeVoiceNote(
+            audioFile = tempAudio,
+            audioModelsOverride = null,
+            openRouterAudioModels = listOf("openai/whisper-large-v3")
+        )
+
+        assertNotNull(result)
+        assertEquals("عايز اطلب هودي اسود مقاس XL", result)
+        assertTrue("OpenRouter audio endpoint should be called", openRouterCalled)
+        assertEquals("openai/whisper-large-v3", capturedModel)
+    }
+
+    @Test
+    fun `callOpenRouterAudioTranscription falls back to chat completions when STT endpoint fails`() = runBlocking {
+        var transcriptionsCalled = false
+        var chatCompletionsCalled = false
+
+        val mockEngine = MockEngine { request ->
+            val url = request.url.toString()
+            when {
+                url.contains("/api/v1/audio/transcriptions") -> {
+                    transcriptionsCalled = true
+                    respond(
+                        content = """{"error": {"code": 404, "message": "Endpoint not supported for this model"}}""",
+                        status = HttpStatusCode.NotFound,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                }
+                url.contains("/api/v1/chat/completions") -> {
+                    chatCompletionsCalled = true
+                    respond(
+                        content = """
+                            {
+                              "choices": [
+                                {
+                                  "message": {
+                                    "role": "assistant",
+                                    "content": "مساء الخير، لو سمحت السعر كام؟"
+                                  }
+                                }
+                              ]
+                            }
+                        """.trimIndent(),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                }
+                else -> respond(
+                    content = "not found",
+                    status = HttpStatusCode.NotFound,
+                    headers = headersOf(HttpHeaders.ContentType, "text/plain")
+                )
+            }
+        }
+
+        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(mockEngine))
+        val tempAudio = tempFolder.newFile("multimodal_voice.ogg").apply {
+            writeBytes(ByteArray(1024) { 9 })
+        }
+
+        val result = extractor.callOpenRouterAudioTranscription(tempAudio, "test_key", "google/gemini-2.5-flash")
+        assertNotNull(result)
+        assertEquals("مساء الخير، لو سمحت السعر كام؟", result)
+        assertTrue("Transcriptions endpoint should be tried first", transcriptionsCalled)
+        assertTrue("Chat completions endpoint should be called as fallback", chatCompletionsCalled)
+    }
 }

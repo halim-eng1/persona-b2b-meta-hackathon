@@ -240,6 +240,10 @@
     <string name="settings_tab_maintenance">Maintenance &amp; Security</string>
 
     <!-- ── Settings AI Engines Section ─────────────────────────────────────────── -->
+    <string name="capability_text">Text</string>
+    <string name="capability_vision">Vision</string>
+    <string name="capability_audio">Audio</string>
+    <string name="capability_decision">Decision</string>
     <string name="settings_ai_priority_title">AI Provider Priority Chain</string>
     <string name="settings_ai_priority_subtitle">Order provider fallback; if the primary engine fails or depletes balance, the next engine takes over automatically.</string>
     <string name="settings_ai_keys_count">%d registered API keys</string>

@@ -165,6 +165,25 @@ class SettingsViewModel @Inject constructor(
             }.collect {}
         }
 
+        // Group 4b: Per-Capability Provider Priorities
+        viewModelScope.launch {
+            combine(
+                userPreferencesRepository.getProviderPriority(ModelCapability.TEXT),
+                userPreferencesRepository.getProviderPriority(ModelCapability.VISION),
+                userPreferencesRepository.getProviderPriority(ModelCapability.AUDIO),
+                userPreferencesRepository.getProviderPriority(ModelCapability.DECISION)
+            ) { textOrder, visionOrder, audioOrder, decisionOrder ->
+                mapOf(
+                    ModelCapability.TEXT to textOrder,
+                    ModelCapability.VISION to visionOrder,
+                    ModelCapability.AUDIO to audioOrder,
+                    ModelCapability.DECISION to decisionOrder
+                )
+            }.collect { priorities ->
+                _uiState.update { it.copy(capabilityProviderPriorities = priorities) }
+            }
+        }
+
         // Group 5: App Language & Localization & Theme
         viewModelScope.launch {
             userPreferencesRepository.appLanguageFlow.collect { lang ->
@@ -221,7 +240,48 @@ class SettingsViewModel @Inject constructor(
 
     // ── 1. AI Engines, Keys & Models Operations ───────────────────────────────
 
+    fun selectCapabilityFilter(cap: ModelCapability) {
+        _uiState.update { it.copy(selectedCapabilityFilter = cap) }
+    }
+
+    fun moveProviderUpForCapability(cap: ModelCapability, provider: String) {
+        val list = _uiState.value.filteredProviderOrder(cap).toMutableList()
+        val idx = list.indexOf(provider.lowercase())
+        if (idx > 0) {
+            Collections.swap(list, idx, idx - 1)
+            updateAndPersistCapabilityPriority(cap, list)
+        }
+    }
+
+    fun moveProviderDownForCapability(cap: ModelCapability, provider: String) {
+        val list = _uiState.value.filteredProviderOrder(cap).toMutableList()
+        val idx = list.indexOf(provider.lowercase())
+        if (idx in 0 until list.size - 1) {
+            Collections.swap(list, idx, idx + 1)
+            updateAndPersistCapabilityPriority(cap, list)
+        }
+    }
+
+    fun moveProviderForCapability(cap: ModelCapability, from: Int, to: Int) {
+        val list = _uiState.value.filteredProviderOrder(cap).toMutableList()
+        if (from !in list.indices || to !in list.indices) return
+        val item = list.removeAt(from)
+        list.add(to, item)
+        updateAndPersistCapabilityPriority(cap, list)
+    }
+
+    private fun updateAndPersistCapabilityPriority(cap: ModelCapability, newOrder: List<String>) {
+        _uiState.update { s ->
+            val updatedMap = s.capabilityProviderPriorities + (cap to newOrder)
+            s.copy(capabilityProviderPriorities = updatedMap)
+        }
+        viewModelScope.launch {
+            userPreferencesRepository.setProviderPriority(cap, newOrder)
+        }
+    }
+
     fun moveProviderUp(provider: String) {
+        moveProviderUpForCapability(_uiState.value.selectedCapabilityFilter, provider)
         val current = _uiState.value.providerOrder.toMutableList()
         val idx = current.indexOf(provider)
         if (idx > 0) {
@@ -234,6 +294,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun moveProviderDown(provider: String) {
+        moveProviderDownForCapability(_uiState.value.selectedCapabilityFilter, provider)
         val current = _uiState.value.providerOrder.toMutableList()
         val idx = current.indexOf(provider)
         if (idx in 0 until current.size - 1) {
@@ -246,6 +307,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun moveProvider(from: Int, to: Int) {
+        moveProviderForCapability(_uiState.value.selectedCapabilityFilter, from, to)
         val order = _uiState.value.providerOrder.toMutableList()
         if (from !in order.indices || to !in order.indices) return
         val item = order.removeAt(from)

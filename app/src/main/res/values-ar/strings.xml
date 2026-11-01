@@ -240,6 +240,10 @@
     <string name="settings_tab_maintenance">الصيانة والأمان</string>
 
     <!-- ── Settings AI Engines Section ─────────────────────────────────────────── -->
+    <string name="capability_text">نص</string>
+    <string name="capability_vision">صور</string>
+    <string name="capability_audio">صوت</string>
+    <string name="capability_decision">قرار</string>
     <string name="settings_ai_priority_title">سلسلة أولويات مزودي الذكاء الاصطناعي</string>
     <string name="settings_ai_priority_subtitle">رتّب أولوية المزودين؛ في حال تعثر المزود الأول أو نفاد رصيده يتم الانتقال تلقائياً للمزود التالي.</string>
     <string name="settings_ai_keys_count">%d مفتاح API مسجل</string>

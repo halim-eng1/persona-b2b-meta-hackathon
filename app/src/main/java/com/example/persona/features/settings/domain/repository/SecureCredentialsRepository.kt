@@ -55,6 +55,7 @@ object ModelProviders {
         ),
         OPENROUTER to listOf(
             "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "nvidia/nemotron-3.5-super-vl:free",
             "liquid/lfm-2.5-2.6b:free",
             "openrouter/free"
         ),
@@ -69,6 +70,24 @@ object ModelProviders {
             "d1:latest",
             "d1"
         )
+    )
+
+    val DEFAULT_CAPABILITY_PROVIDERS: Map<ModelCapability, List<String>> = mapOf(
+        ModelCapability.TEXT to listOf(QWEN, GEMINI, GROQ, NVIDIA, OPENROUTER, NARA),
+        ModelCapability.VISION to listOf(QWEN, GEMINI, GROQ, NVIDIA, OPENROUTER),
+        ModelCapability.AUDIO to listOf(QWEN, GEMINI, GROQ, OPENROUTER),
+        ModelCapability.DECISION to listOf(CLOUDFLARE, LIQUID, OPENROUTER)
+    )
+
+    val DEFAULT_CAPABILITIES_BY_PROVIDER: Map<String, Set<ModelCapability>> = mapOf(
+        QWEN to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.AUDIO),
+        GEMINI to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.AUDIO),
+        GROQ to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.AUDIO),
+        NVIDIA to setOf(ModelCapability.TEXT, ModelCapability.VISION),
+        OPENROUTER to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.AUDIO, ModelCapability.DECISION),
+        NARA to setOf(ModelCapability.TEXT),
+        CLOUDFLARE to setOf(ModelCapability.DECISION),
+        LIQUID to setOf(ModelCapability.DECISION)
     )
 }
 

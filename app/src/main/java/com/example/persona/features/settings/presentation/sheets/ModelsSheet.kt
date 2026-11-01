@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -81,15 +82,17 @@ private data class CapabilityChipDef(
 )
 
 private val CAPABILITY_CHIPS = listOf(
-    CapabilityChipDef(ModelCapability.TEXT,   Icons.Default.TextFields, "نص ومحادثة"),
-    CapabilityChipDef(ModelCapability.VISION, Icons.Default.Image,      "رؤية وصور"),
-    CapabilityChipDef(ModelCapability.AUDIO,  Icons.Default.MicNone,    "تفريغ صوتي")
+    CapabilityChipDef(ModelCapability.TEXT,     Icons.Default.TextFields, "نص"),
+    CapabilityChipDef(ModelCapability.VISION,   Icons.Default.Image,      "صور"),
+    CapabilityChipDef(ModelCapability.AUDIO,    Icons.Default.MicNone,    "صوت"),
+    CapabilityChipDef(ModelCapability.DECISION, Icons.Default.Bolt,       "قرار")
 )
 
 private fun iconForCapability(cap: ModelCapability): ImageVector = when (cap) {
-    ModelCapability.TEXT   -> Icons.Default.TextFields
-    ModelCapability.VISION -> Icons.Default.Image
-    ModelCapability.AUDIO  -> Icons.Default.MicNone
+    ModelCapability.TEXT     -> Icons.Default.TextFields
+    ModelCapability.VISION   -> Icons.Default.Image
+    ModelCapability.AUDIO    -> Icons.Default.MicNone
+    ModelCapability.DECISION -> Icons.Default.Bolt
 }
 
 /** Infers smart capability pre-selection from the typed model ID. */
@@ -234,14 +237,19 @@ private fun AddProviderModelDialog(
 
 @Composable
 private fun CapabilityBadgeRow(capabilities: Set<ModelCapability>, modifier: Modifier = Modifier) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         capabilities.sortedBy { it.ordinal }.forEach { cap ->
             Surface(
                 shape = RoundedCornerShape(6.dp),
                 color = when (cap) {
-                    ModelCapability.TEXT   -> MaterialTheme.colorScheme.secondaryContainer
-                    ModelCapability.VISION -> MaterialTheme.colorScheme.tertiaryContainer
-                    ModelCapability.AUDIO  -> MaterialTheme.colorScheme.primaryContainer
+                    ModelCapability.TEXT     -> MaterialTheme.colorScheme.secondaryContainer
+                    ModelCapability.VISION   -> MaterialTheme.colorScheme.tertiaryContainer
+                    ModelCapability.AUDIO    -> MaterialTheme.colorScheme.primaryContainer
+                    ModelCapability.DECISION -> MaterialTheme.colorScheme.errorContainer
                 }
             ) {
                 Row(
@@ -254,18 +262,20 @@ private fun CapabilityBadgeRow(capabilities: Set<ModelCapability>, modifier: Mod
                         contentDescription = cap.label,
                         modifier = Modifier.size(10.dp),
                         tint = when (cap) {
-                            ModelCapability.TEXT   -> MaterialTheme.colorScheme.onSecondaryContainer
-                            ModelCapability.VISION -> MaterialTheme.colorScheme.onTertiaryContainer
-                            ModelCapability.AUDIO  -> MaterialTheme.colorScheme.onPrimaryContainer
+                            ModelCapability.TEXT     -> MaterialTheme.colorScheme.onSecondaryContainer
+                            ModelCapability.VISION   -> MaterialTheme.colorScheme.onTertiaryContainer
+                            ModelCapability.AUDIO    -> MaterialTheme.colorScheme.onPrimaryContainer
+                            ModelCapability.DECISION -> MaterialTheme.colorScheme.onErrorContainer
                         }
                     )
                     Text(
                         text = cap.label,
                         style = MaterialTheme.typography.labelSmall,
                         color = when (cap) {
-                            ModelCapability.TEXT   -> MaterialTheme.colorScheme.onSecondaryContainer
-                            ModelCapability.VISION -> MaterialTheme.colorScheme.onTertiaryContainer
-                            ModelCapability.AUDIO  -> MaterialTheme.colorScheme.onPrimaryContainer
+                            ModelCapability.TEXT     -> MaterialTheme.colorScheme.onSecondaryContainer
+                            ModelCapability.VISION   -> MaterialTheme.colorScheme.onTertiaryContainer
+                            ModelCapability.AUDIO    -> MaterialTheme.colorScheme.onPrimaryContainer
+                            ModelCapability.DECISION -> MaterialTheme.colorScheme.onErrorContainer
                         },
                         fontWeight = FontWeight.Medium
                     )
@@ -364,16 +374,44 @@ fun ModelsSheet(
                                     .padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                // TOP ROW: Full Model Name (100% Horizontal Breath)
-                                Text(
-                                    text = modelName,
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                // TOP ROW: Model ID (start, weight 1f) + Priority Badge (end)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = modelName,
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (index == 0)
+                                            PersonaTheme.statusColors.success.copy(alpha = 0.15f)
+                                        else
+                                            MaterialTheme.colorScheme.surfaceVariant
+                                    ) {
+                                        Text(
+                                            text = if (index == 0)
+                                                stringResource(R.string.settings_ai_model_primary_badge)
+                                            else
+                                                stringResource(R.string.settings_ai_model_fallback_badge, index + 1),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (index == 0)
+                                                PersonaTheme.statusColors.success
+                                            else
+                                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
 
                                 // BOTTOM ROW: Badges & Controls
                                 Row(
@@ -381,37 +419,15 @@ fun ModelsSheet(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Left: Priority Badge + Capability Badges
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = if (index == 0)
-                                                PersonaTheme.statusColors.success.copy(alpha = 0.15f)
-                                            else
-                                                MaterialTheme.colorScheme.surfaceVariant
-                                        ) {
-                                            Text(
-                                                text = if (index == 0)
-                                                    stringResource(R.string.settings_ai_model_primary_badge)
-                                                else
-                                                    stringResource(R.string.settings_ai_model_fallback_badge, index + 1),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = if (index == 0)
-                                                    PersonaTheme.statusColors.success
-                                                else
-                                                    MaterialTheme.colorScheme.onSurfaceVariant,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
+                                    // Start side: Capability badges in a Row with Modifier.weight(1f)
+                                    CapabilityBadgeRow(
+                                        capabilities = config.capabilities,
+                                        modifier = Modifier.weight(1f)
+                                    )
 
-                                        CapabilityBadgeRow(capabilities = config.capabilities)
-                                    }
+                                    Spacer(modifier = Modifier.width(4.dp))
 
-                                    // Right: Action Controls (Up, Down, Delete, Drag Handle)
+                                    // End side: Fixed action icons (Move Up, Move Down, Delete, Drag Handle)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(2.dp)

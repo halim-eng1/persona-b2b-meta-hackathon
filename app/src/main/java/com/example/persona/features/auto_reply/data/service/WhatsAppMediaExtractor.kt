@@ -59,6 +59,8 @@ class WhatsAppMediaExtractor @Inject constructor(
     internal var groqFallbackApiKeyOverride: String? = null
     internal var qwenApiKeyOverride: String? = null
     internal var geminiApiKeyOverride: String? = null
+    internal var openRouterPrimaryApiKeyOverride: String? = null
+    internal var openRouterFallbackApiKeyOverride: String? = null
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
     private val groqPrimaryApiKey: String
@@ -72,6 +74,12 @@ class WhatsAppMediaExtractor @Inject constructor(
 
     private val geminiApiKey: String
         get() = geminiApiKeyOverride ?: (runCatching { BuildConfig.GEMINI_API_KEY }.getOrNull() ?: "")
+
+    private val openRouterPrimaryApiKey: String
+        get() = openRouterPrimaryApiKeyOverride ?: (runCatching { BuildConfig.OPENROUTER_API_KEY }.getOrNull() ?: "")
+
+    private val openRouterFallbackApiKey: String
+        get() = openRouterFallbackApiKeyOverride ?: (runCatching { BuildConfig.OPENROUTER_API_KEY_V2 }.getOrNull() ?: "")
 
     companion object {
         private const val TAG = "PersonaMedia"
@@ -90,12 +98,16 @@ class WhatsAppMediaExtractor @Inject constructor(
         groqPrimaryApiKey: String?,
         groqFallbackApiKey: String?,
         qwenApiKey: String? = "",
-        geminiApiKey: String? = ""
+        geminiApiKey: String? = "",
+        openRouterPrimaryApiKey: String? = "",
+        openRouterFallbackApiKey: String? = ""
     ) : this(context, httpClient) {
         this.groqPrimaryApiKeyOverride = groqPrimaryApiKey
         this.groqFallbackApiKeyOverride = groqFallbackApiKey
         this.qwenApiKeyOverride = qwenApiKey
         this.geminiApiKeyOverride = geminiApiKey
+        this.openRouterPrimaryApiKeyOverride = openRouterPrimaryApiKey
+        this.openRouterFallbackApiKeyOverride = openRouterFallbackApiKey
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -692,13 +704,47 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     /**
-     * Transcribes an audio voice note via Qwen FunASR (Primary), Gemini Audio (Tier 1.5), or Groq Whisper (Fallback).
+     * Transcribes an audio voice note via OpenRouter (if tagged with AUDIO), Qwen FunASR (Primary),
+     * Gemini Audio (Tier 1.5), Groq Whisper (Tier 2), or OpenRouter Whisper (Fallback).
      *
      * @param audioFile The downloaded voice note file to transcribe.
      * @param audioModelsOverride Optional thread-safe list of active audio models (e.g. from orchestrator).
+     * @param openRouterAudioModels Optional active OpenRouter models tagged with [ModelCapability.AUDIO].
      */
-    suspend fun transcribeVoiceNote(audioFile: File, audioModelsOverride: List<String>? = null): String? {
+    suspend fun transcribeVoiceNote(
+        audioFile: File,
+        audioModelsOverride: List<String>? = null,
+        openRouterAudioModels: List<String>? = null
+    ): String? {
         try {
+            // Priority Check: Explicit OpenRouter models tagged with [AUDIO]
+            val effectiveOpenRouterAudio = openRouterAudioModels.orEmpty().ifEmpty {
+                audioModelsOverride.orEmpty().filter { m ->
+                    m.contains("/") && !m.startsWith("qwen/")
+                }
+            }
+
+            if (effectiveOpenRouterAudio.isNotEmpty()) {
+                val orKeys = listOfNotNull(
+                    openRouterPrimaryApiKey.trim().takeIf { it.isNotBlank() },
+                    openRouterFallbackApiKey.trim().takeIf { it.isNotBlank() && it != openRouterPrimaryApiKey.trim() }
+                )
+                if (orKeys.isNotEmpty()) {
+                    for (key in orKeys) {
+                        for (model in effectiveOpenRouterAudio) {
+                            val result = callOpenRouterAudioTranscription(audioFile, key, model)
+                            if (!result.isNullOrBlank()) {
+                                val logMsg = "🎙️ OpenRouter Audio transcription completed: '$result' (model=$model)"
+                                Log.i(TAG, logMsg)
+                                PersonaLogger.i(TAG, logMsg)
+                                return result
+                            }
+                        }
+                    }
+                }
+                Log.w(TAG, "OpenRouter Audio returned null or blank. Falling back to cascade...")
+            }
+
             // Tier 1: Qwen fun-asr-flash-2026-06-15 (~2.5s)
             val qKey = qwenApiKey.trim()
             if (qKey.isNotBlank()) {
@@ -750,7 +796,29 @@ class WhatsAppMediaExtractor @Inject constructor(
                 }
             }
 
-            Log.w(TAG, "ASR transcription failed across Qwen FunASR, Gemini Audio, and Groq Whisper for ${audioFile.name}")
+            // Tier 3: OpenRouter Whisper Fallback (if not already attempted via explicit models)
+            if (effectiveOpenRouterAudio.isEmpty()) {
+                val orKeys = listOfNotNull(
+                    openRouterPrimaryApiKey.trim().takeIf { it.isNotBlank() },
+                    openRouterFallbackApiKey.trim().takeIf { it.isNotBlank() && it != openRouterPrimaryApiKey.trim() }
+                )
+                if (orKeys.isNotEmpty()) {
+                    val fallbackModels = listOf("openai/whisper-large-v3", "openai/whisper")
+                    for (key in orKeys) {
+                        for (model in fallbackModels) {
+                            val result = callOpenRouterAudioTranscription(audioFile, key, model)
+                            if (!result.isNullOrBlank()) {
+                                val logMsg = "🎙️ OpenRouter fallback ($model) transcription completed: '$result'"
+                                Log.i(TAG, logMsg)
+                                PersonaLogger.i(TAG, logMsg)
+                                return result
+                            }
+                        }
+                    }
+                }
+            }
+
+            Log.w(TAG, "ASR transcription failed across all providers (OpenRouter, Qwen, Gemini, Groq) for ${audioFile.name}")
             return null
         } finally {
             if (audioFile.name.startsWith("incoming_voice_") && audioFile.name.endsWith(".ogg")) {
@@ -997,6 +1065,120 @@ class WhatsAppMediaExtractor @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Exception during Groq Whisper call: ${e.message}", e)
+            null
+        }
+    }
+
+    internal suspend fun callOpenRouterAudioTranscription(
+        audioFile: File,
+        apiKey: String,
+        model: String = "openai/whisper-large-v3"
+    ): String? {
+        return try {
+            if (!audioFile.exists() || audioFile.length() <= 100L) {
+                delay(150L)
+            }
+            if (!audioFile.exists() || audioFile.length() <= 100L) {
+                Log.w(TAG, "Audio file does not exist or has insufficient bytes (< 100B): ${audioFile.absolutePath} (${if (audioFile.exists()) audioFile.length() else 0} bytes)")
+                return null
+            }
+
+            val audioBytes = audioFile.readBytes()
+            val base64Audio = runCatching {
+                android.util.Base64.encodeToString(audioBytes, android.util.Base64.NO_WRAP)
+            }.getOrElse {
+                java.util.Base64.getEncoder().encodeToString(audioBytes)
+            }
+
+            val audioFormat = when (audioFile.extension.lowercase()) {
+                "ogg", "opus" -> "ogg"
+                "wav" -> "wav"
+                "mp3" -> "mp3"
+                "m4a" -> "m4a"
+                "aac" -> "aac"
+                "flac" -> "flac"
+                "webm" -> "webm"
+                else -> "ogg"
+            }
+
+            // Strategy A: OpenRouter Dedicated Audio Transcriptions Endpoint (/api/v1/audio/transcriptions)
+            val sttUrl = "https://openrouter.ai/api/v1/audio/transcriptions"
+            val sttPayload = buildJsonObject {
+                put("model", model)
+                putJsonObject("input_audio") {
+                    put("data", base64Audio)
+                    put("format", audioFormat)
+                }
+            }.toString()
+
+            val sttResponse = httpClient.post(sttUrl) {
+                header(HttpHeaders.Authorization, "Bearer $apiKey")
+                header(HttpHeaders.ContentType, "application/json")
+                setBody(sttPayload)
+            }
+
+            if (sttResponse.status.isSuccess()) {
+                val responseText = sttResponse.bodyAsText()
+                val parsed = runCatching {
+                    val root = jsonParser.parseToJsonElement(responseText).jsonObject
+                    root["text"]?.jsonPrimitive?.content?.trim()
+                }.getOrNull()
+                if (!parsed.isNullOrBlank()) {
+                    return cleanTranscribedText(parsed)
+                }
+            } else {
+                Log.w(TAG, "OpenRouter /audio/transcriptions returned ${sttResponse.status.value}: ${sttResponse.bodyAsText().take(150)}. Trying multimodal chat completion fallback...")
+            }
+
+            // Strategy B: Multimodal Chat Completions with input_audio (/api/v1/chat/completions)
+            val chatUrl = BuildConfig.OPENROUTER_BASE_URL
+            val chatPayload = buildJsonObject {
+                put("model", model)
+                putJsonArray("messages") {
+                    addJsonObject {
+                        put("role", "user")
+                        putJsonArray("content") {
+                            addJsonObject {
+                                put("type", "text")
+                                put("text", "Transcribe this colloquial Egyptian Arabic voice note verbatim into plain text. Output ONLY the plain transcription without any commentary, markdown, or formatting.")
+                            }
+                            addJsonObject {
+                                put("type", "input_audio")
+                                putJsonObject("input_audio") {
+                                    put("data", base64Audio)
+                                    put("format", audioFormat)
+                                }
+                            }
+                        }
+                    }
+                }
+                put("max_tokens", 1024)
+            }.toString()
+
+            val chatResponse = httpClient.post(chatUrl) {
+                header(HttpHeaders.Authorization, "Bearer $apiKey")
+                header(HttpHeaders.ContentType, "application/json")
+                setBody(chatPayload)
+            }
+
+            if (chatResponse.status.isSuccess()) {
+                val responseText = chatResponse.bodyAsText()
+                val parsed = runCatching {
+                    val root = jsonParser.parseToJsonElement(responseText).jsonObject
+                    val choices = root["choices"] as? JsonArray
+                    val message = choices?.firstOrNull()?.jsonObject?.get("message")?.jsonObject
+                    message?.get("content")?.jsonPrimitive?.content?.trim()
+                }.getOrNull()
+                if (!parsed.isNullOrBlank()) {
+                    return cleanTranscribedText(parsed)
+                }
+            } else {
+                Log.w(TAG, "OpenRouter /chat/completions returned ${chatResponse.status.value}: ${chatResponse.bodyAsText().take(150)}")
+            }
+
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception during OpenRouter audio transcription: ${e.message}", e)
             null
         }
     }

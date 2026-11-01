@@ -29,7 +29,7 @@ import com.example.persona.features.settings.presentation.components.SettingsGro
 import com.example.persona.features.settings.presentation.components.SpokeScaffold
 import com.example.persona.features.settings.presentation.components.settingFocus
 import com.example.persona.features.settings.presentation.model.SettingKey
-import com.example.persona.features.settings.presentation.sheets.FallbackOrderSheet
+import com.example.persona.features.settings.presentation.sheets.ProviderPrioritySheet
 
 @Composable
 fun AiEngineScreen(
@@ -115,8 +115,10 @@ fun AiEngineScreen(
     }
 
     if (showFallbackSheet) {
-        FallbackOrderSheet(
-            order = state.providerOrder,
+        ProviderPrioritySheet(
+            selectedCapability = state.selectedCapabilityFilter,
+            onSelectCapability = actions::selectCapabilityFilter,
+            order = state.currentFilteredProviderOrder,
             keyCounts = keyCounts,
             onMoveUp = actions::moveProviderUp,
             onMoveDown = actions::moveProviderDown,

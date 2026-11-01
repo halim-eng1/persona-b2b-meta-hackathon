@@ -128,5 +128,26 @@ class ModelCapabilityTest {
         val caps = ModelConfig.inferCapabilities("WHISPER-LARGE")
         assertTrue(ModelCapability.AUDIO in caps)
     }
+
+    @Test
+    fun `inferCapabilities detects DECISION for clef models`() {
+        val caps = ModelConfig.inferCapabilities("@cf/cloudflare/clef-flash")
+        assertEquals(setOf(ModelCapability.DECISION), caps)
+    }
+
+    @Test
+    fun `inferCapabilities detects DECISION for d1 models`() {
+        val caps = ModelConfig.inferCapabilities("d1:latest")
+        assertEquals(setOf(ModelCapability.DECISION), caps)
+    }
+
+    @Test
+    fun `setFromString handles all four capabilities including DECISION`() {
+        val result = ModelCapability.setFromString("TEXT,VISION,AUDIO,DECISION")
+        assertEquals(
+            setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.AUDIO, ModelCapability.DECISION),
+            result
+        )
+    }
 }
 

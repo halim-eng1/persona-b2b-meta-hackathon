@@ -315,7 +315,12 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                                     .filter { ModelCapability.AUDIO in it.capabilities }
                                     .map { it.modelId }
                             }.getOrNull()
-                            val transcribed = mediaExtractor.transcribeVoiceNote(audioFile, audioModels)
+                            val openRouterAudioModels = runCatching {
+                                prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER)
+                                    .filter { ModelCapability.AUDIO in it.capabilities }
+                                    .map { it.modelId }
+                            }.getOrNull()
+                            val transcribed = mediaExtractor.transcribeVoiceNote(audioFile, audioModels, openRouterAudioModels)
                             if (!transcribed.isNullOrBlank()) {
                                 effectiveText = "[رسالة صوتية من العميل]: $transcribed"
                                 mediaFilePath = null // CRITICAL: Transcribed voice is a pure text turn; never an image attachment!

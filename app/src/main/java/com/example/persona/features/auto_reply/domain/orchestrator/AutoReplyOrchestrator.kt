@@ -2,6 +2,7 @@ package com.example.persona.features.auto_reply.domain.orchestrator
 
 import android.content.Context
 import android.util.Log
+import com.example.persona.BuildConfig
 import com.example.persona.R
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.core.database.Converters
@@ -38,12 +39,19 @@ import com.example.persona.core.network.dto.AgenticLlmResponse
 import com.example.persona.core.network.dto.ExtractedOrder
 import com.example.persona.features.auto_reply.data.gatekeeper.CloudflareClefClient
 import com.example.persona.features.auto_reply.data.gatekeeper.LiquidDecisionClient
+import com.example.persona.features.auto_reply.data.providers.OpenRouterClient
+import com.example.persona.features.auto_reply.data.repository.ReplyGenerationRepositoryImpl
 import com.example.persona.features.auto_reply.domain.gatekeeper.DecisionResult
 import com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent
 import com.example.persona.features.auto_reply.domain.gatekeeper.LocalDecisionClassifier
+import com.example.persona.core.network.dto.ChatMessage
 import dagger.hilt.android.qualifiers.ApplicationContext
+import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import com.example.persona.features.auto_reply.data.repository.PersistentDebounceBuffer
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -86,6 +94,7 @@ class AutoReplyOrchestrator @Inject constructor(
     private val cloudflareClefClient: CloudflareClefClient = CloudflareClefClient(),
     private val liquidDecisionClient: LiquidDecisionClient = LiquidDecisionClient(),
     private val localDecisionClassifier: LocalDecisionClassifier = LocalDecisionClassifier(),
+    private val openRouterClient: OpenRouterClient = OpenRouterClient(HttpClient()),
     private val persistentDebounceBuffer: PersistentDebounceBuffer = PersistentDebounceBuffer(context),
     private val threadIdentityResolver: ThreadIdentityResolver? = null
 ) {
@@ -644,7 +653,12 @@ class AutoReplyOrchestrator @Inject constructor(
                                 .filter { ModelCapability.AUDIO in it.capabilities }
                                 .map { it.modelId }
                         }.getOrNull()
-                        val transcribed = mediaExtractor.transcribeVoiceNote(voiceFile, audioModels)
+                        val openRouterAudioModels = runCatching {
+                            prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER)
+                                .filter { ModelCapability.AUDIO in it.capabilities }
+                                .map { it.modelId }
+                        }.getOrNull()
+                        val transcribed = mediaExtractor.transcribeVoiceNote(voiceFile, audioModels, openRouterAudioModels)
                         if (!transcribed.isNullOrBlank()) {
                             val updatedText = "[رسالة صوتية من العميل]: $transcribed"
                             val retainMediaPath = if (isAudioFilePath(currentMediaFilePath)) null else currentMediaFilePath
@@ -788,6 +802,12 @@ class AutoReplyOrchestrator @Inject constructor(
                         queryTextForEmbedding
                     }
 
+                    val openRouterDecisionModels = runCatching {
+                        prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER)
+                            .filter { ModelCapability.DECISION in it.capabilities }
+                            .map { it.modelId }
+                    }.getOrElse { emptyList() }
+
                     val cfIntent = runCatching {
                         cloudflareClefClient.decide(gatekeeperInput, timeoutMs = 1150L)
                     }.onFailure { e ->
@@ -814,11 +834,31 @@ class AutoReplyOrchestrator @Inject constructor(
                             DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Tier 3: Liquid AI"
                         } else {
                             val latencyTier3 = System.currentTimeMillis() - tLiquid
-                            Log.w(TAG, "⚠️ Gatekeeper Tier 3 (Liquid AI) failed or timed out (${latencyTier3}ms). Falling back to Tier 1 local decision...")
-                            PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper Tier 3 (Liquid AI) failed or timed out (${latencyTier3}ms). Falling back to Tier 1 local decision")
+                            if (openRouterDecisionModels.isNotEmpty()) {
+                                Log.w(TAG, "⚠️ Gatekeeper Tier 3 (Liquid AI) failed or timed out (${latencyTier3}ms). Falling back to Tier 4 (OpenRouter Gatekeeper)...")
+                                PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper Tier 3 (Liquid AI) failed or timed out (${latencyTier3}ms). Falling back to Tier 4 (OpenRouter Gatekeeper)")
 
-                            val latency = System.currentTimeMillis() - tGatekeeper
-                            localDecision.copy(latencyMs = latency) to "Tier 1: LocalDecisionClassifier (On-Device Test Fallback)"
+                                val orOutcome = try {
+                                    decideWithOpenRouter(gatekeeperInput, openRouterDecisionModels, timeoutMs = 1500L)
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Gatekeeper Tier 4 (OpenRouter) threw exception: ${e.message}")
+                                    null
+                                }
+
+                                if (orOutcome != null) {
+                                    val latency = System.currentTimeMillis() - tGatekeeper
+                                    DecisionResult(intent = orOutcome.first, confidence = orOutcome.second, latencyMs = latency) to "Tier 4: OpenRouter (${orOutcome.third})"
+                                } else {
+                                    val latency = System.currentTimeMillis() - tGatekeeper
+                                    localDecision.copy(latencyMs = latency) to "Tier 1: LocalDecisionClassifier (On-Device Test Fallback)"
+                                }
+                            } else {
+                                Log.w(TAG, "⚠️ Gatekeeper Tier 3 (Liquid AI) failed or timed out (${latencyTier3}ms). Falling back to Tier 1 local decision...")
+                                PersonaLogger.w(PersonaLogTags.ORCHESTRATOR, "⚠️ Gatekeeper Tier 3 (Liquid AI) failed or timed out (${latencyTier3}ms). Falling back to Tier 1 local decision")
+
+                                val latency = System.currentTimeMillis() - tGatekeeper
+                                localDecision.copy(latencyMs = latency) to "Tier 1: LocalDecisionClassifier (On-Device Test Fallback)"
+                            }
                         }
                     }
                 }
@@ -1448,5 +1488,97 @@ class AutoReplyOrchestrator @Inject constructor(
         finalParsed: AgenticLlmResponse,
         processed: ProcessedNotification
     ): String? = orderIngestionManager.handleFinalPassOrderActions(finalParsed, processed)
+
+    internal suspend fun decideWithOpenRouter(
+        gatekeeperInput: String,
+        models: List<String>,
+        keys: List<String> = emptyList(),
+        timeoutMs: Long = 1500L
+    ): Triple<InboundIntent, Float, String>? = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        withTimeoutOrNull(timeoutMs) {
+            val validKeys = keys.map { it.trim() }.filter { it.isNotBlank() }.ifEmpty {
+                listOfNotNull(
+                    runCatching { BuildConfig.OPENROUTER_API_KEY }.getOrNull()?.trim()?.takeIf { it.isNotBlank() },
+                    runCatching { BuildConfig.OPENROUTER_API_KEY_V2 }.getOrNull()?.trim()?.takeIf { it.isNotBlank() }
+                )
+            }
+            if (validKeys.isEmpty() || models.isEmpty()) {
+                Log.w(TAG, "OpenRouter Gatekeeper: No valid keys or models configured")
+                return@withTimeoutOrNull null
+            }
+
+            val systemPrompt = """
+                You are an intent classification gatekeeper for an Egyptian WhatsApp customer service assistant.
+                Classify the user message into exactly ONE of the following intents:
+                - GREETING: Greetings like "السلام عليكم", "صباح الخير", "مرحبا", "ألو".
+                - BANTER: Small talk, jokes, personal remarks, thank you / closing. (Never for questions about products, prices, store links, URLs, phone numbers).
+                - ORDER_STATUS: Inquiring about previous or pending orders, delivery status, order cancellation or modification ("أوردر", "شحنة", "تعديل الطلب", "إلغاء").
+                - CATALOG_INQUIRY: Inquiring about products, hoodies, t-shirts, prices, sizes, materials, shipping cost, store website/links, social media accounts, human agent requests, or containing URLs/handles.
+
+                Respond ONLY with a JSON object:
+                {"intent": "GREETING" | "BANTER" | "ORDER_STATUS" | "CATALOG_INQUIRY", "confidence": 0.95}
+            """.trimIndent()
+
+            val messages = listOf(
+                ChatMessage(role = "system", content = systemPrompt),
+                ChatMessage(role = "user", content = gatekeeperInput)
+            )
+
+            for (key in validKeys) {
+                for (model in models) {
+                    val outcome = openRouterClient.executeSingleCall(
+                        model = model,
+                        messages = messages,
+                        maxTokens = 120,
+                        apiKey = key
+                    )
+                    if (outcome is ReplyGenerationRepositoryImpl.CallResult.Success) {
+                        val parsed = parseOpenRouterDecisionJson(outcome.content)
+                        if (parsed != null) {
+                            PersonaLogger.d(
+                                PersonaLogTags.ORCHESTRATOR,
+                                "⚡ OpenRouter Gatekeeper resolved ($model) -> intent=${parsed.first} (conf=${parsed.second})"
+                            )
+                            return@withTimeoutOrNull Triple(parsed.first, parsed.second, model)
+                        }
+                    }
+                }
+            }
+            null
+        }
+    }
+
+    internal fun parseOpenRouterDecisionJson(content: String): Pair<InboundIntent, Float>? {
+        return runCatching {
+            var raw = content.trim()
+            if (raw.startsWith("```")) {
+                raw = raw.substringAfter("\n")
+                if (raw.endsWith("```")) {
+                    raw = raw.substringBeforeLast("```").trim()
+                }
+            }
+            val startIdx = raw.indexOf('{')
+            val endIdx = raw.lastIndexOf('}')
+            if (startIdx != -1 && endIdx > startIdx) {
+                raw = raw.substring(startIdx, endIdx + 1)
+            }
+            val element = agenticJson.parseToJsonElement(raw).jsonObject
+            val intentStr = element["intent"]?.jsonPrimitive?.content
+                ?: element["category"]?.jsonPrimitive?.content
+                ?: element["classification"]?.jsonPrimitive?.content
+            val confidence = runCatching {
+                element["confidence"]?.jsonPrimitive?.content?.toFloatOrNull()
+            }.getOrNull() ?: 0.95f
+
+            val mapped = when (intentStr?.trim()?.uppercase()) {
+                "GREETING" -> InboundIntent.GREETING
+                "BANTER", "CLOSING", "PRESENCE_CHECK" -> InboundIntent.BANTER
+                "ORDER_STATUS", "ORDER_UPDATE", "ORDER_CANCEL" -> InboundIntent.ORDER_STATUS
+                "CATALOG_INQUIRY", "STORE_INFO", "ORDER_CREATE", "GENUINE_COMPLAINT_HITL" -> InboundIntent.CATALOG_INQUIRY
+                else -> null
+            }
+            if (mapped != null) mapped to confidence else null
+        }.getOrNull()
+    }
 }
 

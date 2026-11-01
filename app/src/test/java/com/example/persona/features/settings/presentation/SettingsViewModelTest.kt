@@ -65,6 +65,10 @@ class SettingsViewModelTest {
         every { userPreferencesRepository.blankReplyFallbackTemplateFlow } returns flowOf(UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE)
 
         every { userPreferencesRepository.providerOrderFlow } returns flowOf(UserPreferencesRepository.DEFAULT_PROVIDER_ORDER)
+        every { userPreferencesRepository.getProviderPriority(any()) } answers {
+            val cap = firstArg<ModelCapability>()
+            flowOf(ModelProviders.DEFAULT_CAPABILITY_PROVIDERS[cap] ?: emptyList())
+        }
         every { userPreferencesRepository.businessHoursScheduleFlow } returns flowOf(BusinessHoursSchedule())
         every { userPreferencesRepository.ignoreGroupsFlow } returns flowOf(true)
         every { userPreferencesRepository.blacklistedNumbersFlow } returns flowOf(emptySet())
@@ -516,7 +520,12 @@ class SettingsViewModelTest {
         )
 
         assertEquals(
-            listOf("nvidia/nemotron-3-ultra-550b-a55b:free", "liquid/lfm-2.5-2.6b:free", "openrouter/free"),
+            listOf(
+                "nvidia/nemotron-3-ultra-550b-a55b:free",
+                "nvidia/nemotron-3.5-super-vl:free",
+                "liquid/lfm-2.5-2.6b:free",
+                "openrouter/free"
+            ),
             models[ModelProviders.OPENROUTER]
         )
 
@@ -534,5 +543,75 @@ class SettingsViewModelTest {
             listOf("d1:latest", "d1"),
             models[ModelProviders.LIQUID]
         )
+    }
+
+    @Test
+    fun `per-capability filtering restricts providers correctly`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        // Text
+        assertEquals(
+            listOf(ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ, ModelProviders.NVIDIA, ModelProviders.OPENROUTER, ModelProviders.NARA),
+            viewModel.uiState.value.filteredProviderOrder(ModelCapability.TEXT)
+        )
+
+        // Vision
+        assertEquals(
+            listOf(ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ, ModelProviders.NVIDIA, ModelProviders.OPENROUTER),
+            viewModel.uiState.value.filteredProviderOrder(ModelCapability.VISION)
+        )
+
+        // Audio
+        assertEquals(
+            listOf(ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ, ModelProviders.OPENROUTER),
+            viewModel.uiState.value.filteredProviderOrder(ModelCapability.AUDIO)
+        )
+
+        // Decision (base: Cloudflare, Liquid, OpenRouter)
+        assertEquals(
+            listOf(ModelProviders.CLOUDFLARE, ModelProviders.LIQUID, ModelProviders.OPENROUTER),
+            viewModel.uiState.value.filteredProviderOrder(ModelCapability.DECISION)
+        )
+    }
+
+    @Test
+    fun `user-defined DECISION model adds provider to DECISION capability list`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        val geminiConfig = ProviderConfigState(
+            provider = ModelProviders.GEMINI,
+            modelConfigs = listOf(ModelConfig("gemini-decision-gatekeeper", setOf(ModelCapability.DECISION)))
+        )
+        val stateWithGemini = viewModel.uiState.value.copy(
+            providerConfigs = mapOf(ModelProviders.GEMINI to geminiConfig)
+        )
+
+        val decisionProviders = stateWithGemini.filteredProviderOrder(ModelCapability.DECISION)
+        assertTrue(ModelProviders.GEMINI in decisionProviders)
+        assertTrue(ModelProviders.CLOUDFLARE in decisionProviders)
+        assertTrue(ModelProviders.LIQUID in decisionProviders)
+        assertTrue(ModelProviders.OPENROUTER in decisionProviders)
+    }
+
+    @Test
+    fun `reordering provider for capability calls setProviderPriority`() = runTest(testDispatcher) {
+        val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
+        advanceUntilIdle()
+
+        viewModel.selectCapabilityFilter(ModelCapability.DECISION)
+        advanceUntilIdle()
+
+        // Move liquid up (from index 1 to 0)
+        viewModel.moveProviderUpForCapability(ModelCapability.DECISION, ModelProviders.LIQUID)
+        advanceUntilIdle()
+
+        coVerify {
+            userPreferencesRepository.setProviderPriority(
+                ModelCapability.DECISION,
+                listOf(ModelProviders.LIQUID, ModelProviders.CLOUDFLARE, ModelProviders.OPENROUTER)
+            )
+        }
     }
 }

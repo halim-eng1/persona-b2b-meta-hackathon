@@ -98,6 +98,10 @@ class UserPreferencesRepository @Inject constructor(
 
         // ── Provider Ordering & Model Management ──────────────────────────────
         val KEY_PROVIDER_ORDER = stringPreferencesKey("provider_order")
+
+        fun providerPriorityKey(capability: ModelCapability) =
+            stringPreferencesKey("provider_priority_${capability.name}")
+
         private fun providerModelsKey(provider: String) =
             stringPreferencesKey("provider_models_${provider.trim().lowercase()}")
 
@@ -173,7 +177,28 @@ class UserPreferencesRepository @Inject constructor(
 
             "llama-3.3-70b-versatile" to setOf(ModelCapability.TEXT),
             "whisper-large-v3" to setOf(ModelCapability.AUDIO),
-            "llama-3.2-11b-vision-preview" to setOf(ModelCapability.VISION)
+            "llama-3.2-11b-vision-preview" to setOf(ModelCapability.VISION),
+
+            "@cf/cloudflare/clef-flash" to setOf(ModelCapability.DECISION),
+            "@cf/cloudflare/clef-omni" to setOf(ModelCapability.DECISION),
+            "d1:latest" to setOf(ModelCapability.DECISION),
+            "d1" to setOf(ModelCapability.DECISION),
+            "nvidia/nemotron-3.5-super-vl:free" to setOf(ModelCapability.TEXT, ModelCapability.VISION)
+        )
+
+        /**
+         * Multimodal models required to be backfilled non-destructively for existing users
+         * who already have stored models for these providers.
+         */
+        val REQUIRED_MODELS_BACKFILL: Map<String, List<ModelConfig>> = mapOf(
+            ModelProviders.QWEN to listOf(
+                ModelConfig("qwen3.8-omni-flash", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
+                ModelConfig("qwen-vl-max", setOf(ModelCapability.VISION)),
+                ModelConfig("fun-asr-flash-2026-06-15", setOf(ModelCapability.AUDIO))
+            ),
+            ModelProviders.OPENROUTER to listOf(
+                ModelConfig("nvidia/nemotron-3.5-super-vl:free", setOf(ModelCapability.TEXT, ModelCapability.VISION))
+            )
         )
     }
 
@@ -316,6 +341,34 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
+    // ── Per-Capability Provider Priority Ordering ─────────────────────────────
+
+    fun getProviderPriority(capability: ModelCapability): Flow<List<String>> =
+        dataStore.data.map { prefs ->
+            val raw = prefs[providerPriorityKey(capability)]
+            if (raw.isNullOrBlank()) {
+                ModelProviders.DEFAULT_CAPABILITY_PROVIDERS[capability] ?: emptyList()
+            } else {
+                raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+            }
+        }
+
+    suspend fun getProviderPrioritySync(capability: ModelCapability): List<String> {
+        val raw = dataStore.data.first()[providerPriorityKey(capability)]
+        return if (raw.isNullOrBlank()) {
+            ModelProviders.DEFAULT_CAPABILITY_PROVIDERS[capability] ?: emptyList()
+        } else {
+            raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+        }
+    }
+
+    suspend fun setProviderPriority(capability: ModelCapability, order: List<String>) {
+        val sanitized = order.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+        dataStore.edit { prefs ->
+            prefs[providerPriorityKey(capability)] = sanitized.joinToString(",")
+        }
+    }
+
     // ── Dynamic Provider Model Management (capability-aware) ──────────────────
 
     /**
@@ -337,22 +390,48 @@ class UserPreferencesRepository @Inject constructor(
     }
 
     private fun resolveModelConfigs(norm: String, prefs: Preferences): List<ModelConfig> {
-        // Prefer new capability-annotated key
-        val newRaw = prefs[providerModelConfigsKey(norm)]
-        if (!newRaw.isNullOrBlank()) {
-            return newRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
-                .map { ModelConfig.parse(it) }
+        val baseConfigs: List<ModelConfig> = run {
+            // Prefer new capability-annotated key
+            val newRaw = prefs[providerModelConfigsKey(norm)]
+            if (!newRaw.isNullOrBlank()) {
+                newRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+                    .map { ModelConfig.parse(it) }
+            } else {
+                // Fall back to legacy plain-model key (backward compat)
+                val legacyRaw = prefs[providerModelsKey(norm)]
+                val ids = if (!legacyRaw.isNullOrBlank()) {
+                    legacyRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+                } else {
+                    DEFAULT_PROVIDER_MODELS[norm] ?: emptyList()
+                }
+                ids.map { id ->
+                    val caps = PRESEEDED_CAPABILITIES[id] ?: ModelConfig.inferCapabilities(id)
+                    ModelConfig(modelId = id, capabilities = caps)
+                }
+            }
         }
-        // Fall back to legacy plain-model key (backward compat)
-        val legacyRaw = prefs[providerModelsKey(norm)]
-        val ids = if (!legacyRaw.isNullOrBlank()) {
-            legacyRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+
+        // Restrict Cloudflare & Liquid to ONLY DECISION capability (remove TEXT/VISION)
+        val restrictedConfigs = if (norm == ModelProviders.CLOUDFLARE || norm == ModelProviders.LIQUID) {
+            baseConfigs.map { config ->
+                config.copy(capabilities = setOf(ModelCapability.DECISION))
+            }
         } else {
-            DEFAULT_PROVIDER_MODELS[norm] ?: emptyList()
+            baseConfigs
         }
-        return ids.map { id ->
-            val caps = PRESEEDED_CAPABILITIES[id] ?: ModelConfig.inferCapabilities(id)
-            ModelConfig(modelId = id, capabilities = caps)
+
+        // Auto-backfill on read for existing users with Qwen / OpenRouter
+        val backfillList = REQUIRED_MODELS_BACKFILL[norm]
+        return if (backfillList != null) {
+            val existingIds = restrictedConfigs.map { it.modelId }.toSet()
+            val missing = backfillList.filter { it.modelId !in existingIds }
+            if (missing.isNotEmpty()) {
+                restrictedConfigs + missing
+            } else {
+                restrictedConfigs
+            }
+        } else {
+            restrictedConfigs
         }
     }
 

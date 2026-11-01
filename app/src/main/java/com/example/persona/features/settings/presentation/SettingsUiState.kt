@@ -63,6 +63,8 @@ data class SettingsUiState(
 
     // ── 1. AI Engines, Keys & Models
     val providerOrder: List<String> = UserPreferencesRepository.DEFAULT_PROVIDER_ORDER,
+    val selectedCapabilityFilter: ModelCapability = ModelCapability.TEXT,
+    val capabilityProviderPriorities: Map<ModelCapability, List<String>> = emptyMap(),
     val providerConfigs: Map<String, ProviderConfigState> = emptyMap(),
     val selectedProviderForEdit: String = ModelProviders.QWEN,
     val cloudflareAccountId: String = "",
@@ -103,4 +105,24 @@ data class SettingsUiState(
     val maintenanceMessage: String? = null,
 
     val isLoading: Boolean = true
-)
+) {
+    /**
+     * Returns the prioritized list of providers supporting [cap], combining
+     * default supported providers with any provider possessing custom models for [cap].
+     */
+    fun filteredProviderOrder(cap: ModelCapability): List<String> {
+        val baseDefaults = ModelProviders.DEFAULT_CAPABILITY_PROVIDERS[cap] ?: emptyList()
+        val customProviders = providerConfigs.filter { (_, cfg) ->
+            cfg.modelConfigs.any { cap in it.capabilities }
+        }.keys.map { it.lowercase() }
+        val eligibleProviders = (baseDefaults + customProviders).distinct().toSet()
+        val savedOrder = capabilityProviderPriorities[cap] ?: baseDefaults
+        val ordered = savedOrder.filter { it in eligibleProviders }
+        val missing = eligibleProviders.filter { it !in ordered }
+        return ordered + missing
+    }
+
+    /** Active provider list filtered to currently selected capability. */
+    val currentFilteredProviderOrder: List<String>
+        get() = filteredProviderOrder(selectedCapabilityFilter)
+}
