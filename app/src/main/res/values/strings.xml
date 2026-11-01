@@ -806,6 +806,7 @@
     <string name="settings_perm_battery_missing">Not exempted (service may pause when screen is off)</string>
     <string name="settings_perm_autostart_title">Auto-Start on Boot</string>
     <string name="settings_perm_autostart_ok">Confirmed &amp; Active</string>
+    <string name="settings_perm_autostart_missing">Awaiting confirmation</string>
     <string name="settings_perm_contacts_title">Contacts Access</string>
     <string name="settings_perm_contacts_desc">Required to link contact names and phone numbers</string>
     <string name="settings_perm_contacts_active">Active (resolving customer phone numbers)</string>

@@ -700,4 +700,53 @@ class SettingsViewModelTest {
         coVerify { userPreferencesRepository.setAutoStartConfirmed(true) }
         assertTrue(viewModel.uiState.value.isAutoStartConfirmed)
     }
+
+    @Test
+    fun `openAutoStartSettings delegates to AutoStartHelper and confirms on success`() = runTest(testDispatcher) {
+        val mockAutoStartHelper = mockk<com.example.persona.features.onboarding.data.AutoStartHelper>()
+        val mockContext = mockk<android.content.Context>(relaxed = true)
+        every { mockAutoStartHelper.launchAutoStartSettings(mockContext) } returns true
+        coEvery { userPreferencesRepository.setAutoStartConfirmed(true) } returns Unit
+        coEvery { userPreferencesRepository.isAutoStartConfirmedSync() } returns true
+
+        val viewModel = SettingsViewModel(
+            userPreferencesRepository = userPreferencesRepository,
+            secureCredentialsRepository = secureCredentialsRepository,
+            permissionChecker = null,
+            autoStartHelper = mockAutoStartHelper,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        viewModel.openAutoStartSettings(mockContext)
+        advanceUntilIdle()
+
+        verify { mockAutoStartHelper.launchAutoStartSettings(mockContext) }
+        coVerify { userPreferencesRepository.setAutoStartConfirmed(true) }
+        assertTrue(viewModel.uiState.value.isAutoStartConfirmed)
+    }
+
+    @Test
+    fun `openAutoStartSettings does not confirm auto-start if launch fails`() = runTest(testDispatcher) {
+        val mockAutoStartHelper = mockk<com.example.persona.features.onboarding.data.AutoStartHelper>()
+        val mockContext = mockk<android.content.Context>(relaxed = true)
+        every { mockAutoStartHelper.launchAutoStartSettings(mockContext) } returns false
+        coEvery { userPreferencesRepository.isAutoStartConfirmedSync() } returns false
+
+        val viewModel = SettingsViewModel(
+            userPreferencesRepository = userPreferencesRepository,
+            secureCredentialsRepository = secureCredentialsRepository,
+            permissionChecker = null,
+            autoStartHelper = mockAutoStartHelper,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        viewModel.openAutoStartSettings(mockContext)
+        advanceUntilIdle()
+
+        verify { mockAutoStartHelper.launchAutoStartSettings(mockContext) }
+        coVerify(exactly = 0) { userPreferencesRepository.setAutoStartConfirmed(true) }
+        assertFalse(viewModel.uiState.value.isAutoStartConfirmed)
+    }
 }

@@ -94,7 +94,7 @@ fun SystemHealthSection(
                 title = stringResource(R.string.settings_perm_autostart_title),
                 isOk = state.isAutoStartConfirmed,
                 okText = stringResource(R.string.settings_perm_autostart_ok),
-                missingText = stringResource(R.string.settings_perm_notification_missing),
+                missingText = stringResource(R.string.settings_perm_autostart_missing),
                 onRequestPermission = {
                     actions.openAutoStartSettings(context)
                 }

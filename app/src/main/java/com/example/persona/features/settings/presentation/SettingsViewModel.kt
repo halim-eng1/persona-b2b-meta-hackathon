@@ -17,6 +17,7 @@ import com.example.persona.core.di.IoDispatcher
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
+import com.example.persona.features.onboarding.data.AutoStartHelper
 import com.example.persona.features.onboarding.data.PermissionChecker
 import com.example.persona.features.settings.data.repository.InMemorySecureCredentialsRepository
 import com.example.persona.features.settings.domain.repository.ModelCapability
@@ -47,6 +48,7 @@ class SettingsViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
     private val secureCredentialsRepository: SecureCredentialsRepository,
     private val permissionChecker: PermissionChecker? = null,
+    private val autoStartHelper: AutoStartHelper? = null,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val circuitBreakerAndKeyManager: ProviderCircuitBreakerAndKeyManager? = null
 ) : ViewModel() {
@@ -59,6 +61,7 @@ class SettingsViewModel @Inject constructor(
         userPreferencesRepository = userPreferencesRepository,
         secureCredentialsRepository = InMemorySecureCredentialsRepository(),
         permissionChecker = permissionChecker,
+        autoStartHelper = null,
         ioDispatcher = Dispatchers.Main.immediate,
         circuitBreakerAndKeyManager = null
     )
@@ -71,6 +74,22 @@ class SettingsViewModel @Inject constructor(
         userPreferencesRepository = userPreferencesRepository,
         secureCredentialsRepository = secureCredentialsRepository,
         permissionChecker = null,
+        autoStartHelper = null,
+        ioDispatcher = ioDispatcher,
+        circuitBreakerAndKeyManager = null
+    )
+
+    constructor(
+        userPreferencesRepository: UserPreferencesRepository,
+        secureCredentialsRepository: SecureCredentialsRepository,
+        permissionChecker: PermissionChecker?,
+        autoStartHelper: AutoStartHelper?,
+        ioDispatcher: CoroutineDispatcher
+    ) : this(
+        userPreferencesRepository = userPreferencesRepository,
+        secureCredentialsRepository = secureCredentialsRepository,
+        permissionChecker = permissionChecker,
+        autoStartHelper = autoStartHelper,
         ioDispatcher = ioDispatcher,
         circuitBreakerAndKeyManager = null
     )
@@ -83,6 +102,7 @@ class SettingsViewModel @Inject constructor(
         userPreferencesRepository = userPreferencesRepository,
         secureCredentialsRepository = secureCredentialsRepository,
         permissionChecker = null,
+        autoStartHelper = null,
         ioDispatcher = Dispatchers.Main.immediate,
         circuitBreakerAndKeyManager = circuitBreakerAndKeyManager
     )
@@ -761,60 +781,48 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun requestBatteryOptimizationExemption(context: Context) {
-        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-        val packageName = context.packageName
-        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
-            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                data = Uri.parse("package:$packageName")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            try {
-                context.startActivity(intent)
-            } catch (_: Exception) {
-                val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+        runCatching {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            val packageName = context.packageName
+            if (powerManager?.isIgnoringBatteryOptimizations(packageName) != true) {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 try {
-                    context.startActivity(fallback)
+                    context.startActivity(intent)
                 } catch (_: Exception) {
-                    context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
+                    val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
+                    }
+                    try {
+                        context.startActivity(fallback)
+                    } catch (_: Exception) {
+                        runCatching {
+                            context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            })
+                        }
+                    }
                 }
             }
         }
     }
 
     fun openAutoStartSettings(context: Context) {
-        val intents = listOf(
-            // Transsion / Infinix / Tecno Phone Manager
-            Intent().setComponent(ComponentName("com.transsion.phonemanager", "com.transsion.phonemanager.view.AutoStartListActivity")),
-            Intent().setComponent(ComponentName("com.transsion.phonemanager", "com.transsion.phonemanager.view.PowerConsumptionActivity")),
-            // Transsion Power / Optimizer fallback
-            Intent().setComponent(ComponentName("com.transsion.powersaveschedule", "com.transsion.powersaveschedule.PowerSaveScheduleActivity")),
-            // Xiaomi / MIUI
-            Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
-            // Huawei / Honor
-            Intent().setComponent(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity")),
-            // Oppo / Realme
-            Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity")),
-            // Standard App Details Settings (Universal Fallback)
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.parse("package:${context.packageName}")
-            }
-        )
-
-        for (intent in intents) {
-            try {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val launched = autoStartHelper?.launchAutoStartSettings(context) ?: run {
+            runCatching {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
                 context.startActivity(intent)
-                setAutoStartConfirmed(true)
-                return
-            } catch (_: Exception) {
-                // Try next fallback
-            }
+                true
+            }.getOrDefault(false)
         }
-        setAutoStartConfirmed(true)
+        if (launched) {
+            setAutoStartConfirmed(true)
+        }
     }
 
     fun openNotificationListenerSettings(context: Context) {
@@ -824,9 +832,11 @@ class SettingsViewModel @Inject constructor(
             }
             context.startActivity(intent)
         } catch (_: Exception) {
-            context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
+            runCatching {
+                context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+            }
         }
     }
 

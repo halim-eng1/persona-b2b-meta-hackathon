@@ -14,7 +14,7 @@ import javax.inject.Singleton
 class AutoStartHelper @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    fun launchAutoStartSettings(): Boolean {
+    fun launchAutoStartSettings(targetContext: Context = context): Boolean {
         val manufacturer = Build.MANUFACTURER.lowercase()
 
         val intentMap = mapOf(
@@ -139,8 +139,8 @@ class AutoStartHelper @Inject constructor(
         for (intent in prioritizedIntents) {
             try {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                if (context.packageManager.resolveActivity(intent, 0) != null) {
-                    context.startActivity(intent)
+                if (targetContext.packageManager.resolveActivity(intent, 0) != null) {
+                    targetContext.startActivity(intent)
                     return true
                 }
             } catch (_: Exception) {
@@ -151,11 +151,21 @@ class AutoStartHelper @Inject constructor(
         // Ultimate fallback: open App Details screen so the user can configure battery/permissions
         return try {
             val fallbackIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.parse("package:${context.packageName}")
+                data = Uri.parse("package:${targetContext.packageName}")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(fallbackIntent)
-            true
+            if (targetContext.packageManager.resolveActivity(fallbackIntent, 0) != null) {
+                targetContext.startActivity(fallbackIntent)
+                true
+            } else {
+                runCatching {
+                    val settingsIntent = Intent(Settings.ACTION_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    targetContext.startActivity(settingsIntent)
+                    true
+                }.getOrDefault(false)
+            }
         } catch (_: Exception) {
             false
         }

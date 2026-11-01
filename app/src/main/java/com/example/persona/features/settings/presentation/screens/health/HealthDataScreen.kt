@@ -42,7 +42,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,15 +49,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.example.persona.R
 import com.example.persona.features.settings.presentation.HealthActions
 import com.example.persona.features.settings.presentation.SettingsSpoke
@@ -80,23 +76,14 @@ fun HealthDataScreen(
     modifier: Modifier = Modifier,
     focus: SettingKey? = null
 ) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-
     var showRestoreBackupDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showRecentsDialog by rememberSaveable { mutableStateOf(false) }
 
     // Auto-Refresh on Return: recheck permissions immediately whenever returning from system settings
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                actions.recheckPermissions()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
+    LifecycleResumeEffect(Unit) {
+        actions.recheckPermissions()
+        onPauseOrDispose { }
     }
 
     val contactsPermissionLauncher = rememberLauncherForActivityResult(

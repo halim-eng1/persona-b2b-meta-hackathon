@@ -806,6 +806,7 @@
     <string name="settings_perm_battery_missing">غير مستثناة (قد يتوقف التطبيق بعد قفل الشاشة)</string>
     <string name="settings_perm_autostart_title">التشغيل التلقائي مع فتح الهاتف</string>
     <string name="settings_perm_autostart_ok">مؤكد ومفعل</string>
+    <string name="settings_perm_autostart_missing">في انتظار التأكيد</string>
     <string name="settings_perm_contacts_title">الوصول لجهات الاتصال</string>
     <string name="settings_perm_contacts_desc">مطلوب لربط أرقام الهواتف وأسماء العملاء المسجلين</string>
     <string name="settings_perm_contacts_active">مفعل (يتم ربط أرقام العملاء تلقائياً)</string>
