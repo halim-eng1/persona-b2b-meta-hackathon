@@ -6,6 +6,8 @@ import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import com.example.persona.features.settings.data.repository.InMemorySecureCredentialsRepository
+import com.example.persona.features.settings.domain.repository.ModelCapability
+import com.example.persona.features.settings.domain.repository.ModelConfig
 import com.example.persona.features.settings.domain.repository.ModelProviders
 import io.mockk.Runs
 import io.mockk.coEvery
@@ -71,6 +73,11 @@ class SettingsViewModelTest {
         coEvery { userPreferencesRepository.getProviderModelsSync(any()) } answers {
             val provider = firstArg<String>()
             UserPreferencesRepository.DEFAULT_PROVIDER_MODELS[provider] ?: emptyList()
+        }
+        coEvery { userPreferencesRepository.getProviderModelConfigsSync(any()) } answers {
+            val provider = firstArg<String>()
+            (UserPreferencesRepository.DEFAULT_PROVIDER_MODELS[provider] ?: emptyList())
+                .map { ModelConfig(it, ModelConfig.inferCapabilities(it)) }
         }
     }
 
@@ -309,7 +316,8 @@ class SettingsViewModelTest {
 
         viewModel.moveModelUp(ModelProviders.GEMINI, "gemini-3.5-flash-lite")
         advanceUntilIdle()
-        coVerify(atLeast = 1) { userPreferencesRepository.setProviderModels(ModelProviders.GEMINI, any()) }
+        // moveModelUp now persists via setProviderModelConfigs (capability-aware API)
+        coVerify(atLeast = 1) { userPreferencesRepository.setProviderModelConfigs(ModelProviders.GEMINI, any()) }
     }
 
     @Test
@@ -448,7 +456,8 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         val initialModels = listOf("model-a", "model-b", "model-c")
-        coEvery { userPreferencesRepository.getProviderModelsSync("gemini") } returns initialModels
+        val initialConfigs = initialModels.map { ModelConfig(it, setOf(ModelCapability.TEXT)) }
+        coEvery { userPreferencesRepository.getProviderModelConfigsSync("gemini") } returns initialConfigs
         viewModel.selectProviderForEdit("gemini")
         advanceUntilIdle()
 
@@ -456,7 +465,9 @@ class SettingsViewModelTest {
         viewModel.moveModel("gemini", 0, 2)
         advanceUntilIdle()
 
-        coVerify { userPreferencesRepository.setProviderModels("gemini", listOf("model-b", "model-c", "model-a")) }
+        val expectedConfigs = listOf("model-b", "model-c", "model-a")
+            .map { ModelConfig(it, setOf(ModelCapability.TEXT)) }
+        coVerify { userPreferencesRepository.setProviderModelConfigs("gemini", expectedConfigs) }
     }
 
     @Test

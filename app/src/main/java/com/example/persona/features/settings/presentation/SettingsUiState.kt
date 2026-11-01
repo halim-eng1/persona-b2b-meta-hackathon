@@ -6,6 +6,8 @@ import com.example.persona.core.data.repository.BusinessHoursSchedule
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
+import com.example.persona.features.settings.domain.repository.ModelCapability
+import com.example.persona.features.settings.domain.repository.ModelConfig
 import com.example.persona.features.settings.domain.repository.ModelProviders
 
 enum class ThresholdLevel(
@@ -38,9 +40,15 @@ data class ProviderConfigState(
     val provider: String = "",
     val keys: List<String> = emptyList(),
     val models: List<String> = emptyList(),
+    /** Capability-tagged model configs. Parallel to [models] list. */
+    val modelConfigs: List<ModelConfig> = emptyList(),
     val verificationStates: Map<String, VerificationState> = emptyMap()
 ) {
     val verification: Map<String, VerificationState> get() = verificationStates
+
+    /** Returns models that have a given capability. */
+    fun modelsWithCapability(cap: ModelCapability): List<String> =
+        modelConfigs.filter { cap in it.capabilities }.map { it.modelId }
 }
 
 data class SettingsUiState(

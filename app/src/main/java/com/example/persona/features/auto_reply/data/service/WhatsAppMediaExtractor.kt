@@ -678,6 +678,27 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     /**
+     * Optional override: list of user-configured ASR model IDs (AUDIO capability).
+     * When set, the first Qwen FunASR-compatible model in this list is preferred.
+     * Falls back to the hardcoded default if null or empty.
+     */
+    var userAudioModelsOverride: List<String>? = null
+
+    /**
+     * Resolves the Qwen FunASR model to use. Respects user-configured AUDIO models.
+     * The Qwen ASR API uses a fixed endpoint, so we only honour models that look
+     * like FunASR identifiers (contain "asr" or "fun") from the user list;
+     * otherwise we fall back to the hardcoded default.
+     */
+    private fun resolveQwenAsrModel(): String {
+        val userModels = userAudioModelsOverride.orEmpty()
+        val userAsrModel = userModels.firstOrNull { m ->
+            m.contains("asr", ignoreCase = true) || m.contains("fun", ignoreCase = true)
+        }
+        return userAsrModel ?: "fun-asr-flash-2026-06-15"
+    }
+
+    /**
      * Transcribes an audio voice note via Qwen FunASR (Primary), Gemini Audio (Tier 1.5), or Groq Whisper (Fallback).
      */
     suspend fun transcribeVoiceNote(audioFile: File): String? {
@@ -764,7 +785,7 @@ class WhatsAppMediaExtractor @Inject constructor(
             val dataUri = "data:audio/ogg;base64,$base64Audio"
 
             val payloadJson = buildJsonObject {
-                put("model", "fun-asr-flash-2026-06-15")
+                put("model", resolveQwenAsrModel())
                 putJsonObject("input") {
                     putJsonArray("messages") {
                         addJsonObject {

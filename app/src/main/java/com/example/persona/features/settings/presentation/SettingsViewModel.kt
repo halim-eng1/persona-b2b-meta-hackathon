@@ -14,6 +14,8 @@ import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import com.example.persona.features.onboarding.data.PermissionChecker
 import com.example.persona.features.settings.data.repository.InMemorySecureCredentialsRepository
+import com.example.persona.features.settings.domain.repository.ModelCapability
+import com.example.persona.features.settings.domain.repository.ModelConfig
 import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -207,10 +209,11 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(cloudflareAccountId = cfId) }
         }
         viewModelScope.launch {
-            val models = userPreferencesRepository.getProviderModelsSync(norm)
+            val modelConfigs = userPreferencesRepository.getProviderModelConfigsSync(norm)
+            val models = modelConfigs.map { it.modelId }
             _uiState.update { s ->
                 val existing = s.providerConfigs[norm] ?: ProviderConfigState(provider = norm)
-                val updated = existing.copy(keys = keys, models = models)
+                val updated = existing.copy(keys = keys, models = models, modelConfigs = modelConfigs)
                 s.copy(providerConfigs = s.providerConfigs + (norm to updated))
             }
         }
@@ -403,6 +406,25 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /** Adds a model with explicit capability tags (called from the new FAB dialog). */
+    fun addProviderModelWithCapabilities(
+        provider: String,
+        model: String,
+        capabilities: Set<ModelCapability>
+    ) {
+        val norm = ModelProviders.normalize(provider)
+        val trimmed = model.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            val config = ModelConfig(
+                modelId = trimmed,
+                capabilities = capabilities.ifEmpty { setOf(ModelCapability.TEXT) }
+            )
+            userPreferencesRepository.addProviderModelConfig(norm, config)
+            refreshProviderConfig(norm)
+        }
+    }
+
     fun removeProviderModel(provider: String, model: String) {
         val norm = ModelProviders.normalize(provider)
         viewModelScope.launch {
@@ -414,11 +436,11 @@ class SettingsViewModel @Inject constructor(
     fun moveModelUp(provider: String, model: String) {
         val norm = ModelProviders.normalize(provider)
         viewModelScope.launch {
-            val current = userPreferencesRepository.getProviderModelsSync(norm).toMutableList()
-            val idx = current.indexOf(model)
+            val current = userPreferencesRepository.getProviderModelConfigsSync(norm).toMutableList()
+            val idx = current.indexOfFirst { it.modelId == model }
             if (idx > 0) {
-                Collections.swap(current, idx, idx - 1)
-                userPreferencesRepository.setProviderModels(norm, current)
+                val tmp = current[idx]; current[idx] = current[idx - 1]; current[idx - 1] = tmp
+                userPreferencesRepository.setProviderModelConfigs(norm, current)
                 refreshProviderConfig(norm)
             }
         }
@@ -427,11 +449,11 @@ class SettingsViewModel @Inject constructor(
     fun moveModelDown(provider: String, model: String) {
         val norm = ModelProviders.normalize(provider)
         viewModelScope.launch {
-            val current = userPreferencesRepository.getProviderModelsSync(norm).toMutableList()
-            val idx = current.indexOf(model)
+            val current = userPreferencesRepository.getProviderModelConfigsSync(norm).toMutableList()
+            val idx = current.indexOfFirst { it.modelId == model }
             if (idx in 0 until current.size - 1) {
-                Collections.swap(current, idx, idx + 1)
-                userPreferencesRepository.setProviderModels(norm, current)
+                val tmp = current[idx]; current[idx] = current[idx + 1]; current[idx + 1] = tmp
+                userPreferencesRepository.setProviderModelConfigs(norm, current)
                 refreshProviderConfig(norm)
             }
         }
@@ -440,11 +462,11 @@ class SettingsViewModel @Inject constructor(
     fun moveModel(provider: String, from: Int, to: Int) {
         val norm = ModelProviders.normalize(provider)
         viewModelScope.launch {
-            val current = userPreferencesRepository.getProviderModelsSync(norm).toMutableList()
+            val current = userPreferencesRepository.getProviderModelConfigsSync(norm).toMutableList()
             if (from !in current.indices || to !in current.indices) return@launch
             val item = current.removeAt(from)
             current.add(to, item)
-            userPreferencesRepository.setProviderModels(norm, current)
+            userPreferencesRepository.setProviderModelConfigs(norm, current)
             refreshProviderConfig(norm)
         }
     }
@@ -454,11 +476,12 @@ class SettingsViewModel @Inject constructor(
         val trimmed = model.trim()
         if (trimmed.isBlank()) return
         viewModelScope.launch {
-            val current = userPreferencesRepository.getProviderModelsSync(norm).toMutableList()
-            current.remove(trimmed)
+            val current = userPreferencesRepository.getProviderModelConfigsSync(norm).toMutableList()
+            val existing = current.firstOrNull { it.modelId == trimmed }
+            current.removeAll { it.modelId == trimmed }
             val safeIndex = index.coerceIn(0, current.size)
-            current.add(safeIndex, trimmed)
-            userPreferencesRepository.setProviderModels(norm, current)
+            current.add(safeIndex, existing ?: ModelConfig(trimmed, ModelConfig.inferCapabilities(trimmed)))
+            userPreferencesRepository.setProviderModelConfigs(norm, current)
             refreshProviderConfig(norm)
         }
     }

@@ -23,6 +23,8 @@ import com.example.persona.features.auto_reply.domain.model.ProcessedNotificatio
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.auto_reply.domain.orchestrator.SystemAlertNotificationHandler
 import com.example.persona.features.auto_reply.domain.repository.ReplyGenerationRepository
+import com.example.persona.features.settings.domain.repository.ModelCapability
+import com.example.persona.features.settings.domain.repository.ModelProviders
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.flow.first
@@ -304,6 +306,24 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         return combined
     }
 
+    /**
+     * Returns the user-configured models for [provider] that have [capability] set.
+     * Falls back to the hardcoded constant list if the user hasn't stored any configs yet,
+     * or if no user-configured models carry the requested capability.
+     */
+    private suspend fun getDynamicModels(
+        provider: String,
+        capability: ModelCapability,
+        hardcodedFallback: List<String>
+    ): List<String> {
+        val norm = ModelProviders.normalize(provider)
+        val configs = runCatching {
+            userPreferencesRepository.getProviderModelConfigsSync(norm)
+        }.getOrElse { emptyList() }
+        val userDefined = configs.filter { capability in it.capabilities }.map { it.modelId }
+        return userDefined.ifEmpty { hardcodedFallback }
+    }
+
     internal suspend fun callQwenCloud(
         model: String,
         messages: List<ChatMessage>,
@@ -523,6 +543,18 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade...")
             Log.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade...")
 
+            // Resolve vision models dynamically (user-configured → hardcoded fallback)
+            val effectiveVisionQwen = getDynamicModels(
+                ModelProviders.QWEN, ModelCapability.VISION, VISION_QWEN_MODELS)
+            val effectiveVisionGroq = getDynamicModels(
+                ModelProviders.GROQ, ModelCapability.VISION, VISION_GROQ_MODELS)
+            val effectiveVisionGemini = getDynamicModels(
+                ModelProviders.GEMINI, ModelCapability.VISION, VISION_GEMINI_MODELS)
+            val effectiveVisionNvidia = getDynamicModels(
+                ModelProviders.NVIDIA, ModelCapability.VISION, VISION_NVIDIA_MODELS)
+            val effectiveVisionOpenRouter = getDynamicModels(
+                ModelProviders.OPENROUTER, ModelCapability.VISION, VISION_OPENROUTER_MODELS)
+
             // ── Vision Tier 1: QwenCloud Multimodal Vision (Primary) ───
             if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN)) {
                 val qwenKeys = getEffectiveKeys(
@@ -532,7 +564,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 if (qwenKeys.isNotEmpty()) {
                     val qwenStartTime = System.currentTimeMillis()
                     for (key in qwenKeys) {
-                        for (model in VISION_QWEN_MODELS) {
+                        for (model in effectiveVisionQwen) {
                             when (val result = qwenClient.executeSingleCall(model, messages, targetMaxTokens, key)) {
                                 is CallResult.Success -> {
                                     circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN)
@@ -570,7 +602,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 if (groqKeys.isNotEmpty()) {
                     val groqStartTime = System.currentTimeMillis()
                     for (key in groqKeys) {
-                        for (model in VISION_GROQ_MODELS) {
+                        for (model in effectiveVisionGroq) {
                             when (val result = groqClient.executeSingleCall(model, messages, targetMaxTokens, key)) {
                                 is CallResult.Success -> {
                                     circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ)
@@ -608,7 +640,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 if (geminiKeys.isNotEmpty()) {
                     val geminiStartTime = System.currentTimeMillis()
                     for (key in geminiKeys) {
-                        for (model in VISION_GEMINI_MODELS) {
+                        for (model in effectiveVisionGemini) {
                             when (val result = geminiClient.executeSingleCall(model, messages, targetMaxTokens, key)) {
                                 is CallResult.Success -> {
                                     circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI)
@@ -646,7 +678,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 if (nvidiaKeys.isNotEmpty()) {
                     val nvidiaStartTime = System.currentTimeMillis()
                     for (key in nvidiaKeys) {
-                        for (model in VISION_NVIDIA_MODELS) {
+                        for (model in effectiveVisionNvidia) {
                             when (val result = nvidiaClient.executeSingleCall(model, messages, targetMaxTokens, key)) {
                                 is CallResult.Success -> {
                                     circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA)
@@ -683,7 +715,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                 )
                 if (openRouterKeys.isNotEmpty()) {
                     for (key in openRouterKeys) {
-                        for (model in VISION_OPENROUTER_MODELS) {
+                        for (model in effectiveVisionOpenRouter) {
                             when (val result = openRouterClient.executeSingleCall(model, messages, targetMaxTokens, key)) {
                                 is CallResult.Success -> {
                                     circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER)

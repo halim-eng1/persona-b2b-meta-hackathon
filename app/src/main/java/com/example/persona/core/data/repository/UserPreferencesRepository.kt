@@ -11,6 +11,8 @@ import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import com.example.persona.features.settings.data.repository.InMemorySecureCredentialsRepository
+import com.example.persona.features.settings.domain.repository.ModelCapability
+import com.example.persona.features.settings.domain.repository.ModelConfig
 import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
 import kotlinx.coroutines.flow.Flow
@@ -286,56 +288,111 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
-    // ── Dynamic Provider Model Management ─────────────────────────────────────
+    // ── Dynamic Provider Model Management (capability-aware) ──────────────────
 
-    fun getProviderModels(provider: String): Flow<List<String>> {
+    /**
+     * Key where capability-annotated model configs are stored.
+     * Format per line: "modelId|TEXT,VISION"  or legacy "modelId" (TEXT-only).
+     * Kept separate from the legacy plain-model key to maintain full backward
+     * compatibility: if the new key is blank we fall back to the legacy key.
+     */
+    private fun providerModelConfigsKey(provider: String) =
+        stringPreferencesKey("provider_model_configs_${provider.trim().lowercase()}")
+
+    // ── Capability-aware model config flows ───────────────────────────────────
+
+    fun getProviderModelConfigs(provider: String): Flow<List<ModelConfig>> {
         val norm = ModelProviders.normalize(provider)
-        val key = providerModelsKey(norm)
         return dataStore.data.map { prefs ->
-            val raw = prefs[key]
-            if (raw.isNullOrBlank()) {
-                DEFAULT_PROVIDER_MODELS[norm] ?: emptyList()
-            } else {
-                raw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
-            }
+            resolveModelConfigs(norm, prefs)
         }
     }
 
+    private fun resolveModelConfigs(norm: String, prefs: Preferences): List<ModelConfig> {
+        // Prefer new capability-annotated key
+        val newRaw = prefs[providerModelConfigsKey(norm)]
+        if (!newRaw.isNullOrBlank()) {
+            return newRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+                .map { ModelConfig.parse(it) }
+        }
+        // Fall back to legacy plain-model key (backward compat)
+        val legacyRaw = prefs[providerModelsKey(norm)]
+        val ids = if (!legacyRaw.isNullOrBlank()) {
+            legacyRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+        } else {
+            DEFAULT_PROVIDER_MODELS[norm] ?: emptyList()
+        }
+        return ids.map { id ->
+            ModelConfig(modelId = id, capabilities = ModelConfig.inferCapabilities(id))
+        }
+    }
+
+    suspend fun getProviderModelConfigsSync(provider: String): List<ModelConfig> {
+        val norm = ModelProviders.normalize(provider)
+        val prefs = dataStore.data.first()
+        return resolveModelConfigs(norm, prefs)
+    }
+
+    suspend fun setProviderModelConfigs(provider: String, configs: List<ModelConfig>) {
+        val norm = ModelProviders.normalize(provider)
+        val sanitized = configs
+            .filter { it.modelId.isNotBlank() }
+            .distinctBy { it.modelId }
+        dataStore.edit { prefs ->
+            prefs[providerModelConfigsKey(norm)] = sanitized.joinToString("\n") { it.serialize() }
+            // Keep legacy plain key in sync for backward compat with old callers
+            prefs[providerModelsKey(norm)] = sanitized.joinToString("\n") { it.modelId }
+        }
+    }
+
+    suspend fun addProviderModelConfig(provider: String, config: ModelConfig) {
+        val norm = ModelProviders.normalize(provider)
+        val current = getProviderModelConfigsSync(norm).toMutableList()
+        if (current.none { it.modelId == config.modelId }) {
+            current += config
+            setProviderModelConfigs(norm, current)
+        }
+    }
+
+    suspend fun removeProviderModelConfig(provider: String, modelId: String) {
+        val norm = ModelProviders.normalize(provider)
+        val current = getProviderModelConfigsSync(norm)
+        setProviderModelConfigs(norm, current.filter { it.modelId != modelId })
+    }
+
+    // ── Legacy plain-string model API (preserved for backward compat) ──────────
+
+    fun getProviderModels(provider: String): Flow<List<String>> =
+        getProviderModelConfigs(provider).map { configs -> configs.map { it.modelId } }
+
     suspend fun setProviderModels(provider: String, models: List<String>) {
         val norm = ModelProviders.normalize(provider)
-        val key = providerModelsKey(norm)
-        val sanitized = models.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
-        dataStore.edit { prefs ->
-            prefs[key] = sanitized.joinToString("\n")
-        }
+        // Merge with existing capability data so we don't lose capability tags on reorder/delete
+        val existingConfigs = getProviderModelConfigsSync(norm).associateBy { it.modelId }
+        val newConfigs = models
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .map { id ->
+                existingConfigs[id] ?: ModelConfig(id, ModelConfig.inferCapabilities(id))
+            }
+        setProviderModelConfigs(norm, newConfigs)
     }
 
     suspend fun addProviderModel(provider: String, model: String) {
         val norm = ModelProviders.normalize(provider)
         val trimmed = model.trim()
         if (trimmed.isBlank()) return
-        val current = getProviderModelsSync(norm)
-        if (!current.contains(trimmed)) {
-            setProviderModels(norm, current + trimmed)
-        }
+        val config = ModelConfig(trimmed, ModelConfig.inferCapabilities(trimmed))
+        addProviderModelConfig(norm, config)
     }
 
     suspend fun removeProviderModel(provider: String, model: String) {
-        val norm = ModelProviders.normalize(provider)
-        val trimmed = model.trim()
-        val current = getProviderModelsSync(norm)
-        setProviderModels(norm, current.filter { it != trimmed })
+        removeProviderModelConfig(provider, model.trim())
     }
 
-    suspend fun getProviderModelsSync(provider: String): List<String> {
-        val norm = ModelProviders.normalize(provider)
-        val raw = dataStore.data.first()[providerModelsKey(norm)]
-        return if (raw.isNullOrBlank()) {
-            DEFAULT_PROVIDER_MODELS[norm] ?: emptyList()
-        } else {
-            raw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
-        }
-    }
+    suspend fun getProviderModelsSync(provider: String): List<String> =
+        getProviderModelConfigsSync(provider).map { it.modelId }
 
     // ── Business Hours Schedule Persistence ───────────────────────────────────
 

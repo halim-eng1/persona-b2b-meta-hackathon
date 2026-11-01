@@ -3,6 +3,7 @@ package com.example.persona.features.settings.presentation
 import androidx.compose.runtime.Stable
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
+import com.example.persona.features.settings.domain.repository.ModelCapability
 
 @Stable
 class SettingsActions(val vm: SettingsViewModel) {
@@ -76,6 +77,8 @@ class AiActions(private val vm: SettingsViewModel) {
     fun testAll(provider: String) = vm.testAllConnections(provider)
     fun setCloudflareAccountId(id: String) = vm.setCloudflareAccountId(id)
     fun addProviderModel(provider: String, model: String) = vm.addProviderModel(provider, model)
+    fun addProviderModelWithCapabilities(provider: String, model: String, capabilities: Set<ModelCapability>) =
+        vm.addProviderModelWithCapabilities(provider, model, capabilities)
     fun addProviderModelAtIndex(provider: String, model: String, index: Int) = vm.addProviderModelAtIndex(provider, model, index)
     fun removeProviderModel(provider: String, model: String) = vm.removeProviderModel(provider, model)
     fun moveModel(provider: String, from: Int, to: Int) = vm.moveModel(provider, from, to)

@@ -987,6 +987,11 @@
     <string name="settings_ai_no_keys_warning">لا توجد مفاتيح مسجلة</string>
     <string name="settings_ai_key_deleted">تم حذف مفتاح API</string>
     <string name="settings_ai_model_deleted">تم حذف النموذج %s</string>
+    <!-- New: Add Model Dialog strings -->
+    <string name="settings_ai_add_model_dialog_title">إضافة موديل</string>
+    <string name="settings_ai_add_model_fab">إضافة موديل</string>
+    <string name="settings_ai_model_capabilities_label">التصنيفات</string>
+    <string name="settings_ai_model_capabilities_hint">اختر تصنيفاً واحداً على الأقل</string>
     <string name="settings_ai_add_and_test">إضافة وفحص</string>
     <string name="settings_ai_test_all">فحص الكل</string>
     <string name="settings_ai_add_key_title">إضافة مفتاح API لـ %s</string>

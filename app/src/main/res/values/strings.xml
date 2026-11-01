@@ -987,6 +987,11 @@
     <string name="settings_ai_no_keys_warning">No API keys registered</string>
     <string name="settings_ai_key_deleted">API key removed</string>
     <string name="settings_ai_model_deleted">Model %s removed</string>
+    <!-- New: Add Model Dialog strings -->
+    <string name="settings_ai_add_model_dialog_title">Add Model</string>
+    <string name="settings_ai_add_model_fab">Add Model</string>
+    <string name="settings_ai_model_capabilities_label">Capabilities</string>
+    <string name="settings_ai_model_capabilities_hint">Select at least one capability</string>
     <string name="settings_ai_add_and_test">Add &amp; Test</string>
     <string name="settings_ai_test_all">Test All</string>
     <string name="settings_ai_add_key_title">Add API Key for %s</string>
