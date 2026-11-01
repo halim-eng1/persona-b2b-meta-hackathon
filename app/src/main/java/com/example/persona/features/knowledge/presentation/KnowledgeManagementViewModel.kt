@@ -547,8 +547,16 @@ class KnowledgeManagementViewModel @Inject constructor(
         val botName = runCatching { userPreferencesRepository.getBotNameSync() }.getOrDefault(UserPreferencesRepository.DEFAULT_BOT_NAME)
         val storeName = runCatching { userPreferencesRepository.getStoreNameSync() }.getOrDefault(UserPreferencesRepository.DEFAULT_STORE_NAME)
         val tone = runCatching { userPreferencesRepository.getPersonaToneSync() }.getOrDefault(PersonaTone.WITTY_EGYPTIAN)
-        val storeTopics = runCatching { userPreferencesRepository.storeKnowledgeTopicsFlow.first() }.getOrDefault(emptyList())
-        val storeWebsite = runCatching { userPreferencesRepository.storeWebsiteFlow.first() }.getOrNull()
+        val storeTopics = runCatching {
+            kotlinx.coroutines.withTimeoutOrNull(250L) {
+                userPreferencesRepository.storeKnowledgeTopicsFlow.first()
+            }
+        }.getOrNull().orEmpty()
+        val storeWebsite = runCatching {
+            kotlinx.coroutines.withTimeoutOrNull(250L) {
+                userPreferencesRepository.storeWebsiteFlow.first()
+            }
+        }.getOrNull()
 
         val staticPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
             botName = botName,

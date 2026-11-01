@@ -1,5 +1,6 @@
 package com.example.persona.features.onboarding.presentation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -96,6 +97,12 @@ fun FeatureOnboardingScreen(
     val pagerState = rememberPagerState(pageCount = { 3 })
     val spacing = MaterialTheme.spacing
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
+    BackHandler(enabled = pagerState.currentPage > 0) {
+        coroutineScope.launch {
+            pagerState.animateScrollToPage(pagerState.currentPage - 1)
+        }
+    }
 
     val pages = listOf(
         OnboardingPageData(

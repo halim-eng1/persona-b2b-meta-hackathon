@@ -33,6 +33,28 @@ private val ProductCategories = listOf("ملابس", "أحذية", "إلكترو
 private val PolicyCategories = listOf("سياسة", "شحن وتوصيل", "عروض ترويجية", "معلومات عامة", "أخرى")
 
 /**
+ * Normalizes Arabic-Indic digits (٠-٩), Persian variants, and localized decimal separators (٫, ،, ,)
+ * to standard ASCII digits (0-9) and standard dot (.) decimal point.
+ */
+internal fun sanitizeArabicIndicPrice(input: String): String {
+    return input
+        .replace('٠', '0')
+        .replace('١', '1')
+        .replace('٢', '2')
+        .replace('٣', '3')
+        .replace('٤', '4')
+        .replace('٥', '5')
+        .replace('٦', '6')
+        .replace('٧', '7')
+        .replace('٨', '8')
+        .replace('٩', '9')
+        .replace('٫', '.')
+        .replace('،', '.')
+        .replace(',', '.')
+        .trim()
+}
+
+/**
  * Keyboard-aware, vertically scrollable dialog for adding new knowledge or structured catalog products.
  * Automatically closes as soon as the user taps "إضافة" and triggers the callback.
  */
@@ -181,8 +203,9 @@ fun AddKnowledgeEntryDialog(
                     OutlinedTextField(
                         value = priceEgp,
                         onValueChange = { input ->
-                            if (input.isEmpty() || (input.count { it == '.' } <= 1 && input.all { ch -> ch.isDigit() || ch == '.' })) {
-                                priceEgp = input
+                            val normalized = sanitizeArabicIndicPrice(input)
+                            if (normalized.isEmpty() || (normalized.count { it == '.' } <= 1 && normalized.all { ch -> ch in '0'..'9' || ch == '.' })) {
+                                priceEgp = normalized
                             }
                         },
                         label = { Text(stringResource(R.string.knowledge_input_price_label)) },
@@ -341,7 +364,8 @@ fun AddKnowledgeEntryDialog(
                             if (inputMode == 0) {
                                 val formatted = buildString {
                                     append("[منتج]: ${productName.trim()}")
-                                    if (priceEgp.isNotBlank()) append(" | [السعر]: ${priceEgp.trim()} ج.م")
+                                    val cleanPrice = sanitizeArabicIndicPrice(priceEgp)
+                                    if (cleanPrice.isNotBlank()) append(" | [السعر]: $cleanPrice ج.م")
                                     append(" | [التصنيف]: $selectedProductCategory")
                                     if (productDescription.isNotBlank()) append(" | [المواصفات]: ${productDescription.trim()}")
                                     append(" | [المخزون]: ${if (inStock) "متوفر" else "نفد من المخزن"}")
