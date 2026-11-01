@@ -27,6 +27,8 @@ import com.example.persona.features.settings.domain.repository.SecureCredentials
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -441,8 +443,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun pingProvider(provider: String, key: String): VerificationState {
-        if (key.isBlank()) return VerificationState.Error("المفتاح فارغ")
-        if (key.length < 8) return VerificationState.Error("المفتاح غير صالح (قصير جداً)")
+        if (key.isBlank()) return VerificationState.Error(R.string.settings_ai_status_empty_key)
+        if (key.length < 8) return VerificationState.Error(R.string.settings_ai_status_too_short)
 
         var connection: HttpURLConnection? = null
         return try {
@@ -459,7 +461,7 @@ class SettingsViewModel @Inject constructor(
             }
 
             if (urlString == null) {
-                return VerificationState.Success("تم التحقق من الصيغة بنجاح ✓")
+                return VerificationState.Success(R.string.settings_ai_status_syntax_valid)
             }
 
             val conn = (URL(urlString).openConnection() as HttpURLConnection).apply {
@@ -474,17 +476,22 @@ class SettingsViewModel @Inject constructor(
 
             val code = conn.responseCode
             when (code) {
-                in 200..299 -> VerificationState.Success("الاتصال ناجح (HTTP $code) ✓")
-                401, 403 -> VerificationState.Error("مفتاح غير مصرح به أو منتهي الصلاحية ($code)")
-                429 -> VerificationState.Error("تم تجاوز حد الطلبات أو نفاد الرصيد (429)")
-                else -> VerificationState.Success("تم التحقق بنجاح (رمز الحالة: $code)")
+                in 200..299 -> VerificationState.Success(R.string.settings_ai_status_connected_code, listOf(code))
+                401, 403 -> VerificationState.Error(R.string.settings_ai_status_unauthorized, listOf(code))
+                429 -> VerificationState.Error(R.string.settings_ai_status_rate_limited)
+                else -> VerificationState.Success(R.string.settings_ai_status_verified_code, listOf(code))
             }
         } catch (_: UnknownHostException) {
-            VerificationState.Error("تعذر الاتصال بالإنترنت")
+            VerificationState.Error(R.string.settings_ai_status_no_internet)
         } catch (_: SocketTimeoutException) {
-            VerificationState.Error("انتهت مهلة استجابة الخادم")
+            VerificationState.Error(R.string.settings_ai_status_timeout)
         } catch (e: Throwable) {
-            VerificationState.Error("فشل الفحص: ${e.message ?: "خطأ غير معروف"}")
+            val message = e.message
+            if (message.isNullOrBlank()) {
+                VerificationState.Error(R.string.settings_ai_status_unknown_error)
+            } else {
+                VerificationState.Error(R.string.settings_ai_status_check_failed, listOf(message))
+            }
         } finally {
             try {
                 connection?.disconnect()
@@ -580,9 +587,31 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    private var reorderModelJob: Job? = null
+
     fun moveModelForCapability(provider: String, capability: ModelCapability, from: Int, to: Int) {
         val norm = ModelProviders.normalize(provider)
-        viewModelScope.launch {
+
+        // 1. Immediate in-memory state update for smooth 60fps drag rendering
+        val configState = _uiState.value.providerConfigs[norm]
+        val inMemoryList = (configState?.capabilityModelConfigs?.get(capability)
+            ?: configState?.modelConfigs?.filter { capability in it.capabilities })
+            ?.takeIf { it.isNotEmpty() }
+        if (inMemoryList != null && from in inMemoryList.indices && to in inMemoryList.indices) {
+            val updated = inMemoryList.toMutableList()
+            val item = updated.removeAt(from)
+            updated.add(to, item)
+            _uiState.update { s ->
+                val existing = s.providerConfigs[norm] ?: ProviderConfigState(provider = norm)
+                val updatedMap = existing.capabilityModelConfigs + (capability to updated)
+                s.copy(providerConfigs = s.providerConfigs + (norm to existing.copy(capabilityModelConfigs = updatedMap)))
+            }
+        }
+
+        // 2. Debounce persistence to eliminate write race conditions and UI snap-backs
+        reorderModelJob?.cancel()
+        reorderModelJob = viewModelScope.launch {
+            delay(150L) // debounce rapid gestures
             val current = userPreferencesRepository.getProviderModelConfigsSync(norm, capability).toMutableList()
             if (from !in current.indices || to !in current.indices) return@launch
             val item = current.removeAt(from)

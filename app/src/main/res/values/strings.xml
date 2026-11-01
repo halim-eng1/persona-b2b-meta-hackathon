@@ -311,6 +311,17 @@
     <string name="settings_ai_key_label">Key #%d</string>
     <string name="settings_ai_status_untested">Not tested yet</string>
     <string name="settings_ai_status_checking">Testing connection...</string>
+    <string name="settings_ai_status_syntax_valid">Syntax verified successfully ✓</string>
+    <string name="settings_ai_status_connected_code">Connected successfully (HTTP %d) ✓</string>
+    <string name="settings_ai_status_verified_code">Verified successfully (Status: %d)</string>
+    <string name="settings_ai_status_empty_key">Key is empty</string>
+    <string name="settings_ai_status_too_short">Invalid key (too short)</string>
+    <string name="settings_ai_status_unauthorized">Unauthorized or expired key (%d)</string>
+    <string name="settings_ai_status_rate_limited">Rate limit exceeded or out of quota (429)</string>
+    <string name="settings_ai_status_no_internet">No internet connection</string>
+    <string name="settings_ai_status_timeout">Server response timed out</string>
+    <string name="settings_ai_status_check_failed">Check failed: %s</string>
+    <string name="settings_ai_status_unknown_error">Unknown error</string>
     <string name="settings_ai_ping_btn">Test Connection</string>
     <string name="settings_ai_add_key_label">Add new API key</string>
     <string name="settings_ai_models_title">AI Models for %s</string>

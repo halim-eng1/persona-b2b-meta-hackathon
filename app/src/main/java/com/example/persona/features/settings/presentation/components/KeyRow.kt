@@ -243,16 +243,30 @@ fun StatusText(status: VerificationState, modifier: Modifier = Modifier) {
             )
         }
         is VerificationState.Success -> {
+            val text = when {
+                status.rawMessage != null -> status.rawMessage
+                status.messageRes != 0 && status.formatArgs.isNotEmpty() ->
+                    stringResource(status.messageRes, *status.formatArgs.toTypedArray())
+                status.messageRes != 0 -> stringResource(status.messageRes)
+                else -> stringResource(R.string.settings_ai_status_syntax_valid)
+            }
             Text(
-                text = status.message,
+                text = text,
                 style = MaterialTheme.typography.bodySmall,
                 color = PersonaTheme.statusColors.success,
                 modifier = modifier
             )
         }
         is VerificationState.Error -> {
+            val text = when {
+                status.rawError != null -> status.rawError
+                status.errorRes != 0 && status.formatArgs.isNotEmpty() ->
+                    stringResource(status.errorRes, *status.formatArgs.toTypedArray())
+                status.errorRes != 0 -> stringResource(status.errorRes)
+                else -> stringResource(R.string.settings_ai_status_unknown_error)
+            }
             Text(
-                text = status.error,
+                text = text,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 maxLines = 2,

@@ -32,8 +32,28 @@ enum class ThresholdLevel(
 sealed interface VerificationState {
     data object Idle : VerificationState
     data object Checking : VerificationState
-    data class Success(val message: String = "الاتصال ناجح ✓") : VerificationState
-    data class Error(val error: String) : VerificationState
+    data class Success(
+        @StringRes val messageRes: Int = R.string.settings_ai_status_connected_code,
+        val formatArgs: List<Any> = emptyList(),
+        val rawMessage: String? = null
+    ) : VerificationState {
+        constructor(message: String) : this(
+            messageRes = 0,
+            formatArgs = emptyList(),
+            rawMessage = message
+        )
+    }
+    data class Error(
+        @StringRes val errorRes: Int = R.string.settings_ai_status_unknown_error,
+        val formatArgs: List<Any> = emptyList(),
+        val rawError: String? = null
+    ) : VerificationState {
+        constructor(error: String) : this(
+            errorRes = 0,
+            formatArgs = emptyList(),
+            rawError = error
+        )
+    }
 }
 
 data class ProviderConfigState(

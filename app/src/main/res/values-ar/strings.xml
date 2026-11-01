@@ -311,6 +311,17 @@
     <string name="settings_ai_key_label">مفتاح #%d</string>
     <string name="settings_ai_status_untested">لم يتم الفحص بعد</string>
     <string name="settings_ai_status_checking">جارٍ فحص الاتصال...</string>
+    <string name="settings_ai_status_syntax_valid">تم التحقق من الصيغة بنجاح ✓</string>
+    <string name="settings_ai_status_connected_code">الاتصال ناجح (HTTP %d) ✓</string>
+    <string name="settings_ai_status_verified_code">تم التحقق بنجاح (رمز الحالة: %d)</string>
+    <string name="settings_ai_status_empty_key">المفتاح فارغ</string>
+    <string name="settings_ai_status_too_short">المفتاح غير صالح (قصير جداً)</string>
+    <string name="settings_ai_status_unauthorized">مفتاح غير مصرح به أو منتهي الصلاحية (%d)</string>
+    <string name="settings_ai_status_rate_limited">تم تجاوز حد الطلبات أو نفاد الرصيد (429)</string>
+    <string name="settings_ai_status_no_internet">تعذر الاتصال بالإنترنت</string>
+    <string name="settings_ai_status_timeout">انتهت مهلة استجابة الخادم</string>
+    <string name="settings_ai_status_check_failed">فشل الفحص: %s</string>
+    <string name="settings_ai_status_unknown_error">خطأ غير معروف</string>
     <string name="settings_ai_ping_btn">فحص الاتصال</string>
     <string name="settings_ai_add_key_label">إضافة مفتاح API جديد</string>
     <string name="settings_ai_models_title">نماذج الذكاء الاصطناعي لمزود %s</string>
