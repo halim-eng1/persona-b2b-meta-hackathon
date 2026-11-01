@@ -9,7 +9,14 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Room Database Keep Rules
 # ─────────────────────────────────────────────────────────────────────────────
+-keep class * extends androidx.room.RoomDatabase {
+    <init>();
+}
 -keep class * extends androidx.room.RoomDatabase
+-keep class **_Impl {
+    <init>();
+    *;
+}
 -keep @androidx.room.Entity class * { *; }
 -keep @androidx.room.Dao class * { *; }
 -keep class * implements androidx.room.migration.Migration
@@ -47,6 +54,28 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # ONNX Runtime JNI Keep Rules
 # ─────────────────────────────────────────────────────────────────────────────
+-keep class ai.onnxruntime.** { *; }
+-keepclassmembers class ai.onnxruntime.** { *; }
 -keep class com.microsoft.onnxruntime.** { *; }
 -keepclassmembers class com.microsoft.onnxruntime.** { *; }
+-dontwarn ai.onnxruntime.**
 -dontwarn com.microsoft.onnxruntime.**
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DJL / HuggingFace Tokenizers Keep Rules (Native JNI bindings)
+# ─────────────────────────────────────────────────────────────────────────────
+-keep class ai.djl.** { *; }
+-keepclassmembers class ai.djl.** { *; }
+-keep class ai.djl.huggingface.** { *; }
+-keepclassmembers class ai.djl.huggingface.** { *; }
+-keep class ai.djl.huggingface.tokenizers.** { *; }
+-keepclassmembers class ai.djl.huggingface.tokenizers.** { *; }
+-keep class ai.djl.huggingface.tokenizers.jni.** { *; }
+-keepclassmembers class ai.djl.huggingface.tokenizers.jni.** { *; }
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+-dontwarn ai.djl.**
+-dontwarn org.apache.commons.compress.**
+-dontwarn org.apache.commons.lang3.**
+
