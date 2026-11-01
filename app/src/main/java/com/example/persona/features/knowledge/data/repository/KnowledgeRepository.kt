@@ -1,11 +1,9 @@
 package com.example.persona.features.knowledge.data.repository
 
 import android.content.Context
-import android.util.Log
 import com.example.persona.core.database.dao.BusinessKnowledgeDao
 import com.example.persona.core.database.dao.EmbeddingIndexDao
 import com.example.persona.core.database.entity.BusinessKnowledgeEntity
-import com.example.persona.core.database.entity.EmbeddingIndexEntity
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.knowledge.data.indexer.OnnxKnowledgeVectorIndexer
 import com.example.persona.features.knowledge.domain.indexer.KnowledgeVectorIndexer
@@ -49,65 +47,7 @@ class KnowledgeRepository @Inject constructor(
         embeddingIndexDao = null
     )
 
-    suspend fun ensureReady(): Boolean {
-        val ready = vectorIndexer.ensureReady()
-        if (ready && context != null && embeddingIndexDao != null) {
-            try {
-                syncKnowledgeBaseIfModelChanged(context)
-            } catch (e: Exception) {
-                Log.e("KnowledgeRepository", "Knowledge synchronization on model upgrade failed", e)
-            }
-        }
-        return ready
-    }
-
-    suspend fun syncKnowledgeBaseIfModelChanged(appContext: Context): Boolean {
-        val dao = embeddingIndexDao ?: return false
-        val currentModel = EmbeddingIndexEntity.CURRENT_MODEL_VERSION
-        val staleCount = dao.getStaleVectorCount(currentModel)
-        val totalVectors = dao.getTotalEmbeddingCount()
-
-        if (staleCount > 0 || totalVectors == 0) {
-            Log.i("KnowledgeRepository", "Stale or missing vectors detected (stale=$staleCount, total=$totalVectors). Syncing knowledge base...")
-            if (staleCount > 0) {
-                dao.deleteStaleVectors(currentModel)
-            }
-
-            val totalKnowledge = businessKnowledgeDao.getChunkCount()
-            if (totalKnowledge == 0) {
-                // Ingest default knowledge_velo from assets
-                val knowledgeText = try {
-                    appContext.assets.open("knowledge_velo.md").bufferedReader().use { it.readText() }
-                } catch (_: Exception) {
-                    try {
-                        appContext.assets.open("knowledge_velo.txt").bufferedReader().use { it.readText() }
-                    } catch (e: Exception) {
-                        Log.e("KnowledgeRepository", "Could not load knowledge_velo asset", e)
-                        null
-                    }
-                }
-
-                if (!knowledgeText.isNullOrBlank()) {
-                    ingestMarkdownDocument(
-                        text = knowledgeText,
-                        sourceFileName = "knowledge_velo.md",
-                        sourceType = "CORE_DOCUMENT"
-                    )
-                }
-            } else {
-                // Re-embed pending chunks whose vectors were deleted
-                val pendingChunkIds = dao.getPendingChunkIds()
-                if (pendingChunkIds.isNotEmpty()) {
-                    val pendingChunks = businessKnowledgeDao.getChunkTextsByIds(pendingChunkIds)
-                    for (chunk in pendingChunks) {
-                        vectorIndexer.indexVector(chunk.chunkId, chunk.chunkText)
-                    }
-                }
-            }
-            return true
-        }
-        return false
-    }
+    suspend fun ensureReady(): Boolean = vectorIndexer.ensureReady()
 
     fun observeAllChunks(): Flow<List<BusinessKnowledgeEntity>> {
         return businessKnowledgeDao.observeAllChunks()

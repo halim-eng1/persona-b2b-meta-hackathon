@@ -443,46 +443,60 @@ class KnowledgeManagementViewModel @Inject constructor(
             imageFilePath = imgFile?.absolutePath ?: mediaUri
         }
 
-        // 3. Gatekeeper Cascade (Tier 1 -> Tier 2 -> Tier 3)
+        // =========================================================================
+        // EXPERIMENTAL TEST SETUP: Evaluating On-Device Multilingual Classifier as Tier 1
+        // Goal: Leverage ~1ms edge inference for instant intent triage before cloud calls.
+        // Fallback: Cloudflare Clef (Tier 2) -> Liquid AI (Tier 3).
+        // =========================================================================
         val tGatekeeper = System.currentTimeMillis()
         val (decision, resolvedTier) = if (isImagePresent) {
             DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 1.0f, latencyMs = 0L) to "FastPath: Image Present"
         } else {
-            val lastAssistantText = _uiState.value.simulatorMessages.lastOrNull { it.sender == SimulatorSender.BOT }?.text?.trim().orEmpty()
-            val gatekeeperInput = if (lastAssistantText.isNotBlank()) {
-                "[الرد السابق]: $lastAssistantText\n[رسالة العميل]: $effectiveText"
-            } else {
-                effectiveText
+            val queryEmbedding = embeddingEngine?.embed(effectiveText)
+            val localDecision = runCatching {
+                localClassifier.classify(effectiveText, queryEmbedding)
+            }.getOrElse {
+                DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 0.5f, latencyMs = 0L)
             }
 
-            val cfIntent = cloudflareClefClient?.let { client ->
-                runCatching {
-                    client.decide(gatekeeperInput, timeoutMs = 1150L)
-                }.getOrNull()
-            }
+            val isOnDeviceAccepted = localDecision.confidence >= 0.70f ||
+                localDecision.intent == InboundIntent.GREETING ||
+                localDecision.intent == InboundIntent.BANTER
 
-            if (cfIntent != null) {
+            if (isOnDeviceAccepted) {
                 val latency = System.currentTimeMillis() - tGatekeeper
-                DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Tier 1: Cloudflare Clef"
+                localDecision.copy(latencyMs = latency) to "Tier 1: LocalDecisionClassifier (On-Device Test)"
             } else {
-                val liquidIntent = liquidDecisionClient?.let { client ->
+                val lastAssistantText = _uiState.value.simulatorMessages.lastOrNull { it.sender == SimulatorSender.BOT }?.text?.trim().orEmpty()
+                val gatekeeperInput = if (lastAssistantText.isNotBlank()) {
+                    "[الرد السابق]: $lastAssistantText\n[رسالة العميل]: $effectiveText"
+                } else {
+                    effectiveText
+                }
+
+                val cfIntent = cloudflareClefClient?.let { client ->
                     runCatching {
-                        client.decide(gatekeeperInput, timeoutMs = 800L)
+                        client.decide(gatekeeperInput, timeoutMs = 1150L)
                     }.getOrNull()
                 }
 
-                if (liquidIntent != null) {
+                if (cfIntent != null) {
                     val latency = System.currentTimeMillis() - tGatekeeper
-                    DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Tier 2: Liquid AI"
+                    DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Tier 2: Cloudflare Clef"
                 } else {
-                    val queryEmbedding = embeddingEngine?.embed(effectiveText)
-                    val localDecision = runCatching {
-                        localClassifier.classify(effectiveText, queryEmbedding)
-                    }.getOrElse {
-                        DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 0.5f, latencyMs = 0L)
+                    val liquidIntent = liquidDecisionClient?.let { client ->
+                        runCatching {
+                            client.decide(gatekeeperInput, timeoutMs = 800L)
+                        }.getOrNull()
                     }
-                    val latency = System.currentTimeMillis() - tGatekeeper
-                    localDecision.copy(latencyMs = latency) to "Tier 3: LocalDecisionClassifier (On-Device Fallback)"
+
+                    if (liquidIntent != null) {
+                        val latency = System.currentTimeMillis() - tGatekeeper
+                        DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Tier 3: Liquid AI"
+                    } else {
+                        val latency = System.currentTimeMillis() - tGatekeeper
+                        localDecision.copy(latencyMs = latency) to "Tier 1: LocalDecisionClassifier (On-Device Test Fallback)"
+                    }
                 }
             }
         }

@@ -106,7 +106,7 @@ class AutoReplyOrchestratorConcurrencyTest {
     }
 
     @Test
-    fun `gatekeeper resolves via Tier 1 Cloudflare Clef when available`() = runBlocking {
+    fun `gatekeeper resolves via Tier 1 LocalDecisionClassifier on-device for greetings`() = runBlocking {
         orchestrator = buildOrchestrator(this)
 
         val greetingText = "صباح الخير"
@@ -120,7 +120,6 @@ class AutoReplyOrchestratorConcurrencyTest {
             sourceClass = NotificationSourceClass.BUSINESS
         )
         coEvery { processor.process(any()) } returns processed
-        coEvery { cfClient.decide(any(), any()) } returns InboundIntent.GREETING
         coEvery {
             replyGenerationRepository.generateReply(
                 notification = any(),
@@ -146,8 +145,8 @@ class AutoReplyOrchestratorConcurrencyTest {
             )
         )
 
-        // Verifies Tier 1 Cloudflare Clef was called as primary
-        coVerify(exactly = 1) { cfClient.decide(any(), any()) }
+        // Verifies Tier 1 LocalDecisionClassifier resolved on-device without hitting cloud
+        coVerify(exactly = 0) { cfClient.decide(any(), any()) }
         coVerify(exactly = 0) { liquidClient.decide(any(), any()) }
 
         // And direct reply executed
@@ -162,14 +161,70 @@ class AutoReplyOrchestratorConcurrencyTest {
     }
 
     @Test
-    fun `gatekeeper falls back to Tier 3 LocalDecisionClassifier when Cloudflare and Liquid fail`() = runBlocking {
+    fun `gatekeeper falls through to Tier 2 Cloudflare Clef when on-device classifier is ambiguous`() = runBlocking {
         orchestrator = buildOrchestrator(this)
 
-        val greetingText = "صباح الخير"
+        val ambiguousText = "محتاج استفسار عام"
+        val processed = ProcessedNotification(
+            contactName = "AmbiguousUser",
+            originalText = ambiguousText,
+            normalizedText = ambiguousText,
+            notificationKey = "key_ambiguous_1",
+            postTime = System.currentTimeMillis(),
+            context = mockk(relaxed = true),
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+        coEvery { processor.process(any()) } returns processed
+        coEvery { cfClient.decide(any(), any()) } returns InboundIntent.CATALOG_INQUIRY
+        coEvery {
+            replyGenerationRepository.generateReply(
+                notification = any(),
+                candidates = any(),
+                isOngoingConversation = any(),
+                chatHistory = any(),
+                activeOrders = any(),
+                personalChunks = any(),
+                maxTokens = any(),
+                lastOrder = any(),
+                orderStatusCounts = any(),
+                inboundIntent = InboundIntent.CATALOG_INQUIRY
+            )
+        } returns """{"action":"REPLY","final_reply_text":"تحت أمرك، اتفضل اسأل عن المنتجات"}"""
+
+        orchestrator.processNotificationSequentially(
+            WhatsAppNotification(
+                title = "AmbiguousUser",
+                text = ambiguousText,
+                postTime = System.currentTimeMillis(),
+                notificationKey = "key_ambiguous_1",
+                sourceClass = NotificationSourceClass.BUSINESS
+            )
+        )
+
+        // Verifies Tier 2 Cloudflare Clef was called when on-device was ambiguous (<0.70 confidence)
+        coVerify(exactly = 1) { cfClient.decide(any(), any()) }
+        coVerify(exactly = 0) { liquidClient.decide(any(), any()) }
+
+        // And direct reply executed
+        coVerify(atLeast = 1) {
+            directReplyExecutionUseCase.execute(
+                "key_ambiguous_1",
+                match { it.contains("تحت أمرك") },
+                "AmbiguousUser",
+                "BUSINESS"
+            )
+        }
+    }
+
+    @Test
+    fun `gatekeeper falls back to on-device decision when Cloudflare and Liquid fail`() = runBlocking {
+        orchestrator = buildOrchestrator(this)
+
+        val ambiguousText = "محتاج استفسار عام"
         val processed = ProcessedNotification(
             contactName = "FallbackUser",
-            originalText = greetingText,
-            normalizedText = greetingText,
+            originalText = ambiguousText,
+            normalizedText = ambiguousText,
             notificationKey = "key_fallback_1",
             postTime = System.currentTimeMillis(),
             context = mockk(relaxed = true),
@@ -196,7 +251,7 @@ class AutoReplyOrchestratorConcurrencyTest {
         orchestrator.processNotificationSequentially(
             WhatsAppNotification(
                 title = "FallbackUser",
-                text = greetingText,
+                text = ambiguousText,
                 postTime = System.currentTimeMillis(),
                 notificationKey = "key_fallback_1",
                 sourceClass = NotificationSourceClass.BUSINESS
