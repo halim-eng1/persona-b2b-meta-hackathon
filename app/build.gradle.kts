@@ -88,7 +88,8 @@ android {
 
         ndk {
             stl = "c++_shared"
-            abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a"))
+            abiFilters.clear()
+            abiFilters.add("arm64-v8a")
         }
 
         // OpenRouter credentials — resolved from environment or secrets properties

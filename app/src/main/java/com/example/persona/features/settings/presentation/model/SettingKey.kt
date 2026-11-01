@@ -1,7 +1,9 @@
 package com.example.persona.features.settings.presentation.model
 
+import androidx.annotation.Keep
 import kotlinx.serialization.Serializable
 
+@Keep
 @Serializable
 enum class SettingKey {
     BotName,

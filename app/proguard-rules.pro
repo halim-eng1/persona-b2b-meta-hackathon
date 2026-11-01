@@ -38,6 +38,7 @@
 # Kotlinx Serialization & Ktor Keep Rules
 # ─────────────────────────────────────────────────────────────────────────────
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+-keep @kotlinx.serialization.Serializable class * { *; }
 -keepclassmembers class * {
     @kotlinx.serialization.Serializable *;
 }
@@ -48,6 +49,11 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 -keep class kotlinx.serialization.json.** { *; }
+-keep class androidx.navigation.** { *; }
+-keep class com.example.persona.navigation.** { *; }
+-keep class com.example.persona.features.settings.presentation.SettingsRoute* { *; }
+-keep class com.example.persona.features.settings.presentation.SettingsSpoke* { *; }
+-keep class com.example.persona.features.settings.presentation.model.SettingKey* { *; }
 -keep class io.ktor.** { *; }
 -dontwarn io.ktor.**
 
