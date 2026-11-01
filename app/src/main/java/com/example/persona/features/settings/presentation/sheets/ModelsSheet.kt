@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MicNone
@@ -59,6 +60,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.persona.R
 import com.example.persona.features.settings.domain.repository.ModelCapability
@@ -104,10 +106,11 @@ private fun AddProviderModelDialog(
 ) {
     var modelInput by rememberSaveable { mutableStateOf("") }
     var selectedCaps by remember { mutableStateOf(setOf(ModelCapability.TEXT)) }
+    var userHasManuallyEditedCaps by remember { mutableStateOf(false) }
 
-    // Smart pre-selection: re-infer when user types
+    // Smart pre-selection: re-infer when user types, only if user hasn't manually customized chips
     LaunchedEffect(modelInput) {
-        if (modelInput.isNotBlank()) {
+        if (!userHasManuallyEditedCaps && modelInput.isNotBlank()) {
             val inferred = inferCapabilities(modelInput)
             selectedCaps = inferred
         }
@@ -136,7 +139,7 @@ private fun AddProviderModelDialog(
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedTextField(
                     value = modelInput,
-                    onValueChange = { modelInput = it },
+                    onValueChange = { modelInput = it.replace("|", "") },
                     label = { Text(stringResource(R.string.settings_ai_add_model_label)) },
                     placeholder = { Text("e.g. qwen3.8-omni-flash") },
                     singleLine = true,
@@ -162,6 +165,7 @@ private fun AddProviderModelDialog(
                             FilterChip(
                                 selected = selected,
                                 onClick = {
+                                    userHasManuallyEditedCaps = true
                                     selectedCaps = if (selected && selectedCaps.size > 1) {
                                         selectedCaps - def.capability
                                     } else {
@@ -348,21 +352,36 @@ fun ModelsSheet(
                             ?: ModelConfig(modelName, setOf(ModelCapability.TEXT))
 
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(16.dp),
                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .reorderableItem(reorderState, modelName, index, haptics)
                         ) {
-                            Row(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                // Left: badge + name + capability chips
-                                Column(modifier = Modifier.weight(1f)) {
+                                // TOP ROW: Full Model Name (100% Horizontal Breath)
+                                Text(
+                                    text = modelName,
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                // BOTTOM ROW: Badges & Controls
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Left: Priority Badge + Capability Badges
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -372,8 +391,7 @@ fun ModelsSheet(
                                             color = if (index == 0)
                                                 PersonaTheme.statusColors.success.copy(alpha = 0.15f)
                                             else
-                                                MaterialTheme.colorScheme.surfaceVariant,
-                                            modifier = Modifier.padding(end = 2.dp)
+                                                MaterialTheme.colorScheme.surfaceVariant
                                         ) {
                                             Text(
                                                 text = if (index == 0)
@@ -389,68 +407,69 @@ fun ModelsSheet(
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                             )
                                         }
-                                        Text(
-                                            text = modelName,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                    Spacer(Modifier.height(4.dp))
-                                    CapabilityBadgeRow(capabilities = config.capabilities)
-                                }
 
-                                // Right: reorder + delete + drag handle
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(
-                                        onClick = { actions.moveModelUp(provider, modelName) },
-                                        enabled = index > 0
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ArrowUpward,
-                                            contentDescription = stringResource(R.string.reorder_move_up),
-                                            modifier = Modifier.size(18.dp)
-                                        )
+                                        CapabilityBadgeRow(capabilities = config.capabilities)
                                     }
-                                    IconButton(
-                                        onClick = { actions.moveModelDown(provider, modelName) },
-                                        enabled = index < models.size - 1
+
+                                    // Right: Action Controls (Up, Down, Delete, Drag Handle)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ArrowDownward,
-                                            contentDescription = stringResource(R.string.reorder_move_down),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = {
-                                            actions.removeProviderModel(provider, modelName)
-                                            undo.offer(
-                                                message = context.getString(R.string.settings_ai_model_deleted, modelName),
-                                                actionLabel = context.getString(R.string.common_undo)
-                                            ) {
-                                                actions.addProviderModelAtIndex(provider, modelName, index)
-                                            }
+                                        IconButton(
+                                            onClick = { actions.moveModelUp(provider, modelName) },
+                                            enabled = index > 0,
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ArrowUpward,
+                                                contentDescription = stringResource(R.string.reorder_move_up),
+                                                modifier = Modifier.size(18.dp)
+                                            )
                                         }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = stringResource(R.string.common_delete),
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(start = 2.dp, end = 2.dp)
-                                            .reorderableHandle(reorderState, modelName, index, haptics),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.DragHandle,
-                                            contentDescription = stringResource(R.string.reorder_drag_handle),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(20.dp)
-                                        )
+                                        IconButton(
+                                            onClick = { actions.moveModelDown(provider, modelName) },
+                                            enabled = index < models.size - 1,
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ArrowDownward,
+                                                contentDescription = stringResource(R.string.reorder_move_down),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                actions.removeProviderModel(provider, modelName)
+                                                undo.offer(
+                                                    message = context.getString(R.string.settings_ai_model_deleted, modelName),
+                                                    actionLabel = context.getString(R.string.common_undo)
+                                                ) {
+                                                    actions.addProviderModelAtIndex(provider, modelName, index)
+                                                }
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.DeleteOutline,
+                                                contentDescription = stringResource(R.string.common_delete),
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .reorderableHandle(reorderState, modelName, index, haptics),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.DragHandle,
+                                                contentDescription = stringResource(R.string.reorder_drag_handle),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -472,8 +491,9 @@ fun ModelsSheet(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 16.dp)
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 16.dp, bottom = 16.dp)
             )
         }
     }

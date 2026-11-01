@@ -543,20 +543,11 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade...")
             Log.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade...")
 
-            // Resolve vision models dynamically (user-configured → hardcoded fallback)
-            val effectiveVisionQwen = getDynamicModels(
-                ModelProviders.QWEN, ModelCapability.VISION, VISION_QWEN_MODELS)
-            val effectiveVisionGroq = getDynamicModels(
-                ModelProviders.GROQ, ModelCapability.VISION, VISION_GROQ_MODELS)
-            val effectiveVisionGemini = getDynamicModels(
-                ModelProviders.GEMINI, ModelCapability.VISION, VISION_GEMINI_MODELS)
-            val effectiveVisionNvidia = getDynamicModels(
-                ModelProviders.NVIDIA, ModelCapability.VISION, VISION_NVIDIA_MODELS)
-            val effectiveVisionOpenRouter = getDynamicModels(
-                ModelProviders.OPENROUTER, ModelCapability.VISION, VISION_OPENROUTER_MODELS)
-
             // ── Vision Tier 1: QwenCloud Multimodal Vision (Primary) ───
             if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN)) {
+                val effectiveVisionQwen = getDynamicModels(
+                    ModelProviders.QWEN, ModelCapability.VISION, VISION_QWEN_MODELS
+                )
                 val qwenKeys = getEffectiveKeys(
                     ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN,
                     listOfNotNull(qwenApiKey.ifBlank { userPreferencesRepository.getQwenApiKeySync() }.takeIf { it.isNotBlank() })
@@ -595,6 +586,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
             // ── Vision Tier 2: Groq Cloud (Secondary) ───────────────────
             if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ)) {
+                val effectiveVisionGroq = getDynamicModels(
+                    ModelProviders.GROQ, ModelCapability.VISION, VISION_GROQ_MODELS
+                )
                 val groqKeys = getEffectiveKeys(
                     ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ,
                     listOfNotNull(groqPrimaryApiKey.takeIf { it.isNotBlank() }, groqFallbackApiKey.takeIf { it.isNotBlank() })
@@ -633,6 +627,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
             // ── Vision Tier 2.5: Gemini ──────────────────────────────────
             if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI)) {
+                val effectiveVisionGemini = getDynamicModels(
+                    ModelProviders.GEMINI, ModelCapability.VISION, VISION_GEMINI_MODELS
+                )
                 val geminiKeys = getEffectiveKeys(
                     ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI,
                     listOfNotNull(geminiApiKey.takeIf { it.isNotBlank() }, geminiApiKey2.takeIf { it.isNotBlank() && it != "gemini_placeholder_key_2" })
@@ -671,6 +668,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
             // ── Vision Tier 3: NVIDIA NIM ──────────────────────────
             if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA)) {
+                val effectiveVisionNvidia = getDynamicModels(
+                    ModelProviders.NVIDIA, ModelCapability.VISION, VISION_NVIDIA_MODELS
+                )
                 val nvidiaKeys = getEffectiveKeys(
                     ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA,
                     listOfNotNull(nvidiaApiKey.ifBlank { userPreferencesRepository.getNvidiaApiKeySync() }.takeIf { it.isNotBlank() })
@@ -709,6 +709,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
             // ── Vision Tier 4: OpenRouter Fallback ──────────────────
             if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER)) {
+                val effectiveVisionOpenRouter = getDynamicModels(
+                    ModelProviders.OPENROUTER, ModelCapability.VISION, VISION_OPENROUTER_MODELS
+                )
                 val openRouterKeys = getEffectiveKeys(
                     ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER,
                     listOfNotNull(primaryApiKey.takeIf { it.isNotBlank() }, fallbackApiKey.takeIf { it.isNotBlank() })

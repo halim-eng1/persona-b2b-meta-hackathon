@@ -477,9 +477,12 @@ class SettingsViewModelTest {
         assertEquals(
             listOf(
                 "deepseek-v4.1-flash",
+                "qwen3.8-omni-flash",
+                "qwen-vl-max",
+                "fun-asr-flash-2026-06-15",
                 "qwen3.8-max",
-                "deepseek-v4-pro-0813",
                 "qwen3.8-flash",
+                "deepseek-v4-pro-0813",
                 "qwen3.7-plus",
                 "qwen3.7-flash",
                 "qwen3.6-flash",
@@ -491,7 +494,7 @@ class SettingsViewModelTest {
         )
 
         assertEquals(
-            listOf("gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.8-flash"),
+            listOf("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"),
             models[ModelProviders.GEMINI]
         )
 
@@ -501,7 +504,14 @@ class SettingsViewModelTest {
         )
 
         assertEquals(
-            listOf("openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"),
+            listOf(
+                "llama-3.3-70b-versatile",
+                "whisper-large-v3",
+                "llama-3.2-11b-vision-preview",
+                "openai/gpt-oss-120b",
+                "openai/gpt-oss-20b",
+                "qwen/qwen3.8-27b"
+            ),
             models[ModelProviders.GROQ]
         )
 

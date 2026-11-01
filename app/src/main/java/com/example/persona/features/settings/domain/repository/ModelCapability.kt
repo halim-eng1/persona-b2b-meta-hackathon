@@ -75,6 +75,20 @@ data class ModelConfig(
             if (id.contains("vision") || id.contains("vl") || id.contains("omni") ||
                 id.contains("visual") || id.contains("image")
             ) {
+                caps += ModelCapability.VISION
+                if (!id.contains("vl-max")) {
+                    // VL-max is primarily vision-focused unless specified, but omni/flash models do text too
+                    caps += ModelCapability.TEXT
+                }
+            }
+            // Gemini 3.5 flash lite is multimodal across text, vision, and audio
+            if (id.contains("gemini-3.5-flash-lite")) {
+                caps += ModelCapability.TEXT
+                caps += ModelCapability.VISION
+                caps += ModelCapability.AUDIO
+            }
+            // Gemini 3.8 flash is text + vision
+            if (id.contains("gemini-3.8-flash")) {
                 caps += ModelCapability.TEXT
                 caps += ModelCapability.VISION
             }

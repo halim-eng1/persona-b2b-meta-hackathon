@@ -22,9 +22,12 @@ object ModelProviders {
     val DEFAULT_MODELS: Map<String, List<String>> = mapOf(
         QWEN to listOf(
             "deepseek-v4.1-flash",
+            "qwen3.8-omni-flash",
+            "qwen-vl-max",
+            "fun-asr-flash-2026-06-15",
             "qwen3.8-max",
-            "deepseek-v4-pro-0813",
             "qwen3.8-flash",
+            "deepseek-v4-pro-0813",
             "qwen3.7-plus",
             "qwen3.7-flash",
             "qwen3.6-flash",
@@ -33,9 +36,9 @@ object ModelProviders {
             "qwen3.6-27b"
         ),
         GEMINI to listOf(
-            "gemini-3.1-flash-lite",
+            "gemini-3.8-flash",
             "gemini-3.5-flash-lite",
-            "gemini-3.8-flash"
+            "gemini-3.1-flash-lite"
         ),
         NVIDIA to listOf(
             "nvidia/nemotron-3-ultra-550b-a55b",
@@ -43,6 +46,9 @@ object ModelProviders {
             "nvidia/nemotron-3.5-lightning-30b-a3b"
         ),
         GROQ to listOf(
+            "llama-3.3-70b-versatile",
+            "whisper-large-v3",
+            "llama-3.2-11b-vision-preview",
             "openai/gpt-oss-120b",
             "openai/gpt-oss-20b",
             "qwen/qwen3.8-27b"

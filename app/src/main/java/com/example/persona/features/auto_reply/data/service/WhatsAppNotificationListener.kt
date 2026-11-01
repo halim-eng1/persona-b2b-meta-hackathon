@@ -22,6 +22,8 @@ import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.core.debug.DebugFlags
 import com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceClass
 import com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceDiagnostics
+import com.example.persona.features.settings.domain.repository.ModelCapability
+import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.auto_reply.domain.model.ExtraMessage
 import com.example.persona.features.auto_reply.domain.model.WhatsAppNotification
 import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
@@ -308,7 +310,12 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                     val isTempCache = audioFile != null && audioFile.name.startsWith("incoming_voice_")
                     try {
                         if (audioFile != null) {
-                            val transcribed = mediaExtractor.transcribeVoiceNote(audioFile)
+                            val audioModels = runCatching {
+                                prefsRepository.getProviderModelConfigsSync(ModelProviders.QWEN)
+                                    .filter { ModelCapability.AUDIO in it.capabilities }
+                                    .map { it.modelId }
+                            }.getOrNull()
+                            val transcribed = mediaExtractor.transcribeVoiceNote(audioFile, audioModels)
                             if (!transcribed.isNullOrBlank()) {
                                 effectiveText = "[رسالة صوتية من العميل]: $transcribed"
                                 mediaFilePath = null // CRITICAL: Transcribed voice is a pure text turn; never an image attachment!

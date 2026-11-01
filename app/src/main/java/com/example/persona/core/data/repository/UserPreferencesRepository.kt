@@ -147,6 +147,34 @@ class UserPreferencesRepository @Inject constructor(
         )
 
         val DEFAULT_PROVIDER_MODELS = ModelProviders.DEFAULT_MODELS
+
+        /**
+         * Pre-seeded capability maps for known default models to ensure exact hydration
+         * during legacy migration or fresh installations.
+         */
+        val PRESEEDED_CAPABILITIES: Map<String, Set<ModelCapability>> = mapOf(
+            "deepseek-v4.1-flash" to setOf(ModelCapability.TEXT),
+            "qwen3.8-omni-flash" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
+            "qwen-vl-max" to setOf(ModelCapability.VISION),
+            "fun-asr-flash-2026-06-15" to setOf(ModelCapability.AUDIO),
+            "qwen3.8-max" to setOf(ModelCapability.TEXT),
+            "qwen3.8-flash" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
+            "deepseek-v4-pro-0813" to setOf(ModelCapability.TEXT),
+            "qwen3.7-plus" to setOf(ModelCapability.TEXT),
+            "qwen3.7-flash" to setOf(ModelCapability.TEXT),
+            "qwen3.6-flash" to setOf(ModelCapability.TEXT),
+            "qwen3.5-flash" to setOf(ModelCapability.TEXT),
+            "qwen3-coder-flash" to setOf(ModelCapability.TEXT),
+            "qwen3.6-27b" to setOf(ModelCapability.TEXT),
+
+            "gemini-3.8-flash" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
+            "gemini-3.5-flash-lite" to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.AUDIO),
+            "gemini-3.1-flash-lite" to setOf(ModelCapability.TEXT),
+
+            "llama-3.3-70b-versatile" to setOf(ModelCapability.TEXT),
+            "whisper-large-v3" to setOf(ModelCapability.AUDIO),
+            "llama-3.2-11b-vision-preview" to setOf(ModelCapability.VISION)
+        )
     }
 
     // ── Flows ─────────────────────────────────────────────────────────────────
@@ -323,7 +351,8 @@ class UserPreferencesRepository @Inject constructor(
             DEFAULT_PROVIDER_MODELS[norm] ?: emptyList()
         }
         return ids.map { id ->
-            ModelConfig(modelId = id, capabilities = ModelConfig.inferCapabilities(id))
+            val caps = PRESEEDED_CAPABILITIES[id] ?: ModelConfig.inferCapabilities(id)
+            ModelConfig(modelId = id, capabilities = caps)
         }
     }
 

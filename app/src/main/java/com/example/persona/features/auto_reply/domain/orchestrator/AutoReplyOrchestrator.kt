@@ -30,6 +30,8 @@ import com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResu
 import com.example.persona.features.auto_reply.domain.model.WhatsAppNotification
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
+import com.example.persona.features.settings.domain.repository.ModelCapability
+import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormalizer
 import com.example.persona.core.network.dto.AgenticLlmResponse
@@ -637,7 +639,12 @@ class AutoReplyOrchestrator @Inject constructor(
                     val durationSeconds = mediaExtractor.extractDurationSeconds(processed.originalText)
                     val voiceFile = mediaExtractor.captureLatestVoiceNote(processed.sourceClass, processed.postTime, durationSeconds)
                     if (voiceFile != null) {
-                        val transcribed = mediaExtractor.transcribeVoiceNote(voiceFile)
+                        val audioModels = runCatching {
+                            prefsRepository.getProviderModelConfigsSync(ModelProviders.QWEN)
+                                .filter { ModelCapability.AUDIO in it.capabilities }
+                                .map { it.modelId }
+                        }.getOrNull()
+                        val transcribed = mediaExtractor.transcribeVoiceNote(voiceFile, audioModels)
                         if (!transcribed.isNullOrBlank()) {
                             val updatedText = "[رسالة صوتية من العميل]: $transcribed"
                             val retainMediaPath = if (isAudioFilePath(currentMediaFilePath)) null else currentMediaFilePath
