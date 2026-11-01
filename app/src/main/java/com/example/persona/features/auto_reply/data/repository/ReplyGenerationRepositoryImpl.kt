@@ -131,53 +131,53 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     private var naraApiKeyOverride: String? = null
 
     internal val primaryApiKey: String
-        get() = primaryApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+        get() = primaryApiKeyOverride?.trim()
             ?: userPreferencesRepository.getApiKeys(ModelProviders.OPENROUTER).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: BuildConfig.OPENROUTER_API_KEY.trim()
 
     internal val fallbackApiKey: String
-        get() = fallbackApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+        get() = fallbackApiKeyOverride?.trim()
             ?: userPreferencesRepository.getApiKeys(ModelProviders.OPENROUTER).drop(1).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: BuildConfig.OPENROUTER_API_KEY_V2.trim()
 
     internal val groqPrimaryApiKey: String
-        get() = groqPrimaryApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+        get() = groqPrimaryApiKeyOverride?.trim()
             ?: userPreferencesRepository.getApiKeys(ModelProviders.GROQ).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: BuildConfig.GROQ_API_KEY.trim()
 
     internal val groqFallbackApiKey: String
-        get() = groqFallbackApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+        get() = groqFallbackApiKeyOverride?.trim()
             ?: userPreferencesRepository.getApiKeys(ModelProviders.GROQ).drop(1).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: BuildConfig.GROQ_API_KEY_V2.trim()
 
     internal val nvidiaApiKey: String
-        get() = nvidiaApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+        get() = nvidiaApiKeyOverride?.trim()
             ?: userPreferencesRepository.getApiKeys(ModelProviders.NVIDIA).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: BuildConfig.NVIDIA_API_KEY.trim()
 
     internal val qwenApiKey: String
-        get() = qwenApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+        get() = qwenApiKeyOverride?.trim()
             ?: userPreferencesRepository.getApiKeys(ModelProviders.QWEN).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: BuildConfig.QWEN_API_KEY.trim()
 
     internal val geminiApiKey: String
-        get() = geminiApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+        get() = geminiApiKeyOverride?.trim()
             ?: userPreferencesRepository.getApiKeys(ModelProviders.GEMINI).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: BuildConfig.GEMINI_API_KEY.trim()
 
     internal val geminiApiKey2: String
-        get() = geminiApiKey2Override?.trim()?.takeIf { it.isNotBlank() }
+        get() = geminiApiKey2Override?.trim()
             ?: userPreferencesRepository.getApiKeys(ModelProviders.GEMINI).drop(1).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: BuildConfig.GEMINI_API_KEY_2.trim()
 
     internal val naraApiKey: String
-        get() = naraApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+        get() = naraApiKeyOverride?.trim()
             ?: userPreferencesRepository.getApiKeys(ModelProviders.NARA).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: (runCatching {
                 BuildConfig::class.java.getField("NARA_API_KEY").get(null) as? String
             }.getOrNull()?.trim() ?: "")
 
-    fun hasConfiguredKeys(provider: String): Boolean {
+    override fun hasConfiguredKeys(provider: String): Boolean {
         val norm = ModelProviders.normalize(provider)
         if (userPreferencesRepository.hasConfiguredKeys(norm)) return true
         return when (norm) {

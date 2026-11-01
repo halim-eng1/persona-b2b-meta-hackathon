@@ -30,6 +30,7 @@ import com.example.persona.features.settings.domain.repository.ModelConfig
 import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +56,7 @@ class AutoReplyOrchestratorOpenRouterTest {
 
     @Before
     fun setUp() {
+        every { prefsRepository.hasConfiguredKeys(any()) } returns true
         orchestrator = AutoReplyOrchestrator(
             incomingMessageDispatcher = mockk(relaxed = true),
             processor = mockk(relaxed = true),

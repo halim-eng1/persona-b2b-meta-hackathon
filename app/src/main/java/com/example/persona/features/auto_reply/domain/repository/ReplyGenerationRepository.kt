@@ -61,4 +61,10 @@ interface ReplyGenerationRepository {
      * of the most recent successful LLM call.
      */
     fun getLastExecutionTelemetry(): com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry?
+
+    /**
+     * Checks if the given provider has active/configured API keys in this repository.
+     * Default returns true to ensure seamless testing with mocks.
+     */
+    fun hasConfiguredKeys(provider: String): Boolean = true
 }

@@ -47,8 +47,11 @@ val secretsProperties: Properties = providers.of(SecretsValueSource::class) {
 }.get()
 
 fun resolveSecret(name: String): String? {
-    val env = System.getenv(name)?.trim()?.takeIf { it.isNotBlank() }
-    if (env != null) return env
+    val isCi = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null
+    if (isCi) {
+        val ciEnv = System.getenv(name)?.trim()?.takeIf { it.isNotBlank() }
+        if (ciEnv != null) return ciEnv
+    }
 
     val localProp = localSecretsProperties.getProperty(name)?.trim()?.takeIf { it.isNotBlank() }
     if (localProp != null) return localProp
@@ -58,6 +61,11 @@ fun resolveSecret(name: String): String? {
 
     val projProp = project.findProperty(name)?.toString()?.trim()?.takeIf { it.isNotBlank() }
     if (projProp != null) return projProp
+
+    if (!isCi) {
+        val env = System.getenv(name)?.trim()?.takeIf { it.isNotBlank() }
+        if (env != null) return env
+    }
 
     return null
 }

@@ -230,28 +230,11 @@ class AutoReplyOrchestrator @Inject constructor(
     }
 
     fun hasAnyActiveApiKeys(): Boolean {
-        val providers = listOf(
-            ModelProviders.QWEN,
-            ModelProviders.GEMINI,
-            ModelProviders.GROQ,
-            ModelProviders.NVIDIA,
-            ModelProviders.OPENROUTER,
-            ModelProviders.NARA,
-            ModelProviders.CLOUDFLARE,
-            ModelProviders.LIQUID
-        )
+        val providers = ModelProviders.ALL
         val secRepo = secureCredentialsRepository
-        if (secRepo != null && providers.any { secRepo.hasConfiguredKeys(it) }) {
-            return true
-        }
-        if (providers.any { prefsRepository.hasConfiguredKeys(it) }) {
-            return true
-        }
-        if (replyGenerationRepository is ReplyGenerationRepositoryImpl) {
-            if (providers.any { replyGenerationRepository.hasConfiguredKeys(it) }) {
-                return true
-            }
-        }
+        if (secRepo != null && providers.any { secRepo.hasConfiguredKeys(it) }) return true
+        if (providers.any { prefsRepository.hasConfiguredKeys(it) }) return true
+        if (providers.any { replyGenerationRepository.hasConfiguredKeys(it) }) return true
         return false
     }
 

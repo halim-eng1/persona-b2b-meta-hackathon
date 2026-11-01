@@ -76,6 +76,8 @@ class AutoReplyOrchestratorConcurrencyTest {
 
         coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
         coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0, replyDelaySeconds = 0)
+        every { prefsRepo.hasConfiguredKeys(any()) } returns true
+        every { replyGenerationRepository.hasConfiguredKeys(any()) } returns true
         coEvery { directReplyExecutionUseCase.execute(any(), any(), any(), any()) } returns ReplyExecutionResult.Success
     }
 

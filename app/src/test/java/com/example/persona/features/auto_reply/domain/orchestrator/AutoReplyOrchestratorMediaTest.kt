@@ -97,12 +97,15 @@ class AutoReplyOrchestratorMediaTest {
                 ReplyExecutionResult.Success
 
         coEvery { embeddingEngine.embedForAutoReply(any()) } returns floatArrayOf(0.1f, 0.2f)
+        every { embeddingEngine.isEngineReady() } returns true
         coEvery { semanticRetrievalRepository.retrieveCandidates(any(), any(), any(), any()) } returns Pair(emptyList(), 0.0f)
         coEvery { chatHistoryDao.getRecentMessagesExcept(any(), any(), any()) } returns emptyList()
         coEvery { chatHistoryDao.getRecentMessagesExceptForSource(any(), any(), any(), any()) } returns emptyList()
         coEvery { orderDao.getActiveOrdersByContact(any()) } returns emptyList()
         coEvery { orderDao.getLatestOrderByContact(any()) } returns null
         coEvery { orderDao.getOrderStatusCounts(any()) } returns emptyList()
+        every { prefsRepository.hasConfiguredKeys(any()) } returns true
+        every { replyGenerationRepository.hasConfiguredKeys(any()) } returns true
 
         orchestrator = AutoReplyOrchestrator(
             incomingMessageDispatcher = mockk(relaxed = true),

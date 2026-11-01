@@ -32,7 +32,9 @@ import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormal
 import com.example.persona.features.auto_reply.domain.orchestrator.OrderIngestionResult
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -61,27 +63,32 @@ class AutoReplyOrchestratorRagTest {
         auditLogRepository: AuditLogRepository = mockk(relaxed = true),
         cloudflareClefClient: CloudflareClefClient = mockk(relaxed = true),
         liquidDecisionClient: LiquidDecisionClient = mockk(relaxed = true)
-    ): AutoReplyOrchestrator = AutoReplyOrchestrator(
-        incomingMessageDispatcher = mockk(relaxed = true),
-        processor = processor,
-        embeddingEngine = embeddingEngine,
-        semanticRetrievalRepository = semanticRetrievalRepository,
-        replyGenerationRepository = replyGenerationRepository,
-        directReplyExecutionUseCase = directReplyExecutionUseCase,
-        auditLogRepository = auditLogRepository,
-        prefsRepository = prefsRepository,
-        stylePostProcessor = stylePostProcessor,
-        normalizer = ArabicTextNormalizer(),
-        failedQueryDao = failedQueryDao,
-        chatHistoryDao = chatHistoryDao,
-        orderDao = orderDao,
-        businessKnowledgeDao = businessKnowledgeDao,
-        conversationMetadataDao = conversationMetadataDao,
-        context = mockk(relaxed = true),
-        scope = CoroutineScope(Dispatchers.Unconfined),
-        cloudflareClefClient = cloudflareClefClient,
-        liquidDecisionClient = liquidDecisionClient
-    )
+    ): AutoReplyOrchestrator {
+        every { prefsRepository.hasConfiguredKeys(any()) } returns true
+        every { replyGenerationRepository.hasConfiguredKeys(any()) } returns true
+        every { embeddingEngine.isEngineReady() } returns true
+        return AutoReplyOrchestrator(
+            incomingMessageDispatcher = mockk(relaxed = true),
+            processor = processor,
+            embeddingEngine = embeddingEngine,
+            semanticRetrievalRepository = semanticRetrievalRepository,
+            replyGenerationRepository = replyGenerationRepository,
+            directReplyExecutionUseCase = directReplyExecutionUseCase,
+            auditLogRepository = auditLogRepository,
+            prefsRepository = prefsRepository,
+            stylePostProcessor = stylePostProcessor,
+            normalizer = ArabicTextNormalizer(),
+            failedQueryDao = failedQueryDao,
+            chatHistoryDao = chatHistoryDao,
+            orderDao = orderDao,
+            businessKnowledgeDao = businessKnowledgeDao,
+            conversationMetadataDao = conversationMetadataDao,
+            context = mockk(relaxed = true),
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            cloudflareClefClient = cloudflareClefClient,
+            liquidDecisionClient = liquidDecisionClient
+        )
+    }
 
     @Test
     fun `calculateRagBaseThreshold maps preference to realistic MiniLM range with floor`() {
@@ -1674,5 +1681,35 @@ class AutoReplyOrchestratorRagTest {
         assertNull(OrderIngestionManager.normalizeOrderAction(""))
         assertNull(OrderIngestionManager.normalizeOrderAction("   "))
         assertNull(OrderIngestionManager.normalizeOrderAction("INVALID_ACTION"))
+    }
+
+    @Test
+    fun `processNotificationSequentially triggers HITL escalation when no active api keys are configured`() = runBlocking {
+        val auditLog = mockk<AuditLogRepository>(relaxed = true)
+        val mockReplyGen = mockk<ReplyGenerationRepository>(relaxed = true)
+        val mockPrefs = mockk<UserPreferencesRepository>(relaxed = true)
+
+        val orchestrator = createTestOrchestrator(
+            auditLogRepository = auditLog,
+            replyGenerationRepository = mockReplyGen,
+            prefsRepository = mockPrefs
+        )
+
+        coEvery { mockPrefs.isAutoReplyEnabledSync() } returns true
+        every { mockPrefs.hasConfiguredKeys(any()) } returns false
+        every { mockReplyGen.hasConfiguredKeys(any()) } returns false
+
+        val notif = WhatsAppNotification(
+            title = "CustomerA",
+            text = "السلام عليكم بكم التيشيرت",
+            postTime = System.currentTimeMillis(),
+            notificationKey = "key_no_keys_1",
+            sourceClass = NotificationSourceClass.BUSINESS
+        )
+
+        orchestrator.processNotificationSequentially(notif)
+
+        coVerify(atLeast = 1) { auditLog.queuePendingReply(any(), match { it.contains("API Key Missing Alert") }) }
+        coVerify(exactly = 0) { mockReplyGen.generateReply(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 }

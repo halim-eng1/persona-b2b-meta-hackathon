@@ -70,25 +70,25 @@ class WhatsAppMediaExtractor @Inject constructor(
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
     private val groqPrimaryApiKey: String
-        get() = groqPrimaryApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+        get() = groqPrimaryApiKeyOverride?.trim()
             ?: secureCredentialsRepository?.getApiKeys(ModelProviders.GROQ)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: prefsRepository?.getApiKeys(ModelProviders.GROQ)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: BuildConfig.GROQ_API_KEY.trim()
 
     private val groqFallbackApiKey: String
-        get() = groqFallbackApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+        get() = groqFallbackApiKeyOverride?.trim()
             ?: secureCredentialsRepository?.getApiKeys(ModelProviders.GROQ)?.drop(1)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: prefsRepository?.getApiKeys(ModelProviders.GROQ)?.drop(1)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: BuildConfig.GROQ_API_KEY_V2.trim()
 
     private val qwenApiKey: String
-        get() = qwenApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+        get() = qwenApiKeyOverride?.trim()
             ?: secureCredentialsRepository?.getApiKeys(ModelProviders.QWEN)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: prefsRepository?.getApiKeys(ModelProviders.QWEN)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: BuildConfig.QWEN_API_KEY.trim()
 
     private val geminiApiKey: String
-        get() = geminiApiKeyOverride?.trim()?.takeIf { it.isNotBlank() }
+        get() = geminiApiKeyOverride?.trim()
             ?: secureCredentialsRepository?.getApiKeys(ModelProviders.GEMINI)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: prefsRepository?.getApiKeys(ModelProviders.GEMINI)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: (runCatching { BuildConfig.GEMINI_API_KEY }.getOrNull()?.trim() ?: "")
