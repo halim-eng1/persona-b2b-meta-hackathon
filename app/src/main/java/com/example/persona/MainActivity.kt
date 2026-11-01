@@ -171,20 +171,11 @@ class MainActivity : ComponentActivity() {
                     language = appLanguage
                 ) {
                     val isModelPreparedPref by userPreferencesRepository.isModelPreparedFlow.collectAsStateWithLifecycle(
-                        initialValue = null
+                        initialValue = userPreferencesRepository.isModelPreparedSync()
                     )
 
-                    if (isModelPreparedPref == null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
-                        )
-                        return@PersonaTheme
-                    }
-
                     val isModelReady = remember(isModelPreparedPref) {
-                        (isModelPreparedPref == true) && onnxModelManager.isModelReady() && huggingFaceTokenizer.isTokenizerReady()
+                        isModelPreparedPref && onnxModelManager.isModelReady() && huggingFaceTokenizer.isTokenizerReady()
                     }
                     val startDestination = remember(isModelReady) {
                         if (isModelReady) Screen.Home else Screen.ModelPreparation

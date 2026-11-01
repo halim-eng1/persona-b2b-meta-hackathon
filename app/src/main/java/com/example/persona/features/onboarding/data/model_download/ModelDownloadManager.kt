@@ -232,19 +232,21 @@ class ModelDownloadManager @Inject constructor(
 
         val response = okHttpClient.newCall(requestBuilder.build()).execute()
         if (!response.isSuccessful && response.code != 206 && response.code != 416) {
+            response.close()
             throw IOException("Unexpected HTTP response code: ${response.code} for ${spec.url}")
         }
 
         if (response.code == 416) {
+            response.close()
             // Range not satisfiable -> reset tmp file and retry from byte 0
             tmpFile.delete()
-            existingBytes = 0L
             val freshRequest = Request.Builder()
                 .url(spec.url)
                 .addHeader("User-Agent", "Persona-B2B-Android-Client/1.0")
                 .build()
             val freshResponse = okHttpClient.newCall(freshRequest).execute()
             if (!freshResponse.isSuccessful) {
+                freshResponse.close()
                 throw IOException("HTTP error on restart: ${freshResponse.code}")
             }
             streamResponseToFile(freshResponse, tmpFile, spec, 0L)
@@ -278,40 +280,42 @@ class ModelDownloadManager @Inject constructor(
         spec: ModelAssetSpec,
         initialBytes: Long
     ) {
-        val body = response.body ?: throw IOException("Empty response body for ${spec.fileName}")
-        val appendMode = initialBytes > 0L
-        var totalDownloadedForFile = initialBytes
+        response.use { resp ->
+            val body = resp.body ?: throw IOException("Empty response body for ${spec.fileName}")
+            val appendMode = initialBytes > 0L
+            var totalDownloadedForFile = initialBytes
 
-        var lastLogTime = System.currentTimeMillis()
-        var bytesReadSinceLastLog = 0L
+            var lastLogTime = System.currentTimeMillis()
+            var bytesReadSinceLastLog = 0L
 
-        body.byteStream().use { input ->
-            FileOutputStream(file, appendMode).use { output ->
-                val buffer = ByteArray(16384)
-                var bytesRead: Int
-                while (input.read(buffer).also { bytesRead = it } != -1) {
-                    output.write(buffer, 0, bytesRead)
-                    totalDownloadedForFile += bytesRead
-                    bytesReadSinceLastLog += bytesRead
+            body.byteStream().use { input ->
+                FileOutputStream(file, appendMode).use { output ->
+                    val buffer = ByteArray(65536)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        totalDownloadedForFile += bytesRead
+                        bytesReadSinceLastLog += bytesRead
 
-                    val now = System.currentTimeMillis()
-                    val timeDelta = now - lastLogTime
-                    if (timeDelta >= 200L) {
-                        val speedBytesPerSec = if (timeDelta > 0) (bytesReadSinceLastLog * 1000L) / timeDelta else 0L
-                        val totalDownloadedCombined = computeTotalDownloadedBytes(spec, totalDownloadedForFile)
-                        val remainingBytes = (TOTAL_EXPECTED_BYTES - totalDownloadedCombined).coerceAtLeast(0L)
-                        val etaSeconds = if (speedBytesPerSec > 0) remainingBytes / speedBytesPerSec else 0L
+                        val now = System.currentTimeMillis()
+                        val timeDelta = now - lastLogTime
+                        if (timeDelta >= 200L) {
+                            val speedBytesPerSec = if (timeDelta > 0) (bytesReadSinceLastLog * 1000L) / timeDelta else 0L
+                            val totalDownloadedCombined = computeTotalDownloadedBytes(spec, totalDownloadedForFile)
+                            val remainingBytes = (TOTAL_EXPECTED_BYTES - totalDownloadedCombined).coerceAtLeast(0L)
+                            val etaSeconds = if (speedBytesPerSec > 50_000L) remainingBytes / speedBytesPerSec else 0L
 
-                        val progress = DownloadProgress(
-                            downloadedBytes = totalDownloadedCombined,
-                            totalBytes = TOTAL_EXPECTED_BYTES,
-                            speedBytesPerSec = speedBytesPerSec,
-                            etaSeconds = etaSeconds,
-                            currentFileName = spec.fileName
-                        )
-                        _state.value = ModelDownloadState.Downloading(progress)
-                        lastLogTime = now
-                        bytesReadSinceLastLog = 0L
+                            val progress = DownloadProgress(
+                                downloadedBytes = totalDownloadedCombined,
+                                totalBytes = TOTAL_EXPECTED_BYTES,
+                                speedBytesPerSec = speedBytesPerSec,
+                                etaSeconds = etaSeconds,
+                                currentFileName = spec.fileName
+                            )
+                            _state.value = ModelDownloadState.Downloading(progress)
+                            lastLogTime = now
+                            bytesReadSinceLastLog = 0L
+                        }
                     }
                 }
             }

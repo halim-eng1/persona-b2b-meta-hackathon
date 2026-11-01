@@ -59,7 +59,7 @@ class ModelDownloadService : Service() {
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
 
-        val initialNotification = buildNotification("يتم الآن تجهيز المساعد الذكي لمتاجرك...", 0, 0, 0)
+        val initialNotification = buildNotification(getString(R.string.model_download_notification_initial), 0, 0, 0)
         
         try {
             val foregroundServiceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -83,17 +83,19 @@ class ModelDownloadService : Service() {
                         val percent = (state.progress.progressFraction * 100).toInt()
                         val downloadedMb = state.progress.downloadedBytes / (1024 * 1024)
                         val totalMb = state.progress.totalBytes / (1024 * 1024)
-                        val content = "تم تحميل $downloadedMb من $totalMb ميجابايت ($percent%)"
+                        val content = getString(R.string.model_download_notification_progress, downloadedMb, totalMb, percent)
                         notificationManager.notify(NOTIFICATION_ID, buildNotification(content, percent, downloadedMb, totalMb))
                     }
                     is ModelDownloadState.Verifying -> {
                         notificationManager.notify(
                             NOTIFICATION_ID,
-                            buildNotification("جاري التأكد من سلامة ملفات المساعد...", 100, 127, 127, isIndeterminate = true)
+                            buildNotification(getString(R.string.model_download_notification_verifying), 100, 127, 127, isIndeterminate = true)
                         )
                     }
+                    is ModelDownloadState.Idle,
                     is ModelDownloadState.Success,
                     is ModelDownloadState.Failed -> {
+                        ServiceCompat.stopForeground(this@ModelDownloadService, ServiceCompat.STOP_FOREGROUND_REMOVE)
                         stopSelf()
                     }
                     else -> Unit
@@ -106,10 +108,10 @@ class ModelDownloadService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "تجهيز محرك الذكاء الاصطناعي",
+                getString(R.string.model_download_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "إشعارات تجهيز نماذج الذكاء الاصطناعي للعمل بدون إنترنت"
+                description = getString(R.string.model_download_channel_desc)
                 setShowBadge(false)
             }
             notificationManager.createNotificationChannel(channel)
@@ -137,7 +139,7 @@ class ModelDownloadService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("تجهيز المساعد الذكي لمتاجرك")
+            .setContentTitle(getString(R.string.model_download_notification_title))
             .setContentText(contentText)
             .apply {
                 if (subText != null) {
@@ -153,7 +155,7 @@ class ModelDownloadService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

@@ -65,10 +65,15 @@ class ModelValidator @Inject constructor(
                 .optTruncation(true)
                 .build()
 
-            val testText = "مرحبا بك في متجرنا"
-            val encoding = tokenizer.encode(testText)
-            if (encoding.ids.isEmpty()) {
-                throw IllegalStateException("Tokenizer produced empty token IDs for '$testText'")
+            val encoding = try {
+                val testText = "مرحبا بك في متجرنا"
+                val enc = tokenizer.encode(testText)
+                if (enc.ids.isEmpty()) {
+                    throw IllegalStateException("Tokenizer produced empty token IDs for '$testText'")
+                }
+                enc
+            } finally {
+                tokenizer.close()
             }
             Log.i(TAG, "Dry-run Tokenizer test passed. Token count: ${encoding.ids.size}")
 

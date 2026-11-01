@@ -1073,4 +1073,12 @@
     <string name="kw_cache">cache clean storage clear temporary cleaner ذاكرة مؤقتة تنظيف مسح مساحة</string>
     <string name="kw_language">language arabic english locale لغة عربي إنجليزي لغات</string>
     <string name="kw_theme">theme appearance dark light system mode مظهر سمة داكن فاتح نظام</string>
+
+    <!-- Model Download Service -->
+    <string name="model_download_channel_name">تجهيز محرك الذكاء الاصطناعي</string>
+    <string name="model_download_channel_desc">إشعارات تجهيز نماذج الذكاء الاصطناعي للعمل بدون إنترنت</string>
+    <string name="model_download_notification_title">تجهيز المساعد الذكي لمتاجرك</string>
+    <string name="model_download_notification_initial">يتم الآن تجهيز المساعد الذكي لمتاجرك...</string>
+    <string name="model_download_notification_verifying">جاري التأكد من سلامة ملفات المساعد...</string>
+    <string name="model_download_notification_progress">تم تحميل %1$d من %2$d ميجابايت (%3$d%%)</string>
 </resources>

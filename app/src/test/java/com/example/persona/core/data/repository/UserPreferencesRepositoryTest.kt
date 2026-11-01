@@ -181,11 +181,13 @@ class UserPreferencesRepositoryTest {
     @Test
     fun `isModelPrepared defaults to false and persists true when set`() = runTest(testDispatcher) {
         assertEquals(false, repository.isModelPrepared())
+        assertEquals(false, repository.isModelPreparedSync())
         assertEquals(false, repository.isModelPreparedFlow.first())
 
         repository.setModelPrepared(true)
 
         assertEquals(true, repository.isModelPrepared())
+        assertEquals(true, repository.isModelPreparedSync())
         assertEquals(true, repository.isModelPreparedFlow.first())
     }
 }

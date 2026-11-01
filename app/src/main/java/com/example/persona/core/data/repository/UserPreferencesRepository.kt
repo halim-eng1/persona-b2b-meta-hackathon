@@ -212,8 +212,13 @@ class UserPreferencesRepository @Inject constructor(
         prefs[KEY_AUTO_REPLY_ENABLED] ?: false
     }
 
+    @Volatile
+    private var cachedModelPrepared: Boolean? = null
+
     val isModelPreparedFlow: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[KEY_MODEL_PREPARED] ?: false
+        val prepared = prefs[KEY_MODEL_PREPARED] ?: false
+        cachedModelPrepared = prepared
+        prepared
     }
 
     val appLanguageFlow: Flow<String> = dataStore.data.map { prefs ->
@@ -815,6 +820,7 @@ class UserPreferencesRepository @Inject constructor(
         dataStore.data.first()[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() } ?: DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE
 
     suspend fun setModelPrepared(prepared: Boolean) {
+        cachedModelPrepared = prepared
         dataStore.edit { prefs ->
             prefs[KEY_MODEL_PREPARED] = prepared
         }
@@ -822,6 +828,17 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun isModelPrepared(): Boolean =
         dataStore.data.first()[KEY_MODEL_PREPARED] ?: false
+
+    fun isModelPreparedSync(): Boolean {
+        cachedModelPrepared?.let { return it }
+        return runCatching {
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                val value = dataStore.data.first()[KEY_MODEL_PREPARED] ?: false
+                cachedModelPrepared = value
+                value
+            }
+        }.getOrDefault(false)
+    }
 }
 
 /** Snapshot of app-routing preferences. Immutable value object. */

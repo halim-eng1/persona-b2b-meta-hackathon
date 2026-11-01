@@ -462,9 +462,27 @@ private fun DownloadingCard(progress: DownloadProgress) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (progress.speedBytesPerSec > 0) {
+                val rateText = if (progress.speedBytesPerSec > 50_000L) {
+                    val etaText = when {
+                        progress.etaSeconds in 1..59 -> "باقي ${progress.etaSeconds} ثانية"
+                        progress.etaSeconds in 60..119 -> "باقي دقيقة تقريباً"
+                        progress.etaSeconds >= 120 -> "باقي ${progress.etaSeconds / 60} دقائق تقريباً"
+                        else -> ""
+                    }
+                    if (etaText.isNotBlank()) {
+                        String.format(Locale.US, "%.1f ميجا/ث • %s", speedMb, etaText)
+                    } else {
+                        String.format(Locale.US, "%.1f ميجا/ث", speedMb)
+                    }
+                } else if (progress.downloadedBytes > 0) {
+                    "جاري القياس..."
+                } else {
+                    ""
+                }
+
+                if (rateText.isNotBlank()) {
                     Text(
-                        text = String.format(Locale.US, "%.1f ميجا/ث", speedMb),
+                        text = rateText,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
