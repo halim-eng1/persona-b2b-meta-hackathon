@@ -27,6 +27,11 @@ class EmbeddingEngine @Inject constructor(
     }
 
     /**
+     * Checks whether both the ONNX model and tokenizer are physically present in storage.
+     */
+    fun isEngineReady(): Boolean = modelManager.isModelReady() && tokenizer.isTokenizerReady()
+
+    /**
      * Ensures the ONNX model is loaded and ready for inference before executing embeddings.
      */
     suspend fun ensureReady(): Boolean = modelManager.ensureModelLoaded()

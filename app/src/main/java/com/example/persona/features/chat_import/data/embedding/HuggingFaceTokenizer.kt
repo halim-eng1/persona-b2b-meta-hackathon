@@ -21,17 +21,30 @@ class HuggingFaceTokenizer @Inject constructor(
     }
 
     /**
-     * Loads the tokenizer.json from assets.
+     * Checks whether the decoupled tokenizer.json file exists in internal storage.
+     */
+    fun isTokenizerReady(): Boolean {
+        return java.io.File(context.filesDir, TOKENIZER_JSON_PATH).exists()
+    }
+
+    /**
+     * Loads the tokenizer.json from internal storage (or cacheDir).
      * Must be called once before any tokenize() call.
      */
     fun initialize() {
         synchronized(this) {
             if (isInitialized) return
             try {
-                val tempFile = java.io.File(context.cacheDir, "tokenizer.json")
-                context.assets.open(TOKENIZER_JSON_PATH).use { input ->
-                    java.io.FileOutputStream(tempFile).use { output ->
-                        input.copyTo(output)
+                val file = java.io.File(context.filesDir, TOKENIZER_JSON_PATH)
+                val targetPath = if (file.exists()) {
+                    file.toPath()
+                } else {
+                    val fallbackFile = java.io.File(context.cacheDir, "tokenizer.json")
+                    if (fallbackFile.exists()) {
+                        fallbackFile.toPath()
+                    } else {
+                        Log.w(TAG, "tokenizer.json not found at ${file.absolutePath}; model preparation required.")
+                        return
                     }
                 }
 
@@ -40,13 +53,13 @@ class HuggingFaceTokenizer @Inject constructor(
                 Thread.currentThread().contextClassLoader = appClassLoader
 
                 tokenizer = ai.djl.huggingface.tokenizers.HuggingFaceTokenizer.builder()
-                    .optTokenizerPath(tempFile.toPath())
+                    .optTokenizerPath(targetPath)
                     .optMaxLength(MAX_SEQ_LENGTH)
                     .optPadToMaxLength()
                     .optTruncation(true)
                     .build()
                 isInitialized = true
-                Log.i(TAG, "HuggingFace tokenizer loaded from tokenizer.json")
+                Log.i(TAG, "HuggingFace tokenizer loaded from $targetPath")
             } catch (e: Throwable) {
                 Log.e(TAG, "Failed to initialize HuggingFaceTokenizer -> Exception: ${e.javaClass.simpleName} | Message: ${e.message}")
             }

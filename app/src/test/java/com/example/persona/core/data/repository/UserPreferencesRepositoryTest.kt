@@ -177,4 +177,15 @@ class UserPreferencesRepositoryTest {
         // TEXT remains unaffected
         assertEquals(defaultText, repository.getProviderPrioritySync(ModelCapability.TEXT))
     }
+
+    @Test
+    fun `isModelPrepared defaults to false and persists true when set`() = runTest(testDispatcher) {
+        assertEquals(false, repository.isModelPrepared())
+        assertEquals(false, repository.isModelPreparedFlow.first())
+
+        repository.setModelPrepared(true)
+
+        assertEquals(true, repository.isModelPrepared())
+        assertEquals(true, repository.isModelPreparedFlow.first())
+    }
 }

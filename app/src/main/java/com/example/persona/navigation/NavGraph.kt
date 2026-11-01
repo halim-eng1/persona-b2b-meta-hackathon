@@ -18,17 +18,19 @@ import com.example.persona.features.contacts.presentation.ContactDirectoryScreen
 import com.example.persona.features.home.presentation.HomeScreen
 import com.example.persona.features.knowledge.presentation.KnowledgeManagementScreen
 import com.example.persona.features.onboarding.presentation.PermissionOnboardingScreen
+import com.example.persona.features.onboarding.presentation.model_download.ModelPreparationScreen
 import com.example.persona.features.orders.presentation.OrdersDashboardScreen
 import com.example.persona.features.settings.presentation.SettingsScreen
 
 @Composable
 fun PersonaNavGraph(
     navController: NavHostController,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    startDestination: Screen = Screen.Home
 ) {
     NavHost(
         navController = navController,
-        startDestination = Screen.Home,
+        startDestination = startDestination,
         modifier = modifier
     ) {
         // ── Bottom nav destinations ───────────────────────────────────────────
@@ -113,6 +115,16 @@ fun PersonaNavGraph(
         }
 
         // ── Mandatory Permission / Onboarding Flow ───────────────────────────
+        composable<Screen.ModelPreparation> {
+            ModelPreparationScreen(
+                onComplete = {
+                    navController.navigate(Screen.Home) {
+                        popUpTo(Screen.ModelPreparation) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable<Screen.Onboarding> {
             PermissionOnboardingScreen(
                 onComplete = {

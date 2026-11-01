@@ -109,6 +109,9 @@ class UserPreferencesRepository @Inject constructor(
         // ── Auto-Start Onboarding Confirmation ─────────────────────────────────
         val KEY_AUTO_START_CONFIRMED = booleanPreferencesKey("is_auto_start_confirmed")
 
+        // ── Model Preparation State ───────────────────────────────────────────
+        val KEY_MODEL_PREPARED = booleanPreferencesKey("is_model_prepared")
+
         // ── App Language & Locale ──────────────────────────────────────────────
         val KEY_APP_LANGUAGE = stringPreferencesKey("app_language")
         const val DEFAULT_APP_LANGUAGE = "ar"
@@ -207,6 +210,10 @@ class UserPreferencesRepository @Inject constructor(
 
     val isAutoReplyEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[KEY_AUTO_REPLY_ENABLED] ?: false
+    }
+
+    val isModelPreparedFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_MODEL_PREPARED] ?: false
     }
 
     val appLanguageFlow: Flow<String> = dataStore.data.map { prefs ->
@@ -806,6 +813,15 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun getBlankReplyFallbackTemplateSync(): String =
         dataStore.data.first()[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() } ?: DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE
+
+    suspend fun setModelPrepared(prepared: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[KEY_MODEL_PREPARED] = prepared
+        }
+    }
+
+    suspend fun isModelPrepared(): Boolean =
+        dataStore.data.first()[KEY_MODEL_PREPARED] ?: false
 }
 
 /** Snapshot of app-routing preferences. Immutable value object. */

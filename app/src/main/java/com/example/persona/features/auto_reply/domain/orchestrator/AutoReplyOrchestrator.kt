@@ -207,6 +207,10 @@ class AutoReplyOrchestrator @Inject constructor(
     private val onnxMutex = Mutex()
 
     private suspend fun safeEmbedForAutoReply(text: String): FloatArray? = onnxMutex.withLock {
+        if (!embeddingEngine.isEngineReady()) {
+            Log.d(TAG, "On-device embedding engine not prepared yet. Skipping local embedding generation.")
+            return@withLock null
+        }
         embeddingEngine.embedForAutoReply(text)
     }
 

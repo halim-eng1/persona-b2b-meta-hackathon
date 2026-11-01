@@ -43,6 +43,13 @@ class OnnxModelManager @Inject constructor(
         const val REALTIME_INFERENCE_TIMEOUT_MS = 5_000L
     }
 
+    /**
+     * Checks whether the decoupled on-device ONNX model is physically present in internal storage.
+     */
+    fun isModelReady(): Boolean {
+        return java.io.File(context.filesDir, MODEL_PATH).exists()
+    }
+
     suspend fun loadModel(): Boolean = withContext(aiDispatcher) {
         loadLock.withLock {
             if (session != null) return@withContext true
@@ -60,26 +67,11 @@ class OnnxModelManager @Inject constructor(
 
             val modelFile = java.io.File(context.filesDir, MODEL_PATH)
 
-            // Try to copy from assets to local filesDir if it does not exist
-            if (!modelFile.exists()) {
-                try {
-                    modelFile.parentFile?.mkdirs()
-                    context.assets.open(MODEL_PATH).use { input ->
-                        modelFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                    Log.i(TAG, "Successfully copied model from assets to ${modelFile.absolutePath}")
-                } catch (e: Exception) {
-                    Log.e("AiModel", "CRITICAL: Model file missing at expected path: ${modelFile.absolutePath}", e)
-                }
-            }
-
-            // Explicit Existence Check: Before calling OrtSession.create, explicitly check file.exists()
+            // Explicit Existence Check: Model is decoupled from APK assets and downloaded to filesDir
             if (!modelFile.exists()) {
                 val absolutePath = modelFile.absolutePath
-                val errorMessage = "CRITICAL: Model file missing at expected path: $absolutePath"
-                Log.e("AiModel", errorMessage)
+                val errorMessage = "CRITICAL: Decoupled model file missing at expected path: $absolutePath. Model preparation required."
+                Log.w("AiModel", errorMessage)
                 throw ModelLoadException(absolutePath, errorMessage)
             }
 
@@ -113,6 +105,10 @@ class OnnxModelManager @Inject constructor(
 
     suspend fun ensureModelLoaded(): Boolean = withContext(aiDispatcher) {
         if (isLoaded()) return@withContext true
+        if (!isModelReady()) {
+            Log.d(TAG, "On-device model file not present yet; model preparation required.")
+            return@withContext false
+        }
         try {
             loadModel()
         } catch (e: Exception) {

@@ -1,0 +1,2 @@
+# On-device AI models are decoupled from the base APK bundle and streamed dynamically on first launch.
+

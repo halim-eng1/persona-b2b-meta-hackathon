@@ -13,7 +13,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -68,6 +70,8 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var permissionChecker: PermissionChecker
     @Inject lateinit var userPreferencesRepository: UserPreferencesRepository
+    @Inject lateinit var onnxModelManager: com.example.persona.features.chat_import.data.embedding.OnnxModelManager
+    @Inject lateinit var huggingFaceTokenizer: com.example.persona.features.chat_import.data.embedding.HuggingFaceTokenizer
 
     private var pendingDeepLinkContact by mutableStateOf<Pair<String, String>?>(null)
 
@@ -166,6 +170,26 @@ class MainActivity : ComponentActivity() {
                     darkTheme = isDarkTheme,
                     language = appLanguage
                 ) {
+                    val isModelPreparedPref by userPreferencesRepository.isModelPreparedFlow.collectAsStateWithLifecycle(
+                        initialValue = null
+                    )
+
+                    if (isModelPreparedPref == null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background)
+                        )
+                        return@PersonaTheme
+                    }
+
+                    val isModelReady = remember(isModelPreparedPref) {
+                        (isModelPreparedPref == true) && onnxModelManager.isModelReady() && huggingFaceTokenizer.isTokenizerReady()
+                    }
+                    val startDestination = remember(isModelReady) {
+                        if (isModelReady) Screen.Home else Screen.ModelPreparation
+                    }
+
                     val navController = rememberNavController()
                     val currentBackStackEntry by navController.currentBackStackEntryAsState()
 
@@ -202,7 +226,8 @@ class MainActivity : ComponentActivity() {
                     ) { innerPadding ->
                         PersonaNavGraph(
                             navController = navController,
-                            modifier = Modifier.padding(innerPadding)
+                            modifier = Modifier.padding(innerPadding),
+                            startDestination = startDestination
                         )
                     }
                 }
