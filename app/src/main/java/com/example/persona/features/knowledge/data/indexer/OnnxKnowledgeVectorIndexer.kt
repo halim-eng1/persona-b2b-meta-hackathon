@@ -48,6 +48,6 @@ class OnnxKnowledgeVectorIndexer @Inject constructor(
     }
 
     companion object {
-        const val DEFAULT_MODEL_VERSION = "minilm-l12-v2-int8-1.0"
+        const val DEFAULT_MODEL_VERSION = EmbeddingIndexEntity.CURRENT_MODEL_VERSION
     }
 }

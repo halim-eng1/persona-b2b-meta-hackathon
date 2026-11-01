@@ -70,10 +70,11 @@ class HuggingFaceTokenizer @Inject constructor(
         check(isInitialized) { "Tokenizer not initialized. Call initialize() first." }
         
         val encoding = tokenizer!!.encode(text)
+        val typeIds = encoding.typeIds ?: LongArray(encoding.ids.size) { 0L }
         val tokenized = TokenizedInput(
             inputIds = encoding.ids,
             attentionMask = encoding.attentionMask,
-            tokenTypeIds = encoding.typeIds
+            tokenTypeIds = typeIds
         )
         cache.put(text, tokenized)
         return tokenized
@@ -112,10 +113,11 @@ class HuggingFaceTokenizer @Inject constructor(
             
             for (k in missTexts.indices) {
                 val encoding = encodings[k]
+                val typeIds = encoding.typeIds ?: LongArray(encoding.ids.size) { 0L }
                 val tokenized = TokenizedInput(
                     inputIds = encoding.ids,
                     attentionMask = encoding.attentionMask,
-                    tokenTypeIds = encoding.typeIds
+                    tokenTypeIds = typeIds
                 )
                 val originalIndex = missIndices[k]
                 results[originalIndex] = tokenized

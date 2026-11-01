@@ -67,4 +67,16 @@ interface EmbeddingIndexDao {
 
     @Query("SELECT COUNT(*) FROM embeddings_index")
     suspend fun getTotalEmbeddingCount(): Int
+
+    /** Returns count of vectors computed with a model version other than [currentModelVersion]. */
+    @Query("SELECT COUNT(*) FROM embeddings_index WHERE model_version != :currentModelVersion")
+    suspend fun getStaleVectorCount(currentModelVersion: String): Int
+
+    /** Deletes all vectors computed with a model version other than [currentModelVersion]. */
+    @Query("DELETE FROM embeddings_index WHERE model_version != :currentModelVersion")
+    suspend fun deleteStaleVectors(currentModelVersion: String): Int
+
+    /** Deletes vectors matching a specific legacy model version string. */
+    @Query("DELETE FROM embeddings_index WHERE model_version = :legacyModelVersion")
+    suspend fun deleteByModelVersion(legacyModelVersion: String): Int
 }

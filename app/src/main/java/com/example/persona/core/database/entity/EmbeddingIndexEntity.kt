@@ -45,8 +45,13 @@ data class EmbeddingIndexEntity(
      * Stored so we can selectively invalidate vectors on model upgrade.
      */
     @ColumnInfo(name = "model_version")
-    val modelVersion: String = "minilm-l12-v2-int8-1.0"
+    val modelVersion: String = CURRENT_MODEL_VERSION
 ) {
+    companion object {
+        const val CURRENT_MODEL_VERSION = "paraphrase-multilingual-minilm-l12-v2-qint8-1.0"
+        const val LEGACY_MODEL_VERSION = "minilm-l12-v2-int8-1.0"
+    }
+
     // FloatArray breaks structural equality by default — override explicitly.
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

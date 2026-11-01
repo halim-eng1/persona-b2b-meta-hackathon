@@ -141,15 +141,18 @@ class EmbeddingEngine @Inject constructor(
         var output: OrtSession.Result? = null
 
         return try {
+            val inputNames = session.inputNames
+            val inputs = mutableMapOf<String, OnnxTensor>()
+
             inputIdsTensor = OnnxTensor.createTensor(env, arrayOf(tokenized.inputIds))
             attentionMaskTensor = OnnxTensor.createTensor(env, arrayOf(tokenized.attentionMask))
-            tokenTypeIdsTensor = OnnxTensor.createTensor(env, arrayOf(tokenized.tokenTypeIds))
+            inputs["input_ids"] = inputIdsTensor
+            inputs["attention_mask"] = attentionMaskTensor
 
-            val inputs = mapOf(
-                "input_ids" to inputIdsTensor,
-                "attention_mask" to attentionMaskTensor,
-                "token_type_ids" to tokenTypeIdsTensor
-            )
+            if ("token_type_ids" in inputNames) {
+                tokenTypeIdsTensor = OnnxTensor.createTensor(env, arrayOf(tokenized.tokenTypeIds))
+                inputs["token_type_ids"] = tokenTypeIdsTensor
+            }
 
             output = session.run(inputs)
             val rawOutput = (output[0].value as Array<Array<FloatArray>>)[0]
@@ -201,15 +204,18 @@ class EmbeddingEngine @Inject constructor(
                 var output: OrtSession.Result? = null
 
                 try {
+                    val inputNames = session.inputNames
+                    val inputs = mutableMapOf<String, OnnxTensor>()
+
                     inputIdsTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(inputIds), longArrayOf(size.toLong(), 128L))
                     attentionMaskTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(attentionMask), longArrayOf(size.toLong(), 128L))
-                    tokenTypeIdsTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(tokenTypeIds), longArrayOf(size.toLong(), 128L))
+                    inputs["input_ids"] = inputIdsTensor
+                    inputs["attention_mask"] = attentionMaskTensor
 
-                    val inputs = mapOf(
-                        "input_ids" to inputIdsTensor,
-                        "attention_mask" to attentionMaskTensor,
-                        "token_type_ids" to tokenTypeIdsTensor
-                    )
+                    if ("token_type_ids" in inputNames) {
+                        tokenTypeIdsTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(tokenTypeIds), longArrayOf(size.toLong(), 128L))
+                        inputs["token_type_ids"] = tokenTypeIdsTensor
+                    }
 
                     output = session.run(inputs)
                     val rawOutput = output[0].value as Array<Array<FloatArray>>

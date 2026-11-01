@@ -6,6 +6,7 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.persona.core.database.PersonaDatabase
 import com.example.persona.core.database.dao.*
+import com.example.persona.core.database.entity.EmbeddingIndexEntity
 import com.example.persona.core.database.migration.DatabaseMigrations
 import com.example.persona.core.common.Constants
 import dagger.Module
@@ -38,6 +39,8 @@ object DatabaseModule {
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
                     db.execSQL("PRAGMA foreign_keys = ON;")
+                    // Stale Vector Invalidation: Automatically purge embeddings computed with previous model versions
+                    db.execSQL("DELETE FROM embeddings_index WHERE model_version != '${EmbeddingIndexEntity.CURRENT_MODEL_VERSION}';")
                 }
             })
             .fallbackToDestructiveMigrationOnDowngrade()

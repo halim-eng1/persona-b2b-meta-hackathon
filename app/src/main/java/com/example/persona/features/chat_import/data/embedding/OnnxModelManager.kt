@@ -35,7 +35,8 @@ class OnnxModelManager @Inject constructor(
     val inferenceMutex = Mutex()
 
     companion object {
-        private const val MODEL_PATH = "models/minilm_l12_v2_int8.onnx"
+        private const val MODEL_PATH = "models/model_qint8_arm64.onnx"
+        private const val LEGACY_MODEL_PATH = "models/minilm_l12_v2_int8.onnx"
         private const val TAG = "OnnxModelManager"
         
         /** Hidden #6: Max wait time for auto-reply before giving up */
@@ -45,6 +46,17 @@ class OnnxModelManager @Inject constructor(
     suspend fun loadModel(): Boolean = withContext(aiDispatcher) {
         loadLock.withLock {
             if (session != null) return@withContext true
+
+            // Clean up legacy model file from internal storage if present to recover disk space (~118MB)
+            try {
+                val legacyModelFile = java.io.File(context.filesDir, LEGACY_MODEL_PATH)
+                if (legacyModelFile.exists()) {
+                    val deleted = legacyModelFile.delete()
+                    Log.i(TAG, "Legacy model file purged from internal storage: $deleted (${legacyModelFile.absolutePath})")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Non-fatal error while cleaning legacy model file", e)
+            }
 
             val modelFile = java.io.File(context.filesDir, MODEL_PATH)
 
