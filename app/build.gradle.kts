@@ -185,6 +185,11 @@ android {
 
         val resolvedGroqKey2 = resolveSecret("GROQ_API_KEY_2") ?: resolveSecret("GROQ_API_KEY_V2") ?: ""
         buildConfigField("String", "GROQ_API_KEY_2", "\"$resolvedGroqKey2\"")
+
+        // Meta Model API credentials — resolved from environment or secrets properties
+        val resolvedMetaKey = resolveSecret("META_API_KEY") ?: ""
+        buildConfigField("String", "META_API_KEY", "\"$resolvedMetaKey\"")
+        buildConfigField("String", "META_BASE_URL", "\"${resolveSecret("META_BASE_URL") ?: "https://api.meta.ai/v1"}\"")
     }
 
     buildTypes {

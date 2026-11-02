@@ -1161,6 +1161,12 @@
     <string name="settings_ai_no_primary_key_banner">لم يتم ضبط مفاتيح API بعد. يرجى إضافة مفتاح لمزود واحد على الأقل لتفعيل الرد التلقائي.</string>
     <string name="settings_ai_key_required_badge">يمكنك إضافة مفتاح</string>
     <string name="settings_ai_openrouter_dependency_banner">إذا لم تكن تستخدم OpenRouter كبوابة شاملة، يرجى التأكد من إضافة مفتاح لمزود يدعم الصوت (مثل Qwen أو Groq) ومزود يدعم اتخاذ القرار (مثل Cloudflare أو Liquid) بجانب مزود النصوص.</string>
+    <string name="settings_ai_meta_active_banner">تم تفعيل Meta AI للردود والرؤية والتفريغ الصوتي. في حال عدم إضافة مفتاح لمزود اتخاذ القرار (مثل Cloudflare أو Liquid)، سيعتمد التطبيق تلقائياً على التصنيف المحلي على الجهاز مع التوجيه المباشر للنموذج الذكي.</string>
+    <string name="settings_ai_meta_card_title">Meta AI (المزود الأساسي #1)</string>
+    <string name="settings_ai_meta_card_subtitle">الواجهة الرسمية Meta Model API للنصوص والرؤية والتفريغ الصوتي</string>
+    <string name="settings_ai_meta_active_badge">نشط (#1)</string>
+    <string name="settings_ai_meta_key_hint">أدخل مفتاح META_API_KEY (LLM_...)</string>
+    <string name="settings_ai_meta_save_key">حفظ المفتاح</string>
     <string name="settings_ai_no_active_keys_warning">تعذر الرد التلقائي: لم يتم تسجيل مفتاح API نشط في الإعدادات.</string>
     <string name="settings_ai_key_deleted">تم حذف مفتاح API</string>
     <string name="settings_ai_model_deleted">تم حذف النموذج %s</string>

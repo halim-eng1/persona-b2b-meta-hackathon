@@ -32,6 +32,7 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
         const val COOLDOWN_DURATION_MS = 5 * 60 * 1000L // 5 minutes cooldown
         private const val PREFS_NAME = "provider_circuit_breaker_prefs"
 
+        const val PROVIDER_META = "meta"
         const val PROVIDER_QWEN = "qwen"
         const val PROVIDER_GEMINI = "gemini"
         const val PROVIDER_NVIDIA = "nvidia"
@@ -41,11 +42,12 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
         const val PROVIDER_LIQUID = "liquid"
         const val PROVIDER_CLOUDFLARE = "cloudflare"
 
-        /**
-         * MANDATORY ARCHITECTURAL OVERRIDE:
-         * Strictly FORBIDDEN to reduce experimental Qwen models!
-         * All 10 default Qwen models MUST remain.
-         */
+        val DEFAULT_META_MODELS = listOf(
+            "muse-spark-1.3-contributor",
+            "muse-spark-1.3",
+            "muse-spark-1.2-contributor",
+            "muse-spark-1.2"
+        )
         val DEFAULT_QWEN_MODELS = QwenCloudClient.QWEN_TEXT_MODELS
         val DEFAULT_GEMINI_MODELS = GeminiClient.GEMINI_TEXT_MODELS
         val DEFAULT_NVIDIA_MODELS = NvidiaNimClient.NVIDIA_TEXT_MODELS
@@ -56,6 +58,7 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
         val DEFAULT_LIQUID_MODELS = listOf("d1:latest", "d1")
 
         val DEFAULT_CASCADE_ORDER = listOf(
+            PROVIDER_META,
             PROVIDER_QWEN,
             PROVIDER_GEMINI,
             PROVIDER_NVIDIA,
@@ -105,7 +108,12 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
         // Cascade order
         val savedOrder = prefs.getString("cascade_order", null)
         val order = if (!savedOrder.isNullOrBlank()) {
-            savedOrder.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            val parsed = savedOrder.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            if (!parsed.contains(PROVIDER_META)) {
+                listOf(PROVIDER_META) + parsed
+            } else {
+                parsed
+            }
         } else {
             DEFAULT_CASCADE_ORDER
         }
@@ -113,6 +121,7 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
         cascadePriority.addAll(order)
 
         // Initialize default models
+        initModelsForProvider(PROVIDER_META, DEFAULT_META_MODELS)
         initModelsForProvider(PROVIDER_QWEN, DEFAULT_QWEN_MODELS)
         initModelsForProvider(PROVIDER_GEMINI, DEFAULT_GEMINI_MODELS)
         initModelsForProvider(PROVIDER_NVIDIA, DEFAULT_NVIDIA_MODELS)

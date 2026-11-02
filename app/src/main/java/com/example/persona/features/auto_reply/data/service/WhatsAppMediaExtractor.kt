@@ -50,6 +50,8 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 import com.example.persona.core.data.repository.UserPreferencesRepository
+import com.example.persona.features.auto_reply.data.media.AudioWavConverter
+import com.example.persona.features.auto_reply.data.providers.MetaModelApiClient
 import com.example.persona.features.settings.domain.repository.ModelCapability
 import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
@@ -60,8 +62,10 @@ class WhatsAppMediaExtractor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val httpClient: HttpClient,
     private val secureCredentialsRepository: SecureCredentialsRepository? = null,
-    private val prefsRepository: UserPreferencesRepository? = null
+    private val prefsRepository: UserPreferencesRepository? = null,
+    private val metaModelApiClient: MetaModelApiClient? = null
 ) {
+    internal var metaApiKeyOverride: String? = null
     internal var groqPrimaryApiKeyOverride: String? = null
     internal var groqFallbackApiKeyOverride: String? = null
     internal var qwenApiKeyOverride: String? = null
@@ -69,6 +73,12 @@ class WhatsAppMediaExtractor @Inject constructor(
     internal var openRouterPrimaryApiKeyOverride: String? = null
     internal var openRouterFallbackApiKeyOverride: String? = null
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+
+    private val metaApiKey: String
+        get() = metaApiKeyOverride?.trim()
+            ?: secureCredentialsRepository?.getApiKeys(ModelProviders.META)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: prefsRepository?.getApiKeys(ModelProviders.META)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: runCatching { BuildConfig.META_API_KEY }.getOrNull()?.trim() ?: ""
 
     private val groqPrimaryApiKey: String
         get() = groqPrimaryApiKeyOverride?.trim()
@@ -102,6 +112,7 @@ class WhatsAppMediaExtractor @Inject constructor(
         if (fromRepo) return true
 
         return when (norm) {
+            ModelProviders.META -> metaModelApiClient != null || metaApiKey.isNotBlank()
             ModelProviders.OPENROUTER -> openRouterApiKeys.isNotEmpty()
             ModelProviders.GROQ -> groqPrimaryApiKey.isNotBlank() || groqFallbackApiKey.isNotBlank()
             ModelProviders.QWEN -> qwenApiKey.isNotBlank()
@@ -158,15 +169,21 @@ class WhatsAppMediaExtractor @Inject constructor(
         openRouterPrimaryApiKey: String? = "",
         openRouterFallbackApiKey: String? = "",
         secureCredentialsRepository: SecureCredentialsRepository? = null,
-        prefsRepository: UserPreferencesRepository? = null
-    ) : this(context, httpClient, secureCredentialsRepository, prefsRepository) {
+        prefsRepository: UserPreferencesRepository? = null,
+        metaModelApiClient: MetaModelApiClient? = null,
+        metaApiKey: String? = ""
+    ) : this(context, httpClient, secureCredentialsRepository, prefsRepository, metaModelApiClient) {
         this.groqPrimaryApiKeyOverride = groqPrimaryApiKey
         this.groqFallbackApiKeyOverride = groqFallbackApiKey
         this.qwenApiKeyOverride = qwenApiKey
         this.geminiApiKeyOverride = geminiApiKey
         this.openRouterPrimaryApiKeyOverride = openRouterPrimaryApiKey
         this.openRouterFallbackApiKeyOverride = openRouterFallbackApiKey
+        this.metaApiKeyOverride = metaApiKey
     }
+
+    fun convertAudioToWav(inputFile: File, targetSampleRate: Int = 16000): File =
+        AudioWavConverter.convertTo16kHzMonoWav(inputFile, context.cacheDir)
 
     // ──────────────────────────────────────────────────────────────────────────
     // Phase 1: Direct Image Extraction from Notification Extras
@@ -790,6 +807,18 @@ class WhatsAppMediaExtractor @Inject constructor(
 
             for (provider in priority) {
                 when (provider.lowercase()) {
+                    ModelProviders.META -> {
+                        if (metaModelApiClient != null) {
+                            val result = metaModelApiClient.transcribeAudio(audioFile, "ar").getOrNull()
+                            if (!result.isNullOrBlank()) {
+                                val logMsg = "🎙️ Meta Voice Transcribe completed: '$result'"
+                                Log.i(TAG, logMsg)
+                                PersonaLogger.i(TAG, logMsg)
+                                return result
+                            }
+                            Log.w(TAG, "Meta Voice Transcribe returned null or blank. Falling back to next in priority...")
+                        }
+                    }
                     ModelProviders.OPENROUTER -> {
                         val orKeys = openRouterApiKeys
                         if (orKeys.isNotEmpty()) {

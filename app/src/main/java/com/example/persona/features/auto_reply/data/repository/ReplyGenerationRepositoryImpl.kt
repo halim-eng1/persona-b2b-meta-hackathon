@@ -13,6 +13,7 @@ import com.example.persona.core.network.dto.ChatMessage
 import com.example.persona.features.auto_reply.data.media.ImagePayloadPreprocessor
 import com.example.persona.features.auto_reply.data.providers.GeminiClient
 import com.example.persona.features.auto_reply.data.providers.GroqClient
+import com.example.persona.features.auto_reply.data.providers.MetaModelApiClient
 import com.example.persona.features.auto_reply.data.providers.NaraRouterClient
 import com.example.persona.features.auto_reply.data.providers.NvidiaNimClient
 import com.example.persona.features.auto_reply.data.providers.OpenRouterClient
@@ -47,6 +48,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     private val geminiClient: GeminiClient,
     private val openRouterClient: OpenRouterClient,
     private val naraRouterClient: NaraRouterClient,
+    private val metaModelApiClient: MetaModelApiClient? = null,
     private val imagePreprocessor: ImagePayloadPreprocessor,
     circuitBreaker: ProviderCircuitBreakerAndKeyManager? = null
 ) : ReplyGenerationRepository {
@@ -73,7 +75,9 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         qwenApiKey: String? = "",
         geminiApiKey: String? = "",
         geminiApiKey2: String? = "",
-        naraApiKey: String? = ""
+        naraApiKey: String? = "",
+        metaApiKey: String? = "",
+        metaModelApiClient: MetaModelApiClient? = null
     ) : this(
         httpClient = httpClient,
         promptContextBuilder = promptContextBuilder,
@@ -85,6 +89,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         geminiClient = GeminiClient(httpClient),
         openRouterClient = OpenRouterClient(httpClient),
         naraRouterClient = NaraRouterClient(httpClient),
+        metaModelApiClient = metaModelApiClient,
         imagePreprocessor = ImagePayloadPreprocessor(),
         circuitBreaker = ProviderCircuitBreakerAndKeyManager(context, SystemAlertNotificationHandler(context))
     ) {
@@ -97,6 +102,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         this.geminiApiKeyOverride = geminiApiKey
         this.geminiApiKey2Override = geminiApiKey2
         this.naraApiKeyOverride = naraApiKey
+        this.metaApiKeyOverride = metaApiKey
     }
 
     /** Secondary convenience constructor preserving standard 4-arg instantiations. */
@@ -116,6 +122,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         geminiClient = GeminiClient(httpClient),
         openRouterClient = OpenRouterClient(httpClient),
         naraRouterClient = NaraRouterClient(httpClient),
+        metaModelApiClient = null,
         imagePreprocessor = ImagePayloadPreprocessor(),
         circuitBreaker = ProviderCircuitBreakerAndKeyManager(context, SystemAlertNotificationHandler(context))
     )
@@ -129,6 +136,12 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     private var geminiApiKeyOverride: String? = null
     private var geminiApiKey2Override: String? = null
     private var naraApiKeyOverride: String? = null
+    private var metaApiKeyOverride: String? = null
+
+    internal val metaApiKey: String
+        get() = metaApiKeyOverride?.trim()
+            ?: userPreferencesRepository.getApiKeys(ModelProviders.META).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: runCatching { BuildConfig.META_API_KEY }.getOrNull()?.trim() ?: ""
 
     internal val primaryApiKey: String
         get() = primaryApiKeyOverride?.trim()
@@ -205,6 +218,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         val CANONICAL_HITL_MESSAGE = PromptContextBuilder.CANONICAL_HITL_MESSAGE
 
+        val VISION_META_MODELS = MetaModelApiClient.META_VISION_MODELS
         val VISION_QWEN_MODELS = QwenCloudClient.VISION_QWEN_MODELS
         val VISION_GROQ_MODELS = GroqClient.VISION_GROQ_MODELS
         val VISION_GEMINI_MODELS = GeminiClient.VISION_GEMINI_MODELS
@@ -350,7 +364,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     ): List<String> {
         val norm = ModelProviders.normalize(provider)
         val configs = runCatching {
-            userPreferencesRepository.getProviderModelConfigsSync(norm, capability)
+            userPreferencesRepository.getProviderModelConfigsSync(norm)
         }.getOrElse { emptyList() }
         val userDefined = configs.filter { capability in it.capabilities }.map { it.modelId }
         return userDefined.ifEmpty { hardcodedFallback }
@@ -605,7 +619,48 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade...")
             Log.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade...")
 
-            // ── Vision Tier 1: QwenCloud Multimodal Vision (Primary) ───
+            // ── Vision Tier 0: Meta Model API (muse-spark-1.3-contributor Primary) ───
+            if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)) {
+                val effectiveVisionMeta = getDynamicModels(
+                    ModelProviders.META, ModelCapability.VISION, VISION_META_MODELS
+                )
+                val metaKeys = getEffectiveKeys(
+                    ProviderCircuitBreakerAndKeyManager.PROVIDER_META,
+                    listOfNotNull(metaApiKey.takeIf { it.isNotBlank() })
+                )
+                if (metaKeys.isNotEmpty() && metaModelApiClient != null) {
+                    val metaStartTime = System.currentTimeMillis()
+                    for (key in metaKeys) {
+                        for (model in effectiveVisionMeta) {
+                            when (val result = metaModelApiClient.executeSingleCall(model, messages, targetMaxTokens, key)) {
+                                is CallResult.Success -> {
+                                    circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)
+                                    val durationMs = System.currentTimeMillis() - metaStartTime
+                                    PersonaLogger.i(TAG, "Vision Tier 0 (Meta) succeeded with $model in ${durationMs}ms!")
+                                    recordSuccessTelemetry("Meta", model, durationMs, result, messages)
+                                    return result.content
+                                }
+                                is CallResult.AuthOrQuotaError -> {
+                                    circuitBreaker.evictKey(ProviderCircuitBreakerAndKeyManager.PROVIDER_META, key, "Auth/quota error: ${result.code}")
+                                    break
+                                }
+                                is CallResult.Timeout -> {
+                                    circuitBreaker.recordTimeout(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)
+                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)) break
+                                }
+                                is CallResult.ServerError -> {
+                                    circuitBreaker.recordFailure(ProviderCircuitBreakerAndKeyManager.PROVIDER_META, isServerError = true)
+                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)) break
+                                }
+                                else -> {}
+                            }
+                        }
+                        if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)) break
+                    }
+                }
+            }
+
+            // ── Vision Tier 1: QwenCloud Multimodal Vision (Secondary) ───
             if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN)) {
                 val effectiveVisionQwen = getDynamicModels(
                     ModelProviders.QWEN, ModelCapability.VISION, VISION_QWEN_MODELS
@@ -833,6 +888,10 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             }
 
             val keys = when (providerId) {
+                ProviderCircuitBreakerAndKeyManager.PROVIDER_META -> getEffectiveKeys(
+                    providerId,
+                    listOfNotNull(metaApiKey.takeIf { it.isNotBlank() })
+                )
                 ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN -> getEffectiveKeys(
                     providerId,
                     listOfNotNull(qwenApiKey.ifBlank { userPreferencesRepository.getQwenApiKeySync() }.takeIf { it.isNotBlank() })
@@ -870,6 +929,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             for (key in keys) {
                 for (model in models) {
                     val result = when (providerId) {
+                        ProviderCircuitBreakerAndKeyManager.PROVIDER_META -> metaModelApiClient?.executeSingleCall(model, messages, targetMaxTokens, key) ?: CallResult.Failed
                         ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN -> qwenClient.executeSingleCall(model, messages, targetMaxTokens, key)
                         ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI -> geminiClient.executeSingleCall(model, messages, targetMaxTokens, key)
                         ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA -> nvidiaClient.executeSingleCall(model, messages, targetMaxTokens, key)
@@ -887,6 +947,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                             PersonaLogger.i(TAG, "Tier [$providerId] succeeded with model $model in ${durationMs}ms!")
                             Log.i(TAG, "Tier [$providerId] succeeded with model $model in ${durationMs}ms")
                             val providerLabel = when (providerId) {
+                                ProviderCircuitBreakerAndKeyManager.PROVIDER_META -> "Meta"
                                 ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN -> "Qwen"
                                 ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI -> "Gemini"
                                 ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA -> "NVIDIA"

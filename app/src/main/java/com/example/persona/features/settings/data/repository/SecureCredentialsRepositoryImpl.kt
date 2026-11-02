@@ -216,6 +216,9 @@ class SecureCredentialsRepositoryImpl @Inject constructor(
 
     private fun getBuildConfigSeedKeys(provider: String): List<String> {
         val rawCandidates = when (ModelProviders.normalize(provider)) {
+            ModelProviders.META -> listOf(
+                getBuildConfigString("META_API_KEY")
+            )
             ModelProviders.QWEN -> listOf(
                 getBuildConfigString("QWEN_API_KEY"),
                 getBuildConfigString("DASHSCOPE_API_KEY")

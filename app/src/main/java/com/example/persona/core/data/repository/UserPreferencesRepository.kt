@@ -149,6 +149,7 @@ class UserPreferencesRepository @Inject constructor(
             "أنا معاك وسامعك كويس يا فندم، بس قولّي نقدر نجهزلك إيه النهارده من منتجاتنا في %s؟ 💙"
 
         val DEFAULT_PROVIDER_ORDER = listOf(
+            ModelProviders.META,
             ModelProviders.OPENROUTER,
             ModelProviders.QWEN,
             ModelProviders.GEMINI,
@@ -166,6 +167,12 @@ class UserPreferencesRepository @Inject constructor(
          * during legacy migration or fresh installations.
          */
         val PRESEEDED_CAPABILITIES: Map<String, Set<ModelCapability>> = mapOf(
+            "muse-spark-1.3-contributor" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
+            "muse-spark-1.3" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
+            "muse-spark-1.2-contributor" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
+            "muse-spark-1.2" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
+            "muse-voice-transcribe-1.0" to setOf(ModelCapability.AUDIO),
+
             "deepseek-v4.1-flash" to setOf(ModelCapability.TEXT),
             "qwen3.8-omni-flash" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
             "qwen-vl-max" to setOf(ModelCapability.VISION),
@@ -207,6 +214,13 @@ class UserPreferencesRepository @Inject constructor(
          * who already have stored models for these providers.
          */
         val REQUIRED_MODELS_BACKFILL: Map<String, List<ModelConfig>> = mapOf(
+            ModelProviders.META to listOf(
+                ModelConfig("muse-spark-1.3-contributor", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
+                ModelConfig("muse-spark-1.3", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
+                ModelConfig("muse-spark-1.2-contributor", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
+                ModelConfig("muse-spark-1.2", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
+                ModelConfig("muse-voice-transcribe-1.0", setOf(ModelCapability.AUDIO))
+            ),
             ModelProviders.QWEN to listOf(
                 ModelConfig("qwen3.8-omni-flash", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
                 ModelConfig("qwen-vl-max", setOf(ModelCapability.VISION)),
@@ -413,7 +427,12 @@ class UserPreferencesRepository @Inject constructor(
         val stored = if (raw.isNullOrBlank()) {
             DEFAULT_PROVIDER_ORDER
         } else {
-            raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+            val parsed = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+            if (!parsed.contains(ModelProviders.META)) {
+                listOf(ModelProviders.META) + parsed
+            } else {
+                parsed
+            }
         }
         val missing = DEFAULT_PROVIDER_ORDER.filterNot { stored.contains(it) }
         stored + missing
@@ -433,7 +452,12 @@ class UserPreferencesRepository @Inject constructor(
         val stored = if (raw.isNullOrBlank()) {
             DEFAULT_PROVIDER_ORDER
         } else {
-            raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+            val parsed = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+            if (!parsed.contains(ModelProviders.META)) {
+                listOf(ModelProviders.META) + parsed
+            } else {
+                parsed
+            }
         }
         val missing = DEFAULT_PROVIDER_ORDER.filterNot { stored.contains(it) }
         return stored + missing
@@ -447,7 +471,12 @@ class UserPreferencesRepository @Inject constructor(
             if (raw.isNullOrBlank()) {
                 ModelProviders.DEFAULT_CAPABILITY_PROVIDERS[capability] ?: emptyList()
             } else {
-                raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+                val parsed = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+                if (capability != ModelCapability.DECISION && !parsed.contains(ModelProviders.META)) {
+                    listOf(ModelProviders.META) + parsed
+                } else {
+                    parsed
+                }
             }
         }
 
@@ -456,7 +485,12 @@ class UserPreferencesRepository @Inject constructor(
         return if (raw.isNullOrBlank()) {
             ModelProviders.DEFAULT_CAPABILITY_PROVIDERS[capability] ?: emptyList()
         } else {
-            raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+            val parsed = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+            if (capability != ModelCapability.DECISION && !parsed.contains(ModelProviders.META)) {
+                listOf(ModelProviders.META) + parsed
+            } else {
+                parsed
+            }
         }
     }
 

@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
  * Supported LLM / AI inference providers in Persona.
  */
 object ModelProviders {
+    const val META = "meta"
     const val OPENROUTER = "openrouter"
     const val QWEN = "qwen"
     const val GEMINI = "gemini"
@@ -15,11 +16,18 @@ object ModelProviders {
     const val LIQUID = "liquid"
     const val NARA = "nara"
 
-    val ALL = listOf(OPENROUTER, QWEN, GEMINI, GROQ, NVIDIA, CLOUDFLARE, LIQUID, NARA)
+    val ALL = listOf(META, OPENROUTER, QWEN, GEMINI, GROQ, NVIDIA, CLOUDFLARE, LIQUID, NARA)
 
     fun normalize(provider: String): String = provider.trim().lowercase()
 
     val DEFAULT_MODELS: Map<String, List<String>> = mapOf(
+        META to listOf(
+            "muse-spark-1.3-contributor",
+            "muse-spark-1.3",
+            "muse-spark-1.2-contributor",
+            "muse-spark-1.2",
+            "muse-voice-transcribe-1.0"
+        ),
         QWEN to listOf(
             "deepseek-v4.1-flash",
             "qwen3.8-omni-flash",
@@ -77,13 +85,14 @@ object ModelProviders {
     )
 
     val DEFAULT_CAPABILITY_PROVIDERS: Map<ModelCapability, List<String>> = mapOf(
-        ModelCapability.TEXT to listOf(OPENROUTER, QWEN, GEMINI, GROQ, NVIDIA, NARA),
-        ModelCapability.VISION to listOf(OPENROUTER, QWEN, GEMINI, GROQ, NVIDIA),
-        ModelCapability.AUDIO to listOf(OPENROUTER, QWEN, GEMINI, GROQ),
+        ModelCapability.TEXT to listOf(META, OPENROUTER, QWEN, GEMINI, GROQ, NVIDIA, NARA),
+        ModelCapability.VISION to listOf(META, OPENROUTER, GROQ, GEMINI, NVIDIA),
+        ModelCapability.AUDIO to listOf(META, OPENROUTER, QWEN, GEMINI, GROQ),
         ModelCapability.DECISION to listOf(OPENROUTER, CLOUDFLARE, LIQUID)
     )
 
     val DEFAULT_CAPABILITIES_BY_PROVIDER: Map<String, Set<ModelCapability>> = mapOf(
+        META to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.AUDIO),
         QWEN to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.AUDIO),
         GEMINI to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.AUDIO),
         GROQ to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.AUDIO),

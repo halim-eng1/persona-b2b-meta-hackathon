@@ -1161,6 +1161,12 @@
     <string name="settings_ai_no_primary_key_banner">No API keys configured yet. Please add a key for at least one provider to activate auto-reply.</string>
     <string name="settings_ai_key_required_badge">Optional (Add Key)</string>
     <string name="settings_ai_openrouter_dependency_banner">If not using OpenRouter as an all-in-one gateway, make sure to configure a provider for Audio (e.g. Qwen/Groq) and Decision (e.g. Cloudflare/Liquid) alongside Text.</string>
+    <string name="settings_ai_meta_active_banner">Meta AI is active for Text, Vision, and Audio. If no Decision key (Cloudflare, Liquid, or OpenRouter) is provided, the system will autonomously rely on on-device intent classification and direct model reasoning.</string>
+    <string name="settings_ai_meta_card_title">Meta AI (Primary Provider #1)</string>
+    <string name="settings_ai_meta_card_subtitle">Official Meta Model API covering Text, Vision &amp; Audio</string>
+    <string name="settings_ai_meta_active_badge">Active (#1)</string>
+    <string name="settings_ai_meta_key_hint">Enter META_API_KEY (LLM_...)</string>
+    <string name="settings_ai_meta_save_key">Save Key</string>
     <string name="settings_ai_no_active_keys_warning">Auto-reply unavailable: No active API key registered in settings.</string>
     <string name="settings_ai_key_deleted">API key removed</string>
     <string name="settings_ai_model_deleted">Model %s removed</string>

@@ -144,6 +144,7 @@ class UserPreferencesRepositoryTest {
         val defaultText = repository.getProviderPrioritySync(ModelCapability.TEXT)
         assertEquals(
             listOf(
+                ModelProviders.META,
                 ModelProviders.OPENROUTER,
                 ModelProviders.QWEN,
                 ModelProviders.GEMINI,
@@ -210,22 +211,24 @@ class UserPreferencesRepositoryTest {
     }
 
     @Test
-    fun `default provider order has OPENROUTER as first provider`() = runTest(testDispatcher) {
+    fun `default provider order has META as first provider`() = runTest(testDispatcher) {
         val defaultOrder = repository.getProviderOrderSync()
-        assertEquals(ModelProviders.OPENROUTER, defaultOrder.first())
-        assertEquals(ModelProviders.OPENROUTER, UserPreferencesRepository.DEFAULT_PROVIDER_ORDER.first())
+        assertEquals(ModelProviders.META, defaultOrder.first())
+        assertEquals(ModelProviders.META, UserPreferencesRepository.DEFAULT_PROVIDER_ORDER.first())
     }
 
     @Test
     fun `provider order includes all default providers even when stored list was missing newly added providers`() = runTest(testDispatcher) {
-        // Simulate older saved list without liquid and cloudflare
+        // Simulate older saved list without meta, liquid and cloudflare
         repository.setProviderOrder(listOf("openrouter", "qwen", "gemini"))
         val retrieved = repository.getProviderOrderSync()
+        assertTrue(retrieved.contains(ModelProviders.META))
         assertTrue(retrieved.contains(ModelProviders.LIQUID))
         assertTrue(retrieved.contains(ModelProviders.CLOUDFLARE))
-        assertEquals(ModelProviders.OPENROUTER, retrieved[0])
-        assertEquals(ModelProviders.QWEN, retrieved[1])
-        assertEquals(ModelProviders.GEMINI, retrieved[2])
+        assertEquals(ModelProviders.META, retrieved[0])
+        assertEquals(ModelProviders.OPENROUTER, retrieved[1])
+        assertEquals(ModelProviders.QWEN, retrieved[2])
+        assertEquals(ModelProviders.GEMINI, retrieved[3])
     }
 
     @Test

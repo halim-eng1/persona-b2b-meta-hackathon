@@ -925,7 +925,14 @@ class AutoReplyOrchestrator @Inject constructor(
 
                     resolvedOutcome ?: run {
                         val latency = System.currentTimeMillis() - tGatekeeper
-                        localDecision.copy(latencyMs = latency) to "On-Device Fallback"
+                        val effectiveIntent = if (localDecision.confidence < 0.70f) {
+                            Log.i(TAG, "🎯 Autonomous Gatekeeper: Local classifier confidence below threshold (${localDecision.confidence} < 0.70) with no cloud decision gatekeeper. Routing directly to primary model under CATALOG_INQUIRY with vector search.")
+                            PersonaLogger.i(PersonaLogTags.ORCHESTRATOR, "🎯 Autonomous Gatekeeper: Direct-to-LLM routing active (conf=${localDecision.confidence} < 0.70)")
+                            InboundIntent.CATALOG_INQUIRY
+                        } else {
+                            localDecision.intent
+                        }
+                        DecisionResult(intent = effectiveIntent, confidence = localDecision.confidence, latencyMs = latency) to "On-Device Direct Routing"
                     }
                 }
             }

@@ -67,6 +67,7 @@ class SecureCredentialsRepositoryTest {
     @Test
     fun `unlimited API keys per provider can be added, retrieved, and removed`() = runTest {
         val providers = listOf(
+            ModelProviders.META,
             ModelProviders.QWEN,
             ModelProviders.GEMINI,
             ModelProviders.GROQ,

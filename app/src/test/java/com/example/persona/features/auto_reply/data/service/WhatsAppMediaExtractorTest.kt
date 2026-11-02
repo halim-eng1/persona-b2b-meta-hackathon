@@ -1407,4 +1407,34 @@ class WhatsAppMediaExtractorTest {
         assertNotNull(result)
         assertEquals(listOf("groq"), providersAttempted)
     }
+
+    @Test
+    fun `transcribeVoiceNote invokes MetaModelApiClient when meta is prioritized`() = runBlocking {
+        val mockMetaClient = io.mockk.mockk<com.example.persona.features.auto_reply.data.providers.MetaModelApiClient>()
+        io.mockk.coEvery { mockMetaClient.transcribeAudio(any(), any()) } returns Result.success("تفريغ صوتي من ميتا")
+
+        val extractor = WhatsAppMediaExtractor(
+            context = mockContext,
+            httpClient = io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { respond("") }),
+            groqPrimaryApiKey = "",
+            groqFallbackApiKey = "",
+            qwenApiKey = "",
+            geminiApiKey = "",
+            openRouterPrimaryApiKey = "",
+            openRouterFallbackApiKey = "",
+            metaModelApiClient = mockMetaClient
+        )
+
+        val tempAudio = tempFolder.newFile("test_meta_voice.ogg").apply {
+            writeBytes(ByteArray(512) { 1 })
+        }
+
+        val result = extractor.transcribeVoiceNote(
+            audioFile = tempAudio,
+            audioProviderPriority = listOf("meta", "groq")
+        )
+
+        assertEquals("تفريغ صوتي من ميتا", result)
+        io.mockk.coVerify(exactly = 1) { mockMetaClient.transcribeAudio(tempAudio, "ar") }
+    }
 }

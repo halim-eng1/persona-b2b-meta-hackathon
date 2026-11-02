@@ -452,14 +452,14 @@ class SettingsViewModelTest {
         val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
         advanceUntilIdle()
 
-        // Drag provider from index 0 (OPENROUTER) to index 2
+        // Drag provider from index 0 (META) to index 2
         viewModel.moveProvider(0, 2)
         advanceUntilIdle()
 
         val newOrder = viewModel.uiState.value.providerOrder
-        assertEquals(ModelProviders.QWEN, newOrder[0])
-        assertEquals(ModelProviders.GEMINI, newOrder[1])
-        assertEquals(ModelProviders.OPENROUTER, newOrder[2])
+        assertEquals(ModelProviders.OPENROUTER, newOrder[0])
+        assertEquals(ModelProviders.QWEN, newOrder[1])
+        assertEquals(ModelProviders.META, newOrder[2])
         coVerify { userPreferencesRepository.setProviderOrder(newOrder) }
     }
 
@@ -565,19 +565,19 @@ class SettingsViewModelTest {
 
         // Text
         assertEquals(
-            listOf(ModelProviders.OPENROUTER, ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ, ModelProviders.NVIDIA, ModelProviders.NARA),
+            listOf(ModelProviders.META, ModelProviders.OPENROUTER, ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ, ModelProviders.NVIDIA, ModelProviders.NARA),
             viewModel.uiState.value.filteredProviderOrder(ModelCapability.TEXT)
         )
 
         // Vision
         assertEquals(
-            listOf(ModelProviders.OPENROUTER, ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ, ModelProviders.NVIDIA),
+            listOf(ModelProviders.META, ModelProviders.OPENROUTER, ModelProviders.GROQ, ModelProviders.GEMINI, ModelProviders.NVIDIA, ModelProviders.QWEN),
             viewModel.uiState.value.filteredProviderOrder(ModelCapability.VISION)
         )
 
         // Audio
         assertEquals(
-            listOf(ModelProviders.OPENROUTER, ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ),
+            listOf(ModelProviders.META, ModelProviders.OPENROUTER, ModelProviders.QWEN, ModelProviders.GEMINI, ModelProviders.GROQ),
             viewModel.uiState.value.filteredProviderOrder(ModelCapability.AUDIO)
         )
 
