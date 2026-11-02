@@ -50,20 +50,22 @@ class ChatImportViewModelTest {
 
     @Test
     fun onFilePicked_updatesSelectedFileUri() {
-        viewModel.onFilePicked(mockUri)
+        viewModel.onFilePicked(mockUri, "knowledge_faq.md")
 
         assertEquals(mockUri, viewModel.uiState.value.selectedFileUri)
+        assertEquals("knowledge_faq.md", viewModel.uiState.value.selectedFileName)
         assertNull(viewModel.uiState.value.error)
         assertFalse(viewModel.uiState.value.isOwnerNameMissing)
     }
 
     @Test
     fun onUnsupportedFilePicked_setsErrorAndClearsSelection() {
-        viewModel.onFilePicked(mockUri)
+        viewModel.onFilePicked(mockUri, "invalid.pdf")
 
         viewModel.onUnsupportedFilePicked()
 
         assertNull(viewModel.uiState.value.selectedFileUri)
+        assertNull(viewModel.uiState.value.selectedFileName)
         assertEquals(
             "نوع الملف غير مدعوم. اختر ملف بنسق .txt أو .md (Unsupported file type. Please pick a .txt or .md file.)",
             viewModel.uiState.value.error
