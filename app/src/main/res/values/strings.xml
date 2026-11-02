@@ -114,6 +114,49 @@
     <string name="feature_onboarding_page3_tag2">Customer CRM</string>
     <string name="feature_onboarding_page3_tag3">Instant Alerts</string>
 
+    <!-- ── Model Preparation Screen ─────────────────────────────────────────── -->
+    <string name="model_prep_title">Preparing Assistant for Your Business</string>
+    <string name="model_prep_subtitle">Downloading and preparing the local on-device AI engine for private, offline intelligence.</string>
+    <string name="model_prep_downloading_title">Downloading &amp; Preparing...</string>
+    <string name="model_prep_verifying_title">Verifying Model Integrity</string>
+    <string name="model_prep_verifying_desc">Validating model assets and loading them into local storage...</string>
+    <string name="model_prep_success_title">Preparation Complete!</string>
+    <string name="model_prep_success_desc">Your smart assistant is 100% ready to operate offline on your device.</string>
+    <string name="model_prep_checking_storage">Checking device storage and connectivity...</string>
+    <string name="model_prep_storage_error_title">Insufficient Storage</string>
+    <string name="model_prep_storage_error_desc">The AI engine requires at least %1$d MB. Available storage: %2$d MB.</string>
+    <string name="model_prep_btn_open_storage">Open Storage Settings</string>
+    <string name="model_prep_btn_recheck">Check Again</string>
+    <string name="model_prep_btn_retry">Retry Download</string>
+    <string name="model_prep_cellular_title">Download via Cellular Data</string>
+    <string name="model_prep_cellular_desc">You are connected via mobile data. Download size is ~%1$d MB, required only once for offline usage.</string>
+    <string name="model_prep_btn_proceed_cellular">Continue on Mobile Data</string>
+    <string name="model_prep_disconnected_title">Internet Connection Lost</string>
+    <string name="model_prep_disconnected_desc">Download paused until connection returns. Progress is preserved and will resume automatically.</string>
+    <string name="model_prep_failed_title">Preparation Failed</string>
+    <string name="model_prep_exit_dialog_title">Exit Assistant Setup?</string>
+    <string name="model_prep_exit_dialog_desc">The assistant needs this initial setup to operate offline. You can resume download whenever you reopen.</string>
+    <string name="model_prep_exit_dialog_confirm">Exit Application</string>
+    <string name="model_prep_exit_dialog_dismiss">Continue Setup</string>
+
+    <string name="model_prep_tip_header">Did You Know?</string>
+    <string name="model_prep_tip1_title">Instant On-Device Processing</string>
+    <string name="model_prep_tip1_desc">Intelligent responses to WhatsApp voice notes, text messages, and images in milliseconds.</string>
+    <string name="model_prep_tip2_title">100% Private &amp; Secure</string>
+    <string name="model_prep_tip2_desc">All conversations, customer orders, and knowledge base remain strictly on your phone.</string>
+    <string name="model_prep_tip3_title">Works Without Internet</string>
+    <string name="model_prep_tip3_desc">Your assistant stays active and responsive at all times, even without a network signal.</string>
+    <string name="model_prep_tip4_title">Permanent Data Savings</string>
+    <string name="model_prep_tip4_desc">The model is downloaded only once and will never consume your cellular bundle again.</string>
+
+    <string name="model_prep_mb_format">%1$.1f / %2$.1f MB</string>
+    <string name="model_prep_speed_format">%1$.1f MB/s</string>
+    <string name="model_prep_speed_eta_format">%1$.1f MB/s • %2$s</string>
+    <string name="model_prep_eta_seconds">%1$d seconds remaining</string>
+    <string name="model_prep_eta_one_min">About 1 minute remaining</string>
+    <string name="model_prep_eta_mins">About %1$d minutes remaining</string>
+    <string name="model_prep_measuring_speed">Measuring speed...</string>
+
     <!-- ── Knowledge Management UI ────────────────────────────────────────────── -->
     <string name="knowledge_management_title">Knowledge Base</string>
     <string name="knowledge_add_hint">Add a new offer or business fact...</string>
