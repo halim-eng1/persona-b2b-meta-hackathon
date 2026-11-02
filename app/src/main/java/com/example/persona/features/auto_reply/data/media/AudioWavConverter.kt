@@ -26,7 +26,11 @@ object AudioWavConverter {
      * Converts [inputFile] into a 16kHz mono 16-bit PCM WAV file.
      * If the file is already a valid WAV, returns [inputFile] directly.
      */
-    fun convertTo16kHzMonoWav(inputFile: File, cacheDir: File? = null): File {
+    fun convertTo16kHzMonoWav(
+        inputFile: File,
+        cacheDir: File? = null,
+        targetSampleRate: Int = TARGET_SAMPLE_RATE
+    ): File {
         if (!inputFile.exists() || inputFile.length() == 0L) {
             return inputFile
         }
@@ -46,9 +50,9 @@ object AudioWavConverter {
         val outputFile = File(targetDir, "transcoded_${System.currentTimeMillis()}_${System.nanoTime()}.wav")
 
         return try {
-            decodeToWav(inputFile, outputFile, TARGET_SAMPLE_RATE, TARGET_CHANNELS)
+            decodeToWav(inputFile, outputFile, targetSampleRate, TARGET_CHANNELS)
             if (outputFile.exists() && outputFile.length() > 44L) {
-                Log.i(TAG, "Successfully converted ${inputFile.name} (${inputFile.length()}B) to 16kHz WAV (${outputFile.length()}B)")
+                Log.i(TAG, "Successfully converted ${inputFile.name} (${inputFile.length()}B) to ${targetSampleRate}Hz WAV (${outputFile.length()}B)")
                 outputFile
             } else {
                 Log.w(TAG, "Decoded WAV file was empty or missing. Falling back to input file.")
@@ -92,10 +96,10 @@ object AudioWavConverter {
 
             extractor.selectTrack(audioTrackIndex)
             val mime = inputFormat.getString(MediaFormat.KEY_MIME) ?: "audio/opus"
-            val inputSampleRate = if (inputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+            var actualSampleRate = if (inputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
                 inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             } else 16000
-            val inputChannelCount = if (inputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+            var actualChannelCount = if (inputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
                 inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             } else 1
 
@@ -135,33 +139,46 @@ object AudioWavConverter {
                 }
 
                 val outIndex = codec.dequeueOutputBuffer(bufferInfo, kTimeoutUs)
-                if (outIndex >= 0) {
-                    val outBuffer = codec.getOutputBuffer(outIndex)
-                    if (outBuffer != null && bufferInfo.size > 0) {
-                        outBuffer.position(bufferInfo.offset)
-                        outBuffer.limit(bufferInfo.offset + bufferInfo.size)
-
-                        val chunk = ByteArray(bufferInfo.size)
-                        outBuffer.get(chunk)
-
-                        // If input channel count or sample rate matches, write directly
-                        // Otherwise resample/downmix if needed
-                        val processedChunk = resampleAndDownmixPcm(
-                            inputPcm = chunk,
-                            srcSampleRate = inputSampleRate,
-                            srcChannels = inputChannelCount,
-                            dstSampleRate = targetSampleRate,
-                            dstChannels = targetChannels
-                        )
-
-                        fos.write(processedChunk)
-                        totalPcmBytes += processedChunk.size
+                when (outIndex) {
+                    MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        val outFormat = codec.outputFormat
+                        if (outFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                            actualSampleRate = outFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                        }
+                        if (outFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                            actualChannelCount = outFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                        }
+                        Log.d(TAG, "Decoder output format changed: sampleRate=$actualSampleRate, channels=$actualChannelCount")
                     }
+                    MediaCodec.INFO_TRY_AGAIN_LATER -> { /* no-op */ }
+                    MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED -> { /* no-op (deprecated) */ }
+                    else -> if (outIndex >= 0) {
+                        val outBuffer = codec.getOutputBuffer(outIndex)
+                        if (outBuffer != null && bufferInfo.size > 0) {
+                            outBuffer.position(bufferInfo.offset)
+                            outBuffer.limit(bufferInfo.offset + bufferInfo.size)
 
-                    codec.releaseOutputBuffer(outIndex, false)
+                            val chunk = ByteArray(bufferInfo.size)
+                            outBuffer.get(chunk)
 
-                    if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                        isOutputEos = true
+                            // Resample and downmix PCM using dynamic decoder output parameters
+                            val processedChunk = resampleAndDownmixPcm(
+                                inputPcm = chunk,
+                                srcSampleRate = actualSampleRate,
+                                srcChannels = actualChannelCount,
+                                dstSampleRate = targetSampleRate,
+                                dstChannels = targetChannels
+                            )
+
+                            fos.write(processedChunk)
+                            totalPcmBytes += processedChunk.size
+                        }
+
+                        codec.releaseOutputBuffer(outIndex, false)
+
+                        if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                            isOutputEos = true
+                        }
                     }
                 }
             }

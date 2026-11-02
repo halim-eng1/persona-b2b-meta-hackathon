@@ -77,7 +77,8 @@ class KnowledgeManagementViewModelTest {
         userPreferencesRepository = userPreferencesRepository,
         updateKnowledgeEntryUseCase = updateKnowledgeEntryUseCase,
         semanticRetrievalRepository = semanticRetrievalRepository,
-        embeddingEngine = embeddingEngine
+        embeddingEngine = embeddingEngine,
+        ioDispatcher = testDispatcher
     )
 
     @Before
@@ -474,7 +475,8 @@ class KnowledgeManagementViewModelTest {
             updateKnowledgeEntryUseCase = updateKnowledgeEntryUseCase,
             semanticRetrievalRepository = semanticRetrievalRepository,
             embeddingEngine = embeddingEngine,
-            replyGenerationRepository = mockReplyRepo
+            replyGenerationRepository = mockReplyRepo,
+            ioDispatcher = testDispatcher
         )
 
         val mockVector = FloatArray(384) { 0.1f }

@@ -890,7 +890,13 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             val keys = when (providerId) {
                 ProviderCircuitBreakerAndKeyManager.PROVIDER_META -> getEffectiveKeys(
                     providerId,
-                    listOfNotNull(metaApiKey.takeIf { it.isNotBlank() })
+                    metaApiKeyOverride?.takeIf { it.isNotBlank() }?.let { listOf(it) }
+                        ?: userPreferencesRepository.getApiKeys(ModelProviders.META)
+                            .map { it.trim() }
+                            .filter { it.isNotBlank() }
+                            .ifEmpty {
+                                listOfNotNull(runCatching { BuildConfig.META_API_KEY }.getOrNull()?.trim()?.takeIf { it.isNotBlank() })
+                            }
                 )
                 ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN -> getEffectiveKeys(
                     providerId,

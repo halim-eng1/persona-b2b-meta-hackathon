@@ -39,8 +39,10 @@ import com.example.persona.features.knowledge.presentation.model.ExecutionTrace
 import com.example.persona.features.knowledge.presentation.model.SimulatorMediaType
 import com.example.persona.features.knowledge.presentation.model.SimulatorMessage
 import com.example.persona.features.knowledge.presentation.model.SimulatorSender
+import com.example.persona.core.di.IoDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -96,7 +98,8 @@ class KnowledgeManagementViewModel @Inject constructor(
     private val liquidDecisionClient: LiquidDecisionClient? = null,
     private val localDecisionClassifier: LocalDecisionClassifier? = null,
     private val mediaExtractor: WhatsAppMediaExtractor? = null,
-    @ApplicationContext private val context: Context? = null
+    @ApplicationContext private val context: Context? = null,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     private val replyRepo = replyGenerationRepository
@@ -821,7 +824,7 @@ class KnowledgeManagementViewModel @Inject constructor(
         }
     }
 
-    private suspend fun resolveFileFromUri(uriString: String, mediaType: SimulatorMediaType? = null): File? = withContext(Dispatchers.IO) {
+    private suspend fun resolveFileFromUri(uriString: String, mediaType: SimulatorMediaType? = null): File? = withContext(ioDispatcher) {
         if (uriString.isBlank()) return@withContext null
         val ctx = context ?: return@withContext null
         runCatching {

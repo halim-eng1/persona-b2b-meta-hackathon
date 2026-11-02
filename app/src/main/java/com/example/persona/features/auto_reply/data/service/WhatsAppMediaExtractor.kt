@@ -183,7 +183,7 @@ class WhatsAppMediaExtractor @Inject constructor(
     }
 
     fun convertAudioToWav(inputFile: File, targetSampleRate: Int = 16000): File =
-        AudioWavConverter.convertTo16kHzMonoWav(inputFile, context.cacheDir)
+        AudioWavConverter.convertTo16kHzMonoWav(inputFile, context.cacheDir, targetSampleRate)
 
     // ──────────────────────────────────────────────────────────────────────────
     // Phase 1: Direct Image Extraction from Notification Extras

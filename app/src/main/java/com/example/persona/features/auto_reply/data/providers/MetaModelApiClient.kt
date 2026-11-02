@@ -183,6 +183,9 @@ class MetaModelApiClient @Inject constructor(
                 put("model", DEFAULT_ASR_MODEL)
                 put("audioEncoding", "WAV")
                 put("mode", "PUSH_TO_TALK")
+                if (language.isNotBlank()) {
+                    put("language", language)
+                }
             }.toString()
 
             val requestBody = MultipartBody.Builder()
@@ -271,7 +274,6 @@ class MetaModelApiClient @Inject constructor(
         }
 
         val keyMasked = ReplyGenerationRepositoryImpl.maskKey(apiKey)
-        val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
         val targetModel = model.ifBlank { DEFAULT_MODEL }
 
         try {
