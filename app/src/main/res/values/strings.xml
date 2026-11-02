@@ -113,6 +113,7 @@
     <string name="feature_onboarding_page3_tag1">Order Extraction</string>
     <string name="feature_onboarding_page3_tag2">Customer CRM</string>
     <string name="feature_onboarding_page3_tag3">Instant Alerts</string>
+    <string name="feature_onboarding_page_indicator">Page %1$d of %2$d</string>
 
     <!-- ── Model Preparation Screen ─────────────────────────────────────────── -->
     <string name="model_prep_title">Preparing Assistant for Your Business</string>
