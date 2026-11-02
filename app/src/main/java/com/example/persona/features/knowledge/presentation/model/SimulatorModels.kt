@@ -28,7 +28,7 @@ data class SimulatorMessage(
 data class ExecutionTrace(
     val totalDurationMs: Long = 0L,
     val intent: InboundIntent = InboundIntent.CATALOG_INQUIRY,
-    val intentSourceTier: String = "Tier 3: LocalDecisionClassifier",
+    val intentSourceTier: String = "On-Device",
     val intentConfidence: Float = 0.95f,
     val intentLatencyMs: Long = 0L,
     val ragCandidates: List<RetrievalCandidate> = emptyList(),

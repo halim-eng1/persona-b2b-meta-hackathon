@@ -815,7 +815,7 @@ class AutoReplyOrchestrator @Inject constructor(
 
                 if (isOnDeviceAccepted) {
                     val latency = System.currentTimeMillis() - tGatekeeper
-                    localDecision.copy(latencyMs = latency) to "Tier 1: LocalDecisionClassifier (On-Device Test)"
+                    localDecision.copy(latencyMs = latency) to "On-Device"
                 } else {
                     Log.d(TAG, "Gatekeeper Tier 1 below confidence threshold (${localDecision.confidence} < 0.70) -> falling back to Cloudflare Clef (Tier 2)")
                     val lastAssistantText = runCatching {
@@ -925,7 +925,7 @@ class AutoReplyOrchestrator @Inject constructor(
 
                     resolvedOutcome ?: run {
                         val latency = System.currentTimeMillis() - tGatekeeper
-                        localDecision.copy(latencyMs = latency) to "Tier 1: LocalDecisionClassifier (On-Device Test Fallback)"
+                        localDecision.copy(latencyMs = latency) to "On-Device Fallback"
                     }
                 }
             }

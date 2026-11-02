@@ -465,7 +465,7 @@ class KnowledgeManagementViewModel @Inject constructor(
 
             if (isOnDeviceAccepted) {
                 val latency = System.currentTimeMillis() - tGatekeeper
-                localDecision.copy(latencyMs = latency) to "Tier 1: LocalDecisionClassifier (On-Device Test)"
+                localDecision.copy(latencyMs = latency) to "On-Device"
             } else {
                 val lastAssistantText = _uiState.value.simulatorMessages.lastOrNull { it.sender == SimulatorSender.BOT }?.text?.trim().orEmpty()
                 val gatekeeperInput = if (lastAssistantText.isNotBlank()) {
@@ -482,7 +482,7 @@ class KnowledgeManagementViewModel @Inject constructor(
 
                 if (cfIntent != null) {
                     val latency = System.currentTimeMillis() - tGatekeeper
-                    DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Tier 2: Cloudflare Clef"
+                    DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Cloudflare Clef"
                 } else {
                     val liquidIntent = liquidDecisionClient?.let { client ->
                         runCatching {
@@ -492,10 +492,10 @@ class KnowledgeManagementViewModel @Inject constructor(
 
                     if (liquidIntent != null) {
                         val latency = System.currentTimeMillis() - tGatekeeper
-                        DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Tier 3: Liquid AI"
+                        DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Liquid AI"
                     } else {
                         val latency = System.currentTimeMillis() - tGatekeeper
-                        localDecision.copy(latencyMs = latency) to "Tier 1: LocalDecisionClassifier (On-Device Test Fallback)"
+                        localDecision.copy(latencyMs = latency) to "On-Device Fallback"
                     }
                 }
             }

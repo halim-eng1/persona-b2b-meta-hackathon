@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.persona.R
+import com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.knowledge.presentation.model.ExecutionTrace
 import com.example.persona.ui.theme.statusColors
@@ -133,13 +134,26 @@ fun ExecutionTraceCard(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // 1. Detected Intent
+                    val intentBadgeText = when (trace.intent) {
+                        InboundIntent.GREETING -> stringResource(R.string.trace_intent_greeting)
+                        InboundIntent.BANTER -> stringResource(R.string.trace_intent_banter)
+                        InboundIntent.CATALOG_INQUIRY -> stringResource(R.string.trace_intent_catalog)
+                        InboundIntent.ORDER_STATUS -> stringResource(R.string.trace_intent_order)
+                    }
+                    val friendlyTier = formatTierName(trace.intentSourceTier)
                     TraceStepRow(
                         icon = Icons.Default.AdsClick,
                         title = stringResource(R.string.trace_intent_title),
-                        badgeText = trace.intent.name,
+                        badgeText = intentBadgeText,
                         badgeColor = MaterialTheme.colorScheme.primaryContainer,
                         badgeTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        detail = "${trace.intent.name} • ${trace.intentSourceTier} (${trace.intentLatencyMs}ms, ${(trace.intentConfidence * 100).toInt()}%)"
+                        detail = stringResource(
+                            R.string.trace_intent_detail_format,
+                            intentBadgeText,
+                            friendlyTier,
+                            trace.intentLatencyMs,
+                            (trace.intentConfidence * 100).toInt()
+                        )
                     )
 
                     // Optional ASR info if audio
@@ -147,7 +161,7 @@ fun ExecutionTraceCard(
                         TraceStepRow(
                             icon = Icons.Default.Mic,
                             title = stringResource(R.string.trace_asr_title),
-                            badgeText = "FunASR / Whisper",
+                            badgeText = stringResource(R.string.trace_asr_badge),
                             badgeColor = MaterialTheme.colorScheme.tertiaryContainer,
                             badgeTextColor = MaterialTheme.colorScheme.onTertiaryContainer,
                             detail = trace.asrTranscription
@@ -159,7 +173,7 @@ fun ExecutionTraceCard(
                         TraceStepRow(
                             icon = Icons.Default.Visibility,
                             title = stringResource(R.string.trace_vision_title),
-                            badgeText = "Multimodal Pass",
+                            badgeText = stringResource(R.string.trace_vision_badge),
                             badgeColor = MaterialTheme.colorScheme.secondaryContainer,
                             badgeTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
                             detail = trace.visionDescription
@@ -189,21 +203,36 @@ fun ExecutionTraceCard(
                                     fontWeight = FontWeight.Bold
                                 )
                             }
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer
-                            ) {
-                                Text(
-                                    text = stringResource(
-                                        R.string.trace_rag_match_format,
-                                        trace.ragCandidates.size,
-                                        (trace.ragBestScore * 100).toInt()
-                                    ),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
+                            if (trace.ragCandidates.isNotEmpty()) {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.secondaryContainer
+                                ) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.trace_rag_match_format,
+                                            trace.ragCandidates.size,
+                                            (trace.ragBestScore * 100).toInt()
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            } else {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.trace_rag_none_badge),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Normal,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
                         }
 
@@ -275,17 +304,35 @@ fun ExecutionTraceCard(
                     )
 
                     // 4. Responding Model (LLM)
+                    val actionBadgeText = when (trace.llmAction.uppercase()) {
+                        "REPLY" -> stringResource(R.string.trace_action_reply)
+                        "HITL" -> stringResource(R.string.trace_action_hitl)
+                        "IGNORE", "SILENT" -> stringResource(R.string.trace_action_ignore)
+                        else -> trace.llmAction
+                    }
                     TraceStepRow(
                         icon = Icons.Default.SmartToy,
                         title = stringResource(R.string.trace_llm_title),
-                        badgeText = trace.llmAction,
+                        badgeText = actionBadgeText,
                         badgeColor = MaterialTheme.colorScheme.primaryContainer,
                         badgeTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        detail = "${trace.llmProvider} (${trace.llmLatencyMs}ms) • Action: ${trace.llmAction}"
+                        detail = stringResource(
+                            R.string.trace_llm_detail_format,
+                            trace.llmProvider,
+                            trace.llmLatencyMs,
+                            actionBadgeText
+                        )
                     )
 
                     // 5. Order Action
-                    val orderActionColor = when (trace.orderAction) {
+                    val orderActionBadgeText = when (trace.orderAction.uppercase()) {
+                        "NONE" -> stringResource(R.string.trace_order_action_none)
+                        "CREATE" -> stringResource(R.string.trace_order_action_create)
+                        "UPDATE" -> stringResource(R.string.trace_order_action_update)
+                        "CANCEL" -> stringResource(R.string.trace_order_action_cancel)
+                        else -> trace.orderAction
+                    }
+                    val orderActionColor = when (trace.orderAction.uppercase()) {
                         "CREATE" -> MaterialTheme.statusColors.completed
                         "UPDATE" -> MaterialTheme.statusColors.pending
                         "CANCEL" -> MaterialTheme.colorScheme.error
@@ -319,7 +366,7 @@ fun ExecutionTraceCard(
                                 border = androidx.compose.foundation.BorderStroke(1.dp, orderActionColor.copy(alpha = 0.4f))
                             ) {
                                 Text(
-                                    text = trace.orderAction,
+                                    text = orderActionBadgeText,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = orderActionColor,
@@ -551,3 +598,28 @@ private fun CandidateChunkItem(idx: Int, candidate: RetrievalCandidate) {
         }
     }
 }
+
+@Composable
+private fun formatTierName(rawTier: String): String {
+    val trimmed = rawTier.trim()
+    return when {
+        trimmed.contains("Fallback", ignoreCase = true) || trimmed.contains("احتياطي") -> {
+            stringResource(R.string.trace_tier_on_device_fallback)
+        }
+        trimmed.contains("LocalDecisionClassifier", ignoreCase = true) ||
+        trimmed.contains("On-Device", ignoreCase = true) ||
+        trimmed.contains("القرار المحلي", ignoreCase = true) -> {
+            stringResource(R.string.trace_tier_on_device)
+        }
+        trimmed.contains("FastPath", ignoreCase = true) ||
+        trimmed.contains("Image Present", ignoreCase = true) ||
+        trimmed.contains("صورة", ignoreCase = true) -> {
+            stringResource(R.string.trace_tier_fast_path)
+        }
+        trimmed.startsWith("Tier 1:", ignoreCase = true) -> trimmed.removePrefix("Tier 1:").trim()
+        trimmed.startsWith("Tier 2:", ignoreCase = true) -> trimmed.removePrefix("Tier 2:").trim()
+        trimmed.startsWith("Tier 3:", ignoreCase = true) -> trimmed.removePrefix("Tier 3:").trim()
+        else -> trimmed
+    }
+}
+
