@@ -2,11 +2,16 @@ package com.example.persona.features.settings.presentation.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -20,9 +25,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -68,7 +72,7 @@ fun KeyRow(
 
     SwipeToDismissBox(
         state = dismissState,
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         backgroundContent = {
             Box(
                 modifier = Modifier
@@ -89,8 +93,17 @@ fun KeyRow(
             }
         }
     ) {
-        ListItem(
-            leadingContent = {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceContainerLow
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Leading Content
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (canReorder) {
                         Box(
@@ -107,28 +120,36 @@ fun KeyRow(
                     }
                     StatusDot(status = status)
                 }
-            },
-            overlineContent = {
-                Text(
-                    text = if (index == 0)
-                        stringResource(R.string.settings_ai_model_primary_badge)
-                    else
-                        stringResource(R.string.settings_ai_key_label, index + 1),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (index == 0) PersonaTheme.statusColors.success else MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            headlineContent = {
-                Text(
-                    text = if (revealed) apiKey else maskKey(apiKey),
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            },
-            supportingContent = { StatusText(status = status) },
-            trailingContent = {
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // Middle / Main Content
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = if (index == 0)
+                            stringResource(R.string.settings_ai_model_primary_badge)
+                        else
+                            stringResource(R.string.settings_ai_key_label, index + 1),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (index == 0) PersonaTheme.statusColors.success else MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (revealed) apiKey else maskKey(apiKey),
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    StatusText(status = status)
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Trailing Actions
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (canReorder) {
                         IconButton(
@@ -176,11 +197,8 @@ fun KeyRow(
                         )
                     }
                 }
-            },
-            colors = ListItemDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            )
-        )
+            }
+        }
     }
 }
 

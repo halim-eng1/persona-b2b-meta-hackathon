@@ -230,6 +230,7 @@ fun BlocklistScreen(
 
                                 SwipeToDismissBox(
                                     state = dismissState,
+                                    modifier = Modifier.fillMaxWidth(),
                                     backgroundContent = {
                                         Box(
                                             modifier = Modifier
@@ -247,22 +248,28 @@ fun BlocklistScreen(
                                         }
                                     }
                                 ) {
-                                    ListItem(
-                                        leadingContent = {
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = MaterialTheme.colorScheme.surfaceContainerLow
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
                                             Icon(
                                                 imageVector = Icons.Rounded.Block,
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.error
                                             )
-                                        },
-                                        headlineContent = {
+                                            Spacer(modifier = Modifier.width(16.dp))
                                             Text(
                                                 text = number,
                                                 style = MaterialTheme.typography.bodyLarge,
-                                                fontWeight = FontWeight.SemiBold
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier.weight(1f)
                                             )
-                                        },
-                                        trailingContent = {
                                             IconButton(
                                                 onClick = {
                                                     actions.removeBlockedNumber(number)
@@ -280,9 +287,8 @@ fun BlocklistScreen(
                                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
-                                        },
-                                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-                                    )
+                                        }
+                                    }
                                 }
                             }
                         }
