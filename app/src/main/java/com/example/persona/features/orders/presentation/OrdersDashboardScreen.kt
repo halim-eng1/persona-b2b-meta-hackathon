@@ -1,11 +1,17 @@
 package com.example.persona.features.orders.presentation
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,6 +55,10 @@ fun OrdersDashboardScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val listState = rememberLazyListState()
+    val isFabExpanded = remember {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -104,15 +114,22 @@ fun OrdersDashboardScreen(
             }
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = viewModel::openCreateOrderDialog,
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text(stringResource(R.string.orders_dashboard_fab_new_order), fontWeight = FontWeight.Bold) },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.heightIn(min = 48.dp)
-            )
+            AnimatedVisibility(
+                visible = !state.isMultiSelectMode,
+                enter = scaleIn() + fadeIn(),
+                exit = scaleOut() + fadeOut()
+            ) {
+                ExtendedFloatingActionButton(
+                    onClick = viewModel::openCreateOrderDialog,
+                    expanded = isFabExpanded.value,
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text = { Text(stringResource(R.string.orders_dashboard_fab_new_order), fontWeight = FontWeight.Bold) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.heightIn(min = 48.dp)
+                )
+            }
         }
     ) { padding ->
         Box(
@@ -121,6 +138,7 @@ fun OrdersDashboardScreen(
                 .padding(padding)
         ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 88.dp)
             ) {
