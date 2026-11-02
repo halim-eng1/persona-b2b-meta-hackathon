@@ -125,8 +125,15 @@ class ChatImportViewModel @Inject constructor(
         }
     }
 
-    fun onFilePicked(uri: Uri) {
-        _uiState.update { it.copy(selectedFileUri = uri, error = null, isOwnerNameMissing = false) }
+    fun onFilePicked(uri: Uri, displayName: String? = null) {
+        _uiState.update {
+            it.copy(
+                selectedFileUri = uri,
+                selectedFileName = displayName,
+                error = null,
+                isOwnerNameMissing = false
+            )
+        }
     }
 
     /** Called when the picked file has an unsupported extension (must be .txt or .md). */
@@ -134,6 +141,7 @@ class ChatImportViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 selectedFileUri = null,
+                selectedFileName = null,
                 error = "نوع الملف غير مدعوم. اختر ملف بنسق .txt أو .md (Unsupported file type. Please pick a .txt or .md file.)",
                 isOwnerNameMissing = false
             )
@@ -217,6 +225,7 @@ class ChatImportViewModel @Inject constructor(
 
 data class ChatImportUiState(
     val selectedFileUri: Uri? = null,
+    val selectedFileName: String? = null,
     val isImporting: Boolean = false,
     val isComplete: Boolean = false,
     val isCancelled: Boolean = false,

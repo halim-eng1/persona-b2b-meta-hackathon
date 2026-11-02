@@ -390,16 +390,6 @@ fun KnowledgeManagementScreen(
                                     ) {
                                         Text(stringResource(R.string.knowledge_search_clear))
                                     }
-                                } else {
-                                    Button(
-                                        onClick = { showAddEntryDialog = true },
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier.defaultMinSize(minHeight = 48.dp)
-                                    ) {
-                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(stringResource(R.string.knowledge_empty_state_cta))
-                                    }
                                 }
                             }
                         }
