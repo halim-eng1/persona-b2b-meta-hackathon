@@ -36,8 +36,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.example.persona.R
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.knowledge.presentation.model.SimulatorMediaType
@@ -69,7 +67,8 @@ fun BotSimulatorDialog(
     simulatedResponse: String? = null,
     simulationResults: List<RetrievalCandidate> = emptyList(),
     simulationBestScore: Float = 0f,
-    simulationError: String? = null
+    simulationError: String? = null,
+    modifier: Modifier = Modifier
 ) {
     if (!isOpen) return
 
@@ -111,98 +110,107 @@ fun BotSimulatorDialog(
         }
     }
 
-    Dialog(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false,
-            decorFitsSystemWindows = false
-        )
+        sheetState = sheetState,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = modifier
+            .fillMaxWidth()
+            .imePadding()
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.95f)
+                .navigationBarsPadding()
         ) {
+            // ── WhatsApp Simulator Header ────────────────────────────────
             Surface(
-                modifier = Modifier
-                    .widthIn(max = 680.dp)
-                    .fillMaxWidth(0.96f)
-                    .fillMaxHeight(0.94f)
-                    .imePadding()
-                    .navigationBarsPadding(),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                tonalElevation = 2.dp,
+                modifier = Modifier.fillMaxWidth()
             ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surface)
-            ) {
-                // ── WhatsApp Simulator Header ────────────────────────────────
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                    tonalElevation = 2.dp,
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f, fill = false)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.weight(1f, fill = false)
-                        ) {
-                            Box {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    modifier = Modifier.size(42.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.SmartToy,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
+                        Box {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.SmartToy,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(22.dp)
+                                    )
                                 }
-                                val onlineColor = MaterialTheme.statusColors.completed
-                                // Online indicator dot
-                                Box(
-                                    modifier = Modifier
-                                        .size(12.dp)
-                                        .clip(CircleShape)
-                                        .background(onlineColor)
-                                        .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
-                                        .align(Alignment.BottomEnd)
-                                )
                             }
+                            val onlineColor = MaterialTheme.statusColors.completed
+                            // Online indicator dot
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(CircleShape)
+                                    .background(onlineColor)
+                                    .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                                    .align(Alignment.BottomEnd)
+                            )
+                        }
 
-                            Column(modifier = Modifier.weight(1f, fill = false)) {
-                                Text(
-                                    text = stringResource(R.string.sim_header_title),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1
-                                )
-                                Text(
-                                    text = stringResource(R.string.sim_header_subtitle),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.statusColors.completed,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                            Text(
+                                text = stringResource(R.string.sim_header_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = stringResource(R.string.sim_header_subtitle),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.statusColors.completed,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+
+                    // Actions Row: Clear Chat (if has messages) + Close Button
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (messages.isNotEmpty()) {
+                            IconButton(
+                                onClick = onClearHistory,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = stringResource(R.string.sim_btn_new_chat),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
 
-                        // Close "X" Button
                         IconButton(
                             onClick = onDismiss,
                             modifier = Modifier
@@ -219,6 +227,7 @@ fun BotSimulatorDialog(
                         }
                     }
                 }
+            }
 
                 // ── Quick Test Chips Strip ───────────────────────────────────
                 Surface(
@@ -428,41 +437,10 @@ fun BotSimulatorDialog(
                     }
                 }
 
-                // ── Horizontal "New Chat" Action Strip ───────────────────────
-                if (messages.isNotEmpty()) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        OutlinedButton(
-                            onClick = onClearHistory,
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.primary
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = stringResource(R.string.sim_btn_new_chat),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
                 // ── Multimodal Input Bar ─────────────────────────────────────
                 Surface(
                     color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 3.dp,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -523,7 +501,7 @@ fun BotSimulatorDialog(
                         )
 
                         // Send Button
-                        val canSend = !isSimulating && (inputText.isNotBlank() || selectedMediaUri != null)
+                        val canSend = canSendSimulatorTurn(inputText, selectedMediaUri, isSimulating)
                         FilledIconButton(
                             onClick = {
                                 val text = inputText.trim()
@@ -553,10 +531,8 @@ fun BotSimulatorDialog(
                         }
                     }
                 }
-            }
         }
     }
-}
 }
 
 @Composable
@@ -573,8 +549,7 @@ private fun ChatMessageItem(message: SimulatorMessage) {
     } else {
         MaterialTheme.colorScheme.onSurface
     }
-    val timeFormat = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
-    val timeText = remember(message.timestamp) { timeFormat.format(Date(message.timestamp)) }
+    val timeText = remember(message.timestamp) { formatSimulatorTime(message.timestamp) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -769,3 +744,20 @@ fun SimulatorMediaThumbnail(
         }
     }
 }
+
+/**
+ * Validates whether the merchant can submit a simulation turn.
+ * Disallowed while already simulating, or if both text and media are empty.
+ */
+fun canSendSimulatorTurn(inputText: String, mediaUri: String?, isSimulating: Boolean): Boolean {
+    return !isSimulating && (inputText.isNotBlank() || !mediaUri.isNullOrBlank())
+}
+
+/**
+ * Formats timestamps for chat bubble metadata.
+ */
+fun formatSimulatorTime(timestamp: Long, locale: Locale = Locale.getDefault()): String {
+    val sdf = SimpleDateFormat("hh:mm a", locale)
+    return sdf.format(Date(timestamp))
+}
+
