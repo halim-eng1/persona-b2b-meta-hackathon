@@ -40,6 +40,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -263,51 +264,54 @@ fun ProviderDetailScreen(
                             } else {
                                 val canReorder = config.keys.size > 1
                                 config.keys.forEachIndexed { index, apiKey ->
-                                    val status = config.verificationStates[apiKey] ?: VerificationState.Idle
-                                    val revealed = apiKey in revealedKeys
+                                    key(apiKey) {
+                                        val status = config.verificationStates[apiKey] ?: VerificationState.Idle
+                                        val revealed = apiKey in revealedKeys
 
-                                    KeyRow(
-                                        index = index,
-                                        apiKey = apiKey,
-                                        status = status,
-                                        revealed = revealed,
-                                        canReorder = canReorder,
-                                        onMoveUp = if (index > 0) { { actions.moveApiKeyUp(providerId, apiKey) } } else null,
-                                        onMoveDown = if (index < config.keys.size - 1) { { actions.moveApiKeyDown(providerId, apiKey) } } else null,
-                                        dragHandleModifier = Modifier.reorderableColumnHandle(
-                                            state = reorderKeysState,
-                                            key = apiKey,
+                                        KeyRow(
                                             index = index,
-                                            totalItems = config.keys.size,
-                                            haptics = haptics
-                                        ),
-                                        onToggleReveal = {
-                                            revealedKeys = if (revealed) revealedKeys - apiKey else revealedKeys + apiKey
-                                        },
-                                        onTest = { actions.testConnection(providerId, apiKey) },
-                                        onDelete = {
-                                            actions.removeApiKey(providerId, apiKey)
-                                            // FRANKENSTEIN 2: Index-preserving key undo
-                                            undo.offer(
-                                                message = context.getString(R.string.settings_ai_key_deleted),
-                                                actionLabel = context.getString(R.string.common_undo)
-                                            ) {
-                                                actions.addApiKeyAtIndex(providerId, apiKey, index)
-                                            }
-                                        },
-                                        modifier = if (canReorder) {
-                                            Modifier.reorderableColumnItem(
+                                            apiKey = apiKey,
+                                            status = status,
+                                            revealed = revealed,
+                                            canReorder = canReorder,
+                                            onMoveUp = if (index > 0) { { actions.moveApiKeyUp(providerId, apiKey) } } else null,
+                                            onMoveDown = if (index < config.keys.size - 1) { { actions.moveApiKeyDown(providerId, apiKey) } } else null,
+                                            dragHandleModifier = Modifier.reorderableColumnHandle(
                                                 state = reorderKeysState,
                                                 key = apiKey,
                                                 index = index,
                                                 totalItems = config.keys.size,
                                                 haptics = haptics
-                                            )
-                                        } else {
-                                            Modifier
-                                        }
-                                    )
+                                            ),
+                                            onToggleReveal = {
+                                                revealedKeys = if (revealed) revealedKeys - apiKey else revealedKeys + apiKey
+                                            },
+                                            onTest = { actions.testConnection(providerId, apiKey) },
+                                            onDelete = {
+                                                actions.removeApiKey(providerId, apiKey)
+                                                // FRANKENSTEIN 2: Index-preserving key undo
+                                                undo.offer(
+                                                    message = context.getString(R.string.settings_ai_key_deleted),
+                                                    actionLabel = context.getString(R.string.common_undo)
+                                                ) {
+                                                    actions.addApiKeyAtIndex(providerId, apiKey, index)
+                                                }
+                                            },
+                                            modifier = if (canReorder) {
+                                                Modifier.reorderableColumnItem(
+                                                    state = reorderKeysState,
+                                                    key = apiKey,
+                                                    index = index,
+                                                    totalItems = config.keys.size,
+                                                    haptics = haptics
+                                                )
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
+                                    }
                                 }
+                                Spacer(modifier = Modifier.height(8.dp))
                             }
                         }
                     }
