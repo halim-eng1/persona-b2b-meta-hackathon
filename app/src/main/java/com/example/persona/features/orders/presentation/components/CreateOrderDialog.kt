@@ -1,6 +1,11 @@
 package com.example.persona.features.orders.presentation.components
 
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,12 +15,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentPasteGo
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -27,8 +38,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.example.persona.R
 import com.example.persona.features.orders.domain.EgyptianGovernorates
 import com.example.persona.features.orders.domain.EgyptianOrderUtils
@@ -36,10 +45,14 @@ import com.example.persona.ui.theme.PersonaPrimitives
 import kotlinx.coroutines.launch
 
 /**
- * Dialog for manual order creation in Egyptian B2B commerce (phone calls, in-store, direct sales).
+ * Modern B2B Modal Bottom Sheet for manual order creation.
  *
- * Implements accessible field-level error validation, adaptive keyboard insets,
- * memoized COD recalculations, and WCAG AAA compliant contrast for both Dark Terminal and Outdoor modes.
+ * Engineered specifically for Egyptian retail merchants:
+ * - ModalBottomSheet layout instead of cramped floating Dialog.
+ * - Sticky bottom summary & action bar (always visible above keyboard & scroll).
+ * - Visual chunking into 2 compact cards (Customer/Delivery + Order/Financials).
+ * - 1-Tap "Smart Paste" auto-extracting WhatsApp messages into form fields.
+ * - Progressive disclosure for optional notes.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +79,7 @@ fun CreateOrderDialog(
     var totalAmountText by remember { mutableStateOf("") }
     var shippingFeeText by remember { mutableStateOf("") }
     var customNotes by remember { mutableStateOf("") }
+    var showNotesField by remember { mutableStateOf(false) }
 
     var validationError by remember { mutableStateOf<String?>(null) }
     var isPhoneError by remember { mutableStateOf(false) }
@@ -77,17 +91,19 @@ fun CreateOrderDialog(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Memoize live COD calculation to avoid regex re-parsing on every recomposition tick
+    // Memoize live COD calculation
     val (_, _, codTotal) = remember(totalAmountText, shippingFeeText) {
         val sub = EgyptianOrderUtils.parseEgyptianDecimal(totalAmountText) ?: 0.0
         val ship = EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) ?: 0.0
         Triple(sub, ship, sub + ship)
     }
 
-    // Adaptive contrast colors adhering to Persona Dark Terminal & Outdoor High-Contrast modes (WCAG AAA >= 7:1)
+    // Adaptive contrast colors for Dark Terminal and Outdoor High-Contrast (WCAG AAA >= 7:1)
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val codAccentColor = if (isDark) PersonaPrimitives.Emerald400 else PersonaPrimitives.Teal800
     val codContainerColor = if (isDark) {
@@ -95,41 +111,115 @@ fun CreateOrderDialog(
     } else {
         PersonaPrimitives.Teal100.copy(alpha = 0.60f)
     }
-    val codBorder = if (isDark) {
-        BorderStroke(1.dp, PersonaPrimitives.Emerald400.copy(alpha = 0.35f))
+    val cardContainerColor = if (isDark) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)
     } else {
-        null // Tonal calm: borderless on light background per Persona specs
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.50f)
     }
 
-    Dialog(
+    // ── Smart Auto-Fill from Clipboard ─────────────────────────────────────────
+    fun performSmartPaste() {
+        val rawText = clipboardManager.getText()?.text?.trim().orEmpty()
+        if (rawText.isBlank()) {
+            Toast.makeText(context, context.getString(R.string.orders_create_clipboard_empty), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val lines = rawText.lines().map { it.trim() }.filter { it.isNotBlank() }
+
+        // 1. Extract Egyptian Phone
+        val extractedPhone = EgyptianOrderUtils.extractEgyptianMobilePhone(rawText)
+        if (extractedPhone != null) {
+            customerPhone = extractedPhone
+            isPhoneError = false
+        }
+
+        // 2. Extract Governorate
+        val detectedGov = EgyptianGovernorates.ALL.firstOrNull { gov -> rawText.contains(gov) }
+        if (detectedGov != null) {
+            selectedGov = detectedGov
+        }
+
+        // 3. Extract Delivery Address
+        val addressKeywords = listOf("عنوان", "شارع", "ش ", "عمارة", "شقة", "بجوار", "امام", "أمام", "طريق", "حي", "الحي", "ميدان", "منطقة", "دور", "الدور")
+        val addressLine = lines.firstOrNull { line -> addressKeywords.any { kw -> line.contains(kw) } }
+        if (addressLine != null) {
+            deliveryAddress = addressLine.replace(Regex("^(العنوان|عنوان|العنوان:)\\s*"), "").trim()
+        }
+
+        // 4. Extract Pricing
+        val priceRegex = Regex("""(?:سعر|إجمالي|المبلغ|مبلغ|حساب|اجمالي)?\s*[:=-]?\s*([0-9٠-٩]+(?:\.[0-9٠-٩]+)?)\s*(?:ج\.?م|جنيه|egp|le)?""", RegexOption.IGNORE_CASE)
+        val matchPrice = priceRegex.find(rawText)
+        if (matchPrice != null && totalAmountText.isBlank()) {
+            val extractedNum = matchPrice.groupValues[1]
+            val parsed = EgyptianOrderUtils.parseEgyptianDecimal(extractedNum)
+            if (parsed != null && parsed > 0) {
+                totalAmountText = EgyptianOrderUtils.formatMoney(parsed)
+                isPriceError = false
+            }
+        }
+
+        // 5. Extract Customer Name
+        val nameRegex = Regex("^(?:الاسم|اسم العميل|اسم)[:=-]?\\s*(.+)$")
+        val explicitName = lines.firstNotNullOfOrNull { line -> nameRegex.find(line)?.groupValues?.get(1)?.trim() }
+        if (explicitName != null) {
+            customerName = explicitName
+            isNameError = false
+        } else if (customerName.isBlank() && lines.isNotEmpty()) {
+            val firstLine = lines.first()
+            if (!EgyptianOrderUtils.isValidEgyptianMobile(firstLine) && addressKeywords.none { firstLine.contains(it) }) {
+                customerName = firstLine
+                isNameError = false
+            }
+        }
+
+        // 6. Remaining Lines as Items
+        val remainingLines = lines.filter { line ->
+            line != addressLine &&
+            !line.contains(extractedPhone ?: "___NONE___") &&
+            !line.startsWith("الاسم") &&
+            line != explicitName
+        }
+        if (remainingLines.isNotEmpty() && orderDetails.isBlank()) {
+            orderDetails = remainingLines.joinToString("\n")
+            isDetailsError = false
+        }
+
+        validationError = null
+        Toast.makeText(context, context.getString(R.string.orders_create_clipboard_applied), Toast.LENGTH_SHORT).show()
+    }
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
+        sheetState = sheetState,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        modifier = modifier.imePadding()
     ) {
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            modifier = modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 16.dp)
-                .imePadding()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
         ) {
+            // ── Scrollable Body ───────────────────────────────────────────────
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .weight(1f, fill = false)
                     .verticalScroll(scrollState)
-                    .padding(20.dp)
+                    .padding(horizontal = 20.dp)
             ) {
+                // Header Row
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = stringResource(R.string.orders_create_manual_title),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                     )
                     IconButton(
                         onClick = {
@@ -137,306 +227,451 @@ fun CreateOrderDialog(
                             focusManager.clearFocus()
                             onDismiss()
                         },
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_close))
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Accessible validation error banner with LiveRegionMode for TalkBack
-                validationError?.let { err ->
-                    Surface(
-                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 10.dp)
-                            .semantics { liveRegion = LiveRegionMode.Polite }
-                    ) {
-                        Text(
-                            text = err,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        )
-                    }
-                }
-
-                OutlinedTextField(
-                    value = customerName,
-                    onValueChange = {
-                        customerName = it
-                        validationError = null
-                        isNameError = false
-                    },
-                    isError = isNameError,
-                    label = { Text(stringResource(R.string.orders_customer_name_label)) },
-                    placeholder = { Text(stringResource(R.string.orders_customer_name_placeholder)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = customerPhone,
-                    onValueChange = {
-                        customerPhone = it
-                        validationError = null
-                        isPhoneError = false
-                    },
-                    isError = isPhoneError,
-                    label = { Text(stringResource(R.string.orders_customer_phone_label)) },
-                    placeholder = { Text("01012345678") },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Phone,
-                        imeAction = ImeAction.Next
-                    ),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Governorate dropdown
-                ExposedDropdownMenuBox(
-                    expanded = govExpanded,
-                    onExpandedChange = { govExpanded = it },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    OutlinedTextField(
-                        value = selectedGov,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(stringResource(R.string.orders_input_gov_label)) },
-                        placeholder = { Text(stringResource(R.string.orders_input_gov_placeholder)) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = govExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    ExposedDropdownMenu(
-                        expanded = govExpanded,
-                        onDismissRequest = { govExpanded = false }
-                    ) {
-                        EgyptianGovernorates.ALL.forEach { gov ->
-                            DropdownMenuItem(
-                                text = { Text(gov) },
-                                onClick = {
-                                    selectedGov = gov
-                                    govExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = deliveryAddress,
-                    onValueChange = { deliveryAddress = it },
-                    label = { Text(stringResource(R.string.orders_input_address_label)) },
-                    placeholder = { Text(stringResource(R.string.orders_input_address_placeholder)) },
-                    minLines = 2,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = orderDetails,
-                    onValueChange = {
-                        orderDetails = it
-                        validationError = null
-                        isDetailsError = false
-                    },
-                    isError = isDetailsError,
-                    label = { Text(stringResource(R.string.orders_input_items_label)) },
-                    placeholder = { Text(stringResource(R.string.orders_input_items_placeholder)) },
-                    minLines = 3,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedTextField(
-                        value = totalAmountText,
-                        onValueChange = {
-                            totalAmountText = it
-                            validationError = null
-                            isPriceError = false
-                        },
-                        isError = isPriceError,
-                        label = { Text(stringResource(R.string.orders_input_products_price_label)) },
-                        placeholder = { Text("0.00") },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal,
-                            imeAction = ImeAction.Next
-                        ),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    OutlinedTextField(
-                        value = shippingFeeText,
-                        onValueChange = {
-                            shippingFeeText = it
-                            validationError = null
-                            isShippingError = false
-                        },
-                        isError = isShippingError,
-                        label = { Text(stringResource(R.string.orders_input_shipping_fee_label)) },
-                        placeholder = { Text("0.00") },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal,
-                            imeAction = ImeAction.Next
-                        ),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-
-                // Dynamic live COD calculation summary (WCAG AAA contrast & Tonal Calm)
-                Spacer(modifier = Modifier.height(10.dp))
+                // Smart Paste Action Card
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = codContainerColor,
-                    border = codBorder,
-                    modifier = Modifier.fillMaxWidth()
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { performSmartPaste() }
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Payments,
+                            imageVector = Icons.Default.ContentPasteGo,
                             contentDescription = null,
-                            tint = codAccentColor,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.orders_create_smart_paste),
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = stringResource(R.string.orders_create_smart_paste_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Accessible Validation Error Banner
+                validationError?.let { err ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                            .semantics { liveRegion = LiveRegionMode.Polite }
+                    ) {
                         Text(
-                            text = stringResource(R.string.orders_total_cod_summary, EgyptianOrderUtils.formatMoney(codTotal)),
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                            color = codAccentColor
+                            text = err,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = customNotes,
-                    onValueChange = { customNotes = it },
-                    label = { Text(stringResource(R.string.orders_customer_notes_label)) },
-                    placeholder = { Text(stringResource(R.string.orders_input_notes_placeholder)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Button(
-                    onClick = {
-                        keyboardController?.hide()
-                        focusManager.clearFocus()
-
-                        val name = customerName.trim()
-                        val phone = customerPhone.trim()
-                        val details = orderDetails.trim()
-                        val parsedTotal = EgyptianOrderUtils.parseEgyptianDecimal(totalAmountText) ?: 0.0
-                        val parsedShipping = EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) ?: 0.0
-
-                        if (name.isEmpty() && phone.isEmpty()) {
-                            validationError = context.getString(R.string.orders_error_name_or_phone_required)
-                            isNameError = true
-                            isPhoneError = true
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                            return@Button
-                        }
-                        if (phone.isNotEmpty() && !EgyptianOrderUtils.isValidEgyptianMobile(phone)) {
-                            validationError = context.getString(R.string.orders_error_invalid_egyptian_phone)
-                            isPhoneError = true
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                            return@Button
-                        }
-                        if (details.isEmpty()) {
-                            validationError = context.getString(R.string.orders_error_items_required)
-                            isDetailsError = true
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                            return@Button
-                        }
-                        if (totalAmountText.isNotBlank() && EgyptianOrderUtils.parseEgyptianDecimal(totalAmountText) == null) {
-                            validationError = context.getString(R.string.orders_error_invalid_price)
-                            isPriceError = true
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                            return@Button
-                        }
-                        if (shippingFeeText.isNotBlank() && EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) == null) {
-                            validationError = context.getString(R.string.orders_error_invalid_shipping)
-                            isShippingError = true
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                            return@Button
-                        }
-                        if (parsedTotal < 0.0 || parsedShipping < 0.0) {
-                            validationError = context.getString(R.string.orders_error_negative_amounts)
-                            isPriceError = parsedTotal < 0.0
-                            isShippingError = parsedShipping < 0.0
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                            return@Button
+                // ── Card 1: Customer & Delivery Info (Chunk 1) ────────────────
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = cardContainerColor,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.orders_create_section_customer),
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
 
-                        val normalizedPhone = EgyptianOrderUtils.extractEgyptianMobilePhone(phone) ?: phone
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                        validationError = null
-                        isNameError = false
-                        isPhoneError = false
-                        isDetailsError = false
-                        isPriceError = false
-                        isShippingError = false
-
-                        onCreate(
-                            name,
-                            normalizedPhone,
-                            deliveryAddress.trim(),
-                            selectedGov.ifBlank { null },
-                            details,
-                            parsedTotal,
-                            parsedShipping,
-                            customNotes.trim().ifBlank { null }
+                        // Phone Number First (Primary identifier in Egyptian commerce)
+                        OutlinedTextField(
+                            value = customerPhone,
+                            onValueChange = {
+                                customerPhone = it
+                                validationError = null
+                                isPhoneError = false
+                            },
+                            isError = isPhoneError,
+                            label = { Text(stringResource(R.string.orders_customer_phone_label)) },
+                            placeholder = { Text("01012345678") },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Phone,
+                                imeAction = ImeAction.Next
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
                         )
-                    },
-                    shape = RoundedCornerShape(12.dp),
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Customer Name
+                        OutlinedTextField(
+                            value = customerName,
+                            onValueChange = {
+                                customerName = it
+                                validationError = null
+                                isNameError = false
+                            },
+                            isError = isNameError,
+                            label = { Text(stringResource(R.string.orders_customer_name_label)) },
+                            placeholder = { Text(stringResource(R.string.orders_customer_name_placeholder)) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Governorate Dropdown
+                        ExposedDropdownMenuBox(
+                            expanded = govExpanded,
+                            onExpandedChange = { govExpanded = it },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedTextField(
+                                value = selectedGov,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(stringResource(R.string.orders_input_gov_label)) },
+                                placeholder = { Text(stringResource(R.string.orders_input_gov_placeholder)) },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = govExpanded) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            ExposedDropdownMenu(
+                                expanded = govExpanded,
+                                onDismissRequest = { govExpanded = false }
+                            ) {
+                                EgyptianGovernorates.ALL.forEach { gov ->
+                                    DropdownMenuItem(
+                                        text = { Text(gov) },
+                                        onClick = {
+                                            selectedGov = gov
+                                            govExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Detailed Delivery Address
+                        OutlinedTextField(
+                            value = deliveryAddress,
+                            onValueChange = { deliveryAddress = it },
+                            label = { Text(stringResource(R.string.orders_input_address_label)) },
+                            placeholder = { Text(stringResource(R.string.orders_input_address_placeholder)) },
+                            minLines = 2,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // ── Card 2: Items & Financials (Chunk 2) ──────────────────────
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = cardContainerColor,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.ShoppingBag,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.orders_create_section_items),
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Order Items
+                        OutlinedTextField(
+                            value = orderDetails,
+                            onValueChange = {
+                                orderDetails = it
+                                validationError = null
+                                isDetailsError = false
+                            },
+                            isError = isDetailsError,
+                            label = { Text(stringResource(R.string.orders_input_items_label)) },
+                            placeholder = { Text(stringResource(R.string.orders_input_items_placeholder)) },
+                            minLines = 2,
+                            maxLines = 4,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Compact Price & Shipping Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = totalAmountText,
+                                onValueChange = {
+                                    totalAmountText = it
+                                    validationError = null
+                                    isPriceError = false
+                                },
+                                isError = isPriceError,
+                                label = { Text(stringResource(R.string.orders_input_products_price_label)) },
+                                placeholder = { Text("0.00") },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal,
+                                    imeAction = ImeAction.Next
+                                ),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            OutlinedTextField(
+                                value = shippingFeeText,
+                                onValueChange = {
+                                    shippingFeeText = it
+                                    validationError = null
+                                    isShippingError = false
+                                },
+                                isError = isShippingError,
+                                label = { Text(stringResource(R.string.orders_input_shipping_fee_label)) },
+                                placeholder = { Text("0.00") },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal,
+                                    imeAction = ImeAction.Done
+                                ),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
+
+                        // Progressive Disclosure: Courier notes toggle
+                        Spacer(modifier = Modifier.height(6.dp))
+                        if (!showNotesField && customNotes.isBlank()) {
+                            TextButton(
+                                onClick = { showNotesField = true },
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.orders_create_add_notes),
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(visible = showNotesField || customNotes.isNotBlank()) {
+                            Column(modifier = Modifier.padding(top = 6.dp)) {
+                                OutlinedTextField(
+                                    value = customNotes,
+                                    onValueChange = { customNotes = it },
+                                    label = { Text(stringResource(R.string.orders_customer_notes_label)) },
+                                    placeholder = { Text(stringResource(R.string.orders_input_notes_placeholder)) },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // ── Sticky Persistent Bottom Action Bar ───────────────────────────
+            Surface(
+                tonalElevation = 6.dp,
+                shadowElevation = 8.dp,
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 48.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = stringResource(R.string.orders_create_btn),
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelLarge
-                    )
+                    // Live COD calculation summary pill
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = codContainerColor,
+                        border = if (isDark) BorderStroke(1.dp, PersonaPrimitives.Emerald400.copy(alpha = 0.35f)) else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Payments,
+                                    contentDescription = null,
+                                    tint = codAccentColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.orders_total_cod_summary, EgyptianOrderUtils.formatMoney(codTotal)),
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = codAccentColor
+                                )
+                            }
+                            if (shippingFeeText.isNotBlank()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocalShipping,
+                                        contentDescription = null,
+                                        tint = codAccentColor.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "${EgyptianOrderUtils.formatMoney(EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) ?: 0.0)} ج.م",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = codAccentColor.copy(alpha = 0.85f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Main Submit CTA Button (Always reachable)
+                    Button(
+                        onClick = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
+
+                            val name = customerName.trim()
+                            val phone = customerPhone.trim()
+                            val details = orderDetails.trim()
+                            val parsedTotal = EgyptianOrderUtils.parseEgyptianDecimal(totalAmountText) ?: 0.0
+                            val parsedShipping = EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) ?: 0.0
+
+                            if (name.isEmpty() && phone.isEmpty()) {
+                                validationError = context.getString(R.string.orders_error_name_or_phone_required)
+                                isNameError = true
+                                isPhoneError = true
+                                coroutineScope.launch { scrollState.animateScrollTo(0) }
+                                return@Button
+                            }
+                            if (phone.isNotEmpty() && !EgyptianOrderUtils.isValidEgyptianMobile(phone)) {
+                                validationError = context.getString(R.string.orders_error_invalid_egyptian_phone)
+                                isPhoneError = true
+                                coroutineScope.launch { scrollState.animateScrollTo(0) }
+                                return@Button
+                            }
+                            if (details.isEmpty()) {
+                                validationError = context.getString(R.string.orders_error_items_required)
+                                isDetailsError = true
+                                coroutineScope.launch { scrollState.animateScrollTo(0) }
+                                return@Button
+                            }
+                            if (totalAmountText.isNotBlank() && EgyptianOrderUtils.parseEgyptianDecimal(totalAmountText) == null) {
+                                validationError = context.getString(R.string.orders_error_invalid_price)
+                                isPriceError = true
+                                coroutineScope.launch { scrollState.animateScrollTo(0) }
+                                return@Button
+                            }
+                            if (shippingFeeText.isNotBlank() && EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) == null) {
+                                validationError = context.getString(R.string.orders_error_invalid_shipping)
+                                isShippingError = true
+                                coroutineScope.launch { scrollState.animateScrollTo(0) }
+                                return@Button
+                            }
+                            if (parsedTotal < 0.0 || parsedShipping < 0.0) {
+                                validationError = context.getString(R.string.orders_error_negative_amounts)
+                                isPriceError = parsedTotal < 0.0
+                                isShippingError = parsedShipping < 0.0
+                                coroutineScope.launch { scrollState.animateScrollTo(0) }
+                                return@Button
+                            }
+
+                            val normalizedPhone = EgyptianOrderUtils.extractEgyptianMobilePhone(phone) ?: phone
+
+                            validationError = null
+                            isNameError = false
+                            isPhoneError = false
+                            isDetailsError = false
+                            isPriceError = false
+                            isShippingError = false
+
+                            onCreate(
+                                name,
+                                normalizedPhone,
+                                deliveryAddress.trim(),
+                                selectedGov.ifBlank { null },
+                                details,
+                                parsedTotal,
+                                parsedShipping,
+                                customNotes.trim().ifBlank { null }
+                            )
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.orders_create_btn),
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                    }
                 }
             }
         }
