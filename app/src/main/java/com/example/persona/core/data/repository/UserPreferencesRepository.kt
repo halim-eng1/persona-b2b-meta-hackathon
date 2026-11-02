@@ -112,6 +112,7 @@ class UserPreferencesRepository @Inject constructor(
         // ── Auto-Start Onboarding Confirmation ─────────────────────────────────
         val KEY_AUTO_START_CONFIRMED = booleanPreferencesKey("is_auto_start_confirmed")
         val KEY_HAS_SEEN_ONBOARDING = booleanPreferencesKey("has_seen_onboarding")
+        val KEY_ALWAYS_SHOW_ONBOARDING = booleanPreferencesKey("always_show_onboarding")
 
         // ── Model Preparation State ───────────────────────────────────────────
         val KEY_MODEL_PREPARED = booleanPreferencesKey("is_model_prepared")
@@ -344,10 +345,36 @@ class UserPreferencesRepository @Inject constructor(
     @Volatile
     private var cachedHasSeenOnboarding: Boolean? = null
 
+    val alwaysShowOnboardingFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_ALWAYS_SHOW_ONBOARDING] ?: false
+    }
+
+    suspend fun setAlwaysShowOnboarding(enabled: Boolean) {
+        cachedHasSeenOnboarding = if (enabled) false else true
+        dataStore.edit { prefs ->
+            prefs[KEY_ALWAYS_SHOW_ONBOARDING] = enabled
+            prefs[KEY_HAS_SEEN_ONBOARDING] = !enabled
+        }
+    }
+
+    fun isAlwaysShowOnboardingSync(): Boolean {
+        return runCatching {
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                dataStore.data.first()[KEY_ALWAYS_SHOW_ONBOARDING] ?: false
+            }
+        }.getOrDefault(false)
+    }
+
     val hasSeenOnboardingFlow: Flow<Boolean> = dataStore.data.map { prefs ->
-        val seen = prefs[KEY_HAS_SEEN_ONBOARDING] ?: false
-        cachedHasSeenOnboarding = seen
-        seen
+        val alwaysShow = prefs[KEY_ALWAYS_SHOW_ONBOARDING] ?: false
+        if (alwaysShow) {
+            cachedHasSeenOnboarding = false
+            false
+        } else {
+            val seen = prefs[KEY_HAS_SEEN_ONBOARDING] ?: false
+            cachedHasSeenOnboarding = seen
+            seen
+        }
     }
 
     suspend fun setHasSeenOnboarding(seen: Boolean) {
@@ -357,14 +384,22 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
-    suspend fun hasSeenOnboarding(): Boolean =
-        dataStore.data.first()[KEY_HAS_SEEN_ONBOARDING] ?: false
+    suspend fun hasSeenOnboarding(): Boolean {
+        val prefs = dataStore.data.first()
+        if (prefs[KEY_ALWAYS_SHOW_ONBOARDING] == true) return false
+        return prefs[KEY_HAS_SEEN_ONBOARDING] ?: false
+    }
 
     fun hasSeenOnboardingSync(): Boolean {
-        cachedHasSeenOnboarding?.let { return it }
         return runCatching {
             kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                val value = dataStore.data.first()[KEY_HAS_SEEN_ONBOARDING] ?: false
+                val prefs = dataStore.data.first()
+                if (prefs[KEY_ALWAYS_SHOW_ONBOARDING] == true) {
+                    cachedHasSeenOnboarding = false
+                    return@runBlocking false
+                }
+                cachedHasSeenOnboarding?.let { return@runBlocking it }
+                val value = prefs[KEY_HAS_SEEN_ONBOARDING] ?: false
                 cachedHasSeenOnboarding = value
                 value
             }
@@ -375,11 +410,13 @@ class UserPreferencesRepository @Inject constructor(
 
     val providerOrderFlow: Flow<List<String>> = dataStore.data.map { prefs ->
         val raw = prefs[KEY_PROVIDER_ORDER]
-        if (raw.isNullOrBlank()) {
+        val stored = if (raw.isNullOrBlank()) {
             DEFAULT_PROVIDER_ORDER
         } else {
-            raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+            raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
         }
+        val missing = DEFAULT_PROVIDER_ORDER.filterNot { stored.contains(it) }
+        stored + missing
     }
 
     fun getProviderOrder(): Flow<List<String>> = providerOrderFlow
@@ -393,11 +430,13 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun getProviderOrderSync(): List<String> {
         val raw = dataStore.data.first()[KEY_PROVIDER_ORDER]
-        return if (raw.isNullOrBlank()) {
+        val stored = if (raw.isNullOrBlank()) {
             DEFAULT_PROVIDER_ORDER
         } else {
-            raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+            raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
         }
+        val missing = DEFAULT_PROVIDER_ORDER.filterNot { stored.contains(it) }
+        return stored + missing
     }
 
     // ── Per-Capability Provider Priority Ordering ─────────────────────────────

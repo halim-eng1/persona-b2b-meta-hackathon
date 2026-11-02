@@ -52,6 +52,10 @@
     <string name="home_empty_knowledge_title">قاعدة المعرفة غير مهيأة بعد</string>
     <string name="home_empty_knowledge_desc">أضف معلومات عنك وعن نشاطك أو متجرك لمساعدة الذكاء الاصطناعي في بناء قاعدة المعرفة اللازمة للردود الذكية.</string>
     <string name="home_btn_add_knowledge">+ إضافة واستيراد المعرفة</string>
+    <string name="home_dev_tools_title">أدوات التجربة والاختبار (مؤقت)</string>
+    <string name="home_btn_test_notification">إرسال إشعار تجريبي (اختبار الصوت)</string>
+    <string name="home_toggle_always_onboarding_title">فتح شاشات البداية (Onboarding) دوماً</string>
+    <string name="home_toggle_always_onboarding_desc">تجاوز التخزين المحلي لعرض التهيئة عند كل فتح للتطبيق</string>
     <string name="home_stat_today_orders">طلبات اليوم</string>
     <string name="home_stat_pending_revenue">إيرادات قيد التجهيز</string>
     <string name="home_stat_waiting_customers">عملاء في الانتظار</string>

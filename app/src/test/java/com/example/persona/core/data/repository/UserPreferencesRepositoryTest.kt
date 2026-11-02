@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -213,6 +214,32 @@ class UserPreferencesRepositoryTest {
         val defaultOrder = repository.getProviderOrderSync()
         assertEquals(ModelProviders.OPENROUTER, defaultOrder.first())
         assertEquals(ModelProviders.OPENROUTER, UserPreferencesRepository.DEFAULT_PROVIDER_ORDER.first())
+    }
+
+    @Test
+    fun `provider order includes all default providers even when stored list was missing newly added providers`() = runTest(testDispatcher) {
+        // Simulate older saved list without liquid and cloudflare
+        repository.setProviderOrder(listOf("openrouter", "qwen", "gemini"))
+        val retrieved = repository.getProviderOrderSync()
+        assertTrue(retrieved.contains(ModelProviders.LIQUID))
+        assertTrue(retrieved.contains(ModelProviders.CLOUDFLARE))
+        assertEquals(ModelProviders.OPENROUTER, retrieved[0])
+        assertEquals(ModelProviders.QWEN, retrieved[1])
+        assertEquals(ModelProviders.GEMINI, retrieved[2])
+    }
+
+    @Test
+    fun `alwaysShowOnboarding overrides hasSeenOnboarding properly`() = runTest(testDispatcher) {
+        repository.setHasSeenOnboarding(true)
+        assertTrue(repository.hasSeenOnboarding())
+
+        repository.setAlwaysShowOnboarding(true)
+        assertFalse(repository.hasSeenOnboarding())
+        assertFalse(repository.hasSeenOnboardingSync())
+
+        repository.setAlwaysShowOnboarding(false)
+        assertTrue(repository.hasSeenOnboarding())
+        assertTrue(repository.hasSeenOnboardingSync())
     }
 
     @Test

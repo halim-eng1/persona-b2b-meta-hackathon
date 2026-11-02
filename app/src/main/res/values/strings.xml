@@ -52,6 +52,10 @@
     <string name="home_empty_knowledge_title">Knowledge Base Not Set Up Yet</string>
     <string name="home_empty_knowledge_desc">Add information about yourself, your business, or your store to help the AI build the necessary knowledge base for smart replies.</string>
     <string name="home_btn_add_knowledge">+ Add &amp; Import Knowledge</string>
+    <string name="home_dev_tools_title">Testing &amp; Dev Tools (Temporary)</string>
+    <string name="home_btn_test_notification">Send Test Notification (Sound Test)</string>
+    <string name="home_toggle_always_onboarding_title">Always Show Onboarding on Launch</string>
+    <string name="home_toggle_always_onboarding_desc">Override local storage to display onboarding on every app start</string>
     <string name="home_stat_today_orders">Today\'s Orders</string>
     <string name="home_stat_pending_revenue">Pending Revenue</string>
     <string name="home_stat_waiting_customers">Waiting Customers</string>

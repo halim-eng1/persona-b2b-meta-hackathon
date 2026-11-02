@@ -73,6 +73,7 @@ class HomeViewModelTest {
         Dispatchers.setMain(testDispatcher)
 
         every { userPreferencesRepository.isAutoReplyEnabled } returns isAutoReplyFlow
+        every { userPreferencesRepository.alwaysShowOnboardingFlow } returns MutableStateFlow(false)
         every { auditLogRepository.observeReplyCount() } returns replyCountFlow
         every { auditLogRepository.observeLogs(limit = 3) } returns recentLogsFlow
         every { auditLogRepository.observeLogs(limit = 200) } returns allLogsFlow

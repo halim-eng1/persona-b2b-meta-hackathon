@@ -683,12 +683,12 @@ class AutoReplyOrchestrator @Inject constructor(
                     val voiceFile = mediaExtractor.captureLatestVoiceNote(processed.sourceClass, processed.postTime, durationSeconds)
                     if (voiceFile != null) {
                         val audioModels = runCatching {
-                            prefsRepository.getProviderModelConfigsSync(ModelProviders.QWEN, ModelCapability.AUDIO)
+                            prefsRepository.getProviderModelConfigsSync(ModelProviders.QWEN)
                                 .filter { ModelCapability.AUDIO in it.capabilities }
                                 .map { it.modelId }
                         }.getOrNull()
                         val openRouterAudioModels = runCatching {
-                            prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER, ModelCapability.AUDIO)
+                            prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER)
                                 .filter { ModelCapability.AUDIO in it.capabilities }
                                 .map { it.modelId }
                         }.getOrNull()
@@ -840,7 +840,7 @@ class AutoReplyOrchestrator @Inject constructor(
                     }
 
                     val openRouterDecisionModels = runCatching {
-                        prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER, ModelCapability.DECISION)
+                        prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER)
                             .filter { ModelCapability.DECISION in it.capabilities }
                             .map { it.modelId }
                     }.getOrElse { emptyList() }
@@ -857,6 +857,10 @@ class AutoReplyOrchestrator @Inject constructor(
                         when (provider.lowercase()) {
                             ModelProviders.CLOUDFLARE -> {
                                 val tCloudflare = System.currentTimeMillis()
+                                val cfTokens = secureCredentialsRepository?.getApiKeys(ModelProviders.CLOUDFLARE)?.filter { it.isNotBlank() } ?: emptyList()
+                                if (cfTokens.isNotEmpty()) {
+                                    cloudflareClefClient.setTokens(cfTokens)
+                                }
                                 val cfIntent = runCatching {
                                     cloudflareClefClient.decide(gatekeeperInput, timeoutMs = 1150L)
                                 }.onFailure { e ->
@@ -875,6 +879,10 @@ class AutoReplyOrchestrator @Inject constructor(
                             }
                             ModelProviders.LIQUID -> {
                                 val tLiquid = System.currentTimeMillis()
+                                val liquidKeys = secureCredentialsRepository?.getApiKeys(ModelProviders.LIQUID)?.filter { it.isNotBlank() } ?: emptyList()
+                                if (liquidKeys.isNotEmpty()) {
+                                    liquidDecisionClient.setKeys(liquidKeys)
+                                }
                                 val liquidIntent = runCatching {
                                     liquidDecisionClient.decide(gatekeeperInput, timeoutMs = 800L)
                                 }.onFailure { e ->

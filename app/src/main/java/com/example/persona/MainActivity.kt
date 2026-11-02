@@ -234,7 +234,9 @@ class MainActivity : ComponentActivity() {
                             isModelReady = isModelReady,
                             onCompleteOnboarding = {
                                 coroutineScope.launch {
-                                    userPreferencesRepository.setHasSeenOnboarding(true)
+                                    if (!userPreferencesRepository.isAlwaysShowOnboardingSync()) {
+                                        userPreferencesRepository.setHasSeenOnboarding(true)
+                                    }
                                 }
                             }
                         )

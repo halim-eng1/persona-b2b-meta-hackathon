@@ -1,5 +1,6 @@
 package com.example.persona.features.settings.presentation.sheets
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,7 +64,8 @@ fun ProviderPrioritySheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     onMove: (from: Int, to: Int) -> Unit = { _, _ -> },
-    onMoveForCapability: ((capability: ModelCapability, from: Int, to: Int) -> Unit)? = null
+    onMoveForCapability: ((capability: ModelCapability, from: Int, to: Int) -> Unit)? = null,
+    onOpenProvider: ((provider: String) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val listState = rememberLazyListState()
@@ -163,6 +165,11 @@ fun ProviderPrioritySheet(
                             .reorderableItem(reorderState, provider, index, haptics)
                     ) {
                         ListItem(
+                            modifier = if (onOpenProvider != null) {
+                                Modifier.clickable { onOpenProvider(provider) }
+                            } else {
+                                Modifier
+                            },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             leadingContent = {
                                 Surface(

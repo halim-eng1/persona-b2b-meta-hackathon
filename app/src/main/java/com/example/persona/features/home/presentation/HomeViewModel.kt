@@ -18,6 +18,7 @@ import com.example.persona.core.di.IoDispatcher
 import com.example.persona.features.audit_log.domain.model.AuditLogItem
 import com.example.persona.features.audit_log.domain.repository.AuditLogRepository
 import com.example.persona.features.auto_reply.data.service.WhatsAppNotificationListener
+import com.example.persona.features.auto_reply.domain.orchestrator.HitlNotificationHandler
 import com.example.persona.features.auto_reply.domain.usecase.ToggleAutoReplyUseCase
 import com.example.persona.features.onboarding.data.PermissionChecker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -72,6 +73,7 @@ data class HomeUiState(
     val totalRepliesSent: Int = 0,
     val knowledgeChunkCount: Int = 0,
     val recentActivity: List<AuditLogItem> = emptyList(),
+    val isAlwaysShowOnboardingEnabled: Boolean = false,
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false
 )
@@ -92,6 +94,7 @@ class HomeViewModel @Inject constructor(
     private val conversationMetadataDao: ConversationMetadataDao,
     private val orderDao: OrderDao,
     private val permissionChecker: PermissionChecker,
+    private val hitlNotificationHandler: HitlNotificationHandler? = null,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -183,11 +186,11 @@ class HomeViewModel @Inject constructor(
 
     val uiState: StateFlow<HomeUiState> = combine(
         combine(autoReplyHealthFlow, attentionFlow) { health, attention -> Pair(health, attention) },
-        metricsFlow,
-        businessKnowledgeDao.observeChunkCount(),
+        combine(metricsFlow, businessKnowledgeDao.observeChunkCount()) { m, c -> Pair(m, c) },
         recentLogsFlow,
+        userPreferencesRepository.alwaysShowOnboardingFlow,
         _isRefreshing
-    ) { (healthData, attentionData), metrics, chunkCount, recentLogs, isRefreshing ->
+    ) { (healthData, attentionData), (metrics, chunkCount), recentLogs, alwaysShowOnboarding, isRefreshing ->
         val (isEnabled, isConnected) = healthData
         val (attentionCount, waitingCustomers) = attentionData
         val running = try { serviceAliveChecker() } catch (_: Throwable) { isConnected }
@@ -205,6 +208,7 @@ class HomeViewModel @Inject constructor(
             totalRepliesSent = metrics.totalReplies.coerceAtLeast(0),
             knowledgeChunkCount = chunkCount.coerceAtLeast(0),
             recentActivity = recentLogs,
+            isAlwaysShowOnboardingEnabled = alwaysShowOnboarding,
             isLoading = false,
             isRefreshing = isRefreshing
         )
@@ -260,6 +264,21 @@ class HomeViewModel @Inject constructor(
             refreshSystemHealth()
             kotlinx.coroutines.delay(400)
             _isRefreshing.value = false
+        }
+    }
+
+    fun sendTestNotification() {
+        hitlNotificationHandler?.triggerHitlAlarm(
+            contactName = "تجربة النظام (Test)",
+            queryText = "هذا إشعار تجريبي لاختبار الصوت والتنبيهات بنجاح 🔔",
+            score = 1.0f,
+            sourceClass = "BUSINESS"
+        )
+    }
+
+    fun toggleAlwaysShowOnboarding(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setAlwaysShowOnboarding(enabled)
         }
     }
 

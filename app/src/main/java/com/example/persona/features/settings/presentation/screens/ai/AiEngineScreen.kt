@@ -131,7 +131,12 @@ fun AiEngineScreen(
 
         // Providers Section
         SettingsGroup(title = R.string.settings_ai_providers_title) {
-            state.providerOrder.forEach { provider ->
+            val allSupportedProviders = remember(state.providerOrder) {
+                val ordered = state.providerOrder.filter { it in ModelProviders.ALL }
+                val remaining = ModelProviders.ALL.filterNot { it in ordered }
+                ordered + remaining
+            }
+            allSupportedProviders.forEach { provider ->
                 val config = state.providerConfigs[provider.lowercase()]
                 val keyCount = config?.keys?.size ?: 0
                 val primaryModel = config?.models?.firstOrNull()
@@ -211,6 +216,10 @@ fun AiEngineScreen(
             onMoveDown = actions::moveProviderDown,
             onMove = actions::moveProvider,
             onMoveForCapability = actions::moveProviderForCapability,
+            onOpenProvider = { provider ->
+                showFallbackSheet = false
+                onOpenProvider(provider)
+            },
             onDismiss = { showFallbackSheet = false }
         )
     }

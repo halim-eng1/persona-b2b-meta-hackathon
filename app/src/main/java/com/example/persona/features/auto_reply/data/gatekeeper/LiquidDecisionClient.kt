@@ -5,6 +5,8 @@ import com.example.persona.BuildConfig
 import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent
+import com.example.persona.features.settings.domain.repository.ModelProviders
+import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.header
@@ -28,9 +30,10 @@ import javax.inject.Singleton
 
 @Singleton
 class LiquidDecisionClient @Inject constructor(
-    private val httpClient: HttpClient
+    private val httpClient: HttpClient,
+    private val secureCredentialsRepository: SecureCredentialsRepository? = null
 ) {
-    constructor() : this(createDefaultHttpClient())
+    constructor() : this(createDefaultHttpClient(), null)
 
     internal var apiKeyOverride: String? = null
     internal var apiKey2Override: String? = null
@@ -99,8 +102,13 @@ class LiquidDecisionClient @Inject constructor(
 
     suspend fun decide(text: String, timeoutMs: Long = 800L): InboundIntent? = withContext(Dispatchers.IO) {
         withTimeoutOrNull(timeoutMs) {
+            val configuredKeys = secureCredentialsRepository?.getApiKeys(ModelProviders.LIQUID)
+                ?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+
             val keys = if (keyPool.isNotEmpty()) {
                 keyPool
+            } else if (configuredKeys.isNotEmpty()) {
+                configuredKeys
             } else {
                 listOfNotNull(
                     primaryApiKey.trim().takeIf { it.isNotBlank() },
