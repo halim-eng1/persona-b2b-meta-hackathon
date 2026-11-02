@@ -265,8 +265,13 @@ fun ExecutionTraceCard(
                                 }
                             }
                         } else {
+                            val emptyText = if (trace.intent == com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent.CATALOG_INQUIRY || trace.reQueryTriggered) {
+                                stringResource(R.string.trace_rag_empty_catalog)
+                            } else {
+                                stringResource(R.string.trace_rag_empty)
+                            }
                             Text(
-                                text = stringResource(R.string.trace_rag_empty),
+                                text = emptyText,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

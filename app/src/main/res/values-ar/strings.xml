@@ -292,6 +292,7 @@
     <string name="trace_rag_match_format">%1$d مقاطع (تطابق: %2$d%%)</string>
     <string name="trace_rag_none_badge">بدون استرجاع</string>
     <string name="trace_rag_empty">لم تتطلب النية استرجاع مقاطع من قاعدة المعرفة.</string>
+    <string name="trace_rag_empty_catalog">تم البحث في الكتالوج ولكن قاعدة المعرفة فارغة (0 نتائج).</string>
     <string name="trace_rag_expand">معاينة المقاطع المسترجعة (%d) ▼</string>
     <string name="trace_rag_collapse">إخفاء المقاطع ▲</string>
     <string name="trace_requery_title">إعادة البحث الدلالي</string>

@@ -292,6 +292,7 @@
     <string name="trace_rag_match_format">%1$d chunks (match: %2$d%%)</string>
     <string name="trace_rag_none_badge">No Retrieval</string>
     <string name="trace_rag_empty">This intent did not require knowledge base retrieval.</string>
+    <string name="trace_rag_empty_catalog">Searched the catalog, but the knowledge base is empty (0 results).</string>
     <string name="trace_rag_expand">Preview retrieved chunks (%d) ▼</string>
     <string name="trace_rag_collapse">Hide chunks ▲</string>
     <string name="trace_requery_title">Semantic Re-Query</string>
