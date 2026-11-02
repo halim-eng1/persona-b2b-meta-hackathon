@@ -95,23 +95,23 @@
     <string name="feature_onboarding_back">Back</string>
     <string name="feature_onboarding_next">Next</string>
     <string name="feature_onboarding_get_started">Get Started</string>
-    <string name="feature_onboarding_page1_eyebrow">Multimodal Local AI</string>
+    <string name="feature_onboarding_page1_eyebrow">Supports All Media</string>
     <string name="feature_onboarding_page1_title">All-in-One Intelligent Assistant</string>
     <string name="feature_onboarding_page1_desc">Instant, smart replies to WhatsApp voice notes, text messages, and images with exceptional precision and your unique style.</string>
     <string name="feature_onboarding_page1_tag1">Voice Notes</string>
     <string name="feature_onboarding_page1_tag2">Text Replies</string>
     <string name="feature_onboarding_page1_tag3">Image Queries</string>
     <string name="feature_onboarding_page2_eyebrow">Ultra-Fast &amp; Secure</string>
-    <string name="feature_onboarding_page2_title">Smart Knowledge Base for Your Business</string>
-    <string name="feature_onboarding_page2_desc">Import your product catalog and previous chats to build a lightning-fast on-device AI brain that works completely offline.</string>
-    <string name="feature_onboarding_page2_tag1">100% Offline</string>
-    <string name="feature_onboarding_page2_tag2">Import Chat History</string>
+    <string name="feature_onboarding_page2_title">Your Business Knowledge</string>
+    <string name="feature_onboarding_page2_desc">Import your product catalog and business knowledge to build an offline local AI engine.</string>
+    <string name="feature_onboarding_page2_tag1">Fully Offline</string>
+    <string name="feature_onboarding_page2_tag2">Business Data</string>
     <string name="feature_onboarding_page2_tag3">End-to-End Privacy</string>
     <string name="feature_onboarding_page3_eyebrow">Automated Sales Operations</string>
-    <string name="feature_onboarding_page3_title">Automate Orders &amp; Customer CRM</string>
-    <string name="feature_onboarding_page3_desc">Automatically extract order details and shipping addresses, organize customer CRM, and alert you instantly for urgent cases.</string>
-    <string name="feature_onboarding_page3_tag1">Instant Order Extraction</string>
-    <string name="feature_onboarding_page3_tag2">Built-in Customer CRM</string>
+    <string name="feature_onboarding_page3_title">Orders &amp; Customer Management</string>
+    <string name="feature_onboarding_page3_desc">Automatically extract order details, organize customers, and receive alerts for critical cases.</string>
+    <string name="feature_onboarding_page3_tag1">Order Extraction</string>
+    <string name="feature_onboarding_page3_tag2">Customer CRM</string>
     <string name="feature_onboarding_page3_tag3">Instant Alerts</string>
 
     <!-- ── Knowledge Management UI ────────────────────────────────────────────── -->
