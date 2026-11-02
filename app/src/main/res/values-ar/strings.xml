@@ -715,7 +715,7 @@
     <string name="chat_import_ai_sheet_title">قوالب صياغة المعرفة بالذكاء الاصطناعي</string>
     <string name="chat_import_ai_sheet_subtitle">انسخ أحد البرومبتات التالية وأرسله لـ ChatGPT أو Claude ليقوم بمقابلتك خطوة بخطوة وتوليد ملف معرفة جاهز للصقه هنا:</string>
     <string name="chat_import_clear_file_desc">إلغاء الملف المحدد</string>
-    <string name="chat_import_file_supported_hint">الصيغ المدعومة: محادثات واتساب (.txt) وملفات ماركداون (.md)</string>
+    <string name="chat_import_file_supported_hint">الصيغ المدعومة: ملفات نصية (.txt) وملفات ماركداون (.md)</string>
     <string name="guide_dialog_title">دليل استخراج المفتاح</string>
     <string name="guide_notification_copy_text">انسخ هذا النص وأرسله لأي نموذج ذكاء اصطناعي (مثل ChatGPT أو Gemini) ليرشدك لإنشاء الحساب خطوة بخطوة بالروابط.</string>
 
@@ -724,6 +724,13 @@
     <string name="orders_clear_selection_desc">إلغاء التحديد</string>
     <string name="orders_select_all_desc">تحديد الكل</string>
     <string name="orders_create_manual_title">إنشاء طلب جديد يدوياً</string>
+    <string name="orders_create_smart_paste">لصق ذكي من الحافظة (واتساب)</string>
+    <string name="orders_create_smart_paste_desc">استخراج الاسم، الهاتف، العنوان، والأصناف تلقائياً</string>
+    <string name="orders_create_clipboard_applied">تم استخراج وتعبئة بيانات الطلب بنجاح</string>
+    <string name="orders_create_clipboard_empty">الحافظة لا تحتوي على نص طلب</string>
+    <string name="orders_create_section_customer">بيانات العميل والتوصيل</string>
+    <string name="orders_create_section_items">الأصناف والحساب المالي</string>
+    <string name="orders_create_add_notes">+ إضافة ملاحظات للمندوب</string>
     <string name="orders_edit_order_title">تعديل بيانات الطلب #%d</string>
     <string name="orders_customer_name_label">اسم العميل *</string>
     <string name="orders_customer_phone_label">رقم الهاتف *</string>

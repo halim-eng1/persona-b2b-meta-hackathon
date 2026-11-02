@@ -715,7 +715,7 @@
     <string name="chat_import_ai_sheet_title">AI Knowledge Formatting Prompts</string>
     <string name="chat_import_ai_sheet_subtitle">Copy one of the following prompts and send it to ChatGPT or Claude to guide you step-by-step and produce structured knowledge ready to paste here:</string>
     <string name="chat_import_clear_file_desc">Clear selected file</string>
-    <string name="chat_import_file_supported_hint">Supported formats: WhatsApp chat exports (.txt) and Markdown files (.md)</string>
+    <string name="chat_import_file_supported_hint">Supported formats: Text files (.txt) and Markdown files (.md)</string>
     <string name="guide_dialog_title">API Key Extraction Guide</string>
     <string name="guide_notification_copy_text">Copy this text and send it to any AI model (like ChatGPT or Gemini) to guide you through creating an account step by step with links.</string>
 
@@ -724,6 +724,13 @@
     <string name="orders_clear_selection_desc">Clear Selection</string>
     <string name="orders_select_all_desc">Select All</string>
     <string name="orders_create_manual_title">Create Manual Order</string>
+    <string name="orders_create_smart_paste">Smart Paste from Clipboard</string>
+    <string name="orders_create_smart_paste_desc">Auto-extract name, phone, address, and items from WhatsApp</string>
+    <string name="orders_create_clipboard_applied">Order details extracted from clipboard</string>
+    <string name="orders_create_clipboard_empty">Clipboard does not contain order text</string>
+    <string name="orders_create_section_customer">Customer &amp; Delivery</string>
+    <string name="orders_create_section_items">Items &amp; Financials</string>
+    <string name="orders_create_add_notes">+ Add Delivery Notes</string>
     <string name="orders_edit_order_title">Edit Order #%d</string>
     <string name="orders_customer_name_label">Customer Name *</string>
     <string name="orders_customer_phone_label">Phone Number *</string>
