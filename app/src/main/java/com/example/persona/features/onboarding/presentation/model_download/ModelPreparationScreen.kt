@@ -47,9 +47,9 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SignalCellularConnectedNoInternet0Bar
-import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -622,7 +622,7 @@ fun ModelPreparationRotatingTips(
         listOf(
             PreparationTip(Icons.Default.Bolt, R.string.model_prep_tip1_title, R.string.model_prep_tip1_desc),
             PreparationTip(Icons.Default.Security, R.string.model_prep_tip2_title, R.string.model_prep_tip2_desc),
-            PreparationTip(Icons.Default.WifiOff, R.string.model_prep_tip3_title, R.string.model_prep_tip3_desc),
+            PreparationTip(Icons.Default.Search, R.string.model_prep_tip3_title, R.string.model_prep_tip3_desc),
             PreparationTip(Icons.Default.AutoAwesome, R.string.model_prep_tip4_title, R.string.model_prep_tip4_desc)
         )
     }

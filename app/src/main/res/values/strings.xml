@@ -140,13 +140,13 @@
     <string name="model_prep_exit_dialog_confirm">Exit Application</string>
     <string name="model_prep_exit_dialog_dismiss">Continue Setup</string>
 
-    <string name="model_prep_tip_header">Did You Know?</string>
+    <string name="model_prep_tip_header">Assistant Highlights</string>
     <string name="model_prep_tip1_title">Instant On-Device Processing</string>
     <string name="model_prep_tip1_desc">Intelligent responses to WhatsApp voice notes, text messages, and images in milliseconds.</string>
     <string name="model_prep_tip2_title">100% Private &amp; Secure</string>
     <string name="model_prep_tip2_desc">All conversations, customer orders, and knowledge base remain strictly on your phone.</string>
-    <string name="model_prep_tip3_title">Works Without Internet</string>
-    <string name="model_prep_tip3_desc">Your assistant stays active and responsive at all times, even without a network signal.</string>
+    <string name="model_prep_tip3_title">Fast Local Search</string>
+    <string name="model_prep_tip3_desc">Understanding and retrieving your business catalog is handled directly on your phone with maximum speed.</string>
     <string name="model_prep_tip4_title">Permanent Data Savings</string>
     <string name="model_prep_tip4_desc">The model is downloaded only once and will never consume your cellular bundle again.</string>
 

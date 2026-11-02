@@ -140,13 +140,13 @@
     <string name="model_prep_exit_dialog_confirm">خروج من التطبيق</string>
     <string name="model_prep_exit_dialog_dismiss">متابعة التجهيز</string>
 
-    <string name="model_prep_tip_header">هل تعلم؟</string>
+    <string name="model_prep_tip_header">مميزات مساعدك</string>
     <string name="model_prep_tip1_title">معالجة فورية ومحلية</string>
     <string name="model_prep_tip1_desc">ردود ذكية على رسائل WhatsApp الصوتية والنصية والصور في أجزاء من الثانية دون تأخير.</string>
     <string name="model_prep_tip2_title">أمان وخصوصية 100%</string>
     <string name="model_prep_tip2_desc">جميع المحادثات وبيانات العملاء وقاعدة المعرفة لا تغادر هاتفك مطلقاً.</string>
-    <string name="model_prep_tip3_title">يعمل بدون إنترنت</string>
-    <string name="model_prep_tip3_desc">المساعد جاهز للرد في أي وقت حتى عند انقطاع الشبكة أو ضعف التغطية.</string>
+    <string name="model_prep_tip3_title">بحث ذكي وسريع محلياً</string>
+    <string name="model_prep_tip3_desc">فهم واسترجاع معلومات منتجاتك وعروضك يتم مباشرة داخل هاتفك وبأعلى سرعة ممكنة.</string>
     <string name="model_prep_tip4_title">توفير دائم للبيانات</string>
     <string name="model_prep_tip4_desc">يتم تحميل محرك الذكاء لمرة واحدة فقط ولن يستهلك أي باقة إنترنت مستقبلاً.</string>
 
