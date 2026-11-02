@@ -15,17 +15,24 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Save
-import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Storefront
+import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -34,6 +41,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,8 +51,8 @@ import com.example.persona.ui.theme.spacing
 import kotlinx.coroutines.launch
 
 /**
- * Stateful entry point for the Knowledge & Chat Import screen.
- * Observes [viewModel] state and handles system callbacks.
+ * Stateful entry point for the Knowledge Base creation screen.
+ * Observes [viewModel] state and handles activity/system callbacks.
  */
 @Composable
 fun ChatImportScreen(
@@ -104,14 +112,16 @@ fun ChatImportScreen(
         onDirectInputTextChanged = viewModel::onDirectInputTextChanged,
         onIngestDirectText = viewModel::ingestDirectText,
         onPickFile = { fileLauncher.launch(acceptedMimeTypes) },
+        onClearSelectedFile = viewModel::clearSelectedFile,
         onStartImport = viewModel::startImport,
         modifier = modifier
     )
 }
 
 /**
- * Stateless presentation composable for the Knowledge Import screen.
- * Completely decoupled from ViewModel for previews and testing.
+ * Stateless presentation composable for the Knowledge Base screen.
+ * Optimized for single-viewport clarity, tabbed direct text / file upload,
+ * and progressive disclosure of AI prompt templates via bottom sheet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -124,10 +134,10 @@ fun ChatImportContent(
     onDirectInputTextChanged: (String) -> Unit,
     onIngestDirectText: () -> Unit,
     onPickFile: () -> Unit,
+    onClearSelectedFile: () -> Unit,
     onStartImport: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scrollState = rememberScrollState()
     val isDark = isSystemInDarkTheme()
     val cardBorder = if (isDark) {
         BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -135,13 +145,16 @@ fun ChatImportContent(
         BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     }
 
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    var showAiPromptSheet by rememberSaveable { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         text = stringResource(R.string.import_screen_title),
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Bold
                     )
                 },
                 navigationIcon = {
@@ -173,200 +186,143 @@ fun ChatImportContent(
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .widthIn(max = 640.dp)
-                    .verticalScroll(scrollState)
-                    .padding(
-                        horizontal = MaterialTheme.spacing.screenHorizontal,
-                        vertical = MaterialTheme.spacing.screenVertical
-                    ),
-                verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.lg)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = MaterialTheme.spacing.screenHorizontal, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)
             ) {
-                // Tactile Bento Header Card (Solid M3 Container - High Contrast in Dark & Outdoor)
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    border = cardBorder,
+                // 1. AI Assistant Helper Banner (Progressive Disclosure)
+                Surface(
+                    onClick = { showAiPromptSheet = true },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        modifier = Modifier.padding(MaterialTheme.spacing.cardPadding),
-                        verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.s)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.s)
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.SmartToy,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.chat_import_ai_helper_banner_title),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = stringResource(R.string.chat_import_studio_title),
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Bold
+                                text = stringResource(R.string.chat_import_ai_helper_banner_action),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
-                        Text(
-                            text = stringResource(R.string.chat_import_hero_description),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .graphicsLayer { rotationZ = 180f }
                         )
                     }
                 }
 
-                // Card 1: AI Knowledge Architect Prompts
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    border = cardBorder,
+                // 2. Segmented Tabs: Direct Text vs File Upload
+                PrimaryTabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        modifier = Modifier.padding(MaterialTheme.spacing.cardPadding),
-                        verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.s)
-                        ) {
+                    Tab(
+                        selected = selectedTabIndex == 0,
+                        onClick = { selectedTabIndex = 0 },
+                        text = {
+                            Text(
+                                text = stringResource(R.string.chat_import_tab_direct_text),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        },
+                        icon = {
                             Icon(
-                                imageVector = Icons.Rounded.SmartToy,
+                                imageVector = Icons.Rounded.EditNote,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
-                            Text(
-                                text = stringResource(R.string.chat_import_prompt_generator_title),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
                         }
-
-                        Text(
-                            text = stringResource(R.string.chat_import_ai_card_description),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        // Button 1: Business / Commercial Prompt
-                        val businessSnackbarMsg = stringResource(R.string.import_screen_copied_business_snackbar)
-                        OutlinedButton(
-                            onClick = {
-                                onCopyPrompt(
-                                    ChatImportPrompts.BUSINESS_KNOWLEDGE_PROMPT,
-                                    businessSnackbarMsg
-                                )
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .defaultMinSize(minHeight = MaterialTheme.spacing.touchTargetMin)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Storefront,
-                                contentDescription = null,
-                                modifier = Modifier.padding(end = MaterialTheme.spacing.s)
-                            )
+                    )
+                    Tab(
+                        selected = selectedTabIndex == 1,
+                        onClick = { selectedTabIndex = 1 },
+                        text = {
                             Text(
-                                text = stringResource(R.string.import_screen_copy_business_btn),
+                                text = stringResource(R.string.chat_import_tab_file_upload),
                                 fontWeight = FontWeight.SemiBold
                             )
-                        }
-
-                        // Button 2: Personal Assistant / Non-Commercial Prompt
-                        val personalSnackbarMsg = stringResource(R.string.import_screen_copied_personal_snackbar)
-                        OutlinedButton(
-                            onClick = {
-                                onCopyPrompt(
-                                    ChatImportPrompts.PERSONAL_KNOWLEDGE_PROMPT,
-                                    personalSnackbarMsg
-                                )
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .defaultMinSize(minHeight = MaterialTheme.spacing.touchTargetMin)
-                        ) {
+                        },
+                        icon = {
                             Icon(
-                                imageVector = Icons.Rounded.Person,
+                                imageVector = Icons.Rounded.UploadFile,
                                 contentDescription = null,
-                                modifier = Modifier.padding(end = MaterialTheme.spacing.s)
-                            )
-                            Text(
-                                text = stringResource(R.string.import_screen_copy_personal_btn),
-                                fontWeight = FontWeight.SemiBold
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                    }
+                    )
                 }
 
-                // Card 2: Direct Text Paste Ingestion Box
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    border = cardBorder,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                // 3. Tab Content Area
+                if (selectedTabIndex == 0) {
+                    // TAB 0: Direct Text Ingestion
                     Column(
-                        modifier = Modifier.padding(MaterialTheme.spacing.cardPadding),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.s)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Save,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Text(
-                                text = stringResource(R.string.chat_import_direct_text_title),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Text(
-                            text = stringResource(R.string.chat_import_direct_card_description),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
                         OutlinedTextField(
                             value = uiState.directInputText,
                             onValueChange = onDirectInputTextChanged,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = 160.dp, max = 260.dp),
-                            label = {
-                                Text(stringResource(R.string.chat_import_direct_text_title))
-                            },
+                                .heightIn(min = 180.dp, max = 280.dp),
                             placeholder = {
                                 Text(
                                     text = stringResource(R.string.import_screen_paste_placeholder),
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                 )
                             },
-                            minLines = 6,
-                            maxLines = 10,
+                            trailingIcon = {
+                                if (uiState.directInputText.isNotEmpty()) {
+                                    IconButton(onClick = { onDirectInputTextChanged("") }) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Close,
+                                            contentDescription = stringResource(R.string.chat_import_clear_file_desc)
+                                        )
+                                    }
+                                }
+                            },
                             shape = RoundedCornerShape(12.dp)
                         )
 
-                        // Success Feedback Banner with TalkBack LiveRegion
+                        // Direct Indexing Success Banner
                         AnimatedVisibility(visible = uiState.directIndexSuccessMessage != null) {
                             Surface(
                                 modifier = Modifier
@@ -397,7 +353,7 @@ fun ChatImportContent(
                             }
                         }
 
-                        // Direct Indexing Error Banner with TalkBack LiveRegion
+                        // Direct Indexing Error Banner
                         AnimatedVisibility(visible = uiState.directIndexError != null) {
                             Surface(
                                 modifier = Modifier
@@ -428,7 +384,7 @@ fun ChatImportContent(
                             }
                         }
 
-                        // Primary Direct Ingestion Action Button
+                        // Primary Ingestion Action Button (Always in view)
                         Button(
                             onClick = onIngestDirectText,
                             enabled = uiState.directInputText.isNotBlank() && !uiState.isDirectIndexing,
@@ -458,80 +414,140 @@ fun ChatImportContent(
                             }
                         }
                     }
-                }
-
-                // Card 3: Alternative File Upload
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    border = cardBorder,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                } else {
+                    // TAB 1: File Upload Ingestion
                     Column(
-                        modifier = Modifier.padding(MaterialTheme.spacing.cardPadding),
-                        verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)
                     ) {
-                        Text(
-                            text = stringResource(R.string.import_screen_upload_section_title),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.align(Alignment.Start)
-                        )
-
-                        OutlinedButton(
-                            onClick = onPickFile,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .defaultMinSize(minHeight = MaterialTheme.spacing.touchTargetMin)
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            ),
+                            border = cardBorder,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Add,
-                                contentDescription = stringResource(R.string.import_screen_choose_file_desc),
-                                modifier = Modifier.padding(end = MaterialTheme.spacing.s)
-                            )
-                            Text(stringResource(R.string.import_screen_choose_file_btn))
-                        }
-
-                        uiState.selectedFileUri?.let { uri ->
-                            val resolvedFileName = uiState.selectedFileName
-                                ?: uri.lastPathSegment
-                                ?: "knowledge.md"
-
-                            Text(
-                                text = stringResource(R.string.chat_import_selected_file_label, resolvedFileName),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.align(Alignment.Start)
-                            )
-
-                            Button(
-                                onClick = onStartImport,
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .defaultMinSize(minHeight = MaterialTheme.spacing.touchTargetMin),
-                                shape = RoundedCornerShape(12.dp)
+                                    .padding(vertical = 24.dp, horizontal = 16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.s)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.PlayArrow,
-                                    contentDescription = stringResource(R.string.chat_import_start_icon_desc),
-                                    modifier = Modifier.padding(end = MaterialTheme.spacing.s)
-                                )
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                    modifier = Modifier.size(56.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.UploadFile,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
+                                }
+
                                 Text(
-                                    text = stringResource(R.string.import_screen_start_btn),
-                                    fontWeight = FontWeight.Bold
+                                    text = stringResource(R.string.import_screen_upload_section_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
+
+                                Text(
+                                    text = stringResource(R.string.chat_import_file_supported_hint),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                if (uiState.selectedFileUri == null) {
+                                    Button(
+                                        onClick = onPickFile,
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.defaultMinSize(minHeight = MaterialTheme.spacing.touchTargetMin)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Add,
+                                            contentDescription = null,
+                                            modifier = Modifier.padding(end = MaterialTheme.spacing.s)
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.import_screen_choose_file_btn),
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                } else {
+                                    // Selected file card with quick clear
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.s)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Description,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                            val resolvedFileName = uiState.selectedFileName
+                                                ?: uiState.selectedFileUri.lastPathSegment
+                                                ?: "knowledge.md"
+                                            Text(
+                                                text = resolvedFileName,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            IconButton(
+                                                onClick = onClearSelectedFile,
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Close,
+                                                    contentDescription = stringResource(R.string.chat_import_clear_file_desc),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Button(
+                                        onClick = onStartImport,
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .defaultMinSize(minHeight = MaterialTheme.spacing.touchTargetMin)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.PlayArrow,
+                                            contentDescription = null,
+                                            modifier = Modifier.padding(end = MaterialTheme.spacing.s)
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.import_screen_start_btn),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                // File Import Error Message with LiveRegion
+                // Error message banner (e.g. unsupported file format or missing owner)
                 AnimatedVisibility(visible = uiState.error != null) {
                     Card(
                         shape = RoundedCornerShape(12.dp),
@@ -581,6 +597,149 @@ fun ChatImportContent(
                 }
             }
         }
+
+        // Bottom Sheet: AI Prompt Templates (Organized & Clean)
+        if (showAiPromptSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showAiPromptSheet = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.chat_import_ai_sheet_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Text(
+                        text = stringResource(R.string.chat_import_ai_sheet_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Card A: Business / Store Prompt
+                    val businessSnackbarMsg = stringResource(R.string.import_screen_copied_business_snackbar)
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                        border = cardBorder,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Storefront,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.import_screen_copy_business_btn),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "مناسب للمتاجر والشركات وسياسات الشحن والأسعار",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            FilledTonalIconButton(
+                                onClick = {
+                                    onCopyPrompt(
+                                        ChatImportPrompts.BUSINESS_KNOWLEDGE_PROMPT,
+                                        businessSnackbarMsg
+                                    )
+                                    showAiPromptSheet = false
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.ContentCopy,
+                                    contentDescription = stringResource(R.string.import_screen_copy_business_btn)
+                                )
+                            }
+                        }
+                    }
+
+                    // Card B: Personal Assistant Prompt
+                    val personalSnackbarMsg = stringResource(R.string.import_screen_copied_personal_snackbar)
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                        border = cardBorder,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.import_screen_copy_personal_btn),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "مناسب للملف الشخصي، المواعيد، والمعلومات الفردية",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            FilledTonalIconButton(
+                                onClick = {
+                                    onCopyPrompt(
+                                        ChatImportPrompts.PERSONAL_KNOWLEDGE_PROMPT,
+                                        personalSnackbarMsg
+                                    )
+                                    showAiPromptSheet = false
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.ContentCopy,
+                                    contentDescription = stringResource(R.string.import_screen_copy_personal_btn)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -619,6 +778,7 @@ private fun ChatImportScreenDarkPreview() {
             onDirectInputTextChanged = {},
             onIngestDirectText = {},
             onPickFile = {},
+            onClearSelectedFile = {},
             onStartImport = {}
         )
     }
@@ -640,6 +800,7 @@ private fun ChatImportScreenLightPreview() {
             onDirectInputTextChanged = {},
             onIngestDirectText = {},
             onPickFile = {},
+            onClearSelectedFile = {},
             onStartImport = {}
         )
     }

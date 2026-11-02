@@ -136,6 +136,17 @@ class ChatImportViewModel @Inject constructor(
         }
     }
 
+    fun clearSelectedFile() {
+        _uiState.update {
+            it.copy(
+                selectedFileUri = null,
+                selectedFileName = null,
+                error = null,
+                isOwnerNameMissing = false
+            )
+        }
+    }
+
     /** Called when the picked file has an unsupported extension (must be .txt or .md). */
     fun onUnsupportedFilePicked() {
         _uiState.update {
