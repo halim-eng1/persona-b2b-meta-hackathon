@@ -18,7 +18,7 @@ import com.example.persona.features.settings.presentation.model.SettingKey
 @Composable
 fun MessagesScreen(
     state: SettingsUiState,
-    actions: MessageActions,
+    @Suppress("UNUSED_PARAMETER") actions: MessageActions,
     focus: SettingKey?,
     onBack: () -> Unit,
     modifier: Modifier = Modifier

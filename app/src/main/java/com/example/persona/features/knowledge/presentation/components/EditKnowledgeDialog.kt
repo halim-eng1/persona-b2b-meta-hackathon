@@ -41,7 +41,7 @@ fun EditKnowledgeDialog(
                         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
                     ) {
                         Text(
-                            text = stringResource(R.string.knowledge_edit_section_label, entry.headerContext ?: ""),
+                            text = stringResource(R.string.knowledge_edit_section_label, entry.headerContext),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)

@@ -19,8 +19,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.persona.R
 import com.example.persona.ui.theme.PersonaTheme
 
 @Composable
@@ -74,15 +76,18 @@ fun HealthRing(
             Spacer(modifier = Modifier.width(18.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (allPassed) "All Checks Passed ✓" else "Attention Needed",
+                    text = if (allPassed)
+                        stringResource(R.string.settings_health_ring_all_passed_title)
+                    else
+                        stringResource(R.string.settings_health_ring_attention_needed_title),
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                     color = color
                 )
                 Text(
                     text = if (allPassed)
-                        "Background listeners and storage are operational."
+                        stringResource(R.string.settings_health_ring_all_passed_desc)
                     else
-                        "Ensure required background permissions are granted.",
+                        stringResource(R.string.settings_health_ring_attention_needed_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

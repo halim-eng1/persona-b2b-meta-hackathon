@@ -55,6 +55,7 @@ import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
 
 @Singleton
+@Suppress("DEPRECATION")
 class WhatsAppMediaExtractor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val httpClient: HttpClient,

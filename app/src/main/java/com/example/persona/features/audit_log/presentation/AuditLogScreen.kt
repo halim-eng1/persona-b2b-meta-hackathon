@@ -556,7 +556,7 @@ private fun AuditLogCard(
 
             // ── Deep Telemetry Expanded View ──────────────────────────────────
             if (isExpanded) {
-                Divider(
+                HorizontalDivider(
                     modifier = Modifier.padding(vertical = 8.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                 )

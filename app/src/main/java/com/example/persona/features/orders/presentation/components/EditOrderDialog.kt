@@ -178,7 +178,7 @@ fun EditOrderDialog(
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = govExpanded) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor(),
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
                         shape = RoundedCornerShape(12.dp)
                     )
                     ExposedDropdownMenu(

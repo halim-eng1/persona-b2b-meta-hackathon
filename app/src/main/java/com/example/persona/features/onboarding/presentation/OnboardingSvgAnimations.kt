@@ -318,7 +318,6 @@ fun KnowledgeSyncBrainAnimation(
         val centerY = h * 0.50f
 
         val nodeBg = if (isDark) Color(0xFF1E293B) else Color(0xFFFFFFFF)
-        val nodeBorder = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)
         val tealPrimary = PersonaPrimitives.Teal500
         val amberAccent = Color(0xFFF59E0B)
         val indigoAccent = Color(0xFF6366F1)

@@ -19,6 +19,7 @@ object NotificationParser {
 
     private const val TAG = "NotificationParser"
 
+    @Suppress("DEPRECATION")
     fun parseMetadata(
         context: Context,
         sbn: StatusBarNotification,

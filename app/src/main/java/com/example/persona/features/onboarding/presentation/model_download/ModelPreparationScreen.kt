@@ -207,7 +207,6 @@ fun ModelPreparationScreen(
 
                 is ModelPreparationUiState.NetworkDisconnected -> {
                     DisconnectedCard(
-                        progress = s.progress,
                         onRetry = { viewModel.retry() }
                     )
                 }
@@ -530,7 +529,6 @@ private fun VerifyingCard(statusText: String) {
 
 @Composable
 private fun DisconnectedCard(
-    progress: DownloadProgress,
     onRetry: () -> Unit
 ) {
     Card(

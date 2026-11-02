@@ -122,6 +122,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         mediaExtractor.purgeStaleMediaCache()
     }
 
+    @Suppress("DEPRECATION")
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         _isConnectedFlow.value = true
         // ── 1. Package filter & Ongoing filter ─────────────────────────────────

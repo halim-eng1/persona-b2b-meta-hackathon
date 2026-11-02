@@ -459,7 +459,7 @@ class UserPreferencesRepository @Inject constructor(
         val newRaw = prefs[providerModelConfigsKey(norm)]
         val hasCustomConfigs = !newRaw.isNullOrBlank()
 
-        val baseConfigs: List<ModelConfig> = if (hasCustomConfigs && newRaw != null) {
+        val baseConfigs: List<ModelConfig> = if (!newRaw.isNullOrBlank()) {
             // User has explicitly customized/saved capability-annotated models:
             // Parse configs AS-IS, preserving custom capabilities (including any custom tags for Cloudflare/Liquid)
             newRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }

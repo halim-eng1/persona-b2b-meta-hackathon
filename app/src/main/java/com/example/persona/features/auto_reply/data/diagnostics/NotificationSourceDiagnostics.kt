@@ -155,6 +155,7 @@ class NotificationSourceDiagnostics @Inject constructor(
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun build(sbn: StatusBarNotification): NotificationSourceDiagnostic {
         // Defensive read of fields that the framework may occasionally null
         // out or that may throw SecurityException on some OEM ROMs.

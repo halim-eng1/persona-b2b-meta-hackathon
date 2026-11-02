@@ -322,6 +322,10 @@
     <string name="settings_ai_status_timeout">انتهت مهلة استجابة الخادم</string>
     <string name="settings_ai_status_check_failed">فشل الفحص: %s</string>
     <string name="settings_ai_status_unknown_error">خطأ غير معروف</string>
+    <string name="settings_health_ring_all_passed_title">تم اجتياز جميع الفحوصات بنجاح ✓</string>
+    <string name="settings_health_ring_attention_needed_title">يتطلب اتخاذ إجراء</string>
+    <string name="settings_health_ring_all_passed_desc">خدمات الاستماع في الخلفية وقاعدة البيانات تعمل بكفاءة.</string>
+    <string name="settings_health_ring_attention_needed_desc">يرجى التأكد من منح جميع الصلاحيات اللازمة للعمل في الخلفية.</string>
     <string name="settings_ai_ping_btn">فحص الاتصال</string>
     <string name="settings_ai_add_key_label">إضافة مفتاح API جديد</string>
     <string name="settings_ai_models_title">نماذج الذكاء الاصطناعي لمزود %s</string>

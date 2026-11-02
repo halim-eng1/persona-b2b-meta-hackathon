@@ -322,6 +322,10 @@
     <string name="settings_ai_status_timeout">Server response timed out</string>
     <string name="settings_ai_status_check_failed">Check failed: %s</string>
     <string name="settings_ai_status_unknown_error">Unknown error</string>
+    <string name="settings_health_ring_all_passed_title">All Checks Passed ✓</string>
+    <string name="settings_health_ring_attention_needed_title">Attention Needed</string>
+    <string name="settings_health_ring_all_passed_desc">Background listeners and storage are operational.</string>
+    <string name="settings_health_ring_attention_needed_desc">Ensure required background permissions are granted.</string>
     <string name="settings_ai_ping_btn">Test Connection</string>
     <string name="settings_ai_add_key_label">Add new API key</string>
     <string name="settings_ai_models_title">AI Models for %s</string>

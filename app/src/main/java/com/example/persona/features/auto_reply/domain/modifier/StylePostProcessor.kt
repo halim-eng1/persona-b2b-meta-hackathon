@@ -65,6 +65,7 @@ class StylePostProcessor @Inject constructor() {
      * @param userEmojiRate     Fraction of the user's historical messages that contain an emoji (0.0–1.0).
      *                          Defaults to 0.0 (treat as emoji-light) when unknown.
      */
+    @Suppress("UNUSED_PARAMETER")
     fun process(
         rawReply: String,
         prefs: StylePreferences,

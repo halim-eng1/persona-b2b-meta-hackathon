@@ -83,6 +83,7 @@ class ChatExportFormatter @Inject constructor() {
         val exportDateStr = formatExportTimestamp(exportTimestampMs)
         val lines = mutableListOf<String>()
         lines.add("سجل محادثة: $contactName")
+        if (sourceClass.isNotBlank()) lines.add("المصدر: $sourceClass")
         lines.add("المتجر: $storeName")
         lines.add("تاريخ التصدير: $exportDateStr")
         lines.add("نطاق التصدير: ${range.titleArabic}")

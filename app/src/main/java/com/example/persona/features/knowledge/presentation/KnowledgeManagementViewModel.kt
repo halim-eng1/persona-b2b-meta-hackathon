@@ -438,8 +438,8 @@ class KnowledgeManagementViewModel @Inject constructor(
         // 2. Image vision step
         val isImagePresent = mediaType == SimulatorMediaType.IMAGE && !mediaUri.isNullOrBlank()
         var imageFilePath: String? = null
-        if (isImagePresent && mediaUri != null) {
-            val imgFile = resolveFileFromUri(mediaUri, SimulatorMediaType.IMAGE)
+        if (isImagePresent) {
+            val imgFile = resolveFileFromUri(mediaUri!!, SimulatorMediaType.IMAGE)
             imageFilePath = imgFile?.absolutePath ?: mediaUri
         }
 
@@ -626,11 +626,11 @@ class KnowledgeManagementViewModel @Inject constructor(
         )
 
         val llmStartTime = System.currentTimeMillis()
-        var llmLatencyMs = 0L
+        var llmLatencyMs: Long
         var reQueryTriggered = false
         var refinedKeyword: String? = null
         var pass2Candidates: List<RetrievalCandidate> = emptyList()
-        var finalParsedResponse: AgenticLlmResponse? = null
+        var finalParsedResponse: AgenticLlmResponse
         var llmProviderName = "OpenRouter / Gemini / Qwen"
 
         val rawOutput = runCatching {

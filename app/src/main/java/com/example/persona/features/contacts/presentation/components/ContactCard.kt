@@ -175,7 +175,7 @@ fun ContactCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = stringResource(R.string.contacts_notes_label, contact.notes ?: ""),
+                        text = stringResource(R.string.contacts_notes_label, contact.notes),
                         style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
