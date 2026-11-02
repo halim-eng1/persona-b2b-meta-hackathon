@@ -275,10 +275,19 @@
 
     <string name="trace_thinking_steps">⚡ Reasoning &amp; Decision Steps (took %s s)</string>
     <string name="trace_intent_title">Detected Intent</string>
+    <string name="trace_intent_greeting">Greeting</string>
+    <string name="trace_intent_banter">Casual Chat</string>
+    <string name="trace_intent_catalog">Catalog Inquiry</string>
+    <string name="trace_intent_order">Order Status</string>
+    <string name="trace_intent_unknown">Unknown</string>
+    <string name="trace_intent_detail_format">%1$s • %2$s (%3$d ms • %4$d%%)</string>
     <string name="trace_asr_title">Voice Transcription</string>
+    <string name="trace_asr_badge">Voice to Text (ASR)</string>
     <string name="trace_vision_title">Visual Image Analysis</string>
+    <string name="trace_vision_badge">Visual Analysis</string>
     <string name="trace_rag_title">Retrieved Catalog Chunks</string>
     <string name="trace_rag_match_format">%1$d chunks (match: %2$d%%)</string>
+    <string name="trace_rag_none_badge">No Retrieval</string>
     <string name="trace_rag_empty">This intent did not require knowledge base retrieval.</string>
     <string name="trace_rag_expand">Preview retrieved chunks (%d) ▼</string>
     <string name="trace_rag_collapse">Hide chunks ▲</string>
@@ -286,7 +295,15 @@
     <string name="trace_requery_active">Triggered (Pass 2)</string>
     <string name="trace_requery_inactive">Not required (Direct)</string>
     <string name="trace_llm_title">Responding Model</string>
+    <string name="trace_action_reply">Auto Reply</string>
+    <string name="trace_action_hitl">Human Handoff</string>
+    <string name="trace_action_ignore">Ignore</string>
+    <string name="trace_llm_detail_format">%1$s (%2$d ms) • Action: %3$s</string>
     <string name="trace_order_action_title">Order Action</string>
+    <string name="trace_order_action_none">None</string>
+    <string name="trace_order_action_create">Create Order</string>
+    <string name="trace_order_action_update">Update Order</string>
+    <string name="trace_order_action_cancel">Cancel Order</string>
     <string name="trace_order_details_header">Auto-extracted order details:</string>
     <string name="trace_order_customer_name">Customer Name: %s</string>
     <string name="trace_order_customer_phone">Phone: %s</string>
@@ -831,8 +848,9 @@
     <string name="chat_filter_clone">Dual / Clone</string>
     <string name="chat_filter_needs_attention">Needs Attention</string>
 
-    <string name="notification_listener_title">Persona B2B — Active &amp; Ready</string>
-    <string name="notification_listener_text">Assistant is ready to reply. Keep this notification enabled to ensure uninterrupted service.</string>
+    <string name="notification_listener_title">Persona B2B — Active</string>
+    <string name="notification_listener_text">Smart reply service is running in background</string>
+    <string name="notification_listener_big_text">Smart reply service is active and ready to reply. Keep this notification enabled to ensure uninterrupted service.</string>
     <string name="notification_listener_channel_name">WhatsApp Auto-Reply Service</string>
     <string name="notification_listener_channel_desc">Keeps Persona auto-reply service active in background</string>
     <string name="notification_import_title">Importing Catalog &amp; Chat History</string>

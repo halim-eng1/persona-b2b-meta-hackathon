@@ -275,10 +275,19 @@
 
     <string name="trace_thinking_steps">⚡ خطوات التفكير والقرار (استغرق %s ثانية)</string>
     <string name="trace_intent_title">النية المكتشفة</string>
+    <string name="trace_intent_greeting">تحية وترحيب</string>
+    <string name="trace_intent_banter">دردشة عامة</string>
+    <string name="trace_intent_catalog">استفسار منتجات</string>
+    <string name="trace_intent_order">متابعة طلب</string>
+    <string name="trace_intent_unknown">غير محدد</string>
+    <string name="trace_intent_detail_format">%1$s • %2$s (%3$d م.ث • %4$d%%)</string>
     <string name="trace_asr_title">تفريغ الصوت</string>
+    <string name="trace_asr_badge">تحويل صوتي (ASR)</string>
     <string name="trace_vision_title">تحليل الصورة البصري</string>
+    <string name="trace_vision_badge">تحليل بصري</string>
     <string name="trace_rag_title">المقاطع المسترجعة من الكتالوج</string>
     <string name="trace_rag_match_format">%1$d مقاطع (تطابق: %2$d%%)</string>
+    <string name="trace_rag_none_badge">بدون استرجاع</string>
     <string name="trace_rag_empty">لم تتطلب النية استرجاع مقاطع من قاعدة المعرفة.</string>
     <string name="trace_rag_expand">معاينة المقاطع المسترجعة (%d) ▼</string>
     <string name="trace_rag_collapse">إخفاء المقاطع ▲</string>
@@ -286,7 +295,15 @@
     <string name="trace_requery_active">مفعلة (جولة ثانية)</string>
     <string name="trace_requery_inactive">غير مطلوبة (مباشر)</string>
     <string name="trace_llm_title">النموذج المستجيب</string>
+    <string name="trace_action_reply">رد تلقائي</string>
+    <string name="trace_action_hitl">تحويل بشري</string>
+    <string name="trace_action_ignore">تجاهل</string>
+    <string name="trace_llm_detail_format">%1$s (%2$d م.ث) • الإجراء: %3$s</string>
     <string name="trace_order_action_title">إجراء الطلب</string>
+    <string name="trace_order_action_none">لا يوجد</string>
+    <string name="trace_order_action_create">إنشاء طلب</string>
+    <string name="trace_order_action_update">تعديل طلب</string>
+    <string name="trace_order_action_cancel">إلغاء طلب</string>
     <string name="trace_order_details_header">تفاصيل الطلب المستخرج آلياً:</string>
     <string name="trace_order_customer_name">اسم العميل: %s</string>
     <string name="trace_order_customer_phone">رقم الهاتف: %s</string>
@@ -831,8 +848,9 @@
     <string name="chat_filter_clone">التطبيق المستنسخ</string>
     <string name="chat_filter_needs_attention">تتطلب انتباهاً</string>
 
-    <string name="notification_listener_title">Persona B2B — المساعد نشط وجاهز</string>
-    <string name="notification_listener_text">المساعد الآلي نشط وجاهز للرد. يجب أن يظل هذا الإشعار مفعلاً لضمان عمل الخدمة بدون انقطاع.</string>
+    <string name="notification_listener_title">Persona B2B — المساعد نشط</string>
+    <string name="notification_listener_text">خدمة الرد الذكي تعمل في الخلفية</string>
+    <string name="notification_listener_big_text">المساعد الآلي نشط وجاهز للرد. يُرجى إبقاء هذا الإشعار مفعلاً لضمان عمل الخدمة بدون انقطاع.</string>
     <string name="notification_listener_channel_name">خدمة الرد الآلي على واتساب</string>
     <string name="notification_listener_channel_desc">يحافظ على تشغيل خدمة الرد الآلي في الخلفية</string>
     <string name="notification_import_title">استيراد كتالوج ومحادثات المتجر</string>

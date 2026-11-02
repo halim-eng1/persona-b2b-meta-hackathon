@@ -31,6 +31,8 @@ import com.example.persona.features.auto_reply.service.NotificationParser
 import com.example.persona.features.chat_import.data.embedding.HuggingFaceTokenizer
 import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
 import dagger.hilt.android.AndroidEntryPoint
+import android.content.res.Configuration
+import java.util.Locale
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -412,6 +414,13 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             }
         }
 
+        // Keep foreground notification localized according to user's selected app language
+        serviceScope.launch(Dispatchers.IO) {
+            prefsRepository.appLanguageFlow.collect { lang ->
+                updateNotificationLanguage(lang)
+            }
+        }
+
         startListeningForMessages()
         orchestrator.start()
     }
@@ -529,13 +538,25 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         return null
     }
 
+    private fun getLocalizedContext(languageCode: String): Context {
+        val locale = Locale(languageCode.lowercase().take(2).ifBlank { "ar" })
+        val config = Configuration(resources.configuration)
+        config.setLocale(locale)
+        config.setLayoutDirection(locale)
+        return createConfigurationContext(config)
+    }
+
     private fun createNotificationChannel() {
+        val lang = runBlocking(Dispatchers.IO) {
+            try { prefsRepository.getAppLanguageSync() } catch (_: Throwable) { "ar" }
+        }
+        val localizedCtx = getLocalizedContext(lang)
         val channel = NotificationChannel(
             CHANNEL_ID,
-            getString(R.string.notification_listener_channel_name),
+            localizedCtx.getString(R.string.notification_listener_channel_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = getString(R.string.notification_listener_channel_desc)
+            description = localizedCtx.getString(R.string.notification_listener_channel_desc)
             setShowBadge(false)
             lockscreenVisibility = Notification.VISIBILITY_SECRET
         }
@@ -543,14 +564,32 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         manager.createNotificationChannel(channel)
     }
 
-    private fun buildSilentNotification(): Notification {
+    private fun buildSilentNotification(langCode: String? = null): Notification {
+        val currentLang = langCode ?: runBlocking(Dispatchers.IO) {
+            try { prefsRepository.getAppLanguageSync() } catch (_: Throwable) { "ar" }
+        }
+        val localizedCtx = getLocalizedContext(currentLang)
+        val title = localizedCtx.getString(R.string.notification_listener_title)
+        val shortText = localizedCtx.getString(R.string.notification_listener_text)
+        val bigText = localizedCtx.getString(R.string.notification_listener_big_text)
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.notification_listener_title))
-            .setContentText(getString(R.string.notification_listener_text))
+            .setContentTitle(title)
+            .setContentText(shortText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
             .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setSilent(true)
             .build()
+    }
+
+    private fun updateNotificationLanguage(lang: String) {
+        try {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.notify(NOTIFICATION_ID, buildSilentNotification(lang))
+        } catch (e: Exception) {
+            Log.e("NLS", "Failed to update notification language", e)
+        }
     }
 }
