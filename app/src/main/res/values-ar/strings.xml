@@ -281,7 +281,7 @@
     <string name="trace_intent_order">متابعة طلب</string>
     <string name="trace_intent_unknown">غير محدد</string>
     <string name="trace_tier_on_device">محرك القرار المحلي (على الجهاز)</string>
-    <string name="trace_tier_on_device_fallback">محرك القرار المحلي (احتياطي على الجهاز)</string>
+    <string name="trace_tier_cloud_fallback">محرك القرار السحابي (احتياطي)</string>
     <string name="trace_tier_fast_path">مسار مباشر (صورة مرفقة)</string>
     <string name="trace_intent_detail_format">%1$s • %2$s (%3$d م.ث • %4$d%%)</string>
     <string name="trace_asr_title">تفريغ الصوت</string>

@@ -604,7 +604,7 @@ private fun formatTierName(rawTier: String): String {
     val trimmed = rawTier.trim()
     return when {
         trimmed.contains("Fallback", ignoreCase = true) || trimmed.contains("احتياطي") -> {
-            stringResource(R.string.trace_tier_on_device_fallback)
+            stringResource(R.string.trace_tier_cloud_fallback)
         }
         trimmed.contains("LocalDecisionClassifier", ignoreCase = true) ||
         trimmed.contains("On-Device", ignoreCase = true) ||

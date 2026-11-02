@@ -281,7 +281,7 @@
     <string name="trace_intent_order">Order Status</string>
     <string name="trace_intent_unknown">Unknown</string>
     <string name="trace_tier_on_device">Local Decision Engine (On-Device)</string>
-    <string name="trace_tier_on_device_fallback">Local Decision Engine (On-Device Fallback)</string>
+    <string name="trace_tier_cloud_fallback">Cloud Decision Engine (Fallback)</string>
     <string name="trace_tier_fast_path">Direct Path (Image Attached)</string>
     <string name="trace_intent_detail_format">%1$s • %2$s (%3$d ms • %4$d%%)</string>
     <string name="trace_asr_title">Voice Transcription</string>
