@@ -327,7 +327,7 @@ fun ChatImportContent(
                         )
 
                         // Direct Indexing Success Banner
-                        AnimatedVisibility(visible = uiState.directIndexSuccessMessage != null) {
+                        AnimatedVisibility(visible = uiState.directIndexSuccessMessage != null || uiState.directIndexSuccessChunks != null) {
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -348,8 +348,12 @@ fun ChatImportContent(
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary
                                     )
+                                    val successText = when (val chunks = uiState.directIndexSuccessChunks) {
+                                        null -> uiState.directIndexSuccessMessage.orEmpty()
+                                        else -> stringResource(R.string.chat_import_direct_index_success, chunks)
+                                    }
                                     Text(
-                                        text = uiState.directIndexSuccessMessage.orEmpty(),
+                                        text = successText,
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                         color = MaterialTheme.colorScheme.onPrimaryContainer
                                     )
@@ -379,8 +383,18 @@ fun ChatImportContent(
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.error
                                     )
+                                    val errorText = when (uiState.directIndexError) {
+                                        "EMPTY_TEXT" -> stringResource(R.string.chat_import_error_empty_text)
+                                        "ENGINE_NOT_READY" -> stringResource(R.string.chat_import_error_engine_not_ready)
+                                        "INDEXING_FAILED" -> stringResource(R.string.chat_import_error_indexing_failed)
+                                        // Legacy fallback or custom exception message
+                                        "يرجى لصق نص المعرفة أولاً" -> stringResource(R.string.chat_import_error_empty_text)
+                                        "محرك المعرفة غير مهيأ" -> stringResource(R.string.chat_import_error_engine_not_ready)
+                                        "حدث خطأ أثناء حفظ وفهرسة المعرفة. يرجى التحقق من النص والمحاولة مرة أخرى." -> stringResource(R.string.chat_import_error_indexing_failed)
+                                        else -> uiState.directIndexError.orEmpty()
+                                    }
                                     Text(
-                                        text = uiState.directIndexError.orEmpty(),
+                                        text = errorText,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onErrorContainer
                                     )
@@ -576,8 +590,13 @@ fun ChatImportContent(
                                     contentDescription = stringResource(R.string.chat_import_error_icon_desc),
                                     tint = MaterialTheme.colorScheme.error
                                 )
+                                val errorMessage = when (uiState.error) {
+                                    "UNSUPPORTED_FILE" -> stringResource(R.string.chat_import_error_unsupported_file)
+                                    "نوع الملف غير مدعوم. اختر ملف بنسق .txt أو .md (Unsupported file type. Please pick a .txt or .md file.)" -> stringResource(R.string.chat_import_error_unsupported_file)
+                                    else -> uiState.error.orEmpty()
+                                }
                                 Text(
-                                    text = uiState.error.orEmpty(),
+                                    text = errorMessage,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     modifier = Modifier.weight(1f)

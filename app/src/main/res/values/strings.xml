@@ -728,6 +728,11 @@
     <string name="chat_import_clear_file_desc">Clear selected file</string>
     <string name="chat_import_clear_text_desc">Clear direct text input</string>
     <string name="chat_import_file_supported_hint">Supported formats: Text files (.txt) and Markdown files (.md)</string>
+    <string name="chat_import_direct_index_success">Indexed %1$d chunks successfully!</string>
+    <string name="chat_import_error_empty_text">Please paste knowledge text first</string>
+    <string name="chat_import_error_engine_not_ready">Knowledge engine is not initialized</string>
+    <string name="chat_import_error_indexing_failed">An error occurred while saving and indexing knowledge. Please check the text and try again.</string>
+    <string name="chat_import_error_unsupported_file">Unsupported file type. Please pick a .txt or .md file.</string>
     <string name="guide_dialog_title">API Key Extraction Guide</string>
     <string name="guide_notification_copy_text">Copy this text and send it to any AI model (like ChatGPT or Gemini) to guide you through creating an account step by step with links.</string>
 

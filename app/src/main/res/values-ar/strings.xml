@@ -728,6 +728,11 @@
     <string name="chat_import_clear_file_desc">إلغاء الملف المحدد</string>
     <string name="chat_import_clear_text_desc">مسح النص المدخل</string>
     <string name="chat_import_file_supported_hint">الصيغ المدعومة: ملفات نصية (.txt) وملفات ماركداون (.md)</string>
+    <string name="chat_import_direct_index_success">تمت فهرسة %1$d مقطعاً بنجاح!</string>
+    <string name="chat_import_error_empty_text">يرجى لصق نص المعرفة أولاً</string>
+    <string name="chat_import_error_engine_not_ready">محرك المعرفة غير مهيأ</string>
+    <string name="chat_import_error_indexing_failed">حدث خطأ أثناء حفظ وفهرسة المعرفة. يرجى التحقق من النص والمحاولة مرة أخرى.</string>
+    <string name="chat_import_error_unsupported_file">نوع الملف غير مدعوم. اختر ملف بنسق .txt أو .md</string>
     <string name="guide_dialog_title">دليل استخراج المفتاح</string>
     <string name="guide_notification_copy_text">انسخ هذا النص وأرسله لأي نموذج ذكاء اصطناعي (مثل ChatGPT أو Gemini) ليرشدك لإنشاء الحساب خطوة بخطوة بالروابط.</string>
 

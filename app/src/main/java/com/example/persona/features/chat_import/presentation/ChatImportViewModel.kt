@@ -41,11 +41,11 @@ class ChatImportViewModel @Inject constructor(
     val uiState: StateFlow<ChatImportUiState> = _uiState.asStateFlow()
 
     fun onDirectInputTextChanged(text: String) {
-        _uiState.update { it.copy(directInputText = text, directIndexError = null, directIndexSuccessMessage = null) }
+        _uiState.update { it.copy(directInputText = text, directIndexError = null, directIndexSuccessMessage = null, directIndexSuccessChunks = null) }
     }
 
     fun clearDirectIndexMessages() {
-        _uiState.update { it.copy(directIndexError = null, directIndexSuccessMessage = null) }
+        _uiState.update { it.copy(directIndexError = null, directIndexSuccessMessage = null, directIndexSuccessChunks = null) }
     }
 
     fun ingestDirectText() {
@@ -74,7 +74,8 @@ class ChatImportViewModel @Inject constructor(
                 it.copy(
                     isDirectIndexing = true,
                     directIndexError = null,
-                    directIndexSuccessMessage = null
+                    directIndexSuccessMessage = null,
+                    directIndexSuccessChunks = null
                 )
             }
 
@@ -101,6 +102,7 @@ class ChatImportViewModel @Inject constructor(
                             it.copy(
                                 isDirectIndexing = false,
                                 directIndexSuccessMessage = "تمت فهرسة $chunkCount مقطعاً بنجاح!",
+                                directIndexSuccessChunks = chunkCount,
                                 directInputText = ""
                             )
                         }
@@ -267,6 +269,7 @@ data class ChatImportUiState(
     val directInputText: String = "",
     val isDirectIndexing: Boolean = false,
     val directIndexSuccessMessage: String? = null,
+    val directIndexSuccessChunks: Int? = null,
     val directIndexError: String? = null,
     // Progress
     val currentPhase: String = "",
