@@ -57,9 +57,6 @@ class KnowledgeRepository @Inject constructor(
         if (text.isBlank()) return false
         val chunkId = UUID.randomUUID().toString()
 
-        val indexed = vectorIndexer.indexVector(chunkId, text)
-        if (!indexed) return false
-
         val knowledgeEntity = BusinessKnowledgeEntity(
             chunkId = chunkId,
             headerContext = null,
@@ -69,7 +66,15 @@ class KnowledgeRepository @Inject constructor(
             timestamp = System.currentTimeMillis()
         )
 
+        // 1. Insert parent row in business_knowledge first to satisfy foreign key constraint
         businessKnowledgeDao.insertChunk(knowledgeEntity)
+
+        // 2. Compute and insert child embedding vector into embeddings_index
+        val indexed = vectorIndexer.indexVector(chunkId, text)
+        if (!indexed) {
+            businessKnowledgeDao.deleteByChunkId(chunkId)
+            return false
+        }
         return true
     }
 
@@ -98,22 +103,34 @@ class KnowledgeRepository @Inject constructor(
             throw IllegalStateException("No readable chunks generated from text")
         }
 
+        // Clean up previous chunks for this source file to prevent duplicate chunk keys
+        val previousChunks = businessKnowledgeDao.getChunksBySourceType(sourceType)
+            .filter { it.sourceFileName == sourceFileName }
+        for (old in previousChunks) {
+            deleteKnowledge(old.chunkId)
+        }
+
         vectorIndexer.ensureReady()
 
         var indexedCount = 0
         for (chunk in chunks) {
+            val entity = BusinessKnowledgeEntity(
+                chunkId = chunk.chunkId,
+                headerContext = chunk.headerContext,
+                chunkText = chunk.chunkText,
+                sourceType = chunk.sourceType,
+                sourceFileName = chunk.sourceFileName,
+                timestamp = System.currentTimeMillis()
+            )
+            // 1. Insert parent row in business_knowledge first (satisfies foreign key in embeddings_index)
+            businessKnowledgeDao.insertChunk(entity)
+
+            // 2. Compute and insert child embedding vector into embeddings_index
             val indexed = vectorIndexer.indexVector(chunk.chunkId, chunk.chunkText)
             if (indexed) {
-                val entity = BusinessKnowledgeEntity(
-                    chunkId = chunk.chunkId,
-                    headerContext = chunk.headerContext,
-                    chunkText = chunk.chunkText,
-                    sourceType = chunk.sourceType,
-                    sourceFileName = chunk.sourceFileName,
-                    timestamp = System.currentTimeMillis()
-                )
-                businessKnowledgeDao.insertChunk(entity)
                 indexedCount++
+            } else {
+                businessKnowledgeDao.deleteByChunkId(chunk.chunkId)
             }
         }
 
@@ -132,8 +149,6 @@ class KnowledgeRepository @Inject constructor(
         headerContext: String? = null
     ): Boolean {
         if (newText.isBlank()) return false
-        val indexed = vectorIndexer.indexVector(chunkId, newText)
-        if (!indexed) return false
 
         val updatedEntity = BusinessKnowledgeEntity(
             chunkId = chunkId,
@@ -143,7 +158,12 @@ class KnowledgeRepository @Inject constructor(
             sourceFileName = sourceFileName,
             timestamp = System.currentTimeMillis()
         )
+        // 1. Insert or update parent row in business_knowledge first
         businessKnowledgeDao.insertChunk(updatedEntity)
+
+        // 2. Compute and update child embedding vector
+        val indexed = vectorIndexer.indexVector(chunkId, newText)
+        if (!indexed) return false
         return true
     }
 

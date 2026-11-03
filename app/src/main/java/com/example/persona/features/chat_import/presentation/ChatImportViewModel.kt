@@ -106,22 +106,43 @@ class ChatImportViewModel @Inject constructor(
                         }
                     },
                     onFailure = { error ->
+                        android.util.Log.e("ChatImportViewModel", "Direct indexing failed", error)
                         _uiState.update {
                             it.copy(
                                 isDirectIndexing = false,
-                                directIndexError = error.message ?: "فشلت عملية فهرسة المعرفة"
+                                directIndexError = sanitizeErrorMessage(error)
                             )
                         }
                     }
                 )
             } catch (e: Exception) {
+                android.util.Log.e("ChatImportViewModel", "Unexpected exception in direct indexing", e)
                 _uiState.update {
                     it.copy(
                         isDirectIndexing = false,
-                        directIndexError = e.message ?: "حدث خطأ غير متوقع أثناء الفهرسة"
+                        directIndexError = sanitizeErrorMessage(e)
                     )
                 }
             }
+        }
+    }
+
+    private fun sanitizeErrorMessage(error: Throwable): String {
+        val msg = error.message.orEmpty()
+        val isTechnicalError = error is android.database.SQLException ||
+            msg.contains("SQLITE", ignoreCase = true) ||
+            msg.contains("FOREIGN KEY", ignoreCase = true) ||
+            msg.contains("constraint", ignoreCase = true) ||
+            msg.contains("table", ignoreCase = true) ||
+            msg.contains("database", ignoreCase = true) ||
+            msg.contains("cursor", ignoreCase = true) ||
+            msg.contains("NullPointerException", ignoreCase = true) ||
+            msg.contains("Exception", ignoreCase = true)
+
+        return if (isTechnicalError || msg.isBlank()) {
+            "حدث خطأ أثناء حفظ وفهرسة المعرفة. يرجى التحقق من النص والمحاولة مرة أخرى."
+        } else {
+            msg
         }
     }
 

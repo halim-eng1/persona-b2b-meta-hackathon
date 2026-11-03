@@ -191,4 +191,27 @@ class ChatImportViewModelTest {
 
         coVerify(exactly = 1) { mockKnowledgeRepo.ingestMarkdownDocument(any(), any(), any(), any()) }
     }
+
+    @Test
+    fun ingestDirectText_whenTechnicalDbErrorOccurs_sanitizesErrorForUi() = runTest {
+        val mockKnowledgeRepo = mockk<com.example.persona.features.knowledge.data.repository.KnowledgeRepository>()
+        coEvery { mockKnowledgeRepo.ingestMarkdownDocument(any(), any(), any(), any()) } returns
+            Result.failure(android.database.sqlite.SQLiteConstraintException("FOREIGN KEY constraint failed (code 787 SQLITE_CONSTRAINT_FOREIGNKEY)"))
+
+        val vm = ChatImportViewModel(
+            startImportUseCase = startImportUseCase,
+            repository = repository,
+            knowledgeRepository = mockKnowledgeRepo
+        )
+
+        vm.onDirectInputTextChanged("# Sample Knowledge")
+        vm.ingestDirectText()
+
+        val state = vm.uiState.value
+        assertFalse(state.isDirectIndexing)
+        // Technical error message must NEVER be shown to user
+        assertFalse(state.directIndexError?.contains("SQLITE", ignoreCase = true) == true)
+        assertFalse(state.directIndexError?.contains("FOREIGN KEY", ignoreCase = true) == true)
+        assertEquals("حدث خطأ أثناء حفظ وفهرسة المعرفة. يرجى التحقق من النص والمحاولة مرة أخرى.", state.directIndexError)
+    }
 }

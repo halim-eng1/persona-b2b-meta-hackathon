@@ -59,7 +59,8 @@ class KnowledgeRepositoryTest {
 
         val result = repository.addManualKnowledge("Valid text", "MANUAL_ENTRY")
         assertFalse(result)
-        coVerify(exactly = 0) { businessKnowledgeDao.insertChunk(any()) }
+        coVerify(exactly = 1) { businessKnowledgeDao.insertChunk(any()) }
+        coVerify(exactly = 1) { businessKnowledgeDao.deleteByChunkId(any()) }
     }
 
     @Test
