@@ -59,6 +59,8 @@ data class WaitingCustomer(
     val timestamp: Long
 )
 
+enum class SetupCopilotStep { NEEDS_API_KEY, NEEDS_IDENTITY }
+
 data class HomeUiState(
     val isAutoReplyEnabled: Boolean = false,
     val isServiceRunning: Boolean = false,
@@ -76,7 +78,8 @@ data class HomeUiState(
     val isAlwaysShowOnboardingEnabled: Boolean = false,
     val isAutoPauseOnHitl: Boolean = false,
     val isLoading: Boolean = true,
-    val isRefreshing: Boolean = false
+    val isRefreshing: Boolean = false,
+    val setupCopilotStep: SetupCopilotStep? = null
 )
 
 private data class B2BMetrics(
@@ -183,19 +186,43 @@ class HomeViewModel @Inject constructor(
         B2BMetrics(orders, rev, totalReplies, todayReplies)
     }
 
+    /** Emits the current setup step or null when fully configured. */
+    private val setupCopilotFlow = combine(
+        userPreferencesRepository.botName,
+        userPreferencesRepository.storeName
+    ) { bot, store ->
+        val hasApiKey = userPreferencesRepository.hasConfiguredKeys(
+            com.example.persona.features.settings.domain.repository.ModelProviders.META
+        )
+        val isDefaultBot = bot == UserPreferencesRepository.DEFAULT_BOT_NAME ||
+            bot == UserPreferencesRepository.DEFAULT_BOT_NAME_EN
+        val isDefaultStore = store == UserPreferencesRepository.DEFAULT_STORE_NAME ||
+            store == UserPreferencesRepository.DEFAULT_STORE_NAME_EN
+        when {
+            !hasApiKey -> SetupCopilotStep.NEEDS_API_KEY
+            isDefaultBot && isDefaultStore -> SetupCopilotStep.NEEDS_IDENTITY
+            else -> null
+        }
+    }.flowOn(ioDispatcher)
+
     private val _isRefreshing = MutableStateFlow(false)
 
     val uiState: StateFlow<HomeUiState> = combine(
         combine(autoReplyHealthFlow, attentionFlow) { health, attention -> Pair(health, attention) },
         combine(metricsFlow, businessKnowledgeDao.observeChunkCount()) { m, c -> Pair(m, c) },
         recentLogsFlow,
-        combine(userPreferencesRepository.alwaysShowOnboardingFlow, userPreferencesRepository.isAutoPauseOnHitlEnabledFlow) { onboarding, autoPause -> Pair(onboarding, autoPause) },
+        combine(
+            userPreferencesRepository.alwaysShowOnboardingFlow,
+            userPreferencesRepository.isAutoPauseOnHitlEnabledFlow,
+            setupCopilotFlow
+        ) { onboarding, autoPause, setup -> Triple(onboarding, autoPause, setup) },
         _isRefreshing
-    ) { (healthData, attentionData), (metrics, chunkCount), recentLogs, (alwaysShowOnboarding, isAutoPauseOnHitl), isRefreshing ->
+    ) { (healthData, attentionData), (metrics, chunkCount), recentLogs, prefsData, isRefreshing ->
         val (isEnabled, isConnected) = healthData
         val (attentionCount, waitingCustomers) = attentionData
         val running = try { serviceAliveChecker() } catch (_: Throwable) { isConnected }
         val health = computeSystemHealth(isEnabled)
+        val (alwaysShowOnboarding, isAutoPauseOnHitl, setupStep) = prefsData
         HomeUiState(
             isAutoReplyEnabled = isEnabled,
             isServiceRunning = running,
@@ -212,7 +239,8 @@ class HomeViewModel @Inject constructor(
             isAlwaysShowOnboardingEnabled = alwaysShowOnboarding,
             isAutoPauseOnHitl = isAutoPauseOnHitl,
             isLoading = false,
-            isRefreshing = isRefreshing
+            isRefreshing = isRefreshing,
+            setupCopilotStep = setupStep
         )
     }.stateIn(
         scope = viewModelScope,

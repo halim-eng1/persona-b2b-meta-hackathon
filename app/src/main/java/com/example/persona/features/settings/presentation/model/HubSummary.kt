@@ -31,7 +31,6 @@ fun buildHubCards(s: SettingsUiState, r: Resources): List<HubCard> {
     val checks = listOf(
         s.isNotificationListenerGranted,
         s.isBatteryOptimizationIgnored,
-        s.isAutoStartConfirmed,
         s.isStorageAccessGranted,
         s.isContactsPermissionGranted
     )

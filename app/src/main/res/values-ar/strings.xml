@@ -47,7 +47,7 @@
     <string name="common_move_down">تحريك للأسفل</string>
     <string name="common_toggle_visibility">تبديل الرؤية</string>
     <string name="common_remove">إزالة</string>
-    <string name="settings_cooldown_none">بدون تأخير (فوري / وضع الفحص)</string>
+    <string name="settings_cooldown_none">فوري (بدون انتظار)</string>
     <string name="settings_cooldown_one_min">دقيقة واحدة</string>
     <string name="settings_cooldown_mins">%d دقائق</string>
 
@@ -1021,10 +1021,10 @@
     <!-- Sprint 1: Threshold & Ping -->
     <string name="settings_threshold_conservative">متحفظ</string>
     <string name="settings_threshold_balanced">متوازن</string>
-    <string name="settings_threshold_aggressive">متقدم / هجومي</string>
+    <string name="settings_threshold_aggressive">استجابة مرنة / استباقية</string>
     <string name="settings_threshold_conservative_desc">الرد فقط عند الثقة العالية (≥ 85%).</string>
     <string name="settings_threshold_balanced_desc">مستوى ثقة متوازن مطلوب (≥ 75%).</string>
-    <string name="settings_threshold_aggressive_desc">الرد حتى مع مستوى ثقة منخفض (≥ 65%).</string>
+    <string name="settings_threshold_aggressive_desc">الرد مع نسبة تطابق مرنة (≥ 65%).</string>
 
 
     <!-- Sprint 2: Order & Date Filters -->
@@ -1163,6 +1163,16 @@
     <string name="setup_notification_access">منح إذن قراءة الإشعارات</string>
     <string name="setup_storage_access">منح إذن قراءة الوسائط والتسجيلات</string>
     <string name="setup_name_store">تحديد اسم المتجر والمساعد</string>
+
+    <!-- Setup Copilot Dashboard Cards -->
+    <string name="setup_copilot_api_title">إعداد المساعد الذكي</string>
+    <string name="setup_copilot_api_step">الخطوة 1 من 2</string>
+    <string name="setup_copilot_api_subtitle">أضف مفتاح Meta Model API في الإعدادات لتفعيل الردود التلقائية.</string>
+    <string name="setup_copilot_api_btn">إعداد مفتاح API</string>
+    <string name="setup_copilot_identity_title">خصّص هوية المساعد وأسلوبه</string>
+    <string name="setup_copilot_identity_step">الخطوة 2 من 2</string>
+    <string name="setup_copilot_identity_subtitle">حدد اسم مساعدك وملف المتجر وأسلوب المحادثة.</string>
+    <string name="setup_copilot_identity_btn">تخصيص الشخصية</string>
 
     <string name="quick_hours">ساعات العمل</string>
     <string name="quick_groups">تجاهل المجموعات</string>

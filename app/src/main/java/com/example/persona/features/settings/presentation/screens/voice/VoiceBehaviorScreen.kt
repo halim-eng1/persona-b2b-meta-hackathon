@@ -269,7 +269,8 @@ fun VoiceBehaviorScreen(
         TonePickerSheet(
             selectedTone = state.personaTone,
             onSelectTone = actions::setPersonaTone,
-            onDismiss = { showTonePicker = false }
+            onDismiss = { showTonePicker = false },
+            appLanguage = state.appLanguage
         )
     }
 }

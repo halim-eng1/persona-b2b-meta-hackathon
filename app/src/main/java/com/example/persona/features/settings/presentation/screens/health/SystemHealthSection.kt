@@ -89,18 +89,7 @@ fun SystemHealthSection(
                 }
             )
 
-            // 3. Auto-Start on Boot (Infinix / Transsion XOS / OEM)
-            HealthItemRow(
-                title = stringResource(R.string.settings_perm_autostart_title),
-                isOk = state.isAutoStartConfirmed,
-                okText = stringResource(R.string.settings_perm_autostart_ok),
-                missingText = stringResource(R.string.settings_perm_autostart_missing),
-                onRequestPermission = {
-                    actions.openAutoStartSettings(context)
-                }
-            )
-
-            // 4. Voice Notes & Storage Access
+            // 3. Voice Notes & Storage Access
             HealthItemRow(
                 title = stringResource(R.string.settings_perm_storage_title),
                 isOk = state.isStorageAccessGranted,
@@ -111,7 +100,7 @@ fun SystemHealthSection(
                 }
             )
 
-            // 5. Contacts Access
+            // 4. Contacts Access
             HealthItemRow(
                 title = stringResource(R.string.settings_perm_contacts_title),
                 isOk = state.isContactsPermissionGranted,

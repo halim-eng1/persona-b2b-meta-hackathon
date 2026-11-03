@@ -47,7 +47,7 @@
     <string name="common_move_down">Move Down</string>
     <string name="common_toggle_visibility">Toggle Visibility</string>
     <string name="common_remove">Remove</string>
-    <string name="settings_cooldown_none">None (Instant / Testing Mode)</string>
+    <string name="settings_cooldown_none">Instant (No Cooldown)</string>
     <string name="settings_cooldown_one_min">1 minute</string>
     <string name="settings_cooldown_mins">%d minutes</string>
 
@@ -1021,10 +1021,10 @@
     <!-- Sprint 1: Threshold & Ping -->
     <string name="settings_threshold_conservative">Conservative</string>
     <string name="settings_threshold_balanced">Balanced</string>
-    <string name="settings_threshold_aggressive">Aggressive</string>
+    <string name="settings_threshold_aggressive">Proactive</string>
     <string name="settings_threshold_conservative_desc">Only reply when highly confident (≥ 85%).</string>
     <string name="settings_threshold_balanced_desc">Balanced confidence required (≥ 75%).</string>
-    <string name="settings_threshold_aggressive_desc">Reply even with lower confidence (≥ 65%).</string>
+    <string name="settings_threshold_aggressive_desc">Reply with flexible confidence (≥ 65%).</string>
 
 
     <!-- Sprint 2: Order & Date Filters -->
@@ -1163,6 +1163,16 @@
     <string name="setup_notification_access">Grant Notification Listener Access</string>
     <string name="setup_storage_access">Grant Media &amp; Voice Storage Access</string>
     <string name="setup_name_store">Set your Assistant &amp; Store Name</string>
+
+    <!-- Setup Copilot Dashboard Cards -->
+    <string name="setup_copilot_api_title">Setup Assistant Copilot</string>
+    <string name="setup_copilot_api_step">Step 1 of 2</string>
+    <string name="setup_copilot_api_subtitle">Add your Meta Model API key in Settings to activate autonomous replies.</string>
+    <string name="setup_copilot_api_btn">Configure API Key</string>
+    <string name="setup_copilot_identity_title">Personalize Assistant Identity &amp; Tone</string>
+    <string name="setup_copilot_identity_step">Step 2 of 2</string>
+    <string name="setup_copilot_identity_subtitle">Customize your assistant\'s name, store profile, and conversation style.</string>
+    <string name="setup_copilot_identity_btn">Customize Persona</string>
 
     <string name="quick_hours">Working Hours</string>
     <string name="quick_groups">Ignore Groups</string>

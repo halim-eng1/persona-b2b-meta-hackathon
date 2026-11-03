@@ -75,6 +75,9 @@ class HomeViewModelTest {
         every { userPreferencesRepository.isAutoReplyEnabled } returns isAutoReplyFlow
         every { userPreferencesRepository.alwaysShowOnboardingFlow } returns MutableStateFlow(false)
         every { userPreferencesRepository.isAutoPauseOnHitlEnabledFlow } returns MutableStateFlow(false)
+        every { userPreferencesRepository.botName } returns MutableStateFlow(UserPreferencesRepository.DEFAULT_BOT_NAME)
+        every { userPreferencesRepository.storeName } returns MutableStateFlow(UserPreferencesRepository.DEFAULT_STORE_NAME)
+        every { userPreferencesRepository.hasConfiguredKeys(any()) } returns true
         every { auditLogRepository.observeReplyCount() } returns replyCountFlow
         every { auditLogRepository.observeLogs(limit = 3) } returns recentLogsFlow
         every { auditLogRepository.observeLogs(limit = 200) } returns allLogsFlow

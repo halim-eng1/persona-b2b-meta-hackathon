@@ -121,7 +121,9 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_PERSONAL_ASSISTANT_NAME = stringPreferencesKey("personal_assistant_name")
         val KEY_PERSONAL_OWNER_NAME = stringPreferencesKey("personal_owner_name")
         const val DEFAULT_PERSONAL_ASSISTANT_NAME = "Assistant"
-        const val DEFAULT_PERSONAL_OWNER_NAME = "User"
+        const val DEFAULT_PERSONAL_ASSISTANT_NAME_AR = "المساعد الشخصي"
+        const val DEFAULT_PERSONAL_OWNER_NAME = "Personal Profile"
+        const val DEFAULT_PERSONAL_OWNER_NAME_AR = "الملف الشخصي"
 
         // ── Model Preparation State ───────────────────────────────────────────
         val KEY_MODEL_PREPARED = booleanPreferencesKey("is_model_prepared")
@@ -148,7 +150,9 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_BLACKLISTED_NUMBERS = stringPreferencesKey("blacklisted_phone_numbers")
 
         const val DEFAULT_BOT_NAME = "مساعد المبيعات"
+        const val DEFAULT_BOT_NAME_EN = "Sales Assistant"
         const val DEFAULT_STORE_NAME = "متجرنا"
+        const val DEFAULT_STORE_NAME_EN = "Our Store"
 
         const val DEFAULT_HITL_HOLDING_MESSAGE_AR =
             "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
@@ -317,11 +321,21 @@ class UserPreferencesRepository @Inject constructor(
     }
 
     val botName: Flow<String> = dataStore.data.map { prefs ->
-        prefs[KEY_BOT_NAME]?.takeIf { it.isNotBlank() } ?: DEFAULT_BOT_NAME
+        val saved = prefs[KEY_BOT_NAME]?.takeIf { it.isNotBlank() }
+        if (saved != null) saved
+        else {
+            val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+            if (lang.startsWith("ar", ignoreCase = true)) DEFAULT_BOT_NAME else DEFAULT_BOT_NAME_EN
+        }
     }
 
     val storeName: Flow<String> = dataStore.data.map { prefs ->
-        prefs[KEY_STORE_NAME]?.takeIf { it.isNotBlank() } ?: DEFAULT_STORE_NAME
+        val saved = prefs[KEY_STORE_NAME]?.takeIf { it.isNotBlank() }
+        if (saved != null) saved
+        else {
+            val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+            if (lang.startsWith("ar", ignoreCase = true)) DEFAULT_STORE_NAME else DEFAULT_STORE_NAME_EN
+        }
     }
 
     val storeKnowledgeTopicsFlow: Flow<List<String>> = dataStore.data.map { preferences ->
@@ -989,36 +1003,54 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun getFarewellTemplateSync(default: String): String =
         dataStore.data.first()[KEY_FAREWELL_TEMPLATE]?.takeIf { it.isNotBlank() } ?: default
 
-    suspend fun getBotNameSync(): String =
-        dataStore.data.first()[KEY_BOT_NAME]?.takeIf { it.isNotBlank() } ?: DEFAULT_BOT_NAME
+    suspend fun getBotNameSync(): String {
+        val prefs = dataStore.data.first()
+        val saved = prefs[KEY_BOT_NAME]?.takeIf { it.isNotBlank() }
+        if (saved != null) return saved
+        val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+        return if (lang.startsWith("ar", ignoreCase = true)) DEFAULT_BOT_NAME else DEFAULT_BOT_NAME_EN
+    }
 
-    suspend fun getStoreNameSync(): String =
-        dataStore.data.first()[KEY_STORE_NAME]?.takeIf { it.isNotBlank() } ?: DEFAULT_STORE_NAME
+    suspend fun getStoreNameSync(): String {
+        val prefs = dataStore.data.first()
+        val saved = prefs[KEY_STORE_NAME]?.takeIf { it.isNotBlank() }
+        if (saved != null) return saved
+        val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+        return if (lang.startsWith("ar", ignoreCase = true)) DEFAULT_STORE_NAME else DEFAULT_STORE_NAME_EN
+    }
 
     val personalAssistantNameFlow: Flow<String> = dataStore.data.map { prefs ->
+        val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+        val isArabic = lang.startsWith("ar", ignoreCase = true)
         prefs[KEY_PERSONAL_ASSISTANT_NAME]?.takeIf { it.isNotBlank() }
-            ?: prefs[KEY_BOT_NAME]?.takeIf { it.isNotBlank() && it != DEFAULT_BOT_NAME }
-            ?: DEFAULT_PERSONAL_ASSISTANT_NAME
+            ?: prefs[KEY_BOT_NAME]?.takeIf { it.isNotBlank() && it != DEFAULT_BOT_NAME && it != DEFAULT_BOT_NAME_EN }
+            ?: if (isArabic) DEFAULT_PERSONAL_ASSISTANT_NAME_AR else DEFAULT_PERSONAL_ASSISTANT_NAME
     }
 
     val personalOwnerNameFlow: Flow<String> = dataStore.data.map { prefs ->
+        val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+        val isArabic = lang.startsWith("ar", ignoreCase = true)
         prefs[KEY_PERSONAL_OWNER_NAME]?.takeIf { it.isNotBlank() }
-            ?: prefs[KEY_STORE_NAME]?.takeIf { it.isNotBlank() && it != DEFAULT_STORE_NAME }
-            ?: DEFAULT_PERSONAL_OWNER_NAME
+            ?: prefs[KEY_STORE_NAME]?.takeIf { it.isNotBlank() && it != DEFAULT_STORE_NAME && it != DEFAULT_STORE_NAME_EN }
+            ?: if (isArabic) DEFAULT_PERSONAL_OWNER_NAME_AR else DEFAULT_PERSONAL_OWNER_NAME
     }
 
     suspend fun getPersonalAssistantNameSync(): String {
         val prefs = dataStore.data.first()
+        val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+        val isArabic = lang.startsWith("ar", ignoreCase = true)
         return prefs[KEY_PERSONAL_ASSISTANT_NAME]?.takeIf { it.isNotBlank() }
-            ?: prefs[KEY_BOT_NAME]?.takeIf { it.isNotBlank() && it != DEFAULT_BOT_NAME }
-            ?: DEFAULT_PERSONAL_ASSISTANT_NAME
+            ?: prefs[KEY_BOT_NAME]?.takeIf { it.isNotBlank() && it != DEFAULT_BOT_NAME && it != DEFAULT_BOT_NAME_EN }
+            ?: if (isArabic) DEFAULT_PERSONAL_ASSISTANT_NAME_AR else DEFAULT_PERSONAL_ASSISTANT_NAME
     }
 
     suspend fun getPersonalOwnerNameSync(): String {
         val prefs = dataStore.data.first()
+        val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+        val isArabic = lang.startsWith("ar", ignoreCase = true)
         return prefs[KEY_PERSONAL_OWNER_NAME]?.takeIf { it.isNotBlank() }
-            ?: prefs[KEY_STORE_NAME]?.takeIf { it.isNotBlank() && it != DEFAULT_STORE_NAME }
-            ?: DEFAULT_PERSONAL_OWNER_NAME
+            ?: prefs[KEY_STORE_NAME]?.takeIf { it.isNotBlank() && it != DEFAULT_STORE_NAME && it != DEFAULT_STORE_NAME_EN }
+            ?: if (isArabic) DEFAULT_PERSONAL_OWNER_NAME_AR else DEFAULT_PERSONAL_OWNER_NAME
     }
 
     suspend fun setPersonalAssistantName(name: String) {

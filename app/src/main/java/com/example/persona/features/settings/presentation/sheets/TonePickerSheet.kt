@@ -39,9 +39,11 @@ fun TonePickerSheet(
     selectedTone: PersonaTone,
     onSelectTone: (PersonaTone) -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    appLanguage: String = "ar"
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val isArabic = appLanguage.startsWith("ar", ignoreCase = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -101,12 +103,12 @@ fun TonePickerSheet(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = tone.titleArabic,
+                                    text = if (isArabic) tone.titleArabic else tone.subtitle,
                                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = tone.subtitle,
+                                    text = if (isArabic) tone.subtitle else tone.titleArabic,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -114,8 +116,8 @@ fun TonePickerSheet(
                         }
                         Spacer(modifier = Modifier.height(10.dp))
                         ChatBubblePreview(
-                            sender = tone.titleArabic,
-                            text = tone.samplePreview
+                            sender = if (isArabic) tone.titleArabic else tone.subtitle,
+                            text = tone.getLocalizedPreview(isArabic)
                         )
                     }
                 }

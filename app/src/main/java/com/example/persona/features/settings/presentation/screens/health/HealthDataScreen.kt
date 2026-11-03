@@ -96,7 +96,6 @@ fun HealthDataScreen(
         listOf(
             state.isNotificationListenerGranted,
             state.isBatteryOptimizationIgnored,
-            state.isAutoStartConfirmed,
             state.isStorageAccessGranted,
             state.isContactsPermissionGranted
         )

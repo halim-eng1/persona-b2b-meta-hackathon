@@ -202,6 +202,18 @@ fun HomeScreen(
                     )
                 }
 
+                // ── Section 1.5: Setup Copilot Onboarding Card ──────────────────
+                val copilotStep = state.setupCopilotStep
+                if (areAllPermissionsGranted && copilotStep != null) {
+                    item(key = "setup_copilot") {
+                        SetupCopilotCard(
+                            step = copilotStep,
+                            onConfigureApiKey = onNavigateToSettings,
+                            onCustomizePersona = onNavigateToSettings
+                        )
+                    }
+                }
+
                 // ── Section 2: Human Takeover (HITL) Alert Center ─────────────────
                 if (state.pendingAttentionCount > 0) {
                     item(key = "urgent_attention") {
