@@ -192,11 +192,22 @@ android {
         buildConfigField("String", "META_BASE_URL", "\"${resolveSecret("META_BASE_URL") ?: "https://api.meta.ai/v1"}\"")
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("${rootDir}/release-key.jks")
+            storePassword = "personaPass2026"
+            keyAlias = "persona-release"
+            keyPassword = "personaPass2026"
+            enableV1Signing = true
+            enableV2Signing = true
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

@@ -29,3 +29,8 @@ secrets copy.properties
 /benchmark_reasoning/
 /scripts/
 __pycache__/
+
+# Keystores & Signing
+release-key.jks
+*.jks
+*.keystore
