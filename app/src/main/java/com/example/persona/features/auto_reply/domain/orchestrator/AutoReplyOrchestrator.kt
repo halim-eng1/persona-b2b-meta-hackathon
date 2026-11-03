@@ -1265,11 +1265,22 @@ class AutoReplyOrchestrator @Inject constructor(
             val safeReplyText = if (!rawReplyText.isNullOrBlank()) {
                 rawReplyText
             } else if (orderAction == null) {
-                val storeName = prefsRepository.getStoreNameSync()
-                PersonaLogger.w(TAG, "LLM returned blank final_reply_text for benign turn. Using persona fallback.")
-                val template = runCatching { prefsRepository.getBlankReplyFallbackTemplateSync() }.getOrNull()
-                    ?: UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE
-                String.format(template, storeName)
+                if (accountMode == AccountMode.PERSONAL) {
+                    val ownerName = runCatching { prefsRepository.getPersonalOwnerNameSync() }.getOrDefault(UserPreferencesRepository.DEFAULT_PERSONAL_OWNER_NAME)
+                    val isEnglishContact = processed.originalText.any { it in 'a'..'z' || it in 'A'..'Z' }
+                    PersonaLogger.w(TAG, "LLM returned blank final_reply_text in Personal Mode. Using personal persona fallback.")
+                    if (isEnglishContact) {
+                        "I am here to assist you with any questions regarding $ownerName."
+                    } else {
+                        "أنا معاك يا فندم، وتحت أمرك في أي استفسار يخص $ownerName."
+                    }
+                } else {
+                    val storeName = prefsRepository.getStoreNameSync()
+                    PersonaLogger.w(TAG, "LLM returned blank final_reply_text for benign turn. Using persona fallback.")
+                    val template = runCatching { prefsRepository.getBlankReplyFallbackTemplateSync() }.getOrNull()
+                        ?: UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE
+                    String.format(template, storeName)
+                }
             } else {
                 Log.d(TAG, "Agentic loop produced no reply — HITL fallback.")
                 hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
@@ -1291,10 +1302,15 @@ class AutoReplyOrchestrator @Inject constructor(
                 if (orderAction == null) {
                     val storeName = prefsRepository.getStoreNameSync()
                     PersonaLogger.w(TAG, "Anti-echo guard triggered on standard conversational turn. Replacing with alternative persona closing.")
+                    val isEnglishContact = processed.originalText.any { it in 'a'..'z' || it in 'A'..'Z' }
                     styledReplyText = if (accountMode == AccountMode.PERSONAL) {
-                        "أنا معاك، قولّي أقدر أساعدك في إيه؟"
+                        if (isEnglishContact) "I'm right here! How can I assist you?" else "أنا معاك، قولّي أقدر أساعدك في إيه؟"
                     } else {
-                        "معاك يا فندم، اطلب اللي نفسك فيه من $storeName وأنا في الخدمة علطول 💙"
+                        if (isEnglishContact) {
+                            "I'm at your service! Feel free to ask anything about $storeName 💙"
+                        } else {
+                            "معاك يا فندم، اطلب اللي نفسك فيه من $storeName وأنا في الخدمة علطول 💙"
+                        }
                     }
                 } else {
                     Log.w(TAG, "Anti-echo guard triggered: duplicate reply for ${processed.contactName}. Degrading to HITL.")

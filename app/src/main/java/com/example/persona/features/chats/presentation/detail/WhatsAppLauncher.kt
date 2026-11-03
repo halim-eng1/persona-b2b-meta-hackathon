@@ -41,11 +41,14 @@ object WhatsAppLauncher {
     }
 
     fun normalizePhoneNumber(phone: String): String {
-        val clean = phone.replace(Regex("[^0-9+]"), "").trim()
+        val raw = phone.trim()
+        val hasLeadingPlus = raw.startsWith("+")
+        val digitsOnly = raw.filter { it.isDigit() }
+        val clean = if (hasLeadingPlus) "+$digitsOnly" else digitsOnly
         return when {
             clean.startsWith("+") -> clean.substring(1)
             clean.startsWith("00") -> clean.substring(2)
-            clean.startsWith("01") && clean.length == 11 -> "2" + clean // Retain backward-compatible Egyptian local mapping
+            clean.startsWith("01") && clean.length == 11 -> "2$clean"
             else -> clean
         }
     }

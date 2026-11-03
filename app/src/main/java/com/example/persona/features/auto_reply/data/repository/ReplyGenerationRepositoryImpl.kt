@@ -511,20 +511,40 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
         val storeWebsite = userPreferencesRepository.storeWebsiteFlow.first()
         val tone = userPreferencesRepository.stylePreferences.first().personaTone
-        val botName = userPreferencesRepository.getBotNameSync()
-        val storeName = userPreferencesRepository.getStoreNameSync()
         val accountMode = runCatching { userPreferencesRepository.getAccountModeSync() }.getOrDefault(AccountMode.BUSINESS)
+        val botName = if (accountMode == AccountMode.PERSONAL) {
+            userPreferencesRepository.getPersonalAssistantNameSync()
+        } else {
+            userPreferencesRepository.getBotNameSync()
+        }
+        val storeName = if (accountMode == AccountMode.PERSONAL) {
+            userPreferencesRepository.getPersonalOwnerNameSync()
+        } else {
+            userPreferencesRepository.getStoreNameSync()
+        }
 
         val systemPromptWithContext = if (accountMode == AccountMode.PERSONAL) {
-            val baseSystemPrompt = PromptContextBuilder.buildPersonalFirstPassSystemPrompt(
-                assistantName = botName,
-                ownerName = storeName,
-                tone = tone
-            )
-            PromptContextBuilder.buildPersonalSystemPromptWithContext(
-                staticSystemPrompt = baseSystemPrompt,
-                candidates = candidates
-            )
+            when (inboundIntent) {
+                InboundIntent.GREETING, InboundIntent.BANTER -> {
+                    Log.d(TAG, "⚡ Routing to Personal small talk (intent=$inboundIntent, bypassing RAG)")
+                    PromptContextBuilder.buildPersonalFirstPassSystemPrompt(
+                        assistantName = botName,
+                        ownerName = storeName,
+                        tone = tone
+                    )
+                }
+                else -> {
+                    val baseSystemPrompt = PromptContextBuilder.buildPersonalFirstPassSystemPrompt(
+                        assistantName = botName,
+                        ownerName = storeName,
+                        tone = tone
+                    )
+                    PromptContextBuilder.buildPersonalSystemPromptWithContext(
+                        staticSystemPrompt = baseSystemPrompt,
+                        candidates = candidates
+                    )
+                }
+            }
         } else {
             when (inboundIntent) {
                 InboundIntent.GREETING, InboundIntent.BANTER -> {
@@ -601,9 +621,10 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val accountMode = runCatching { userPreferencesRepository.getAccountModeSync() }.getOrDefault(AccountMode.BUSINESS)
         val systemPromptWithContext = if (accountMode == AccountMode.PERSONAL) {
             val baseSystemPrompt = PromptContextBuilder.buildPersonalFirstPassSystemPrompt(
-                assistantName = userPreferencesRepository.getBotNameSync(),
-                ownerName = userPreferencesRepository.getStoreNameSync(),
-                tone = tone
+                assistantName = userPreferencesRepository.getPersonalAssistantNameSync(),
+                ownerName = userPreferencesRepository.getPersonalOwnerNameSync(),
+                tone = tone,
+                isMultimodal = isMultimodal
             )
             PromptContextBuilder.buildPersonalSystemPromptWithContext(
                 staticSystemPrompt = baseSystemPrompt,

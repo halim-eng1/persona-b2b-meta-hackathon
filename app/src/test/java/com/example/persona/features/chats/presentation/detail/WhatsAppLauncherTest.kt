@@ -23,5 +23,6 @@ class WhatsAppLauncherTest {
     fun `normalizePhoneNumber handles international prefixes`() {
         assertEquals("966501234567", WhatsAppLauncher.normalizePhoneNumber("+966501234567"))
         assertEquals("201012345678", WhatsAppLauncher.normalizePhoneNumber("201012345678"))
+        assertEquals("15551234567", WhatsAppLauncher.normalizePhoneNumber("+1 555 + 123 4567"))
     }
 }

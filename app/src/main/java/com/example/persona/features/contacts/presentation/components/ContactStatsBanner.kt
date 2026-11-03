@@ -45,7 +45,7 @@ fun ContactStatsBanner(
                 color = MaterialTheme.colorScheme.primary
             )
             StatItem(
-                label = "VIP ⭐",
+                label = stringResource(R.string.contacts_stat_vip),
                 value = summary.vipCount.toString(),
                 color = Color(0xFFD4AF37) // Gold
             )

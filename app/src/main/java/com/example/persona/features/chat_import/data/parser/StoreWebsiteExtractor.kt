@@ -63,7 +63,7 @@ object StoreWebsiteExtractor {
 
     private fun cleanUrl(raw: String): String {
         return raw.trim()
-            .trimEnd('.', ',', ';', ':', ')', ']', '}', '"', '\'')
+            .trimEnd('.', ',', ';', ':', ')', ']', '}', '"', '\'', '!', '?', '*', '>', '<', '~')
     }
 
     private fun isValidStoreUrl(url: String): Boolean {

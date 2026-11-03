@@ -106,9 +106,22 @@ class EgyptianOrderUtilsTest {
         assertEquals(550.50, EgyptianOrderUtils.parseEgyptianDecimal("550,50")!!, 0.001)
         assertEquals(550.50, EgyptianOrderUtils.parseEgyptianDecimal("٥٥٠٫٥٠")!!, 0.001)
         assertEquals(300.0, EgyptianOrderUtils.parseEgyptianDecimal("٣٠٠ ج.م")!!, 0.001)
+        assertEquals(1000.0, EgyptianOrderUtils.parseEgyptianDecimal("1,000")!!, 0.001)
+        assertEquals(1000.0, EgyptianOrderUtils.parseEgyptianDecimal("1،000")!!, 0.001)
+        assertEquals(1500.50, EgyptianOrderUtils.parseEgyptianDecimal("1,500.50")!!, 0.001)
+        assertEquals(10.50, EgyptianOrderUtils.parseEgyptianDecimal("10,50")!!, 0.001)
+        assertEquals(10.5, EgyptianOrderUtils.parseEgyptianDecimal("10,5")!!, 0.001)
+        assertEquals(1000000.0, EgyptianOrderUtils.parseEgyptianDecimal("1,000,000")!!, 0.001)
         assertNull(EgyptianOrderUtils.parseEgyptianDecimal(""))
         assertNull(EgyptianOrderUtils.parseEgyptianDecimal("   "))
         assertNull(EgyptianOrderUtils.parseEgyptianDecimal(null))
+    }
+
+    @Test
+    fun `extracts Egyptian mobile number in mixed text containing foreign phone`() {
+        val mixed = "US contact +15551234567, local delivery brother 01012345678"
+        assertEquals("01012345678", EgyptianOrderUtils.extractEgyptianMobilePhone(mixed))
+        assertNull(EgyptianOrderUtils.extractEgyptianMobilePhone("+15551234567"))
     }
 
     @Test

@@ -15,7 +15,7 @@ object EgyptianOrderUtils {
      * e.g. 1[0125][0-9]{8}.
      * Accepts optional country prefix (+20, 0020, 20, or leading 0).
      */
-    private val EGYPTIAN_MOBILE_REGEX = Regex("""(?:\+?20|0020|20|0)?(1[0125][0-9]{8})""")
+    private val EGYPTIAN_MOBILE_REGEX = Regex("""(?<![\d+])(?:\(?\+20|\(?0020|\(?20|\(?0)?[\s\-_()]*1[0125](?:[\s\-_()]*[0-9]){8}(?!\d)""")
 
     /**
      * Converts Eastern Arabic (٠-٩) and Persian (۰-۹) digits to ASCII standard digits (0-9).
@@ -45,21 +45,15 @@ object EgyptianOrderUtils {
     fun extractEgyptianMobilePhone(text: String?): String? {
         if (text.isNullOrBlank()) return null
         val asciiText = convertArabicDigitsToAscii(text)
-
-        // 1. Guard against non-Egyptian international prefixes (+ or 00)
-        val stripped = asciiText.replace(Regex("""[\s\-_().,،/\\:]"""), "")
-        if (stripped.contains("+") && !stripped.contains("+20")) return null
-        if (stripped.startsWith("00") && !stripped.startsWith("0020")) return null
-
-        val strippedMatch = EGYPTIAN_MOBILE_REGEX.find(stripped)
-        if (strippedMatch != null) {
-            return "0${strippedMatch.groupValues[1]}"
-        }
-
-        // 2. Fallback to searching unstripped ascii text
-        if (asciiText.contains("+") && !asciiText.contains("+20")) return null
         val match = EGYPTIAN_MOBILE_REGEX.find(asciiText) ?: return null
-        return "0${match.groupValues[1]}"
+        val digits = match.value.filter { it.isDigit() }
+        return when {
+            digits.length == 10 -> "0$digits"
+            digits.length == 11 && digits.startsWith("01") -> digits
+            digits.length == 12 && digits.startsWith("201") -> "0${digits.substring(2)}"
+            digits.length == 14 && digits.startsWith("00201") -> "0${digits.substring(4)}"
+            else -> null
+        }
     }
 
     /**
@@ -68,9 +62,9 @@ object EgyptianOrderUtils {
     val INTERNATIONAL_PHONE_REGEX = Regex("""^\+?[0-9]{7,15}$""")
 
     /**
-     * Extracts candidate phone numbers from multi-line text or clipboard blocks.
+     * Extracts candidate phone numbers from text or clipboard blocks without spanning across line breaks.
      */
-    val CLIPBOARD_PHONE_REGEX = Regex("""(?:\+?[0-9]{1,4}[\s\-]?)?(?:\([0-9]{1,4}\)[\s\-]?)?[0-9]{2,4}[\s\-]?[0-9]{3,4}[\s\-]?[0-9]{3,6}""")
+    val CLIPBOARD_PHONE_REGEX = Regex("""(?:\+?[0-9]{1,4}[ \t\-]?)?(?:\([0-9]{1,4}\)[ \t\-]?)?[0-9]{2,4}[ \t\-]?[0-9]{3,4}[ \t\-]?[0-9]{3,6}""")
 
     /**
      * Validates whether [phone] represents a valid international phone number under ITU-T E.164
@@ -85,7 +79,7 @@ object EgyptianOrderUtils {
     }
 
     /**
-     * Extracts a candidate phone number from text or clipboard content.
+     * Extracts a candidate phone number from text or clipboard content line-by-line.
      */
     fun extractPhoneNumber(text: String?): String? {
         if (text.isNullOrBlank()) return null
@@ -95,10 +89,17 @@ object EgyptianOrderUtils {
         val stripped = ascii.replace(Regex("""[\s\-_().,،/\\:]"""), "")
         if (isValidPhoneNumber(stripped)) return stripped
 
-        // 2. Pattern matching within clipboard text
-        val match = CLIPBOARD_PHONE_REGEX.find(ascii) ?: return null
-        val candidate = match.value.replace(Regex("""[\s\-_().,،/\\:]"""), "")
-        return if (isValidPhoneNumber(candidate)) candidate else null
+        // 2. Scan line by line to prevent cross-line concatenation
+        for (line in ascii.lines()) {
+            val lineTrimmed = line.trim()
+            if (lineTrimmed.isBlank()) continue
+            val match = CLIPBOARD_PHONE_REGEX.find(lineTrimmed)
+            if (match != null) {
+                val candidate = match.value.replace(Regex("""[ \t\-_().,،/\\:]"""), "")
+                if (isValidPhoneNumber(candidate)) return candidate
+            }
+        }
+        return null
     }
 
     /**
@@ -147,18 +148,42 @@ object EgyptianOrderUtils {
      * supporting decimal points (.), Arabic decimal separators (٫), commas (، ,),
      * and currency suffixes.
      *
+     * Correctly distinguishes thousands separators (e.g. 1,000 or 1,500.50) from decimal separators (e.g. 10,50).
+     *
      * Returns null for blank or unparseable input.
      */
     fun parseEgyptianDecimal(input: String?): Double? {
         if (input.isNullOrBlank()) return null
         val ascii = convertArabicDigitsToAscii(input.trim())
-        val normalized = ascii.map { ch ->
-            when (ch) {
-                '٫', '،', ',' -> '.'
-                else -> ch
+
+        // Strip currency symbols and text (EGP, LE, USD, EUR, GBP, AED, SAR, ج.م, جنيه, $, €, etc.)
+        val strippedCurrency = ascii.replace(
+            Regex("""(?i)\b(?:egp|le|usd|eur|gbp|aed|sar)\b|(?:ج\.م|جنيه|ج\.م\.)|[$€£¥₹]"""),
+            ""
+        ).trim()
+        if (strippedCurrency.isBlank()) return null
+
+        // 1. Remove Arabic thousands separator (\u066C)
+        var s = strippedCurrency.replace('\u066C', ' ')
+
+        // 2. Normalize Arabic decimal separator (\u066B) to standard '.'
+        s = s.replace('\u066B', '.')
+
+        // 3. Handle commas (, and ،)
+        if (s.contains('.')) {
+            // Already has decimal point, e.g. "1,500.50" -> commas are thousands separators
+            s = s.replace(",", "").replace("،", "")
+        } else {
+            // Check if comma is followed by exactly 3 digits, e.g. "1,000" or "25,500"
+            if (Regex("""[,،]\d{3}(?:[,،]\d{3})*(?!\d)""").containsMatchIn(s)) {
+                s = s.replace(",", "").replace("،", "")
+            } else {
+                // Decimal separator, e.g. "10,5" or "550,50" -> convert to '.'
+                s = s.replace(',', '.').replace('،', '.')
             }
-        }.joinToString("")
-        val clean = normalized.filter { it.isDigit() || it == '.' || it == '-' }
+        }
+
+        val clean = s.filter { it.isDigit() || it == '.' || it == '-' }
         return clean.toDoubleOrNull()
     }
 

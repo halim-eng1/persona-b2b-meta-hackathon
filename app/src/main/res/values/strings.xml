@@ -726,6 +726,7 @@
     <string name="chat_import_ai_sheet_title">AI Knowledge Formatting Prompts</string>
     <string name="chat_import_ai_sheet_subtitle">Copy one of the following prompts and send it to Meta AI, ChatGPT, or Claude to guide you step-by-step and produce structured knowledge ready to paste here:</string>
     <string name="chat_import_clear_file_desc">Clear selected file</string>
+    <string name="chat_import_clear_text_desc">Clear direct text input</string>
     <string name="chat_import_file_supported_hint">Supported formats: Text files (.txt) and Markdown files (.md)</string>
     <string name="guide_dialog_title">API Key Extraction Guide</string>
     <string name="guide_notification_copy_text">Copy this text and send it to any AI model (like ChatGPT or Gemini) to guide you through creating an account step by step with links.</string>
@@ -777,6 +778,7 @@
     <string name="guide_ai_prompt_template">Explain to me step by step for beginners with links how to create an account on %1$s (%2$s) and how to get an %3$s free to use in my app.</string>
 
     <string name="contacts_stat_total_customers">Total Customers</string>
+    <string name="contacts_stat_vip">VIP ⭐</string>
     <string name="contacts_stat_problematic">Returns / Problematic</string>
     <string name="contacts_stat_total_sales">Total Sales</string>
     <string name="contacts_edit_dialog_title">Edit Customer Details</string>

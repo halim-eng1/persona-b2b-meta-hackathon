@@ -726,6 +726,7 @@
     <string name="chat_import_ai_sheet_title">قوالب صياغة المعرفة بالذكاء الاصطناعي</string>
     <string name="chat_import_ai_sheet_subtitle">انسخ أحد البرومبتات التالية وأرسله لـ Meta AI أو ChatGPT أو Claude ليقوم بمقابلتك خطوة بخطوة وتوليد ملف معرفة جاهز للصقه هنا:</string>
     <string name="chat_import_clear_file_desc">إلغاء الملف المحدد</string>
+    <string name="chat_import_clear_text_desc">مسح النص المدخل</string>
     <string name="chat_import_file_supported_hint">الصيغ المدعومة: ملفات نصية (.txt) وملفات ماركداون (.md)</string>
     <string name="guide_dialog_title">دليل استخراج المفتاح</string>
     <string name="guide_notification_copy_text">انسخ هذا النص وأرسله لأي نموذج ذكاء اصطناعي (مثل ChatGPT أو Gemini) ليرشدك لإنشاء الحساب خطوة بخطوة بالروابط.</string>
@@ -777,6 +778,7 @@
     <string name="guide_ai_prompt_template">أشرح لي خطوة بخطوة للمبتدئين بالصور والروابط كيف أنشئ حساباً على منصة %1$s (%2$s) وكيف أستخرج مفتاح %3$s مجاناً لاستخدامه في تطبيقي.</string>
 
     <string name="contacts_stat_total_customers">إجمالي العملاء</string>
+    <string name="contacts_stat_vip">عملاء VIP ⭐</string>
     <string name="contacts_stat_problematic">مرتجعات/مشاكل</string>
     <string name="contacts_stat_total_sales">إجمالي المبيعات</string>
     <string name="contacts_edit_dialog_title">تعديل بيانات العميل</string>

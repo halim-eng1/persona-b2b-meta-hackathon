@@ -61,6 +61,13 @@ class StoreWebsiteExtractorTest {
     }
 
     @Test
+    fun `extracts website cleanly trimming punctuation like exclamation and question marks`() {
+        val markdown = "Check out our official store at: https://store.example.com! For inquiries visit https://store.example.com/products/item?"
+        val website = StoreWebsiteExtractor.extract(markdown)
+        assertEquals("https://store.example.com", website)
+    }
+
+    @Test
     fun `returns null on empty or blank document`() {
         assertNull(StoreWebsiteExtractor.extract(""))
         assertNull(StoreWebsiteExtractor.extract("   \n\t  "))

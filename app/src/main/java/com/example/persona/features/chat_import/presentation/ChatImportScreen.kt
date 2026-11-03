@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -82,9 +83,13 @@ fun ChatImportScreen(
     ) { uri ->
         uri?.let { picked ->
             val displayName = picked.queryDisplayName(context)
-            val isSupported = displayName?.endsWith(".txt", ignoreCase = true) == true ||
-                displayName?.endsWith(".md", ignoreCase = true) == true
-            if (isSupported || displayName == null) {
+            val isSupported = displayName != null && (
+                displayName.endsWith(".txt", ignoreCase = true) ||
+                displayName.endsWith(".md", ignoreCase = true) ||
+                displayName.endsWith(".json", ignoreCase = true) ||
+                displayName.endsWith(".csv", ignoreCase = true)
+            )
+            if (isSupported) {
                 viewModel.onFilePicked(picked, displayName)
             } else {
                 viewModel.onUnsupportedFilePicked()
@@ -237,12 +242,10 @@ fun ChatImportContent(
                         }
 
                         Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .size(18.dp)
-                                .graphicsLayer { rotationZ = 180f }
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -315,7 +318,7 @@ fun ChatImportContent(
                                     IconButton(onClick = { onDirectInputTextChanged("") }) {
                                         Icon(
                                             imageVector = Icons.Rounded.Close,
-                                            contentDescription = stringResource(R.string.chat_import_clear_file_desc)
+                                            contentDescription = stringResource(R.string.chat_import_clear_text_desc)
                                         )
                                     }
                                 }

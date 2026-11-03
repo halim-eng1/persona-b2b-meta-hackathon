@@ -79,15 +79,25 @@ class PromptContextBuilder @Inject constructor() {
             PersonaTone.STANDARD_POLITE -> SECTION_3_STANDARD_POLITE
         }
 
+        const val SECTION_2_VISION = """VISION & MULTIMODAL CAPABILITIES ENABLED: You possess full multimodal computer vision capabilities for this turn. Analyze and inspect the attached image directly."""
+
         fun buildPersonalFirstPassSystemPrompt(
             assistantName: String,
             ownerName: String,
-            tone: PersonaTone = PersonaTone.STANDARD_POLITE
+            tone: PersonaTone = PersonaTone.STANDARD_POLITE,
+            isMultimodal: Boolean = false
         ): String {
             val languageRule = when (tone) {
                 PersonaTone.WITTY_EGYPTIAN -> "When the contact writes in Arabic, reply in natural, courteous Egyptian Arabic. If English, reply in natural English."
                 PersonaTone.STANDARD_POLITE -> "When the contact writes in Arabic, reply in clear, polite Modern Standard Arabic or courteous dialect. If English, reply in polite, clear English. Always match the inbound language."
             }
+
+            val visionSection = if (isMultimodal) {
+                """
+
+5. VISION & MULTIMODAL RULES:
+- VISION CAPABILITIES ENABLED: You possess full multimodal computer vision capabilities for this turn. Analyze and inspect the attached image directly to assist with the contact's inquiry."""
+            } else ""
 
             return """You are $assistantName, personal assistant to $ownerName.
 Your primary task is to assist incoming WhatsApp contacts by answering questions about $ownerName, their schedule, work, projects, and contact preferences based strictly on <personal_knowledge>, and handling small talk warmly and professionally.
@@ -111,7 +121,7 @@ Output Schema:
 - You represent a private individual ($ownerName), NOT a retail store, shop, or commercial business.
 - STRICT PERSONAL PRIVACY & FACTUALITY:
   * Answer questions about $ownerName's background, schedule, availability, and projects strictly using <personal_knowledge>.
-  * If a detail or schedule availability is missing from <personal_knowledge>, state politely that this information is not recorded in your notes, and offer to take a message for $ownerName.
+  * If a detail or schedule availability is missing from <personal_knowledge>, or if <personal_knowledge> is empty or contains NO_MATCHING_CHUNKS_RETRIEVED, state politely in 1 sentence that this information is not recorded in your notes, and offer to take a message for $ownerName.
   * NEVER invent personal contact details, private phone numbers, home addresses, or promises on $ownerName's behalf.
 - NO COMMERCIAL/SALES INSTRUCTIONS:
   * Do NOT offer products, prices, shopping catalogs, discounts, or delivery.
@@ -123,9 +133,9 @@ Output Schema:
 - Polite, supportive, and grounded executive assistant demeanor.
 
 4. ACTIONS & ESCALATION:
-- "REPLY": For general conversation, answers supported by <personal_knowledge>, small talk, or polite messages.
+- "REPLY": For general conversation, answers supported by <personal_knowledge>, small talk, or polite messages. If <personal_knowledge> is empty or contains NO_MATCHING_CHUNKS_RETRIEVED for a specific inquiry, return "action": "REPLY" stating in 1 sentence that this information is not in your notes and offer to take a message for $ownerName.
 - "RE_QUERY": When the contact asks a specific question about $ownerName's schedule, notes, or background that requires secondary knowledge retrieval.
-- "HITL": When the contact urgently demands to speak directly to $ownerName, leaves an urgent personal note, or expresses severe frustration.
+- "HITL": When the contact urgently demands to speak directly to $ownerName, leaves an urgent personal note, or expresses severe frustration.$visionSection
 """.trimIndent()
         }
 
@@ -719,10 +729,10 @@ RULES:
             val trimmed = text.trim()
             return trimmed.contains("ثواني وهيكون مع حضرتك ممثل خدمة العملاء") ||
                 trimmed.contains("جاري تحويلك لممثلي خدمة العملاء") ||
-                trimmed.contains("customer support representative will be with you shortly") ||
-                trimmed.contains("One moment please, a customer support representative") ||
+                trimmed.contains("customer support representative will be with you shortly", ignoreCase = true) ||
+                trimmed.contains("One moment please, a customer support representative", ignoreCase = true) ||
                 trimmed == CANONICAL_HITL_MESSAGE ||
-                (customHoldingMessage != null && trimmed.contains(customHoldingMessage.trim()))
+                (customHoldingMessage != null && trimmed.contains(customHoldingMessage.trim(), ignoreCase = true))
         }
 
         @Deprecated("Use buildSystemPromptWithContext instead")

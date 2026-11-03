@@ -10,15 +10,23 @@ import java.util.Locale
 object ChatImportPrompts {
 
     fun getBusinessPrompt(context: Context? = null): String {
-        val lang = context?.resources?.configuration?.locales?.get(0)?.language 
-            ?: Locale.getDefault().language
+        val config = context?.resources?.configuration
+        val lang = when {
+            config == null -> Locale.getDefault().language
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N && !config.locales.isEmpty -> config.locales[0].language
+            else -> @Suppress("DEPRECATION") config.locale.language
+        }
         val isArabic = lang.equals("ar", ignoreCase = true)
         return if (isArabic) BUSINESS_KNOWLEDGE_PROMPT_AR else BUSINESS_KNOWLEDGE_PROMPT_EN
     }
 
     fun getPersonalPrompt(context: Context? = null): String {
-        val lang = context?.resources?.configuration?.locales?.get(0)?.language 
-            ?: Locale.getDefault().language
+        val config = context?.resources?.configuration
+        val lang = when {
+            config == null -> Locale.getDefault().language
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N && !config.locales.isEmpty -> config.locales[0].language
+            else -> @Suppress("DEPRECATION") config.locale.language
+        }
         val isArabic = lang.equals("ar", ignoreCase = true)
         return if (isArabic) PERSONAL_KNOWLEDGE_PROMPT_AR else PERSONAL_KNOWLEDGE_PROMPT_EN
     }

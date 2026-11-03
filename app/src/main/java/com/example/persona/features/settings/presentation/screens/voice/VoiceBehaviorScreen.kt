@@ -97,7 +97,11 @@ fun VoiceBehaviorScreen(
 
                 // Bot / Assistant Name Field
                 DraftSaveTextField(
-                    value = state.botName,
+                    value = if (isPersonalMode && state.botName == UserPreferencesRepository.DEFAULT_BOT_NAME) {
+                        UserPreferencesRepository.DEFAULT_PERSONAL_ASSISTANT_NAME
+                    } else {
+                        state.botName
+                    },
                     onSave = actions::setBotName,
                     label = stringResource(
                         if (isPersonalMode) R.string.settings_assistant_name_label else R.string.settings_bot_name_label
@@ -105,13 +109,17 @@ fun VoiceBehaviorScreen(
                     placeholder = stringResource(
                         if (isPersonalMode) R.string.settings_assistant_name_placeholder else R.string.settings_bot_name_placeholder
                     ),
-                    fallbackDefault = if (isPersonalMode) "Assistant" else UserPreferencesRepository.DEFAULT_BOT_NAME,
+                    fallbackDefault = if (isPersonalMode) UserPreferencesRepository.DEFAULT_PERSONAL_ASSISTANT_NAME else UserPreferencesRepository.DEFAULT_BOT_NAME,
                     modifier = Modifier.settingFocus(SettingKey.BotName)
                 )
 
                 // Store / Owner Name Field
                 DraftSaveTextField(
-                    value = state.storeName,
+                    value = if (isPersonalMode && state.storeName == UserPreferencesRepository.DEFAULT_STORE_NAME) {
+                        UserPreferencesRepository.DEFAULT_PERSONAL_OWNER_NAME
+                    } else {
+                        state.storeName
+                    },
                     onSave = actions::setStoreName,
                     label = stringResource(
                         if (isPersonalMode) R.string.settings_owner_name_label else R.string.settings_store_name_label
@@ -119,7 +127,7 @@ fun VoiceBehaviorScreen(
                     placeholder = stringResource(
                         if (isPersonalMode) R.string.settings_owner_name_placeholder else R.string.settings_store_name_placeholder
                     ),
-                    fallbackDefault = if (isPersonalMode) "Owner" else UserPreferencesRepository.DEFAULT_STORE_NAME,
+                    fallbackDefault = if (isPersonalMode) UserPreferencesRepository.DEFAULT_PERSONAL_OWNER_NAME else UserPreferencesRepository.DEFAULT_STORE_NAME,
                     modifier = Modifier.settingFocus(SettingKey.StoreName)
                 )
             }

@@ -51,7 +51,9 @@ class LocalDecisionClassifier @Inject constructor() {
             "الغي طلبي", "ألغي طلبي", "لغي", "ملغي", "ملغى", "اتكنسل", "كنسلت", "كنسللي",
             // Franco-Arab & English
             "status", "order feen", "tracking", "track", "order status", "cancel", "cancel order",
-            "where is my order", "my order", "my shipment", "delivery status", "track order", "where is my package"
+            "where is my order", "my order", "my shipment", "delivery status", "track order", "where is my package",
+            "where is my delivery", "track delivery", "delivery tracking", "shipment status", "where is my parcel",
+            "when will it be delivered", "when is my order arriving", "when is delivery", "track shipment"
         )
         private val BANTER_KEYWORDS = listOf(
             // Arabic Colloquial & Emojis

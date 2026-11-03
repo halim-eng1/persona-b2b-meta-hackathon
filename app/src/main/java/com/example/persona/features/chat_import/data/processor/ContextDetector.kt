@@ -203,7 +203,13 @@ class ContextDetector @Inject constructor(
         val cleanWords = clean.split("[\\s\\p{Punct}؟?]+".toRegex()).filter { it.isNotEmpty() }
         val cleanWordsLower = cleanWords.map { it.lowercase() }
 
-        val hasUnambiguousQuestionWord = cleanWordsLower.any { QUESTION_KEYWORDS.contains(it) }
+        val singleWordQuestionKeywords = QUESTION_KEYWORDS.filter { !it.contains(" ") }.map { normalizeKeyword(it) }.toSet()
+        val multiWordQuestionKeywords = QUESTION_KEYWORDS.filter { it.contains(" ") }.map { normalizeKeyword(it) }
+
+        val hasUnambiguousQuestionWord = cleanWordsLower.any { singleWordQuestionKeywords.contains(it) } ||
+            multiWordQuestionKeywords.any { kw ->
+                Regex("""(?<![\p{L}\p{N}])${Regex.escape(kw)}(?![\p{L}\p{N}])""", RegexOption.IGNORE_CASE).containsMatchIn(lower)
+            }
 
         var hasValidAmbiguousQuestion = false
         val ambiguousIndices = cleanWordsLower.mapIndexedNotNull { index, word ->
@@ -298,6 +304,14 @@ class ContextDetector @Inject constructor(
         return ConversationContext(intent, topic, sentiment, confidence)
     }
 
+    private fun normalizeKeyword(kw: String): String =
+        normalizer.normalize(kw)?.lowercase() ?: kw.lowercase()
+
     private fun matchesKeywords(text: String, keywords: Set<String>): Boolean =
-        keywords.any { text.contains(it) }
+        keywords.any { kw ->
+            val normKw = normalizeKeyword(kw)
+            val isArabic = normKw.any { it.code in 0x0600..0x06FF }
+            val prefix = if (isArabic) "(?:و|ف|ب|ل|ك|ال|لل|بال|وال|فل|فال)?" else ""
+            Regex("""(?<![\p{L}\p{N}])$prefix${Regex.escape(normKw)}(?![\p{L}\p{N}])""", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        }
 }

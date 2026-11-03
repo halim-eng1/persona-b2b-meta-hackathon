@@ -118,6 +118,8 @@ class UserPreferencesRepository @Inject constructor(
         // ── Operational Mode (Business vs. Personal) ───────────────────────────
         val KEY_ACCOUNT_MODE = stringPreferencesKey("account_mode")
         val DEFAULT_ACCOUNT_MODE = AccountMode.BUSINESS.name
+        val KEY_PERSONAL_ASSISTANT_NAME = stringPreferencesKey("personal_assistant_name")
+        val KEY_PERSONAL_OWNER_NAME = stringPreferencesKey("personal_owner_name")
         const val DEFAULT_PERSONAL_ASSISTANT_NAME = "Assistant"
         const val DEFAULT_PERSONAL_OWNER_NAME = "User"
 
@@ -992,6 +994,40 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun getStoreNameSync(): String =
         dataStore.data.first()[KEY_STORE_NAME]?.takeIf { it.isNotBlank() } ?: DEFAULT_STORE_NAME
+
+    val personalAssistantNameFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_PERSONAL_ASSISTANT_NAME]?.takeIf { it.isNotBlank() }
+            ?: prefs[KEY_BOT_NAME]?.takeIf { it.isNotBlank() && it != DEFAULT_BOT_NAME }
+            ?: DEFAULT_PERSONAL_ASSISTANT_NAME
+    }
+
+    val personalOwnerNameFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_PERSONAL_OWNER_NAME]?.takeIf { it.isNotBlank() }
+            ?: prefs[KEY_STORE_NAME]?.takeIf { it.isNotBlank() && it != DEFAULT_STORE_NAME }
+            ?: DEFAULT_PERSONAL_OWNER_NAME
+    }
+
+    suspend fun getPersonalAssistantNameSync(): String {
+        val prefs = dataStore.data.first()
+        return prefs[KEY_PERSONAL_ASSISTANT_NAME]?.takeIf { it.isNotBlank() }
+            ?: prefs[KEY_BOT_NAME]?.takeIf { it.isNotBlank() && it != DEFAULT_BOT_NAME }
+            ?: DEFAULT_PERSONAL_ASSISTANT_NAME
+    }
+
+    suspend fun getPersonalOwnerNameSync(): String {
+        val prefs = dataStore.data.first()
+        return prefs[KEY_PERSONAL_OWNER_NAME]?.takeIf { it.isNotBlank() }
+            ?: prefs[KEY_STORE_NAME]?.takeIf { it.isNotBlank() && it != DEFAULT_STORE_NAME }
+            ?: DEFAULT_PERSONAL_OWNER_NAME
+    }
+
+    suspend fun setPersonalAssistantName(name: String) {
+        dataStore.edit { prefs -> prefs[KEY_PERSONAL_ASSISTANT_NAME] = name.trim() }
+    }
+
+    suspend fun setPersonalOwnerName(name: String) {
+        dataStore.edit { prefs -> prefs[KEY_PERSONAL_OWNER_NAME] = name.trim() }
+    }
 
     suspend fun isAutoPauseOnHitlEnabledSync(): Boolean {
         return isAutoPauseOnHitlEnabledFlow.first()

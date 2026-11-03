@@ -133,8 +133,12 @@ fun CreateOrderDialog(
         }
 
         // 2. Extract Delivery Address (Single comprehensive address field)
-        val addressKeywords = listOf("عنوان", "شارع", "ش ", "عمارة", "شقة", "بجوار", "امام", "أمام", "طريق", "حي", "الحي", "ميدان", "منطقة", "دور", "الدور", "address", "street", "st", "apt", "building", "floor", "suite", "road", "ave", "avenue", "city", "state", "zip")
-        val addressLine = lines.firstOrNull { line -> addressKeywords.any { kw -> line.contains(kw, ignoreCase = true) } }
+        val addressKeywords = listOf("عنوان", "شارع", "ش ", "عمارة", "شقة", "بجوار", "امام", "أمام", "طريق", "حي", "الحي", "ميدان", "منطقة", "دور", "الدور", "address", "street", "building", "floor", "suite", "road", "avenue", "city", "state", "zip")
+        val shortAddressRegex = Regex("""\b(?:st|apt|rd|ave)\b""", RegexOption.IGNORE_CASE)
+        val isAddressLine: (String) -> Boolean = { line ->
+            addressKeywords.any { kw -> line.contains(kw, ignoreCase = true) } || shortAddressRegex.containsMatchIn(line)
+        }
+        val addressLine = lines.firstOrNull { line -> isAddressLine(line) }
         if (addressLine != null) {
             deliveryAddress = addressLine.replace(Regex("^(العنوان|عنوان|العنوان:|address:|address)\\s*", RegexOption.IGNORE_CASE), "").trim()
         }
@@ -162,7 +166,7 @@ fun CreateOrderDialog(
             isNameError = false
         } else if (customerName.isBlank() && lines.isNotEmpty()) {
             val firstLine = lines.first()
-            if (!EgyptianOrderUtils.isValidPhoneNumber(firstLine) && addressKeywords.none { firstLine.contains(it, ignoreCase = true) }) {
+            if (!EgyptianOrderUtils.isValidPhoneNumber(firstLine) && !isAddressLine(firstLine)) {
                 customerName = firstLine
                 isNameError = false
             }

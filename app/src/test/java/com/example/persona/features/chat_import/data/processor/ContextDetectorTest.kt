@@ -109,4 +109,31 @@ class ContextDetectorTest {
         assertEquals(TopicType.STUDY, context.topic)
         assertEquals(0.8f, context.confidence, 0.001f)
     }
+
+    @Test
+    fun detect_wordBoundaryPreciseMatching_doesNotTriggerOnSubstrings() {
+        // "smoke" should not match "ok", "team" should not match "am", "this" should not match "hi"
+        val contextSmoke = detector.detect("There is smoke outside the building")
+        assertTrue(contextSmoke.intent != IntentType.AGREEMENT)
+
+        val contextTeam = detector.detect("Our development team works hard")
+        assertTrue(contextTeam.topic != TopicType.TIME)
+
+        val contextThis = detector.detect("This item was delivered yesterday")
+        assertTrue(contextThis.intent != IntentType.GREETING)
+    }
+
+    @Test
+    fun detect_normalizedArabicKeywords_matchesAlefTehMarbutaAndDiacritics() {
+        assertEquals(IntentType.GREETING, detector.detect("تحية طيبة للجميع").intent)
+        assertEquals(TopicType.STATUS, detector.detect("أخبارك إيه اليوم").topic)
+        assertEquals(IntentType.CLOSING, detector.detect("شكرًا جزيلًا").intent)
+    }
+
+    @Test
+    fun detect_multiWordQuestionPhrases_matchesQuestionIntent() {
+        assertEquals(IntentType.QUESTION, detector.detect("can you check this").intent)
+        assertEquals(IntentType.QUESTION, detector.detect("could you please explain").intent)
+        assertEquals(IntentType.QUESTION, detector.detect("how much does it cost").intent)
+    }
 }
