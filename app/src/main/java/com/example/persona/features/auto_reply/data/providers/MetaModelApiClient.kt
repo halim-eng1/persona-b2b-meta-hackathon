@@ -114,7 +114,8 @@ class MetaModelApiClient @Inject constructor(
             ChatMessage(role = "user", content = userPrompt)
         )
 
-        when (val result = executeSingleCall(model, messages, maxTokens = 1024, apiKey = apiKey, reasoningEffort = reasoningEffort, temperature = temperature)) {
+        val targetMaxTokens = if (model.contains("muse-spark") || model.contains("reasoning")) 2000 else 1500
+        when (val result = executeSingleCall(model, messages, maxTokens = targetMaxTokens, apiKey = apiKey, reasoningEffort = reasoningEffort, temperature = temperature)) {
             is CallResult.Success -> Result.success(result.content)
             is CallResult.AuthOrQuotaError -> Result.failure(AuthOrQuotaException(result.code, "Meta API Auth/Quota Error ${result.code}"))
             is CallResult.RateLimited -> Result.failure(RateLimitException("Meta API Rate Limited (429)"))
@@ -263,7 +264,7 @@ class MetaModelApiClient @Inject constructor(
     suspend fun executeSingleCall(
         model: String,
         messages: List<ChatMessage>,
-        maxTokens: Int,
+        maxTokens: Int = 2000,
         apiKey: String,
         reasoningEffort: String? = "low",
         temperature: Double = 0.7
@@ -275,13 +276,19 @@ class MetaModelApiClient @Inject constructor(
 
         val keyMasked = ReplyGenerationRepositoryImpl.maskKey(apiKey)
         val targetModel = model.ifBlank { DEFAULT_MODEL }
+        val isReasoningModel = targetModel.contains("muse-spark") || targetModel.contains("reasoning")
+        val effectiveMaxTokens = if (isReasoningModel) {
+            maxOf(maxTokens, 2000)
+        } else {
+            maxOf(maxTokens, 1500)
+        }
 
         try {
             val url = "$baseUrl/chat/completions"
             val payload = buildJsonObject {
                 put("model", targetModel)
                 put("temperature", temperature)
-                put("max_tokens", maxTokens)
+                put("max_tokens", effectiveMaxTokens)
                 if (!reasoningEffort.isNullOrBlank()) {
                     put("reasoning_effort", reasoningEffort)
                 }

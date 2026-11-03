@@ -208,6 +208,7 @@ fun HomeScreen(
                         UrgentAttentionBanner(
                             pendingCount = state.pendingAttentionCount,
                             waitingCustomers = state.waitingCustomers,
+                            isAutoPauseEnabled = state.isAutoPauseOnHitl,
                             onCustomerClick = onNavigateToChat
                         )
                     }
@@ -223,7 +224,7 @@ fun HomeScreen(
                 item(key = "metrics_hub") {
                     B2BOperationalMetricsHub(
                         todayOrders = state.todayOrdersCount,
-                        pendingRevenue = state.todayPendingRevenue,
+                        knowledgeChunks = state.knowledgeChunkCount,
                         waitingCount = state.waitingCustomersCount,
                         todayReplies = state.todayRepliesCount,
                         totalReplies = state.totalRepliesSent
@@ -283,85 +284,7 @@ fun HomeScreen(
                     }
                 }
 
-                // ── Section 5.1: Temporary Dev & Testing Controls ───
-                item(key = "temp_dev_controls") {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
-                        border = if (isDark) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.home_dev_tools_title),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
 
-                            // 1. زر إرسال إشعار تجريبي لاختبار الصوت
-                            Button(
-                                onClick = { viewModel.sendTestNotification() },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 44.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.NotificationsActive,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = stringResource(R.string.home_btn_test_notification),
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-
-                            // 2. زر توجل لإعادة فتح شاشات التهيئة (Onboarding)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable {
-                                        viewModel.toggleAlwaysShowOnboarding(!state.isAlwaysShowOnboardingEnabled)
-                                    }
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = stringResource(R.string.home_toggle_always_onboarding_title),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.home_toggle_always_onboarding_desc),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Switch(
-                                    checked = state.isAlwaysShowOnboardingEnabled,
-                                    onCheckedChange = { viewModel.toggleAlwaysShowOnboarding(it) }
-                                )
-                            }
-                        }
-                    }
-                }
 
                 // ── Section 6: Recent Activity ────────────────────────────────────
                 if (state.recentActivity.isNotEmpty()) {

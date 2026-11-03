@@ -9,6 +9,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -241,7 +242,8 @@ fun UrgentAttentionBanner(
     pendingCount: Int,
     waitingCustomers: List<WaitingCustomer>,
     onCustomerClick: (contactName: String, sourceClass: String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isAutoPauseEnabled: Boolean = false
 ) {
     if (pendingCount <= 0) return
 
@@ -272,8 +274,13 @@ fun UrgentAttentionBanner(
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = scheme.error
                     )
+                    val subtitleText = if (isAutoPauseEnabled) {
+                        stringResource(R.string.home_attention_customers_waiting_desc_paused)
+                    } else {
+                        stringResource(R.string.home_attention_customers_waiting_desc_active)
+                    }
                     Text(
-                        text = stringResource(R.string.home_attention_customers_waiting_desc),
+                        text = subtitleText,
                         style = MaterialTheme.typography.bodySmall,
                         color = scheme.onSurfaceVariant
                     )
@@ -346,7 +353,7 @@ fun UrgentAttentionBanner(
 @Composable
 fun B2BOperationalMetricsHub(
     todayOrders: Int,
-    pendingRevenue: Double,
+    knowledgeChunks: Int,
     waitingCount: Int,
     todayReplies: Int,
     totalReplies: Int,
@@ -354,8 +361,6 @@ fun B2BOperationalMetricsHub(
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val isWide = maxWidth >= 600.dp
-        val currencySuffix = stringResource(R.string.currency_egp)
-        val formattedRevenue = "\u202A${com.example.persona.features.orders.domain.EgyptianOrderUtils.formatMoney(pendingRevenue.coerceAtLeast(0.0))} $currencySuffix\u202C"
         val isWaitingAlert = waitingCount > 0
 
         val waitingContainerColor = if (isWaitingAlert) MaterialTheme.colorScheme.tertiaryContainer else null
@@ -376,9 +381,9 @@ fun B2BOperationalMetricsHub(
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
-                    icon = Icons.Default.MonetizationOn,
-                    value = formattedRevenue,
-                    label = stringResource(R.string.home_stat_pending_revenue),
+                    icon = Icons.AutoMirrored.Filled.MenuBook,
+                    value = knowledgeChunks.toString(),
+                    label = stringResource(R.string.home_stat_knowledge_chunks),
                     iconTint = MaterialTheme.colorScheme.tertiary
                 )
                 StatCard(
@@ -417,9 +422,9 @@ fun B2BOperationalMetricsHub(
                     )
                     StatCard(
                         modifier = Modifier.weight(1f),
-                        icon = Icons.Default.MonetizationOn,
-                        value = formattedRevenue,
-                        label = stringResource(R.string.home_stat_pending_revenue),
+                        icon = Icons.AutoMirrored.Filled.MenuBook,
+                        value = knowledgeChunks.toString(),
+                        label = stringResource(R.string.home_stat_knowledge_chunks),
                         iconTint = MaterialTheme.colorScheme.tertiary
                     )
                 }

@@ -5,6 +5,11 @@ import com.example.persona.features.auto_reply.data.repository.ReplyGenerationRe
 import com.example.persona.features.settings.data.repository.InMemorySecureCredentialsRepository
 import com.example.persona.features.settings.domain.repository.ModelProviders
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import okio.Buffer
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -197,6 +202,44 @@ class MetaModelApiClientTest {
         }
         val res500 = client500.executeSingleCall("muse-spark-1.3", listOf(ChatMessage(role = "user", content = "Hi")), 100, "key")
         assertTrue(res500 is ReplyGenerationRepositoryImpl.CallResult.ServerError)
+    }
+
+    @Test
+    fun `executeSingleCall enforces minimum 2000 max_tokens for reasoning models and 1500 for standard models`() = runTest {
+        var capturedMaxTokens: Int? = null
+        val (client, _) = createClient { chain ->
+            val req = chain.request()
+            val buffer = Buffer()
+            req.body?.writeTo(buffer)
+            val json = Json.parseToJsonElement(buffer.readUtf8()).jsonObject
+            capturedMaxTokens = json["max_tokens"]?.jsonPrimitive?.intOrNull
+
+            Response.Builder()
+                .request(req)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("""{"choices":[{"message":{"content":"{\"action\":\"REPLY\"}"}}]}""".toResponseBody(jsonMediaType))
+                .build()
+        }
+
+        // Test reasoning model with small maxTokens (e.g. 500) -> should be scaled to 2000
+        client.executeSingleCall(
+            model = "muse-spark-1.3-contributor",
+            messages = listOf(ChatMessage(role = "user", content = "تمام")),
+            maxTokens = 500,
+            apiKey = "key"
+        )
+        assertEquals(2000, capturedMaxTokens)
+
+        // Test non-reasoning model with small maxTokens (e.g. 500) -> should be scaled to 1500
+        client.executeSingleCall(
+            model = "meta-llama-3",
+            messages = listOf(ChatMessage(role = "user", content = "Hi")),
+            maxTokens = 500,
+            apiKey = "key"
+        )
+        assertEquals(1500, capturedMaxTokens)
     }
 }
 

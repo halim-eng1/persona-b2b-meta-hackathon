@@ -74,6 +74,7 @@ data class HomeUiState(
     val knowledgeChunkCount: Int = 0,
     val recentActivity: List<AuditLogItem> = emptyList(),
     val isAlwaysShowOnboardingEnabled: Boolean = false,
+    val isAutoPauseOnHitl: Boolean = false,
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false
 )
@@ -188,9 +189,9 @@ class HomeViewModel @Inject constructor(
         combine(autoReplyHealthFlow, attentionFlow) { health, attention -> Pair(health, attention) },
         combine(metricsFlow, businessKnowledgeDao.observeChunkCount()) { m, c -> Pair(m, c) },
         recentLogsFlow,
-        userPreferencesRepository.alwaysShowOnboardingFlow,
+        combine(userPreferencesRepository.alwaysShowOnboardingFlow, userPreferencesRepository.isAutoPauseOnHitlEnabledFlow) { onboarding, autoPause -> Pair(onboarding, autoPause) },
         _isRefreshing
-    ) { (healthData, attentionData), (metrics, chunkCount), recentLogs, alwaysShowOnboarding, isRefreshing ->
+    ) { (healthData, attentionData), (metrics, chunkCount), recentLogs, (alwaysShowOnboarding, isAutoPauseOnHitl), isRefreshing ->
         val (isEnabled, isConnected) = healthData
         val (attentionCount, waitingCustomers) = attentionData
         val running = try { serviceAliveChecker() } catch (_: Throwable) { isConnected }
@@ -209,6 +210,7 @@ class HomeViewModel @Inject constructor(
             knowledgeChunkCount = chunkCount.coerceAtLeast(0),
             recentActivity = recentLogs,
             isAlwaysShowOnboardingEnabled = alwaysShowOnboarding,
+            isAutoPauseOnHitl = isAutoPauseOnHitl,
             isLoading = false,
             isRefreshing = isRefreshing
         )

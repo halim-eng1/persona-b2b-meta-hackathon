@@ -88,6 +88,7 @@ class HitlNotificationHandler @Inject constructor(
 
             val title = context.getString(R.string.hitl_alarm_title)
             val body = context.getString(R.string.hitl_alarm_body)
+            val detailsText = context.getString(R.string.hitl_alarm_details, body, contactName, queryText)
 
             val intent = Intent(context, com.example.persona.MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -106,7 +107,7 @@ class HitlNotificationHandler @Inject constructor(
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(title)
                 .setContentText("$contactName: $queryText")
-                .setStyle(NotificationCompat.BigTextStyle().bigText("$body\n\nالعميل: $contactName\nالرسالة: $queryText"))
+                .setStyle(NotificationCompat.BigTextStyle().bigText(detailsText))
                 .setVibrate(vibrationPattern)
                 .setSound(soundUri)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -150,11 +151,13 @@ class HitlNotificationHandler @Inject constructor(
                 PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
             )
             val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val title = context.getString(R.string.hitl_handover_title)
+            val body = context.getString(R.string.hitl_handover_body, contactName)
             val notification = NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("طلب تحويل لبشري")
-                .setContentText("العميل $contactName يطلب التحدث مع موظف بشري الآن!")
-                .setStyle(NotificationCompat.BigTextStyle().bigText("العميل $contactName يطلب التحدث مع موظف بشري الآن!"))
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
                 .setVibrate(vibrationPattern)
                 .setSound(soundUri)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)

@@ -598,7 +598,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             imageUrl = null,
             customMediaFallbackMessage = customMediaFallback
         )
-        return executeFailoverChain(messages, maxTokens)
+        val effectiveMaxTokens = maxOf(maxTokens, 1500)
+        return executeFailoverChain(messages, effectiveMaxTokens)
     }
 
     override suspend fun generateFinalReply(
@@ -655,13 +656,14 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             imageUrl = imageUri,
             customMediaFallbackMessage = customMediaFallback
         )
-        val effectiveMaxTokens = if (isMultimodal) 1500 else maxTokens
+        val effectiveMaxTokens = if (isMultimodal) 1500 else maxOf(maxTokens, 1500)
         return executeFailoverChain(messages, effectiveMaxTokens)
     }
 
     internal suspend fun executeFailoverChain(messages: List<ChatMessage>, maxTokens: Int): String? {
         val hasImage = messages.any { !it.imageUrl.isNullOrBlank() }
-        val targetMaxTokens = minOf(maxTokens, ABSOLUTE_FAILOVER_CEILING)
+        val effectiveTokens = if (hasImage) maxTokens else maxOf(maxTokens, 1500)
+        val targetMaxTokens = minOf(effectiveTokens, ABSOLUTE_FAILOVER_CEILING)
 
         if (hasImage) {
             PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade...")
@@ -680,7 +682,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
                     val metaStartTime = System.currentTimeMillis()
                     for (key in metaKeys) {
                         for (model in effectiveVisionMeta) {
-                            when (val result = metaModelApiClient.executeSingleCall(model, messages, targetMaxTokens, key)) {
+                            val modelMaxTokens = if (model.contains("muse-spark") || model.contains("reasoning")) maxOf(targetMaxTokens, 2000) else maxOf(targetMaxTokens, 1500)
+                            when (val result = metaModelApiClient.executeSingleCall(model, messages, modelMaxTokens, key)) {
                                 is CallResult.Success -> {
                                     circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)
                                     val durationMs = System.currentTimeMillis() - metaStartTime
@@ -983,7 +986,10 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             for (key in keys) {
                 for (model in models) {
                     val result = when (providerId) {
-                        ProviderCircuitBreakerAndKeyManager.PROVIDER_META -> metaModelApiClient?.executeSingleCall(model, messages, targetMaxTokens, key) ?: CallResult.Failed
+                        ProviderCircuitBreakerAndKeyManager.PROVIDER_META -> {
+                            val modelMaxTokens = if (model.contains("muse-spark") || model.contains("reasoning")) maxOf(targetMaxTokens, 2000) else maxOf(targetMaxTokens, 1500)
+                            metaModelApiClient?.executeSingleCall(model, messages, modelMaxTokens, key) ?: CallResult.Failed
+                        }
                         ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN -> qwenClient.executeSingleCall(model, messages, targetMaxTokens, key)
                         ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI -> geminiClient.executeSingleCall(model, messages, targetMaxTokens, key)
                         ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA -> nvidiaClient.executeSingleCall(model, messages, targetMaxTokens, key)

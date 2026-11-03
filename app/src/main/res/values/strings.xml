@@ -18,6 +18,13 @@
     <!-- Notification body for the HITL alarm -->
     <string name="hitl_alarm_body">The automated assistant could not answer the customer\'s inquiry. Please follow up manually.</string>
 
+    <!-- Notification body details for the HITL alarm -->
+    <string name="hitl_alarm_details">%1$s\n\nCustomer: %2$s\nMessage: %3$s</string>
+
+    <!-- Notification for human handoff request -->
+    <string name="hitl_handover_title">Human Agent Request</string>
+    <string name="hitl_handover_body">Customer %1$s is requesting to speak with a human agent now!</string>
+
     <!-- ── Orchestrator: Media fallback message ──────────────────────────────── -->
     <!-- Sent when the incoming notification contains media (image/video/audio) -->
     <string name="media_fallback_message">Sorry, I cannot process media attachments. Please type your inquiry as a text message.</string>
@@ -568,6 +575,8 @@
     <string name="home_health_service_killed_btn">Restart Service Now</string>
     <string name="home_attention_customers_waiting">⚠️ %d customers awaiting urgent attention</string>
     <string name="home_attention_customers_waiting_desc">Auto-reply paused for these customers awaiting your manual response.</string>
+    <string name="home_attention_customers_waiting_desc_paused">Auto-reply paused for these customers awaiting your manual response.</string>
+    <string name="home_attention_customers_waiting_desc_active">Auto-reply is active. Review the conversation or step in manually.</string>
     <string name="home_attention_click_to_open">Waiting customers (tap to open chat):</string>
     <string name="home_toggle_auto_reply_title">Auto-Reply to Messages</string>
     <string name="home_toggle_auto_reply_active">Active — Instant response to WhatsApp chats</string>
@@ -576,7 +585,7 @@
     <string name="home_emergency_kill_message">Are you sure you want to stop auto-reply immediately for all customers? The bot will be disabled until manually re-enabled.</string>
     <string name="home_emergency_kill_confirm">Yes, Stop Immediately</string>
     <string name="home_stat_total_replies_sent">Total Replies Sent</string>
-    <string name="home_stat_knowledge_chunks">Knowledge Base Items</string>
+    <string name="home_stat_knowledge_chunks">Knowledge Chunks</string>
     <string name="home_recent_reply_prefix">Reply: %s</string>
     <string name="home_match_high">Verified Reply</string>
     <string name="home_match_medium">Good Match</string>

@@ -74,6 +74,7 @@ class HomeViewModelTest {
 
         every { userPreferencesRepository.isAutoReplyEnabled } returns isAutoReplyFlow
         every { userPreferencesRepository.alwaysShowOnboardingFlow } returns MutableStateFlow(false)
+        every { userPreferencesRepository.isAutoPauseOnHitlEnabledFlow } returns MutableStateFlow(false)
         every { auditLogRepository.observeReplyCount() } returns replyCountFlow
         every { auditLogRepository.observeLogs(limit = 3) } returns recentLogsFlow
         every { auditLogRepository.observeLogs(limit = 200) } returns allLogsFlow
@@ -117,6 +118,7 @@ class HomeViewModelTest {
         assertEquals(SystemHealthStatus.ACTIVE, state.systemHealth)
         assertEquals(42, state.totalRepliesSent)
         assertEquals(15, state.knowledgeChunkCount)
+        assertFalse(state.isAutoPauseOnHitl)
         assertTrue(state.recentActivity.isEmpty())
         assertEquals(0, state.pendingAttentionCount)
         assertEquals(0, state.todayOrdersCount)

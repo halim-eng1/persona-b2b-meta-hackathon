@@ -18,6 +18,13 @@
     <!-- Notification body for the HITL alarm -->
     <string name="hitl_alarm_body">لم يتمكن المساعد الآلي من الإجابة على استفسار العميل. يرجى المتابعة يدوياً.</string>
 
+    <!-- Notification body details for the HITL alarm -->
+    <string name="hitl_alarm_details">%1$s\n\nالعميل: %2$s\nالرسالة: %3$s</string>
+
+    <!-- Notification for human handoff request -->
+    <string name="hitl_handover_title">طلب تحويل لبشري</string>
+    <string name="hitl_handover_body">العميل %1$s يطلب التحدث مع موظف بشري الآن!</string>
+
     <!-- ── Orchestrator: Media fallback message ──────────────────────────────── -->
     <!-- Sent when the incoming notification contains media (image/video/audio) -->
     <string name="media_fallback_message">عفواً، لا يمكنني معالجة الوسائط. يرجى كتابة استفسارك في رسالة نصية.</string>
@@ -568,6 +575,8 @@
     <string name="home_health_service_killed_btn">إعادة تشغيل الخدمة الآن</string>
     <string name="home_attention_customers_waiting">⚠️ يوجد %d عملاء ينتظرون تدخل بشري عاجل</string>
     <string name="home_attention_customers_waiting_desc">تم تعليق الرد الآلي لهؤلاء العملاء بانتظار ردك المباشر لمنع فقدان المبيعات.</string>
+    <string name="home_attention_customers_waiting_desc_paused">تم تعليق الرد الآلي لهؤلاء العملاء بانتظار ردك المباشر لمنع فقدان المبيعات.</string>
+    <string name="home_attention_customers_waiting_desc_active">الرد التلقائي مستمر. يمكنك مراجعة المحادثة أو التدخل يدوياً.</string>
     <string name="home_attention_click_to_open">العملاء في الانتظار (اضغط لفتح المحادثة):</string>
     <string name="home_toggle_auto_reply_title">الرد الآلي على الرسائل</string>
     <string name="home_toggle_auto_reply_active">نشط — استجابة فورية لمحادثات واتساب</string>
@@ -576,7 +585,7 @@
     <string name="home_emergency_kill_message">هل أنت متأكد من رغبتك في إيقاف الرد الآلي فوراً لجميع العملاء؟ سيتم تعطيل البوت فورياً لحين إعادة تفعيله يدوياً.</string>
     <string name="home_emergency_kill_confirm">نعم، إيقاف فوري</string>
     <string name="home_stat_total_replies_sent">إجمالي الردود المرسلة</string>
-    <string name="home_stat_knowledge_chunks">عناصر قاعدة المعرفة</string>
+    <string name="home_stat_knowledge_chunks">قطع المعرفة</string>
     <string name="home_recent_reply_prefix">الرد: %s</string>
     <string name="home_match_high">رد موثوق</string>
     <string name="home_match_medium">تطابق جيد</string>

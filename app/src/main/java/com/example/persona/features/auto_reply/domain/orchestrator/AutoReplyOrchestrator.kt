@@ -1130,7 +1130,6 @@ class AutoReplyOrchestrator @Inject constructor(
                     effectiveAction == "HITL" -> {
                         Log.i(TAG, "LLM action=HITL. Triggering alarm and hand-off notification.")
                         hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
-                        hitlNotificationHandler.notifyMerchantHandover(processed.contactName, processed.sourceClass.name, "1003")
                         val hitlReply = if (!agenticResponse.finalReplyText.isNullOrBlank()) {
                             agenticResponse.finalReplyText
                         } else {
@@ -1243,7 +1242,6 @@ class AutoReplyOrchestrator @Inject constructor(
                                     Log.e(TAG, "Failed to insert FailedQueryEntity", e)
                                 }
                                 hitlNotificationHandler.handleHitlEscalation(processed, maxScore)
-                                hitlNotificationHandler.notifyMerchantHandover(processed.contactName, processed.sourceClass.name, "1003_2")
                                 val hitlReply = if (!finalParsed.finalReplyText.isNullOrBlank()) {
                                     finalParsed.finalReplyText
                                 } else {
