@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 @Keep
 @Serializable
 enum class SettingKey {
+    AccountMode,
     BotName,
     StoreName,
     Tone,

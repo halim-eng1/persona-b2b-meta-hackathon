@@ -24,6 +24,7 @@ import com.example.persona.features.auto_reply.domain.model.ProcessedNotificatio
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.auto_reply.domain.orchestrator.SystemAlertNotificationHandler
 import com.example.persona.features.auto_reply.domain.repository.ReplyGenerationRepository
+import com.example.persona.features.settings.domain.model.AccountMode
 import com.example.persona.features.settings.domain.repository.ModelCapability
 import com.example.persona.features.settings.domain.repository.ModelProviders
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -512,47 +513,60 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val tone = userPreferencesRepository.stylePreferences.first().personaTone
         val botName = userPreferencesRepository.getBotNameSync()
         val storeName = userPreferencesRepository.getStoreNameSync()
+        val accountMode = runCatching { userPreferencesRepository.getAccountModeSync() }.getOrDefault(AccountMode.BUSINESS)
 
-        val systemPromptWithContext = when (inboundIntent) {
-            InboundIntent.GREETING, InboundIntent.BANTER -> {
-                Log.d(TAG, "⚡ Routing to buildMicroBanterPrompt (intent=$inboundIntent, bypassing RAG)")
-                PromptContextBuilder.buildMicroBanterPrompt(
-                    botName = botName,
-                    storeName = storeName,
-                    tone = tone,
-                    storeTopics = storeTopics
-                )
-            }
-            InboundIntent.ORDER_STATUS -> {
-                Log.d(TAG, "⚡ Routing to buildMicroOrderStatusPrompt (intent=$inboundIntent)")
-                val orderContext = PromptContextBuilder.formatCustomerOrderState(
-                    activeOrders = activeOrders,
-                    lastOrder = lastOrder,
-                    statusCounts = orderStatusCounts
-                )
-                PromptContextBuilder.buildMicroOrderStatusPrompt(
-                    botName = botName,
-                    storeName = storeName,
-                    tone = tone,
-                    orderStateContext = orderContext
-                )
-            }
-            InboundIntent.CATALOG_INQUIRY -> {
-                val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
-                    botName = botName,
-                    storeName = storeName,
-                    tone = tone,
-                    isMultimodal = false
-                )
-                PromptContextBuilder.buildSystemPromptWithContext(
-                    staticSystemPrompt = baseSystemPrompt,
-                    candidates = candidates,
-                    activeOrders = activeOrders,
-                    storeTopics = storeTopics,
-                    storeWebsite = storeWebsite,
-                    lastOrder = lastOrder,
-                    statusCounts = orderStatusCounts
-                )
+        val systemPromptWithContext = if (accountMode == AccountMode.PERSONAL) {
+            val baseSystemPrompt = PromptContextBuilder.buildPersonalFirstPassSystemPrompt(
+                assistantName = botName,
+                ownerName = storeName,
+                tone = tone
+            )
+            PromptContextBuilder.buildPersonalSystemPromptWithContext(
+                staticSystemPrompt = baseSystemPrompt,
+                candidates = candidates
+            )
+        } else {
+            when (inboundIntent) {
+                InboundIntent.GREETING, InboundIntent.BANTER -> {
+                    Log.d(TAG, "⚡ Routing to buildMicroBanterPrompt (intent=$inboundIntent, bypassing RAG)")
+                    PromptContextBuilder.buildMicroBanterPrompt(
+                        botName = botName,
+                        storeName = storeName,
+                        tone = tone,
+                        storeTopics = storeTopics
+                    )
+                }
+                InboundIntent.ORDER_STATUS -> {
+                    Log.d(TAG, "⚡ Routing to buildMicroOrderStatusPrompt (intent=$inboundIntent)")
+                    val orderContext = PromptContextBuilder.formatCustomerOrderState(
+                        activeOrders = activeOrders,
+                        lastOrder = lastOrder,
+                        statusCounts = orderStatusCounts
+                    )
+                    PromptContextBuilder.buildMicroOrderStatusPrompt(
+                        botName = botName,
+                        storeName = storeName,
+                        tone = tone,
+                        orderStateContext = orderContext
+                    )
+                }
+                InboundIntent.CATALOG_INQUIRY -> {
+                    val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
+                        botName = botName,
+                        storeName = storeName,
+                        tone = tone,
+                        isMultimodal = false
+                    )
+                    PromptContextBuilder.buildSystemPromptWithContext(
+                        staticSystemPrompt = baseSystemPrompt,
+                        candidates = candidates,
+                        activeOrders = activeOrders,
+                        storeTopics = storeTopics,
+                        storeWebsite = storeWebsite,
+                        lastOrder = lastOrder,
+                        statusCounts = orderStatusCounts
+                    )
+                }
             }
         }
 
@@ -584,21 +598,34 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val storeTopics = userPreferencesRepository.storeKnowledgeTopicsFlow.first()
         val storeWebsite = userPreferencesRepository.storeWebsiteFlow.first()
         val tone = userPreferencesRepository.stylePreferences.first().personaTone
-        val baseSystemPrompt = PromptContextBuilder.buildFinalPassSystemPrompt(
-            botName = userPreferencesRepository.getBotNameSync(),
-            storeName = userPreferencesRepository.getStoreNameSync(),
-            tone = tone,
-            isMultimodal = isMultimodal
-        )
-        val systemPromptWithContext = PromptContextBuilder.buildSystemPromptWithContext(
-            staticSystemPrompt = baseSystemPrompt,
-            candidates = chunks,
-            activeOrders = activeOrders,
-            storeTopics = storeTopics,
-            storeWebsite = storeWebsite,
-            lastOrder = lastOrder,
-            statusCounts = orderStatusCounts
-        )
+        val accountMode = runCatching { userPreferencesRepository.getAccountModeSync() }.getOrDefault(AccountMode.BUSINESS)
+        val systemPromptWithContext = if (accountMode == AccountMode.PERSONAL) {
+            val baseSystemPrompt = PromptContextBuilder.buildPersonalFirstPassSystemPrompt(
+                assistantName = userPreferencesRepository.getBotNameSync(),
+                ownerName = userPreferencesRepository.getStoreNameSync(),
+                tone = tone
+            )
+            PromptContextBuilder.buildPersonalSystemPromptWithContext(
+                staticSystemPrompt = baseSystemPrompt,
+                candidates = chunks
+            )
+        } else {
+            val baseSystemPrompt = PromptContextBuilder.buildFinalPassSystemPrompt(
+                botName = userPreferencesRepository.getBotNameSync(),
+                storeName = userPreferencesRepository.getStoreNameSync(),
+                tone = tone,
+                isMultimodal = isMultimodal
+            )
+            PromptContextBuilder.buildSystemPromptWithContext(
+                staticSystemPrompt = baseSystemPrompt,
+                candidates = chunks,
+                activeOrders = activeOrders,
+                storeTopics = storeTopics,
+                storeWebsite = storeWebsite,
+                lastOrder = lastOrder,
+                statusCounts = orderStatusCounts
+            )
+        }
         val customMediaFallback = runCatching { userPreferencesRepository.getMediaFallbackMessageSync() }.getOrNull()
         val messages = PromptContextBuilder.buildOpenRouterMessages(
             systemPrompt = systemPromptWithContext,

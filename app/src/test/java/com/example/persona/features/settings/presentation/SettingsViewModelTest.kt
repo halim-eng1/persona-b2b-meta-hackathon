@@ -6,6 +6,7 @@ import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import com.example.persona.features.settings.data.repository.InMemorySecureCredentialsRepository
+import com.example.persona.features.settings.domain.model.AccountMode
 import com.example.persona.features.settings.domain.repository.ModelCapability
 import com.example.persona.features.settings.domain.repository.ModelConfig
 import com.example.persona.features.settings.domain.repository.ModelProviders
@@ -50,6 +51,7 @@ class SettingsViewModelTest {
         every { userPreferencesRepository.appLanguageFlow } returns appLanguageFlow
         every { userPreferencesRepository.themeModeFlow } returns themeModeFlow
         every { userPreferencesRepository.cloudflareAccountIdFlow } returns cloudflareAccountIdFlow
+        every { userPreferencesRepository.accountModeFlow } returns flowOf(AccountMode.BUSINESS)
         every { userPreferencesRepository.stylePreferences } returns flowOf(
             StylePreferences(StyleProfile.CASUAL, 0.75f, 5, 2)
         )
@@ -140,11 +142,11 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `default personaTone in uiState is WITTY_EGYPTIAN`() = runTest(testDispatcher) {
+    fun `default personaTone in uiState is STANDARD_POLITE`() = runTest(testDispatcher) {
         val viewModel = SettingsViewModel(userPreferencesRepository, secureCredentialsRepository)
         advanceUntilIdle()
 
-        assertEquals(PersonaTone.WITTY_EGYPTIAN, viewModel.uiState.value.personaTone)
+        assertEquals(PersonaTone.STANDARD_POLITE, viewModel.uiState.value.personaTone)
     }
 
     @Test

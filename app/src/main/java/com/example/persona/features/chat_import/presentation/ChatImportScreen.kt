@@ -139,6 +139,7 @@ fun ChatImportContent(
     modifier: Modifier = Modifier
 ) {
     val isDark = isSystemInDarkTheme()
+    val context = LocalContext.current
     val cardBorder = if (isDark) {
         BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     } else {
@@ -665,7 +666,7 @@ fun ChatImportContent(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "مناسب للمتاجر والشركات وسياسات الشحن والأسعار",
+                                    text = stringResource(R.string.chat_import_ai_business_card_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -673,7 +674,7 @@ fun ChatImportContent(
                             FilledTonalIconButton(
                                 onClick = {
                                     onCopyPrompt(
-                                        ChatImportPrompts.BUSINESS_KNOWLEDGE_PROMPT,
+                                        ChatImportPrompts.getBusinessPrompt(context),
                                         businessSnackbarMsg
                                     )
                                     showAiPromptSheet = false
@@ -716,7 +717,7 @@ fun ChatImportContent(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "مناسب للملف الشخصي، المواعيد، والمعلومات الفردية",
+                                    text = stringResource(R.string.chat_import_ai_personal_card_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -724,7 +725,7 @@ fun ChatImportContent(
                             FilledTonalIconButton(
                                 onClick = {
                                     onCopyPrompt(
-                                        ChatImportPrompts.PERSONAL_KNOWLEDGE_PROMPT,
+                                        ChatImportPrompts.getPersonalPrompt(context),
                                         personalSnackbarMsg
                                     )
                                     showAiPromptSheet = false

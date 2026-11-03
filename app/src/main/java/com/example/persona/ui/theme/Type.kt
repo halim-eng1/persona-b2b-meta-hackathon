@@ -26,7 +26,7 @@ val CairoFontFamily = FontFamily(
  * Uses [CairoFontFamily] for Arabic ("ar") with adjusted line-height for Arabic script ergonomics,
  * and [InterFontFamily] for English and Latin locales.
  */
-fun getPersonaTypography(language: String = "ar"): Typography {
+fun getPersonaTypography(language: String = "en"): Typography {
     val activeFontFamily = if (language.lowercase() == "ar") CairoFontFamily else InterFontFamily
     return Typography(
         displayLarge = TextStyle(
@@ -123,4 +123,4 @@ fun getPersonaTypography(language: String = "ar"): Typography {
     )
 }
 
-val PersonaTypography = getPersonaTypography("ar")
+val PersonaTypography = getPersonaTypography("en")

@@ -434,6 +434,16 @@
     <string name="settings_theme_system_sub">حسب إعدادات النظام</string>
 
     <!-- ── Store Identity Section ─────────────────────────────────────────────── -->
+    <!-- وضع الحساب والهوية الشخصية -->
+    <string name="settings_account_mode_label">وضع الاستخدام</string>
+    <string name="settings_mode_business">نشاط تجاري (متجر)</string>
+    <string name="settings_mode_personal">مساعد شخصي</string>
+    <string name="settings_personal_identity_title">هوية المساعد الشخصي</string>
+    <string name="settings_assistant_name_label">اسم المساعد</string>
+    <string name="settings_assistant_name_placeholder">مثال: أليكس / جارفيس</string>
+    <string name="settings_owner_name_label">اسمك الشخصي (صاحب الحساب)</string>
+    <string name="settings_owner_name_placeholder">مثال: أحمد محمد / د. محمود</string>
+
     <string name="settings_store_identity_title">هوية المتجر وممثل خدمة العملاء</string>
     <string name="settings_store_identity_subtitle">حدد اسم المساعد واسم المتجر أو العلامة التجارية لاستخدامهما في ردود الذكاء الاصطناعي</string>
     <string name="settings_bot_name_label">اسم ممثل خدمة العملاء</string>
@@ -692,12 +702,12 @@
     <string name="import_screen_title">بناء قاعدة المعرفة</string>
     <string name="import_screen_nav_back">رجوع</string>
     <string name="import_screen_header_desc">أنشئ قاعدة المعرفة لمتجرك أو مساعدك الشخصي عبر برومبتات الذكاء الاصطناعي، أو أدخل النصوص والملفات مباشرة.</string>
-    <string name="import_screen_copy_instruction">انسخ البرومبت والصقه في ChatGPT أو Claude ليقوم بمقابلتك وتوليد ملف المعرفة المنسق.</string>
+    <string name="import_screen_copy_instruction">انسخ البرومبت والصقه في Meta AI أو ChatGPT أو Claude ليقوم بمقابلتك وتوليد ملف المعرفة المنسق.</string>
     <string name="import_screen_copied_business_toast">تم نسخ برومبت الأنشطة التجارية!</string>
-    <string name="import_screen_copied_business_snackbar">تم نسخ برومبت الأنشطة التجارية! الصقه في ChatGPT أو Claude</string>
+    <string name="import_screen_copied_business_snackbar">تم نسخ برومبت الأنشطة التجارية! الصقه في Meta AI أو ChatGPT أو Claude</string>
     <string name="import_screen_copy_business_btn">نسخ برومبت الأنشطة التجارية والمتاجر</string>
     <string name="import_screen_copied_personal_toast">تم نسخ برومبت المساعد الشخصي!</string>
-    <string name="import_screen_copied_personal_snackbar">تم نسخ برومبت المساعد الشخصي! الصقه في ChatGPT أو Claude</string>
+    <string name="import_screen_copied_personal_snackbar">تم نسخ برومبت المساعد الشخصي! الصقه في Meta AI أو ChatGPT أو Claude</string>
     <string name="import_screen_copy_personal_btn">نسخ برومبت المساعد الشخصي والأفراد</string>
     <string name="import_screen_paste_desc">الصق نص المعرفة لتتم فهرسته وتوليد التضمينات محلياً على جهازك.</string>
     <string name="import_screen_paste_placeholder">الصق تفاصيل المتجر، الأسعار، سياسات الاسترجاع، أو الأسئلة الشائعة هنا...</string>
@@ -714,7 +724,7 @@
     <string name="chat_import_ai_helper_banner_title">تحتاج مساعدة في صياغة بياناتك؟</string>
     <string name="chat_import_ai_helper_banner_action">قوالب الذكاء الاصطناعي</string>
     <string name="chat_import_ai_sheet_title">قوالب صياغة المعرفة بالذكاء الاصطناعي</string>
-    <string name="chat_import_ai_sheet_subtitle">انسخ أحد البرومبتات التالية وأرسله لـ ChatGPT أو Claude ليقوم بمقابلتك خطوة بخطوة وتوليد ملف معرفة جاهز للصقه هنا:</string>
+    <string name="chat_import_ai_sheet_subtitle">انسخ أحد البرومبتات التالية وأرسله لـ Meta AI أو ChatGPT أو Claude ليقوم بمقابلتك خطوة بخطوة وتوليد ملف معرفة جاهز للصقه هنا:</string>
     <string name="chat_import_clear_file_desc">إلغاء الملف المحدد</string>
     <string name="chat_import_file_supported_hint">الصيغ المدعومة: ملفات نصية (.txt) وملفات ماركداون (.md)</string>
     <string name="guide_dialog_title">دليل استخراج المفتاح</string>
@@ -1041,11 +1051,12 @@
     <string name="orders_input_products_price_edit_label">سعر المنتجات (ج.م)</string>
     <string name="orders_input_shipping_fee_label">الشحن (ج.م)</string>
     <string name="orders_input_notes_placeholder">ملاحظات خاصة بالتسليم أو المواعيد</string>
-    <string name="orders_total_cod_summary">إجمالي التحصيل عند الاستلام: %s ج.م (شامل الشحن)</string>
+    <string name="orders_total_cod_summary">إجمالي التحصيل عند الاستلام: %s (شامل الشحن)</string>
 
     <!-- Sprint 2: Validation Errors -->
     <string name="orders_error_name_or_phone_required">يرجى كتابة اسم العميل أو رقم الهاتف</string>
     <string name="orders_error_invalid_egyptian_phone">رقم الهاتف غير صالح. يجب أن يتكون من 11 رقماً ويبدأ بـ 010 أو 011 أو 012 أو 015</string>
+    <string name="orders_error_invalid_phone">رقم الهاتف غير صالح. يجب أن يتكون من 7 إلى 15 رقماً.</string>
     <string name="orders_error_items_required">يرجى إدخال أصناف ومحتويات الطلب</string>
     <string name="orders_error_invalid_price">يرجى إدخال سعر صحيح للمنتجات</string>
     <string name="orders_error_invalid_shipping">يرجى إدخال قيمة صحيحة لمصاريف الشحن</string>
@@ -1095,7 +1106,9 @@
 
     <!-- Sprint 2: Chat Import Screen -->
     <string name="chat_import_hero_description">أنشئ قاعدة المعرفة الذكية لمتجرك أو مساعدك الشخصي عبر برومبتات الذكاء الاصطناعي الجاهزة، أو الصق النص مباشرة للفهرسة الفورية، أو اختر ملفاً من جهازك.</string>
-    <string name="chat_import_ai_card_description">انسخ البرومبت المتخصص والصقه في ChatGPT أو Claude. سيقوم الذكاء الاصطناعي بمقابلتك خطوة بخطوة وتوليد ملف المعرفة المنسق بالماركداون (# Heading) لتقوم بلصقه هنا مباشرة:</string>
+    <string name="chat_import_ai_card_description">انسخ البرومبت المتخصص والصقه في Meta AI أو ChatGPT أو Claude. سيقوم الذكاء الاصطناعي بمقابلتك خطوة بخطوة وتوليد ملف المعرفة المنسق بالماركداون (# Heading) لتقوم بلصقه هنا مباشرة:</string>
+    <string name="chat_import_ai_business_card_desc">مناسب للمتاجر والشركات وسياسات الشحن والأسعار</string>
+    <string name="chat_import_ai_personal_card_desc">مناسب للملف الشخصي، المواعيد، والمعلومات الفردية</string>
     <string name="chat_import_direct_card_description">الصق نص المعرفة المنسق بالماركداون أو النص العادي ليتم تقطيعه وتوليد التضمينات الشعاعية محلياً على جهازك دون الحاجة لحفظ أو رفع ملفات:</string>
     <string name="chat_import_selected_file_label">الملف المحدد: %s</string>
     <string name="chat_import_start_icon_desc">بدء</string>

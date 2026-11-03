@@ -27,6 +27,7 @@ class ContextDetector @Inject constructor(
         // ─────────────────────────────────────────────────────────────────────
         private val GREETING_REGEX = Regex(
             "\\b(hi|hello|hey|morning|evening|assalam|salam|" +
+                "howdy|greetings|welcome|good morning|good evening|good afternoon|good day|" +
                 "مرحبا|مرحب|اهلا|اهلين|السلام عليكم|وعليكم السلام|" +
                 "صباح الخير|صباح النور|صباح الورد|" +
                 "مساء الخير|مساء النور|مساء الورد|" +
@@ -42,7 +43,8 @@ class ContextDetector @Inject constructor(
         private val GREETING_KEYWORDS = setOf(
             // English
             "hi", "hello", "hey", "morning", "evening", "good morning", "good evening",
-            "what's up", "sup",
+            "what's up", "sup", "howdy", "greetings", "welcome", "good afternoon", "good day",
+            "hey there", "hi there", "hello there",
             // Standard/Levantine
             "مرحبا", "مرحب", "اهلا", "السلام عليكم", "وعليكم السلام",
             "صباح الخير", "صباح النور", "صباح الورد",
@@ -63,6 +65,7 @@ class ContextDetector @Inject constructor(
         // ─────────────────────────────────────────────────────────────────────
         private val CLOSING_REGEX = Regex(
             "\\b(bye|goodbye|good night|see you|take care|" +
+                "thanks|thank you|cheers|have a good one|have a nice day|have a great day|" +
                 "مع السلامة|وداعا|باي|باي باي|" +
                 "يلا سلام|يلا باي|يلا معلش|" +
                 "شكرا|شكرًا|شكراً|تشكر|يسلمو|يسلموا|يسلم|" +
@@ -78,6 +81,7 @@ class ContextDetector @Inject constructor(
         private val CLOSING_KEYWORDS = setOf(
             // English
             "bye", "goodbye", "see you", "later", "good night", "ttyl", "take care", "cya",
+            "thanks", "thank you", "cheers", "have a good one", "have a nice day", "have a great day",
             // Standard
             "مع السلامة", "وداعا", "باي", "تصبح على خير", "الله يحفظك",
             "الله يعافيك", "جزاك الله خيرا", "جزاكم الله",
@@ -109,6 +113,8 @@ class ContextDetector @Inject constructor(
         private val QUESTION_KEYWORDS = setOf(
             "what", "where", "when", "who", "why", "how", "can you", "could you",
             "do you", "did you", "is it", "are you", "will you",
+            "which", "whose", "whom", "is there", "are there", "how much", "how many",
+            "could i", "may i", "should i", "would it",
             "ايش", "وين", "متى", "ليش", "كيف", "هل", "شنو", "منو", "اشلون",
             "ليه", "فين", "مين", "كام", "ازاي", "انهي", "بتعمل", "شغال",
             "ايه", "ما هو", "ما هي", "ماهو", "ماهي"

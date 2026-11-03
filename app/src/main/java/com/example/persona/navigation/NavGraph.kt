@@ -11,6 +11,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.auto_reply.presentation.audit.AuditLogScreen
 import com.example.persona.features.chat_import.presentation.ChatImportProgressScreen
 import com.example.persona.features.chat_import.presentation.ChatImportScreen
@@ -32,6 +33,8 @@ fun PersonaNavGraph(
     modifier: Modifier = Modifier,
     startDestination: Screen = Screen.Home,
     isModelReady: Boolean = true,
+    currentLanguage: String = UserPreferencesRepository.DEFAULT_APP_LANGUAGE,
+    onLanguageChange: (String) -> Unit = {},
     onCompleteOnboarding: () -> Unit = {}
 ) {
     NavHost(
@@ -133,6 +136,8 @@ fun PersonaNavGraph(
         // ── First-Time Feature Onboarding ─────────────────────────────────────
         composable<Screen.FeatureOnboarding> {
             FeatureOnboardingScreen(
+                currentLanguage = currentLanguage,
+                onLanguageChange = onLanguageChange,
                 onComplete = {
                     onCompleteOnboarding()
                     val next = if (isModelReady) Screen.Home else Screen.ModelPreparation
@@ -146,6 +151,8 @@ fun PersonaNavGraph(
         // ── Mandatory Permission / Onboarding Flow ───────────────────────────
         composable<Screen.ModelPreparation> {
             ModelPreparationScreen(
+                currentLanguage = currentLanguage,
+                onLanguageChange = onLanguageChange,
                 onComplete = {
                     navController.navigate(Screen.Home) {
                         popUpTo(Screen.ModelPreparation) { inclusive = true }

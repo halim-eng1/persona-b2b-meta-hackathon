@@ -2,6 +2,7 @@ package com.example.persona.features.orders.domain.usecase
 
 import com.example.persona.core.database.entity.OrderEntity
 import com.example.persona.core.database.entity.OrderStatus
+import com.example.persona.features.orders.domain.CurrencyFormatter
 import com.example.persona.features.orders.domain.EgyptianOrderUtils
 import javax.inject.Inject
 
@@ -12,7 +13,7 @@ import javax.inject.Inject
  */
 class FormatCourierManifestUseCase @Inject constructor() {
 
-    operator fun invoke(order: OrderEntity): String = buildString {
+    operator fun invoke(order: OrderEntity, currency: String = "ج.م"): String = buildString {
         appendLine("بيانات الشحن والتوصيل")
         appendLine("━━━━━━━━━━━━━━━━")
         appendLine("اسم العميل: ${order.customerNameFromLlm?.takeIf { it.isNotBlank() } ?: order.contactName}")
@@ -23,9 +24,9 @@ class FormatCourierManifestUseCase @Inject constructor() {
 
         val codBalance = order.totalAmount + order.shippingFee
         if (codBalance > 0.0) {
-            appendLine("المطلوب تحصيله عند الاستلام: ${EgyptianOrderUtils.formatMoney(codBalance)} ج.م (شامل الشحن)")
+            appendLine("المطلوب تحصيله عند الاستلام: ${EgyptianOrderUtils.formatMoney(codBalance)} $currency (شامل الشحن)")
         } else {
-            appendLine("المطلوب تحصيله عند الاستلام: مدفوع مسبقاً / 0.00 ج.م")
+            appendLine("المطلوب تحصيله عند الاستلام: مدفوع مسبقاً / 0.00 $currency")
         }
 
         val orderNotes = order.customNotes?.takeIf { it.isNotBlank() }
@@ -52,40 +53,32 @@ class FormatCourierManifestUseCase @Inject constructor() {
     }
 
     private fun resolvePhoneNumber(order: OrderEntity): String {
-        // 1. Prioritize customerPhone if it contains a valid Egyptian mobile
-        val phoneFromCustomer = EgyptianOrderUtils.extractEgyptianMobilePhone(order.customerPhone)
-        if (phoneFromCustomer != null) {
-            return phoneFromCustomer
+        val candidates = listOf(
+            order.customerPhone,
+            order.customNotes,
+            order.contactName,
+            order.deliveryAddress,
+            order.orderDetails
+        )
+
+        // 1. Try Egyptian mobile extraction first across candidates
+        for (candidate in candidates) {
+            val egPhone = EgyptianOrderUtils.extractEgyptianMobilePhone(candidate)
+            if (egPhone != null) return egPhone
         }
 
-        // 2. Extract from customNotes
-        val phoneInNotes = EgyptianOrderUtils.extractEgyptianMobilePhone(order.customNotes)
-        if (phoneInNotes != null) {
-            return phoneInNotes
+        // 2. Fallback to international phone extraction preserving leading '+'
+        for (candidate in candidates) {
+            val intlPhone = EgyptianOrderUtils.extractPhoneNumber(candidate)
+            if (intlPhone != null) return intlPhone
         }
 
-        // 3. Extract from contactName if contactName contains a valid Egyptian mobile
-        val phoneInContact = EgyptianOrderUtils.extractEgyptianMobilePhone(order.contactName)
-        if (phoneInContact != null) {
-            return phoneInContact
-        }
-
-        // 4. Extract from deliveryAddress
-        val phoneInAddress = EgyptianOrderUtils.extractEgyptianMobilePhone(order.deliveryAddress)
-        if (phoneInAddress != null) {
-            return phoneInAddress
-        }
-
-        // 5. Extract from orderDetails
-        val phoneInDetails = EgyptianOrderUtils.extractEgyptianMobilePhone(order.orderDetails)
-        if (phoneInDetails != null) {
-            return phoneInDetails
-        }
-
-        // 6. If customerPhone had raw digits that might be landline or foreign number (7-15 digits)
-        val rawDigits = EgyptianOrderUtils.convertArabicDigitsToAscii(order.customerPhone).filter { it.isDigit() }
+        // 3. Fallback for raw foreign number
+        val rawAscii = EgyptianOrderUtils.convertArabicDigitsToAscii(order.customerPhone).trim()
+        val hasPlus = rawAscii.startsWith("+")
+        val rawDigits = rawAscii.filter { it.isDigit() }
         if (rawDigits.length in 7..15) {
-            return rawDigits
+            return if (hasPlus) "+$rawDigits" else rawDigits
         }
 
         return "غير مسجل - يرجى مراجعة العميل"

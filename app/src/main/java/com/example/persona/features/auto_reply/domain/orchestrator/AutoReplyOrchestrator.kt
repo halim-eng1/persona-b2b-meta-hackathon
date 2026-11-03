@@ -31,6 +31,7 @@ import com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResu
 import com.example.persona.features.auto_reply.domain.model.WhatsAppNotification
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
+import com.example.persona.features.settings.domain.model.AccountMode
 import com.example.persona.features.settings.domain.repository.ModelCapability
 import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
@@ -1059,62 +1060,67 @@ class AutoReplyOrchestrator @Inject constructor(
 
             // Agentic Order Actions & Ingestion Routing
             var overriddenReplyText: String? = null
-            val orderAction = OrderIngestionManager.normalizeOrderAction(agenticResponse.orderAction)
+            val accountMode = runCatching { prefsRepository.getAccountModeSync() }.getOrDefault(AccountMode.BUSINESS)
+            val orderAction = if (accountMode == AccountMode.PERSONAL) null else OrderIngestionManager.normalizeOrderAction(agenticResponse.orderAction)
 
-            Log.i("PersonaMetrics", "metric=order_extraction_rate value=${if (agenticResponse.extractedOrder != null) 1 else 0} contact=${processed.contactName.hashCode()}")
-            Log.i("PersonaMetrics", "metric=order_action_usage value=${orderAction ?: if (agenticResponse.orderAction != null) "UNKNOWN" else "NONE"} contact=${processed.contactName.hashCode()}")
+            if (accountMode != AccountMode.PERSONAL) {
+                Log.i("PersonaMetrics", "metric=order_extraction_rate value=${if (agenticResponse.extractedOrder != null) 1 else 0} contact=${processed.contactName.hashCode()}")
+                Log.i("PersonaMetrics", "metric=order_action_usage value=${orderAction ?: if (agenticResponse.orderAction != null) "UNKNOWN" else "NONE"} contact=${processed.contactName.hashCode()}")
 
-            // Defer order ingestion mutations on intermediate turns (RE_QUERY or image turns)
-            if (effectiveAction == "REPLY" && !isImagePresent) {
-                if (agenticResponse.extractedOrder != null) {
-                    val extracted = agenticResponse.extractedOrder
-                    val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
+                // Defer order ingestion mutations on intermediate turns (RE_QUERY or image turns)
+                if (effectiveAction == "REPLY" && !isImagePresent) {
+                    if (agenticResponse.extractedOrder != null) {
+                        val extracted = agenticResponse.extractedOrder
+                        val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
 
-                    when {
-                        orderAction == "CANCEL" -> {
-                            if (!orderIngestionManager.executeCancelOrderAction(processed)) {
-                                overriddenReplyText = NO_ACTIVE_ORDER_REPLY
+                        when {
+                            orderAction == "CANCEL" -> {
+                                if (!orderIngestionManager.executeCancelOrderAction(processed)) {
+                                    overriddenReplyText = NO_ACTIVE_ORDER_REPLY
+                                }
+                            }
+                            orderAction == "UPDATE" && existingOrder != null -> {
+                                orderIngestionManager.applyOrderUpdates(existingOrder, extracted)
+                                if (existingOrder.status == OrderStatus.PENDING.name) {
+                                    orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
+                                    Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirm/update")
+                                }
+                            }
+                            else -> {
+                                val result = orderIngestionManager.handleOrderCreation(
+                                    extractedOrder = agenticResponse.extractedOrder,
+                                    contactName = processed.contactName,
+                                    customerText = processed.originalText,
+                                    orderAction = orderAction ?: "",
+                                    sourceClass = sourceClassStr
+                                )
+                                if (result is OrderIngestionResult.DuplicatePivot) {
+                                    overriddenReplyText = result.pivotReplyText
+                                }
                             }
                         }
-                        orderAction == "UPDATE" && existingOrder != null -> {
-                            orderIngestionManager.applyOrderUpdates(existingOrder, extracted)
-                            if (existingOrder.status == OrderStatus.PENDING.name) {
-                                orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
-                                Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirm/update")
+                    } else {
+                        when (orderAction) {
+                            "CANCEL" -> {
+                                if (!orderIngestionManager.executeCancelOrderAction(processed)) {
+                                    overriddenReplyText = NO_ACTIVE_ORDER_REPLY
+                                }
                             }
-                        }
-                        else -> {
-                            val result = orderIngestionManager.handleOrderCreation(
-                                extractedOrder = agenticResponse.extractedOrder,
-                                contactName = processed.contactName,
-                                customerText = processed.originalText,
-                                orderAction = orderAction ?: "",
-                                sourceClass = sourceClassStr
-                            )
-                            if (result is OrderIngestionResult.DuplicatePivot) {
-                                overriddenReplyText = result.pivotReplyText
+                            "UPDATE" -> {
+                                val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
+                                if (existingOrder == null) {
+                                    Log.i(TAG, "order_action=UPDATE but no active order for ${processed.contactName} — nothing to update")
+                                } else if (existingOrder.status == OrderStatus.PENDING.name) {
+                                    orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
+                                    Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirmation")
+                                }
                             }
+                            else -> Unit
                         }
-                    }
-                } else {
-                    when (orderAction) {
-                        "CANCEL" -> {
-                            if (!orderIngestionManager.executeCancelOrderAction(processed)) {
-                                overriddenReplyText = NO_ACTIVE_ORDER_REPLY
-                            }
-                        }
-                        "UPDATE" -> {
-                            val existingOrder = orderDao.getActiveMatchingOrder(processed.contactName)
-                            if (existingOrder == null) {
-                                Log.i(TAG, "order_action=UPDATE but no active order for ${processed.contactName} — nothing to update")
-                            } else if (existingOrder.status == OrderStatus.PENDING.name) {
-                                orderDao.updateStatus(existingOrder.id, OrderStatus.IN_PREPARATION.name)
-                                Log.i(TAG, "📈 Order id=${existingOrder.id} advanced PENDING → IN_PREPARATION after customer confirmation")
-                            }
-                        }
-                        else -> Unit
                     }
                 }
+            } else {
+                Log.d(TAG, "AccountMode.PERSONAL active: Bypassing order extraction, persistence, and courier triggers.")
             }
 
             val rawReplyText: String? = if (overriddenReplyText != null) {
@@ -1220,7 +1226,9 @@ class AutoReplyOrchestrator @Inject constructor(
                                 }
                             }
 
-                            val finalReplyOverride = orderIngestionManager.handleFinalPassOrderActions(finalParsed, processed)
+                            val finalReplyOverride = if (accountMode == AccountMode.PERSONAL) null else {
+                                orderIngestionManager.handleFinalPassOrderActions(finalParsed, processed)
+                            }
 
                             if (finalParsed.action.trim().uppercase() == "HITL") {
                                 Log.i(TAG, "Second-pass LLM action=HITL. Handing off to human.")
@@ -1283,7 +1291,11 @@ class AutoReplyOrchestrator @Inject constructor(
                 if (orderAction == null) {
                     val storeName = prefsRepository.getStoreNameSync()
                     PersonaLogger.w(TAG, "Anti-echo guard triggered on standard conversational turn. Replacing with alternative persona closing.")
-                    styledReplyText = "معاك يا فندم، اطلب اللي نفسك فيه من $storeName وأنا في الخدمة علطول 💙"
+                    styledReplyText = if (accountMode == AccountMode.PERSONAL) {
+                        "أنا معاك، قولّي أقدر أساعدك في إيه؟"
+                    } else {
+                        "معاك يا فندم، اطلب اللي نفسك فيه من $storeName وأنا في الخدمة علطول 💙"
+                    }
                 } else {
                     Log.w(TAG, "Anti-echo guard triggered: duplicate reply for ${processed.contactName}. Degrading to HITL.")
                     hitlNotificationHandler.handleHitlEscalation(processed, maxScore)

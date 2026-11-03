@@ -89,6 +89,21 @@ class ContextDetectorTest {
     }
 
     @Test
+    fun detect_englishGreetings_returnsGreetingIntent() {
+        assertEquals(IntentType.GREETING, detector.detect("Howdy").intent)
+        assertEquals(IntentType.GREETING, detector.detect("Greetings!").intent)
+        assertEquals(IntentType.GREETING, detector.detect("Good afternoon").intent)
+        assertEquals(IntentType.GREETING, detector.detect("Welcome everyone").intent)
+    }
+
+    @Test
+    fun detect_englishClosings_returnsClosingIntent() {
+        assertEquals(IntentType.CLOSING, detector.detect("Thank you").intent)
+        assertEquals(IntentType.CLOSING, detector.detect("Cheers").intent)
+        assertEquals(IntentType.CLOSING, detector.detect("Have a good one").intent)
+    }
+
+    @Test
     fun detect_studyStatement_returnsStudyTopic() {
         val context = detector.detect("لازم ادرس للامتحان")
         assertEquals(TopicType.STUDY, context.topic)

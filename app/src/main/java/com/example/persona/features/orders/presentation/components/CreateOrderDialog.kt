@@ -39,7 +39,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.persona.R
-import com.example.persona.features.orders.domain.EgyptianGovernorates
+import com.example.persona.features.orders.domain.CurrencyFormatter
 import com.example.persona.features.orders.domain.EgyptianOrderUtils
 import com.example.persona.ui.theme.PersonaPrimitives
 import kotlinx.coroutines.launch
@@ -73,8 +73,6 @@ fun CreateOrderDialog(
     var customerName by remember { mutableStateOf("") }
     var customerPhone by remember { mutableStateOf("") }
     var deliveryAddress by remember { mutableStateOf("") }
-    var selectedGov by remember { mutableStateOf("") }
-    var govExpanded by remember { mutableStateOf(false) }
     var orderDetails by remember { mutableStateOf("") }
     var totalAmountText by remember { mutableStateOf("") }
     var shippingFeeText by remember { mutableStateOf("") }
@@ -127,31 +125,28 @@ fun CreateOrderDialog(
 
         val lines = rawText.lines().map { it.trim() }.filter { it.isNotBlank() }
 
-        // 1. Extract Egyptian Phone
-        val extractedPhone = EgyptianOrderUtils.extractEgyptianMobilePhone(rawText)
+        // 1. Extract Phone (ITU-T E.164 compliant)
+        val extractedPhone = EgyptianOrderUtils.extractPhoneNumber(rawText)
         if (extractedPhone != null) {
             customerPhone = extractedPhone
             isPhoneError = false
         }
 
-        // 2. Extract Governorate
-        val detectedGov = EgyptianGovernorates.ALL.firstOrNull { gov -> rawText.contains(gov) }
-        if (detectedGov != null) {
-            selectedGov = detectedGov
-        }
-
-        // 3. Extract Delivery Address
-        val addressKeywords = listOf("عنوان", "شارع", "ش ", "عمارة", "شقة", "بجوار", "امام", "أمام", "طريق", "حي", "الحي", "ميدان", "منطقة", "دور", "الدور")
-        val addressLine = lines.firstOrNull { line -> addressKeywords.any { kw -> line.contains(kw) } }
+        // 2. Extract Delivery Address (Single comprehensive address field)
+        val addressKeywords = listOf("عنوان", "شارع", "ش ", "عمارة", "شقة", "بجوار", "امام", "أمام", "طريق", "حي", "الحي", "ميدان", "منطقة", "دور", "الدور", "address", "street", "st", "apt", "building", "floor", "suite", "road", "ave", "avenue", "city", "state", "zip")
+        val addressLine = lines.firstOrNull { line -> addressKeywords.any { kw -> line.contains(kw, ignoreCase = true) } }
         if (addressLine != null) {
-            deliveryAddress = addressLine.replace(Regex("^(العنوان|عنوان|العنوان:)\\s*"), "").trim()
+            deliveryAddress = addressLine.replace(Regex("^(العنوان|عنوان|العنوان:|address:|address)\\s*", RegexOption.IGNORE_CASE), "").trim()
         }
 
         // 4. Extract Pricing
-        val priceRegex = Regex("""(?:سعر|إجمالي|المبلغ|مبلغ|حساب|اجمالي)?\s*[:=-]?\s*([0-9٠-٩]+(?:\.[0-9٠-٩]+)?)\s*(?:ج\.?م|جنيه|egp|le)?""", RegexOption.IGNORE_CASE)
+        val priceRegex = Regex(
+            """(?:سعر|إجمالي|المبلغ|مبلغ|حساب|اجمالي|total|price|amount)?\s*[:=-]?\s*([$€£¥₹]?\s*[0-9٠-٩]+(?:\.[0-9٠-٩]+)?)\s*(?:ج\.?م|جنيه|egp|le|usd|eur|gbp|aed|sar|[$€£¥₹])?""",
+            RegexOption.IGNORE_CASE
+        )
         val matchPrice = priceRegex.find(rawText)
         if (matchPrice != null && totalAmountText.isBlank()) {
-            val extractedNum = matchPrice.groupValues[1]
+            val extractedNum = matchPrice.groupValues[1].replace(Regex("""[$€£¥₹\s]"""), "")
             val parsed = EgyptianOrderUtils.parseEgyptianDecimal(extractedNum)
             if (parsed != null && parsed > 0) {
                 totalAmountText = EgyptianOrderUtils.formatMoney(parsed)
@@ -160,14 +155,14 @@ fun CreateOrderDialog(
         }
 
         // 5. Extract Customer Name
-        val nameRegex = Regex("^(?:الاسم|اسم العميل|اسم)[:=-]?\\s*(.+)$")
+        val nameRegex = Regex("^(?:الاسم|اسم العميل|اسم|name|customer)[:=-]?\\s*(.+)$", RegexOption.IGNORE_CASE)
         val explicitName = lines.firstNotNullOfOrNull { line -> nameRegex.find(line)?.groupValues?.get(1)?.trim() }
         if (explicitName != null) {
             customerName = explicitName
             isNameError = false
         } else if (customerName.isBlank() && lines.isNotEmpty()) {
             val firstLine = lines.first()
-            if (!EgyptianOrderUtils.isValidEgyptianMobile(firstLine) && addressKeywords.none { firstLine.contains(it) }) {
+            if (!EgyptianOrderUtils.isValidPhoneNumber(firstLine) && addressKeywords.none { firstLine.contains(it, ignoreCase = true) }) {
                 customerName = firstLine
                 isNameError = false
             }
@@ -178,6 +173,7 @@ fun CreateOrderDialog(
             line != addressLine &&
             !line.contains(extractedPhone ?: "___NONE___") &&
             !line.startsWith("الاسم") &&
+            !line.startsWith("name", ignoreCase = true) &&
             line != explicitName
         }
         if (remainingLines.isNotEmpty() && orderDetails.isBlank()) {
@@ -323,7 +319,7 @@ fun CreateOrderDialog(
                             },
                             isError = isPhoneError,
                             label = { Text(stringResource(R.string.orders_customer_phone_label)) },
-                            placeholder = { Text("01012345678") },
+                            placeholder = { Text("+1 555 123 4567 / +20 101 234 5678") },
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Phone,
                                 imeAction = ImeAction.Next
@@ -351,42 +347,6 @@ fun CreateOrderDialog(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Governorate Dropdown
-                        ExposedDropdownMenuBox(
-                            expanded = govExpanded,
-                            onExpandedChange = { govExpanded = it },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            OutlinedTextField(
-                                value = selectedGov,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text(stringResource(R.string.orders_input_gov_label)) },
-                                placeholder = { Text(stringResource(R.string.orders_input_gov_placeholder)) },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = govExpanded) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            ExposedDropdownMenu(
-                                expanded = govExpanded,
-                                onDismissRequest = { govExpanded = false }
-                            ) {
-                                EgyptianGovernorates.ALL.forEach { gov ->
-                                    DropdownMenuItem(
-                                        text = { Text(gov) },
-                                        onClick = {
-                                            selectedGov = gov
-                                            govExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
 
                         Spacer(modifier = Modifier.height(8.dp))
 
@@ -564,7 +524,7 @@ fun CreateOrderDialog(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = stringResource(R.string.orders_total_cod_summary, EgyptianOrderUtils.formatMoney(codTotal)),
+                                    text = stringResource(R.string.orders_total_cod_summary, CurrencyFormatter.formatAmountWithCurrency(codTotal)),
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                     color = codAccentColor
                                 )
@@ -578,8 +538,9 @@ fun CreateOrderDialog(
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
+                                    val parsedShippingAmount = EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) ?: 0.0
                                     Text(
-                                        text = "${EgyptianOrderUtils.formatMoney(EgyptianOrderUtils.parseEgyptianDecimal(shippingFeeText) ?: 0.0)} ج.م",
+                                        text = CurrencyFormatter.formatAmountWithCurrency(parsedShippingAmount),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = codAccentColor.copy(alpha = 0.85f)
                                     )
@@ -607,8 +568,8 @@ fun CreateOrderDialog(
                                 coroutineScope.launch { scrollState.animateScrollTo(0) }
                                 return@Button
                             }
-                            if (phone.isNotEmpty() && !EgyptianOrderUtils.isValidEgyptianMobile(phone)) {
-                                validationError = context.getString(R.string.orders_error_invalid_egyptian_phone)
+                            if (phone.isNotEmpty() && !EgyptianOrderUtils.isValidPhoneNumber(phone)) {
+                                validationError = context.getString(R.string.orders_error_invalid_phone)
                                 isPhoneError = true
                                 coroutineScope.launch { scrollState.animateScrollTo(0) }
                                 return@Button
@@ -639,7 +600,7 @@ fun CreateOrderDialog(
                                 return@Button
                             }
 
-                            val normalizedPhone = EgyptianOrderUtils.extractEgyptianMobilePhone(phone) ?: phone
+                            val normalizedPhone = EgyptianOrderUtils.extractPhoneNumber(phone) ?: phone
 
                             validationError = null
                             isNameError = false
@@ -652,7 +613,7 @@ fun CreateOrderDialog(
                                 name,
                                 normalizedPhone,
                                 deliveryAddress.trim(),
-                                selectedGov.ifBlank { null },
+                                null,
                                 details,
                                 parsedTotal,
                                 parsedShipping,

@@ -71,6 +71,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.persona.R
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.ui.components.personaScreenBackground
 import com.example.persona.ui.theme.spacing
 import kotlinx.coroutines.launch
@@ -96,7 +97,9 @@ private data class OnboardingPageData(
 @Composable
 fun FeatureOnboardingScreen(
     onComplete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    currentLanguage: String = UserPreferencesRepository.DEFAULT_APP_LANGUAGE,
+    onLanguageChange: (String) -> Unit = {}
 ) {
     val coroutineScope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { 3 })
@@ -197,6 +200,12 @@ fun FeatureOnboardingScreen(
                 } else {
                     Spacer(modifier = Modifier.size(spacing.touchTargetMin))
                 }
+
+                // Prominent Bilingual Language Toggle Pill (English / العربية)
+                LanguageTogglePill(
+                    currentLanguage = currentLanguage,
+                    onToggleLanguage = onLanguageChange
+                )
 
                 // Top Skip Button with full 48dp minimum touch target
                 AnimatedVisibility(
@@ -455,6 +464,76 @@ fun FeatureOnboardingScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun LanguageTogglePill(
+    currentLanguage: String,
+    onToggleLanguage: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isArabic = currentLanguage.equals("ar", ignoreCase = true)
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.padding(3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // English Option
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (!isArabic) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(
+                        role = Role.RadioButton,
+                        onClick = { onToggleLanguage("en") }
+                    )
+                    .semantics {
+                        selected = !isArabic
+                    }
+            ) {
+                Text(
+                    text = "English",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = if (!isArabic) FontWeight.Bold else FontWeight.Medium
+                    ),
+                    color = if (!isArabic) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(2.dp))
+
+            // Arabic Option
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (isArabic) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(
+                        role = Role.RadioButton,
+                        onClick = { onToggleLanguage("ar") }
+                    )
+                    .semantics {
+                        selected = isArabic
+                    }
+            ) {
+                Text(
+                    text = "العربية",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = if (isArabic) FontWeight.Bold else FontWeight.Medium
+                    ),
+                    color = if (isArabic) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
             }
         }
     }

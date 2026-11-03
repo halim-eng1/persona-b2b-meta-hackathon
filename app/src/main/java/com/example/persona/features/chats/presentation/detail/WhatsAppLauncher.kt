@@ -42,15 +42,11 @@ object WhatsAppLauncher {
 
     fun normalizePhoneNumber(phone: String): String {
         val clean = phone.replace(Regex("[^0-9+]"), "").trim()
-        return if (clean.startsWith("+")) {
-            clean.substring(1)
-        } else if (clean.startsWith("01") && clean.length == 11) {
-            // Egyptian local mobile numbers (e.g. 01012345678 -> 201012345678)
-            "2" + clean
-        } else if (clean.startsWith("201") && clean.length == 12) {
-            clean
-        } else {
-            clean
+        return when {
+            clean.startsWith("+") -> clean.substring(1)
+            clean.startsWith("00") -> clean.substring(2)
+            clean.startsWith("01") && clean.length == 11 -> "2" + clean // Retain backward-compatible Egyptian local mapping
+            else -> clean
         }
     }
 

@@ -112,7 +112,7 @@ object PersonaTheme {
 @Composable
 fun PersonaTheme(
     darkTheme: Boolean = false,
-    language: String = "ar",
+    language: String = "en",
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {

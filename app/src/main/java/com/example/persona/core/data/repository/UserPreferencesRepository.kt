@@ -11,6 +11,7 @@ import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
 import com.example.persona.features.settings.data.repository.InMemorySecureCredentialsRepository
+import com.example.persona.features.settings.domain.model.AccountMode
 import com.example.persona.features.settings.domain.repository.ModelCapability
 import com.example.persona.features.settings.domain.repository.ModelConfig
 import com.example.persona.features.settings.domain.repository.ModelProviders
@@ -114,12 +115,18 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_HAS_SEEN_ONBOARDING = booleanPreferencesKey("has_seen_onboarding")
         val KEY_ALWAYS_SHOW_ONBOARDING = booleanPreferencesKey("always_show_onboarding")
 
+        // ── Operational Mode (Business vs. Personal) ───────────────────────────
+        val KEY_ACCOUNT_MODE = stringPreferencesKey("account_mode")
+        val DEFAULT_ACCOUNT_MODE = AccountMode.BUSINESS.name
+        const val DEFAULT_PERSONAL_ASSISTANT_NAME = "Assistant"
+        const val DEFAULT_PERSONAL_OWNER_NAME = "User"
+
         // ── Model Preparation State ───────────────────────────────────────────
         val KEY_MODEL_PREPARED = booleanPreferencesKey("is_model_prepared")
 
         // ── App Language & Locale ──────────────────────────────────────────────
         val KEY_APP_LANGUAGE = stringPreferencesKey("app_language")
-        const val DEFAULT_APP_LANGUAGE = "ar"
+        const val DEFAULT_APP_LANGUAGE = "en"
 
         // ── Theme Mode ("dark", "light", "system") ──────────────────────────────
         val KEY_THEME_MODE = stringPreferencesKey("app_theme_mode")
@@ -141,12 +148,23 @@ class UserPreferencesRepository @Inject constructor(
         const val DEFAULT_BOT_NAME = "مساعد المبيعات"
         const val DEFAULT_STORE_NAME = "متجرنا"
 
-        const val DEFAULT_HITL_HOLDING_MESSAGE =
+        const val DEFAULT_HITL_HOLDING_MESSAGE_AR =
             "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
-        const val DEFAULT_MEDIA_FALLBACK_MESSAGE =
+        const val DEFAULT_HITL_HOLDING_MESSAGE_EN =
+            "One moment please, a customer support representative will be with you shortly to assist you! 🙏"
+        const val DEFAULT_HITL_HOLDING_MESSAGE = DEFAULT_HITL_HOLDING_MESSAGE_EN
+
+        const val DEFAULT_MEDIA_FALLBACK_MESSAGE_AR =
             "عفواً، لا يمكنني معالجة الوسائط. يرجى كتابة استفسارك في رسالة نصية."
-        const val DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE =
+        const val DEFAULT_MEDIA_FALLBACK_MESSAGE_EN =
+            "Sorry, I cannot process media attachments. Please type your inquiry as a text message."
+        const val DEFAULT_MEDIA_FALLBACK_MESSAGE = DEFAULT_MEDIA_FALLBACK_MESSAGE_EN
+
+        const val DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_AR =
             "أنا معاك وسامعك كويس يا فندم، بس قولّي نقدر نجهزلك إيه النهارده من منتجاتنا في %s؟ 💙"
+        const val DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_EN =
+            "I am here and listening, but please let us know how we can assist you with our products today? 💙"
+        const val DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE = DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_EN
 
         val DEFAULT_PROVIDER_ORDER = listOf(
             ModelProviders.META,
@@ -255,6 +273,10 @@ class UserPreferencesRepository @Inject constructor(
         prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
     }
 
+    val accountModeFlow: Flow<AccountMode> = dataStore.data.map { prefs ->
+        AccountMode.fromString(prefs[KEY_ACCOUNT_MODE])
+    }
+
     val themeModeFlow: Flow<String> = dataStore.data.map { prefs ->
         prefs[KEY_THEME_MODE]?.takeIf { it.isNotBlank() } ?: DEFAULT_THEME_MODE
     }
@@ -314,15 +336,57 @@ class UserPreferencesRepository @Inject constructor(
     }
 
     val hitlHoldingMessageFlow: Flow<String> = dataStore.data.map { prefs ->
-        prefs[KEY_HITL_HOLDING_MESSAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_HITL_HOLDING_MESSAGE
+        val custom = prefs[KEY_HITL_HOLDING_MESSAGE]?.takeIf { it.isNotBlank() }
+        val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+        val isArabic = lang.equals("ar", ignoreCase = true)
+        val defaultMsg = if (isArabic) DEFAULT_HITL_HOLDING_MESSAGE_AR else DEFAULT_HITL_HOLDING_MESSAGE_EN
+        if (custom != null) {
+            if (!isArabic && custom == DEFAULT_HITL_HOLDING_MESSAGE_AR) {
+                defaultMsg
+            } else if (isArabic && custom == DEFAULT_HITL_HOLDING_MESSAGE_EN) {
+                defaultMsg
+            } else {
+                custom
+            }
+        } else {
+            defaultMsg
+        }
     }
 
     val mediaFallbackMessageFlow: Flow<String> = dataStore.data.map { prefs ->
-        prefs[KEY_MEDIA_FALLBACK_MESSAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_MEDIA_FALLBACK_MESSAGE
+        val custom = prefs[KEY_MEDIA_FALLBACK_MESSAGE]?.takeIf { it.isNotBlank() }
+        val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+        val isArabic = lang.equals("ar", ignoreCase = true)
+        val defaultMsg = if (isArabic) DEFAULT_MEDIA_FALLBACK_MESSAGE_AR else DEFAULT_MEDIA_FALLBACK_MESSAGE_EN
+        if (custom != null) {
+            if (!isArabic && custom == DEFAULT_MEDIA_FALLBACK_MESSAGE_AR) {
+                defaultMsg
+            } else if (isArabic && custom == DEFAULT_MEDIA_FALLBACK_MESSAGE_EN) {
+                defaultMsg
+            } else {
+                custom
+            }
+        } else {
+            defaultMsg
+        }
     }
 
     val blankReplyFallbackTemplateFlow: Flow<String> = dataStore.data.map { prefs ->
-        prefs[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() } ?: DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE
+        val custom = prefs[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() }
+        val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+        val isArabic = lang.equals("ar", ignoreCase = true)
+        val defaultMsg = if (isArabic) DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_AR else DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_EN
+        if (custom != null) {
+            if (!isArabic && custom == DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_AR) {
+                defaultMsg
+            } else if (isArabic && custom == DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_EN) {
+                defaultMsg
+            } else {
+                custom
+            }
+        } else {
+            defaultMsg
+        }
     }
 
     val nvidiaApiKeyFlow: Flow<String?> = secureCredentialsRepository.nvidiaApiKeyFlow
@@ -789,6 +853,10 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
+    suspend fun setAccountMode(mode: AccountMode) {
+        dataStore.edit { prefs -> prefs[KEY_ACCOUNT_MODE] = mode.name }
+    }
+
     suspend fun setThemeMode(mode: String) {
         dataStore.edit { prefs ->
             prefs[KEY_THEME_MODE] = mode.trim().lowercase()
@@ -882,6 +950,11 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun getAppLanguageSync(): String =
         dataStore.data.first()[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
 
+    suspend fun getAccountModeSync(): AccountMode {
+        val raw = dataStore.data.first()[KEY_ACCOUNT_MODE]
+        return AccountMode.fromString(raw)
+    }
+
     suspend fun getThemeModeSync(): String =
         dataStore.data.first()[KEY_THEME_MODE]?.takeIf { it.isNotBlank() } ?: DEFAULT_THEME_MODE
 
@@ -936,11 +1009,35 @@ class UserPreferencesRepository @Inject constructor(
         dataStore.edit { prefs -> prefs[KEY_BLANK_REPLY_FALLBACK_TEMPLATE] = template }
     }
 
-    suspend fun getHitlHoldingMessageSync(): String =
-        dataStore.data.first()[KEY_HITL_HOLDING_MESSAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_HITL_HOLDING_MESSAGE
+    suspend fun getHitlHoldingMessageSync(): String {
+        val prefs = dataStore.data.first()
+        val custom = prefs[KEY_HITL_HOLDING_MESSAGE]?.takeIf { it.isNotBlank() }
+        val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+        val isArabic = lang.equals("ar", ignoreCase = true)
+        val defaultMsg = if (isArabic) DEFAULT_HITL_HOLDING_MESSAGE_AR else DEFAULT_HITL_HOLDING_MESSAGE_EN
+        return if (custom != null) {
+            if (!isArabic && custom == DEFAULT_HITL_HOLDING_MESSAGE_AR) defaultMsg
+            else if (isArabic && custom == DEFAULT_HITL_HOLDING_MESSAGE_EN) defaultMsg
+            else custom
+        } else {
+            defaultMsg
+        }
+    }
 
-    suspend fun getMediaFallbackMessageSync(): String =
-        dataStore.data.first()[KEY_MEDIA_FALLBACK_MESSAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_MEDIA_FALLBACK_MESSAGE
+    suspend fun getMediaFallbackMessageSync(): String {
+        val prefs = dataStore.data.first()
+        val custom = prefs[KEY_MEDIA_FALLBACK_MESSAGE]?.takeIf { it.isNotBlank() }
+        val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+        val isArabic = lang.equals("ar", ignoreCase = true)
+        val defaultMsg = if (isArabic) DEFAULT_MEDIA_FALLBACK_MESSAGE_AR else DEFAULT_MEDIA_FALLBACK_MESSAGE_EN
+        return if (custom != null) {
+            if (!isArabic && custom == DEFAULT_MEDIA_FALLBACK_MESSAGE_AR) defaultMsg
+            else if (isArabic && custom == DEFAULT_MEDIA_FALLBACK_MESSAGE_EN) defaultMsg
+            else custom
+        } else {
+            defaultMsg
+        }
+    }
 
     suspend fun setNvidiaApiKey(key: String?) {
         secureCredentialsRepository.setNvidiaApiKey(key)
@@ -976,8 +1073,20 @@ class UserPreferencesRepository @Inject constructor(
         return legacy
     }
 
-    suspend fun getBlankReplyFallbackTemplateSync(): String =
-        dataStore.data.first()[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() } ?: DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE
+    suspend fun getBlankReplyFallbackTemplateSync(): String {
+        val prefs = dataStore.data.first()
+        val custom = prefs[KEY_BLANK_REPLY_FALLBACK_TEMPLATE]?.takeIf { it.isNotBlank() }
+        val lang = prefs[KEY_APP_LANGUAGE]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_LANGUAGE
+        val isArabic = lang.equals("ar", ignoreCase = true)
+        val defaultMsg = if (isArabic) DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_AR else DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_EN
+        return if (custom != null) {
+            if (!isArabic && custom == DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_AR) defaultMsg
+            else if (isArabic && custom == DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_EN) defaultMsg
+            else custom
+        } else {
+            defaultMsg
+        }
+    }
 
     suspend fun setModelPrepared(prepared: Boolean) {
         cachedModelPrepared = prepared

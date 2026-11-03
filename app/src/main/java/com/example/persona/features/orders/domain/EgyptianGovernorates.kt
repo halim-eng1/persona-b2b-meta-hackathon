@@ -3,6 +3,7 @@ package com.example.persona.features.orders.domain
 /**
  * Standard list of Egyptian Governorates for B2B fulfillment routing & filtering.
  */
+@Deprecated("Governorate dropdown deprecated in favor of full international deliveryAddress")
 object EgyptianGovernorates {
     val ALL = listOf(
         "القاهرة",

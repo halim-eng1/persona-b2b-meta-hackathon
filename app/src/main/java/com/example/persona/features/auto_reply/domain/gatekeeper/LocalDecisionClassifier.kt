@@ -37,7 +37,9 @@ class LocalDecisionClassifier @Inject constructor() {
             "حد هنا", "في حد هنا", "في حد", "ف حد", "هلو",
             // Franco-Arab & English Commercial Tokens
             "hi", "hello", "hey", "salam", "sabah el kher", "morning",
-            "good morning", "good evening", "sabah el kheir", "sabah el fol",
+            "good morning", "good evening", "good afternoon", "good day",
+            "greetings", "howdy", "welcome",
+            "sabah el kheir", "sabah el fol",
             "fe 7ad hena", "fe 7ad", "feh 7ad"
         )
         private val ORDER_KEYWORDS = listOf(
@@ -48,7 +50,8 @@ class LocalDecisionClassifier @Inject constructor() {
             "الغي", "ألغي", "إلغاء", "الغاء", "إلغي", "اتلغي", "اتلغى", "طيب اتلغي", "كنسل", "كنسل الاوردر", "كنسل الأوردر",
             "الغي طلبي", "ألغي طلبي", "لغي", "ملغي", "ملغى", "اتكنسل", "كنسلت", "كنسللي",
             // Franco-Arab & English
-            "status", "order feen", "tracking", "track", "order status", "cancel", "cancel order"
+            "status", "order feen", "tracking", "track", "order status", "cancel", "cancel order",
+            "where is my order", "my order", "my shipment", "delivery status", "track order", "where is my package"
         )
         private val BANTER_KEYWORDS = listOf(
             // Arabic Colloquial & Emojis
@@ -56,7 +59,7 @@ class LocalDecisionClassifier @Inject constructor() {
             "المانجا", "البطيخ", "روبوت", "ذكاء", "هههه", "😂", "🤣", "اممم", "امم", "امممم",
             // Franco-Arab & English
             "haha", "hahaha", "lol", "joke", "jokes", "3asha", "akl", "akel", "sa7by", "sa7bi",
-            "mmm", "hmmm"
+            "mmm", "hmmm", "who are you", "are you human", "are you a bot", "what can you do", "tell me a joke", "chatbot"
         )
         private val CATALOG_KEYWORDS = listOf(
             // Arabic Product / Specs / Price
@@ -64,9 +67,11 @@ class LocalDecisionClassifier @Inject constructor() {
             "خامة", "قماش", "الوان", "ألوان", "هودي", "تيشيرت", "شراء", "اشتري", 
             "كتالوج", "كام", "تصميم", "التصميم",
             // Franco-Arab & English
-            "price", "prices", "bkam", "bekam", "b kam", "hoodie", "hoodies", 
+            "price", "prices", "pricing", "cost", "how much", "bkam", "bekam", "b kam", "hoodie", "hoodies", 
             "tshirt", "tshirts", "t-shirt", "t-shirts", "size", "sizes", 
-            "oversize", "oversized", "colors", "color", "colours", "colour"
+            "oversize", "oversized", "colors", "color", "colours", "colour",
+            "product", "products", "item", "items", "catalog", "catalogue", "menu", "services",
+            "in stock", "stock", "available", "shipping", "delivery"
         )
         private val STORE_INFO_AND_SOCIAL_KEYWORDS = listOf(
             // Social Media Platforms & Channels

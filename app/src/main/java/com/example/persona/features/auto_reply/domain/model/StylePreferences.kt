@@ -15,7 +15,7 @@ enum class StyleProfile(val displayName: String) {
 }
 
 data class StylePreferences(
-    val personaTone: PersonaTone = PersonaTone.WITTY_EGYPTIAN,
+    val personaTone: PersonaTone = PersonaTone.STANDARD_POLITE,
     val similarityThreshold: Float = 0.75f, // Balanced default
     val cooldownMins: Int = 5,
     val replyDelaySeconds: Int = 2,
@@ -29,7 +29,7 @@ data class StylePreferences(
         cooldownMins: Int = 5,
         replyDelaySeconds: Int = 2
     ) : this(
-        personaTone = PersonaTone.WITTY_EGYPTIAN,
+        personaTone = PersonaTone.STANDARD_POLITE,
         similarityThreshold = similarityThreshold,
         cooldownMins = cooldownMins,
         replyDelaySeconds = replyDelaySeconds,

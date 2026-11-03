@@ -26,7 +26,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.persona.core.database.entity.OrderEntity
-import com.example.persona.features.orders.domain.EgyptianGovernorates
+import com.example.persona.features.orders.domain.CurrencyFormatter
 import com.example.persona.features.orders.domain.EgyptianOrderUtils
 
 /**
@@ -52,13 +52,11 @@ fun EditOrderDialog(
     var customerName by remember { mutableStateOf(order.customerNameFromLlm.orEmpty()) }
     var customerPhone by remember {
         mutableStateOf(
-            EgyptianOrderUtils.extractEgyptianMobilePhone(order.customerPhone)
+            EgyptianOrderUtils.extractPhoneNumber(order.customerPhone)
                 ?: order.customerPhone.ifBlank { order.contactName }
         )
     }
     var deliveryAddress by remember { mutableStateOf(order.deliveryAddress.orEmpty()) }
-    var selectedGov by remember { mutableStateOf(order.governorate.orEmpty()) }
-    var govExpanded by remember { mutableStateOf(false) }
     var orderDetails by remember { mutableStateOf(order.orderDetails.orEmpty()) }
     var totalAmountText by remember {
         mutableStateOf(if (order.totalAmount > 0) EgyptianOrderUtils.formatMoney(order.totalAmount) else "")
@@ -152,6 +150,7 @@ fun EditOrderDialog(
                         validationError = null
                     },
                     label = { Text(stringResource(R.string.orders_input_phone_rep_label)) },
+                    placeholder = { Text("+1 555 123 4567 / +20 101 234 5678") },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Phone,
                         imeAction = ImeAction.Next
@@ -160,42 +159,6 @@ fun EditOrderDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Governorate dropdown
-                ExposedDropdownMenuBox(
-                    expanded = govExpanded,
-                    onExpandedChange = { govExpanded = it },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    OutlinedTextField(
-                        value = selectedGov,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(stringResource(R.string.orders_input_gov_label)) },
-                        placeholder = { Text(stringResource(R.string.orders_input_gov_placeholder)) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = govExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    ExposedDropdownMenu(
-                        expanded = govExpanded,
-                        onDismissRequest = { govExpanded = false }
-                    ) {
-                        EgyptianGovernorates.ALL.forEach { gov ->
-                            DropdownMenuItem(
-                                text = { Text(gov) },
-                                onClick = {
-                                    selectedGov = gov
-                                    govExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -283,7 +246,7 @@ fun EditOrderDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = stringResource(R.string.orders_total_cod_summary, EgyptianOrderUtils.formatMoney(codTotal)),
+                            text = stringResource(R.string.orders_total_cod_summary, CurrencyFormatter.formatAmountWithCurrency(codTotal)),
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                             color = OrderGreen
                         )
@@ -298,8 +261,8 @@ fun EditOrderDialog(
                         focusManager.clearFocus()
 
                         val phone = customerPhone.trim()
-                        if (phone.isNotEmpty() && !EgyptianOrderUtils.isValidEgyptianMobile(phone)) {
-                            validationError = context.getString(R.string.orders_error_invalid_egyptian_phone)
+                        if (phone.isNotEmpty() && !EgyptianOrderUtils.isValidPhoneNumber(phone)) {
+                            validationError = context.getString(R.string.orders_error_invalid_phone)
                             return@Button
                         }
                         if (totalAmountText.isNotBlank() && EgyptianOrderUtils.parseEgyptianDecimal(totalAmountText) == null) {
@@ -319,7 +282,7 @@ fun EditOrderDialog(
                             return@Button
                         }
 
-                        val normalizedPhone = EgyptianOrderUtils.extractEgyptianMobilePhone(phone) ?: phone
+                        val normalizedPhone = EgyptianOrderUtils.extractPhoneNumber(phone) ?: phone
 
                         validationError = null
                         onSave(
@@ -327,7 +290,7 @@ fun EditOrderDialog(
                             customerName.trim().ifBlank { null },
                             normalizedPhone,
                             deliveryAddress.trim().ifBlank { null },
-                            selectedGov.ifBlank { null },
+                            order.governorate,
                             orderDetails.trim().ifBlank { null },
                             total,
                             shippingFeeVal

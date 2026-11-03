@@ -226,7 +226,7 @@ class SemanticRetrievalRepository @Inject constructor(
             }
         }
 
-        // Distinct alphanumeric terms (length >= 5, e.g. "velo.egypt")
+        // Distinct alphanumeric terms (length >= 5, e.g. "store.global")
         val words = cleanQuery.split(Regex("""[\s,،؛?؟!]+"""))
             .map { it.trim().removePrefix("@").removePrefix("https://").removePrefix("http://") }
             .filter { it.length >= 5 }

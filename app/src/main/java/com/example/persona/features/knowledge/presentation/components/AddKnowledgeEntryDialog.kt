@@ -1,5 +1,7 @@
 package com.example.persona.features.knowledge.presentation.components
 
+import com.example.persona.features.orders.domain.CurrencyFormatter
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -365,7 +367,8 @@ fun AddKnowledgeEntryDialog(
                                 val formatted = buildString {
                                     append("[منتج]: ${productName.trim()}")
                                     val cleanPrice = sanitizeArabicIndicPrice(priceEgp)
-                                    if (cleanPrice.isNotBlank()) append(" | [السعر]: $cleanPrice ج.م")
+                                    val currencySymbol = CurrencyFormatter.getCurrencySymbol()
+                                    if (cleanPrice.isNotBlank()) append(" | [السعر]: $cleanPrice $currencySymbol")
                                     append(" | [التصنيف]: $selectedProductCategory")
                                     if (productDescription.isNotBlank()) append(" | [المواصفات]: ${productDescription.trim()}")
                                     append(" | [المخزون]: ${if (inStock) "متوفر" else "نفد من المخزن"}")

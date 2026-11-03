@@ -19,22 +19,44 @@ import org.junit.Test
 class PromptContextBuilderTest {
 
     @Test
-    fun `buildFirstPassSystemPrompt defaults to WITTY_EGYPTIAN`() {
+    fun `buildFirstPassSystemPrompt defaults to STANDARD_POLITE`() {
         val defaultPrompt = PromptContextBuilder.buildFirstPassSystemPrompt()
-        val explicitWittyPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val explicitPolitePrompt = PromptContextBuilder.buildFirstPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
 
-        assertEquals(explicitWittyPrompt, defaultPrompt)
-        assertTrue(defaultPrompt.contains("Dynamic 4-Gear Calibration"))
-        assertTrue(defaultPrompt.contains("ابن بلد لمّاح، واقعي، وسريع البديهة"))
+        assertEquals(explicitPolitePrompt, defaultPrompt)
+        assertTrue(defaultPrompt.contains("Customer Language & Dialect Matching Rule"))
     }
 
     @Test
-    fun `buildFinalPassSystemPrompt defaults to WITTY_EGYPTIAN`() {
+    fun `buildFinalPassSystemPrompt defaults to STANDARD_POLITE`() {
         val defaultPrompt = PromptContextBuilder.buildFinalPassSystemPrompt()
-        val explicitWittyPrompt = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.WITTY_EGYPTIAN)
+        val explicitPolitePrompt = PromptContextBuilder.buildFinalPassSystemPrompt(tone = PersonaTone.STANDARD_POLITE)
 
-        assertEquals(explicitWittyPrompt, defaultPrompt)
-        assertTrue(defaultPrompt.contains("Dynamic 4-Gear Calibration"))
+        assertEquals(explicitPolitePrompt, defaultPrompt)
+        assertTrue(defaultPrompt.contains("Customer Language & Dialect Matching Rule"))
+    }
+
+    @Test
+    fun `buildPersonalFirstPassSystemPrompt declares personal identity and suppresses orders`() {
+        val prompt = PromptContextBuilder.buildPersonalFirstPassSystemPrompt(
+            assistantName = "Alex",
+            ownerName = "John Doe",
+            tone = PersonaTone.STANDARD_POLITE
+        )
+
+        assertTrue(prompt.contains("Alex, personal assistant to John Doe"))
+        assertTrue(prompt.contains("<personal_knowledge>"))
+        assertTrue(prompt.contains("\"order_action\": null"))
+        assertTrue(prompt.contains("\"extracted_order\": null"))
+    }
+
+    @Test
+    fun `isCanonicalHitlMessage detects English and Arabic holding messages`() {
+        val arabic = "تمام يا فندم، ثواني وهيكون مع حضرتك ممثل خدمة العملاء فوراً لمساعدتك في أقرب وقت متاح! 🙏"
+        val english = "One moment please, a customer support representative will be with you shortly to assist you! 🙏"
+
+        assertTrue(PromptContextBuilder.isCanonicalHitlMessage(arabic))
+        assertTrue(PromptContextBuilder.isCanonicalHitlMessage(english))
     }
 
     @Test
@@ -152,11 +174,11 @@ class PromptContextBuilderTest {
 
     @Test
     fun `PersonaTone deserialization and fallback`() {
-        // Unknown or legacy strings fall back to WITTY_EGYPTIAN
-        assertEquals(PersonaTone.WITTY_EGYPTIAN, PersonaTone.fromString(null))
-        assertEquals(PersonaTone.WITTY_EGYPTIAN, PersonaTone.fromString("CASUAL"))
-        assertEquals(PersonaTone.WITTY_EGYPTIAN, PersonaTone.fromString("PROFESSIONAL"))
-        assertEquals(PersonaTone.WITTY_EGYPTIAN, PersonaTone.fromString("UNKNOWN_TONE"))
+        // Unknown or legacy strings fall back to STANDARD_POLITE
+        assertEquals(PersonaTone.STANDARD_POLITE, PersonaTone.fromString(null))
+        assertEquals(PersonaTone.STANDARD_POLITE, PersonaTone.fromString("CASUAL"))
+        assertEquals(PersonaTone.STANDARD_POLITE, PersonaTone.fromString("PROFESSIONAL"))
+        assertEquals(PersonaTone.STANDARD_POLITE, PersonaTone.fromString("UNKNOWN_TONE"))
 
         // Known names deserialize cleanly (case-insensitive)
         assertEquals(PersonaTone.WITTY_EGYPTIAN, PersonaTone.fromString("WITTY_EGYPTIAN"))

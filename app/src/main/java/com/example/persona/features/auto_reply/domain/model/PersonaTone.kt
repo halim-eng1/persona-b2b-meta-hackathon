@@ -8,9 +8,9 @@ enum class PersonaTone(
 ) {
     WITTY_EGYPTIAN(
         id = "WITTY_EGYPTIAN",
-        titleArabic = "ابن بلد لمّاح",
-        subtitle = "Witty & Dynamic",
-        samplePreview = "واقفين على رجلينا مستنيين الأوردر بتاعك أهو 😎 قولّي نجهزلك إيه؟"
+        titleArabic = "خدمة العملاء المصري",
+        subtitle = "Egyptian Local Style",
+        samplePreview = "واقفين على رجلينا مستنيين الأوردر بتاعك أهو، قولّي نجهزلك إيه؟"
     ),
     STANDARD_POLITE(
         id = "STANDARD_POLITE",
@@ -20,7 +20,7 @@ enum class PersonaTone(
     );
 
     companion object {
-        val DEFAULT = WITTY_EGYPTIAN
+        val DEFAULT = STANDARD_POLITE
 
         fun fromString(value: String?): PersonaTone {
             if (value == null) return DEFAULT

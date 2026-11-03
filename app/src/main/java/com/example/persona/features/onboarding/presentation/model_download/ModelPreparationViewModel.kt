@@ -46,7 +46,7 @@ class ModelPreparationViewModel @Inject constructor(
                 )
                 is ModelDownloadState.Downloading -> ModelPreparationUiState.Downloading(domainState.progress)
                 is ModelDownloadState.Verifying -> ModelPreparationUiState.Verifying(
-                    statusText = "جاري التأكد من سلامة ملفات المساعد..."
+                    statusText = ""
                 )
                 is ModelDownloadState.NetworkDisconnected -> ModelPreparationUiState.NetworkDisconnected(domainState.progress)
                 is ModelDownloadState.Failed -> ModelPreparationUiState.Failed(

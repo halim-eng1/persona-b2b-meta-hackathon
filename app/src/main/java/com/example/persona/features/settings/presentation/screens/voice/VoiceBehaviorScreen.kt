@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.persona.R
+import com.example.persona.features.settings.domain.model.AccountMode
 import com.example.persona.features.settings.presentation.SettingsSpoke
 import com.example.persona.features.settings.presentation.SettingsUiState
 import com.example.persona.features.settings.presentation.ThresholdLevel
@@ -63,24 +64,62 @@ fun VoiceBehaviorScreen(
         focus = focus,
         modifier = modifier
     ) {
-        // ── 1. Store & Bot Identity ───────────────────────────────────────────
-        SettingsGroup(title = R.string.settings_store_identity_title) {
+        // ── 1. Usage Mode & Identity ───────────────────────────────────────────
+        val isPersonalMode = state.accountMode == AccountMode.PERSONAL
+
+        SettingsGroup(
+            title = if (isPersonalMode) R.string.settings_personal_identity_title else R.string.settings_store_identity_title
+        ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // Usage Mode Selector
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .settingFocus(SettingKey.AccountMode),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_account_mode_label),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    SegmentedRow(
+                        title = stringResource(R.string.settings_mode_business),
+                        isSelected = state.accountMode == AccountMode.BUSINESS,
+                        onSelect = { actions.setAccountMode(AccountMode.BUSINESS) }
+                    )
+                    SegmentedRow(
+                        title = stringResource(R.string.settings_mode_personal),
+                        isSelected = state.accountMode == AccountMode.PERSONAL,
+                        onSelect = { actions.setAccountMode(AccountMode.PERSONAL) }
+                    )
+                }
+
+                // Bot / Assistant Name Field
                 DraftSaveTextField(
                     value = state.botName,
                     onSave = actions::setBotName,
-                    label = stringResource(R.string.settings_bot_name_label),
-                    placeholder = stringResource(R.string.settings_bot_name_placeholder),
-                    fallbackDefault = UserPreferencesRepository.DEFAULT_BOT_NAME,
+                    label = stringResource(
+                        if (isPersonalMode) R.string.settings_assistant_name_label else R.string.settings_bot_name_label
+                    ),
+                    placeholder = stringResource(
+                        if (isPersonalMode) R.string.settings_assistant_name_placeholder else R.string.settings_bot_name_placeholder
+                    ),
+                    fallbackDefault = if (isPersonalMode) "Assistant" else UserPreferencesRepository.DEFAULT_BOT_NAME,
                     modifier = Modifier.settingFocus(SettingKey.BotName)
                 )
 
+                // Store / Owner Name Field
                 DraftSaveTextField(
                     value = state.storeName,
                     onSave = actions::setStoreName,
-                    label = stringResource(R.string.settings_store_name_label),
-                    placeholder = stringResource(R.string.settings_store_name_placeholder),
-                    fallbackDefault = UserPreferencesRepository.DEFAULT_STORE_NAME,
+                    label = stringResource(
+                        if (isPersonalMode) R.string.settings_owner_name_label else R.string.settings_store_name_label
+                    ),
+                    placeholder = stringResource(
+                        if (isPersonalMode) R.string.settings_owner_name_placeholder else R.string.settings_store_name_placeholder
+                    ),
+                    fallbackDefault = if (isPersonalMode) "Owner" else UserPreferencesRepository.DEFAULT_STORE_NAME,
                     modifier = Modifier.settingFocus(SettingKey.StoreName)
                 )
             }
@@ -88,9 +127,10 @@ fun VoiceBehaviorScreen(
 
         // ── 2. Persona Tone ───────────────────────────────────────────────────
         SettingsGroup(title = R.string.settings_persona_tone_title) {
+            val isArabic = state.appLanguage.equals("ar", ignoreCase = true)
             NavRow(
-                title = state.personaTone.titleArabic,
-                summary = state.personaTone.subtitle,
+                title = if (isArabic) state.personaTone.titleArabic else state.personaTone.subtitle,
+                summary = if (isArabic) state.personaTone.subtitle else state.personaTone.titleArabic,
                 icon = Icons.Default.RecordVoiceOver,
                 onClick = { showTonePicker = true },
                 modifier = Modifier.settingFocus(SettingKey.Tone)

@@ -6,6 +6,7 @@ import com.example.persona.core.data.repository.BusinessHoursSchedule
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
+import com.example.persona.features.settings.domain.model.AccountMode
 import com.example.persona.features.settings.domain.repository.ModelCapability
 import com.example.persona.features.settings.domain.repository.ModelConfig
 import com.example.persona.features.settings.domain.repository.ModelProviders
@@ -95,9 +96,10 @@ data class SettingsUiState(
     val cloudflareAccountId: String = "",
 
     // ── 2. Store Identity & Bot Persona
+    val accountMode: AccountMode = AccountMode.BUSINESS,
     val botName: String = UserPreferencesRepository.DEFAULT_BOT_NAME,
     val storeName: String = UserPreferencesRepository.DEFAULT_STORE_NAME,
-    val personaTone: PersonaTone = PersonaTone.WITTY_EGYPTIAN,
+    val personaTone: PersonaTone = PersonaTone.STANDARD_POLITE,
     val styleProfile: StyleProfile = StyleProfile.CASUAL,
     val thresholdLevel: ThresholdLevel = ThresholdLevel.BALANCED,
     val cooldownMins: Int = 5,

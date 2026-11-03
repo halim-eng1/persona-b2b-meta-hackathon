@@ -549,7 +549,7 @@ class KnowledgeManagementViewModel @Inject constructor(
         // 5. Assemble System Prompt with PromptContextBuilder
         val botName = runCatching { userPreferencesRepository.getBotNameSync() }.getOrDefault(UserPreferencesRepository.DEFAULT_BOT_NAME)
         val storeName = runCatching { userPreferencesRepository.getStoreNameSync() }.getOrDefault(UserPreferencesRepository.DEFAULT_STORE_NAME)
-        val tone = runCatching { userPreferencesRepository.getPersonaToneSync() }.getOrDefault(PersonaTone.WITTY_EGYPTIAN)
+        val tone = runCatching { userPreferencesRepository.getPersonaToneSync() }.getOrDefault(PersonaTone.STANDARD_POLITE)
         val storeTopics = runCatching {
             kotlinx.coroutines.withTimeoutOrNull(250L) {
                 userPreferencesRepository.storeKnowledgeTopicsFlow.first()

@@ -1,5 +1,7 @@
 package com.example.persona.features.knowledge.presentation.components
 
+import com.example.persona.features.orders.domain.CurrencyFormatter
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -266,7 +268,8 @@ fun ManualKnowledgeInputCard(
                                 onClick = {
                                     val formatted = buildString {
                                         append("[منتج]: ${productName.trim()}")
-                                        if (priceEgp.isNotBlank()) append(" | [السعر]: ${priceEgp.trim()} ج.م")
+                                        val currencySymbol = CurrencyFormatter.getCurrencySymbol()
+                                    if (priceEgp.isNotBlank()) append(" | [السعر]: ${priceEgp.trim()} $currencySymbol")
                                         append(" | [التصنيف]: $selectedCategory")
                                         if (variations.isNotBlank()) append(" | [المقاسات والألوان]: ${variations.trim()}")
                                         append(" | [المخزون]: ${if (inStock) "متوفر" else "نفد من المخزن"}")

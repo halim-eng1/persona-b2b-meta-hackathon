@@ -75,6 +75,20 @@ class FormatCourierManifestUseCaseTest {
     }
 
     @Test
+    fun `resolves international phone preserving leading plus sign`() {
+        val order = OrderEntity(
+            id = 25L,
+            contactName = "John Doe",
+            customerPhone = "+15551234567",
+            status = OrderStatus.PENDING.name
+        )
+
+        val manifest = useCase(order)
+
+        assertTrue(manifest.contains("الهاتف: +15551234567"))
+    }
+
+    @Test
     fun `normalizes international plus20 phone to 11 digits domestic format`() {
         val order = OrderEntity(
             id = 21L,

@@ -92,10 +92,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.persona.R
+import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.onboarding.domain.model_download.DownloadProgress
+import com.example.persona.features.onboarding.presentation.LanguageTogglePill
 import com.example.persona.ui.components.personaScreenBackground
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -107,6 +110,8 @@ import kotlin.math.sin
 fun ModelPreparationScreen(
     onComplete: () -> Unit,
     modifier: Modifier = Modifier,
+    currentLanguage: String = UserPreferencesRepository.DEFAULT_APP_LANGUAGE,
+    onLanguageChange: (String) -> Unit = {},
     viewModel: ModelPreparationViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -291,6 +296,22 @@ fun ModelPreparationScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .systemBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 12.dp)
+                .align(Alignment.TopEnd)
+                .zIndex(1f),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            LanguageTogglePill(
+                currentLanguage = currentLanguage,
+                onToggleLanguage = onLanguageChange
+            )
         }
     }
 }
@@ -852,21 +873,22 @@ private fun DownloadingCard(progress: DownloadProgress, isDark: Boolean) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                val rateText = remember(progress.speedBytesPerSec, progress.etaSeconds) {
+                val context = LocalContext.current
+                val rateText = remember(progress.speedBytesPerSec, progress.etaSeconds, context) {
                     if (progress.speedBytesPerSec > 50_000L) {
                         val eta = when {
-                            progress.etaSeconds in 1..59 -> "باقي ${progress.etaSeconds} ثانية"
-                            progress.etaSeconds in 60..119 -> "باقي دقيقة تقريباً"
-                            progress.etaSeconds >= 120 -> "باقي ${progress.etaSeconds / 60} دقائق تقريباً"
+                            progress.etaSeconds in 1..59 -> context.getString(R.string.model_prep_eta_seconds, progress.etaSeconds)
+                            progress.etaSeconds in 60..119 -> context.getString(R.string.model_prep_eta_one_min)
+                            progress.etaSeconds >= 120 -> context.getString(R.string.model_prep_eta_mins, progress.etaSeconds / 60)
                             else -> ""
                         }
                         if (eta.isNotBlank()) {
-                            String.format(Locale.US, "%.1f ميجا/ث • %s", speedMb, eta)
+                            String.format(Locale.US, context.getString(R.string.model_prep_speed_eta_format), speedMb, eta)
                         } else {
-                            String.format(Locale.US, "%.1f ميجا/ث", speedMb)
+                            String.format(Locale.US, context.getString(R.string.model_prep_speed_format), speedMb)
                         }
                     } else if (progress.downloadedBytes > 0) {
-                        "جاري القياس..."
+                        context.getString(R.string.model_prep_measuring_speed)
                     } else {
                         ""
                     }

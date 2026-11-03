@@ -17,6 +17,7 @@ import com.example.persona.core.di.IoDispatcher
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StylePreferences
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
+import com.example.persona.features.settings.domain.model.AccountMode
 import com.example.persona.features.onboarding.data.AutoStartHelper
 import com.example.persona.features.onboarding.data.PermissionChecker
 import com.example.persona.features.settings.data.repository.InMemorySecureCredentialsRepository
@@ -151,6 +152,13 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
             }.collect {}
+        }
+
+        // Group 1b: Operational Account Mode
+        viewModelScope.launch {
+            userPreferencesRepository.accountModeFlow.collect { mode ->
+                _uiState.update { it.copy(accountMode = mode) }
+            }
         }
 
         // Group 2: App Routing
@@ -726,6 +734,11 @@ class SettingsViewModel @Inject constructor(
         if (error == null && parsedInt != null) {
             saveStyle()
         }
+    }
+
+    fun setAccountMode(mode: AccountMode) {
+        _uiState.update { it.copy(accountMode = mode) }
+        viewModelScope.launch { userPreferencesRepository.setAccountMode(mode) }
     }
 
     fun setBotName(name: String) {

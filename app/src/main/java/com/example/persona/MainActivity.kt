@@ -232,6 +232,12 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(innerPadding),
                             startDestination = startDestination,
                             isModelReady = isModelReady,
+                            currentLanguage = appLanguage,
+                            onLanguageChange = { newLang ->
+                                coroutineScope.launch {
+                                    userPreferencesRepository.setAppLanguage(newLang)
+                                }
+                            },
                             onCompleteOnboarding = {
                                 coroutineScope.launch {
                                     if (!userPreferencesRepository.isAlwaysShowOnboardingSync()) {

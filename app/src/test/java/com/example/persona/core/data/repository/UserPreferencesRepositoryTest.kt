@@ -3,7 +3,9 @@ package com.example.persona.core.data.repository
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.settings.data.repository.InMemorySecureCredentialsRepository
+import com.example.persona.features.settings.domain.model.AccountMode
 import com.example.persona.features.settings.domain.repository.ModelCapability
 import com.example.persona.features.settings.domain.repository.ModelConfig
 import com.example.persona.features.settings.domain.repository.ModelProviders
@@ -208,6 +210,45 @@ class UserPreferencesRepositoryTest {
     fun `default theme mode is light`() = runTest(testDispatcher) {
         assertEquals(UserPreferencesRepository.THEME_MODE_LIGHT, UserPreferencesRepository.DEFAULT_THEME_MODE)
         assertEquals(UserPreferencesRepository.THEME_MODE_LIGHT, repository.getThemeModeSync())
+    }
+
+    @Test
+    fun `default app language is english`() = runTest(testDispatcher) {
+        assertEquals("en", UserPreferencesRepository.DEFAULT_APP_LANGUAGE)
+        assertEquals("en", repository.getAppLanguageSync())
+        assertEquals("en", repository.appLanguageFlow.first())
+    }
+
+    @Test
+    fun `default account mode is BUSINESS and persists updates`() = runTest(testDispatcher) {
+        assertEquals(AccountMode.BUSINESS, repository.getAccountModeSync())
+        assertEquals(AccountMode.BUSINESS, repository.accountModeFlow.first())
+
+        repository.setAccountMode(AccountMode.PERSONAL)
+        assertEquals(AccountMode.PERSONAL, repository.getAccountModeSync())
+        assertEquals(AccountMode.PERSONAL, repository.accountModeFlow.first())
+    }
+
+    @Test
+    fun `default persona tone is STANDARD_POLITE`() = runTest(testDispatcher) {
+        assertEquals(PersonaTone.STANDARD_POLITE, repository.getPersonaToneSync())
+        assertEquals(PersonaTone.STANDARD_POLITE, repository.personaToneFlow.first())
+    }
+
+    @Test
+    fun `system messages fallback to English defaults when language is English`() = runTest(testDispatcher) {
+        repository.setAppLanguage("en")
+        assertEquals(UserPreferencesRepository.DEFAULT_HITL_HOLDING_MESSAGE_EN, repository.getHitlHoldingMessageSync())
+        assertEquals(UserPreferencesRepository.DEFAULT_MEDIA_FALLBACK_MESSAGE_EN, repository.getMediaFallbackMessageSync())
+        assertEquals(UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_EN, repository.getBlankReplyFallbackTemplateSync())
+    }
+
+    @Test
+    fun `system messages fallback to Arabic defaults when language is Arabic`() = runTest(testDispatcher) {
+        repository.setAppLanguage("ar")
+        assertEquals(UserPreferencesRepository.DEFAULT_HITL_HOLDING_MESSAGE_AR, repository.getHitlHoldingMessageSync())
+        assertEquals(UserPreferencesRepository.DEFAULT_MEDIA_FALLBACK_MESSAGE_AR, repository.getMediaFallbackMessageSync())
+        assertEquals(UserPreferencesRepository.DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_AR, repository.getBlankReplyFallbackTemplateSync())
     }
 
     @Test

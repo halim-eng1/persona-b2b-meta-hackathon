@@ -7,12 +7,12 @@ import java.net.URI
  * from an imported knowledge document.
  *
  * Excludes social media platforms and messaging links, and strips sub-product/catalog paths
- * to provide a clean root or storefront base URL (e.g. https://velo.ordersapps.com/ar).
+ * to provide a clean root or storefront base URL (e.g. https://store.example.com).
  */
 object StoreWebsiteExtractor {
 
     private val EXPLICIT_STORE_WEBSITE_REGEX = Regex(
-        """(?:المتجر\s+الإلكتروني(?:\s+الرسمي)?|الموقع\s+الرسمي|المتجر\s+الرسمي|موقع\s+المتجر|الموقع|متجرنا|المتجر)\s*[:：\-]\s*(https?://[^\s)\]>"']+)""",
+        """(?:Official\s+Website|Store\s+Website|Online\s+Store|Official\s+Store|Store|Website|المتجر\s+الإلكتروني(?:\s+الرسمي)?|الموقع\s+الرسمي|المتجر\s+الرسمي|موقع\s+المتجر|الموقع|متجرنا|المتجر)\s*[:：\-]\s*(https?://[^\s)\]>"']+)""",
         RegexOption.IGNORE_CASE
     )
 

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.Stable
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.StyleProfile
+import com.example.persona.features.settings.domain.model.AccountMode
 import com.example.persona.features.settings.domain.repository.ModelCapability
 
 @Stable
@@ -25,6 +26,7 @@ class AppActions(private val vm: SettingsViewModel) {
 
 @Stable
 class VoiceActions(private val vm: SettingsViewModel) {
+    fun setAccountMode(mode: AccountMode) = vm.setAccountMode(mode)
     fun setBotName(name: String) = vm.setBotName(name)
     fun setStoreName(name: String) = vm.setStoreName(name)
     fun setPersonaTone(tone: PersonaTone) = vm.setPersonaTone(tone)

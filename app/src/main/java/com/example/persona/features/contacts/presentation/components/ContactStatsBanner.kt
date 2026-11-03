@@ -1,6 +1,7 @@
 package com.example.persona.features.contacts.presentation.components
 
 import com.example.persona.R
+import com.example.persona.features.orders.domain.CurrencyFormatter
 import androidx.compose.ui.res.stringResource
 
 import androidx.compose.foundation.background
@@ -55,7 +56,7 @@ fun ContactStatsBanner(
             )
             StatItem(
                 label = stringResource(R.string.contacts_stat_total_sales),
-                value = "${summary.totalRevenue.toInt()} ج.م",
+                value = CurrencyFormatter.formatAmountWithCurrency(summary.totalRevenue),
                 color = Color(0xFF2E7D32) // Green
             )
         }

@@ -189,16 +189,43 @@ class LocalDecisionClassifierTest {
     }
 
     @Test
+    fun `classify correctly detects generalized English inbound intents`() {
+        val greetings = listOf("good afternoon", "good day", "howdy", "welcome")
+        for (query in greetings) {
+            val result = classifier.classify(query, null)
+            assertEquals("Expected GREETING for query: $query", InboundIntent.GREETING, result.intent)
+        }
+
+        val orders = listOf("where is my order", "where is my package", "track order", "my shipment")
+        for (query in orders) {
+            val result = classifier.classify(query, null)
+            assertEquals("Expected ORDER_STATUS for query: $query", InboundIntent.ORDER_STATUS, result.intent)
+        }
+
+        val banter = listOf("who are you", "are you a bot", "tell me a joke")
+        for (query in banter) {
+            val result = classifier.classify(query, null)
+            assertEquals("Expected BANTER for query: $query", InboundIntent.BANTER, result.intent)
+        }
+
+        val catalog = listOf("how much is the shipping", "is this item in stock", "show me your catalog", "what is the pricing")
+        for (query in catalog) {
+            val result = classifier.classify(query, null)
+            assertEquals("Expected CATALOG_INQUIRY for query: $query", InboundIntent.CATALOG_INQUIRY, result.intent)
+        }
+    }
+
+    @Test
     fun `social media and store link inquiries are classified as CATALOG_INQUIRY and never BANTER`() {
         val socialQueries = listOf(
-            "tiktok.com/@velo.egypt",
+            "tiktok.com/@novastyle.apparel",
             "ليكم حساب تيك توك؟",
             "عندكم صفحة فيسبوك؟",
             "لينك الانستجرام ايه؟",
             "رقم خدمة العملاء",
             "عايز رابط الموقع بتاعكم",
-            "https://www.tiktok.com/@velo.egypt",
-            "@velo.egypt"
+            "https://www.tiktok.com/@novastyle.apparel",
+            "@novastyle.apparel"
         )
 
         for (query in socialQueries) {

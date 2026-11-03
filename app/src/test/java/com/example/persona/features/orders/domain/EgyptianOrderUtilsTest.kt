@@ -59,6 +59,47 @@ class EgyptianOrderUtilsTest {
     }
 
     @Test
+    fun `validates ITU-T E164 international phone numbers correctly`() {
+        assertTrue(EgyptianOrderUtils.isValidPhoneNumber("01012345678"))
+        assertTrue(EgyptianOrderUtils.isValidPhoneNumber("+15551234567"))
+        assertTrue(EgyptianOrderUtils.isValidPhoneNumber("+201012345678"))
+        assertTrue(EgyptianOrderUtils.isValidPhoneNumber("+442071838750"))
+        assertTrue(EgyptianOrderUtils.isValidPhoneNumber("+966 50 123 4567"))
+        assertTrue(EgyptianOrderUtils.isValidPhoneNumber("(555) 123-4567"))
+        assertTrue(EgyptianOrderUtils.isValidPhoneNumber("٠١٠١٢٣٤٥٦٧٨"))
+
+        assertFalse(EgyptianOrderUtils.isValidPhoneNumber("12345")) // < 7 digits
+        assertFalse(EgyptianOrderUtils.isValidPhoneNumber("+1234567890123456")) // > 15 digits
+        assertFalse(EgyptianOrderUtils.isValidPhoneNumber("not-a-number"))
+        assertFalse(EgyptianOrderUtils.isValidPhoneNumber(""))
+        assertFalse(EgyptianOrderUtils.isValidPhoneNumber(null))
+    }
+
+    @Test
+    fun `extracts international phone numbers from text and clipboard`() {
+        assertEquals("01012345678", EgyptianOrderUtils.extractPhoneNumber("01012345678"))
+        assertEquals("+15551234567", EgyptianOrderUtils.extractPhoneNumber("+15551234567"))
+        assertEquals("+15551234567", EgyptianOrderUtils.extractPhoneNumber("Please reach me at +1 555 123 4567 for details"))
+        assertEquals("01012345678", EgyptianOrderUtils.extractPhoneNumber("الرقم: 01012345678"))
+        assertNull(EgyptianOrderUtils.extractPhoneNumber("No numbers here"))
+        assertNull(EgyptianOrderUtils.extractPhoneNumber(""))
+        assertNull(EgyptianOrderUtils.extractPhoneNumber(null))
+    }
+
+    @Test
+    fun `formatDisplayPhone wraps phone in BiDi isolating markers`() {
+        val formattedUs = EgyptianOrderUtils.formatDisplayPhone("+15551234567")
+        assertTrue(formattedUs.startsWith("\u202A"))
+        assertTrue(formattedUs.endsWith("\u202C"))
+        assertTrue(formattedUs.contains("+15551234567"))
+
+        val formattedEg = EgyptianOrderUtils.formatDisplayPhone("01012345678")
+        assertTrue(formattedEg.startsWith("\u202A"))
+        assertTrue(formattedEg.endsWith("\u202C"))
+        assertTrue(formattedEg.contains("010 1234 5678"))
+    }
+
+    @Test
     fun `parses Egyptian decimal monetary amounts with Arabic and English numerals`() {
         assertEquals(550.0, EgyptianOrderUtils.parseEgyptianDecimal("550")!!, 0.001)
         assertEquals(550.50, EgyptianOrderUtils.parseEgyptianDecimal("550.50")!!, 0.001)

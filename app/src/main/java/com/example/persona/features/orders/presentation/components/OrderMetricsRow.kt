@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.persona.features.orders.domain.CurrencyFormatter
 import com.example.persona.features.orders.domain.EgyptianOrderUtils
 import com.example.persona.features.orders.presentation.OrderFilter
 import com.example.persona.ui.theme.PersonaTheme
@@ -82,7 +83,6 @@ fun OrderMetricsRow(
             onClick = { onFilterClick(OrderFilter.COMPLETED) }
         )
         if (totalCodAmount > 0.0) {
-            val formatted = EgyptianOrderUtils.formatMoney(totalCodAmount)
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
@@ -104,7 +104,7 @@ fun OrderMetricsRow(
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
                         Text(
-                            text = "$formatted ج.م",
+                            text = CurrencyFormatter.formatAmountWithCurrency(totalCodAmount),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = statusColors.completed
                         )
