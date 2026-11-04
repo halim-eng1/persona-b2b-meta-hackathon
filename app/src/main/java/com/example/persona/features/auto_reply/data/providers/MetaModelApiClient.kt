@@ -32,6 +32,7 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.BufferedSink
+import okio.source
 import java.io.File
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -96,16 +97,11 @@ private class AsrMultipartRequestBody(
 
     override fun writeTo(sink: BufferedSink) {
         sink.write(preamble)
-        audioFile.inputStream().use { input ->
-            sink.outputStream().use { output ->
-                input.copyTo(output, DEFAULT_STREAM_BUFFER_SIZE)
-            }
-        }
+        // Stream audio via okio Source - never closes `sink` (closing the
+        // BufferedSink's OutputStream aborts the request body mid-upload
+        // with ProtocolException "unexpected end of stream").
+        audioFile.source().use { source -> sink.writeAll(source) }
         sink.write(epilogue)
-    }
-
-    private companion object {
-        const val DEFAULT_STREAM_BUFFER_SIZE = 32 * 1024
     }
 }
 
