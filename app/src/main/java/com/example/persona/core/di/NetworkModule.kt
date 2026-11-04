@@ -42,8 +42,8 @@ object NetworkModule {
                 ignoreUnknownKeys = true
                 isLenient = true
                 prettyPrint = false
-                // Required so reasoning-suppression fields (include_reasoning,
-                // reasoning) with default values are actually sent to OpenRouter.
+                // Required so optional request fields with default values are
+                // actually serialized into the Meta Muse Spark request body.
                 encodeDefaults = true
                 explicitNulls = false
             })

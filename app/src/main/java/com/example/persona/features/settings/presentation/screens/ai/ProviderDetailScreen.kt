@@ -164,31 +164,6 @@ fun ProviderDetailScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    // Cloudflare Account ID (if applicable)
-                    if (providerId.equals("cloudflare", ignoreCase = true)) {
-                        SettingsGroup(title = R.string.settings_ai_cloudflare_account_id_title) {
-                            Column(
-                                modifier = Modifier
-                                    .padding(16.dp)
-                                    .settingFocus(SettingKey.CloudflareId)
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.settings_ai_cloudflare_account_id_subtitle),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                DebouncedTextField(
-                                    value = state.cloudflareAccountId,
-                                    onValueChange = actions::setCloudflareAccountId,
-                                    label = stringResource(R.string.settings_ai_cloudflare_account_id_title),
-                                    placeholder = "e.g. 0123456789abcdef0123456789abcdef",
-                                    supportingText = { Text(stringResource(R.string.settings_ai_cloudflare_hint)) }
-                                )
-                            }
-                        }
-                    }
-
                     // API Keys Pool
                     SettingsGroup(title = R.string.settings_ai_keys_title) {
                         Column(

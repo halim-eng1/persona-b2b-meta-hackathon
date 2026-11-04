@@ -33,14 +33,6 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
         private const val PREFS_NAME = "provider_circuit_breaker_prefs"
 
         const val PROVIDER_META = "meta"
-        const val PROVIDER_QWEN = "qwen"
-        const val PROVIDER_GEMINI = "gemini"
-        const val PROVIDER_NVIDIA = "nvidia"
-        const val PROVIDER_GROQ = "groq"
-        const val PROVIDER_OPENROUTER = "openrouter"
-        const val PROVIDER_NARA = "nara"
-        const val PROVIDER_LIQUID = "liquid"
-        const val PROVIDER_CLOUDFLARE = "cloudflare"
 
         val DEFAULT_META_MODELS = listOf(
             "muse-spark-1.3-contributor",
@@ -48,23 +40,9 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
             "muse-spark-1.2-contributor",
             "muse-spark-1.2"
         )
-        val DEFAULT_QWEN_MODELS = QwenCloudClient.QWEN_TEXT_MODELS
-        val DEFAULT_GEMINI_MODELS = GeminiClient.GEMINI_TEXT_MODELS
-        val DEFAULT_NVIDIA_MODELS = NvidiaNimClient.NVIDIA_TEXT_MODELS
-        val DEFAULT_GROQ_MODELS = GroqClient.GROQ_MODELS
-        val DEFAULT_OPENROUTER_MODELS = OpenRouterClient.OPENROUTER_FAILOVER_MODELS
-        val DEFAULT_NARA_MODELS = NaraRouterClient.NARA_TEXT_MODELS
-        val DEFAULT_CLOUDFLARE_MODELS = listOf("@cf/cloudflare/clef-flash", "@cf/cloudflare/clef-omni")
-        val DEFAULT_LIQUID_MODELS = listOf("d1:latest", "d1")
 
         val DEFAULT_CASCADE_ORDER = listOf(
-            PROVIDER_META,
-            PROVIDER_QWEN,
-            PROVIDER_GEMINI,
-            PROVIDER_NVIDIA,
-            PROVIDER_GROQ,
-            PROVIDER_OPENROUTER,
-            PROVIDER_NARA
+            PROVIDER_META
         )
 
         fun maskKey(key: String): String {
@@ -122,14 +100,6 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
 
         // Initialize default models
         initModelsForProvider(PROVIDER_META, DEFAULT_META_MODELS)
-        initModelsForProvider(PROVIDER_QWEN, DEFAULT_QWEN_MODELS)
-        initModelsForProvider(PROVIDER_GEMINI, DEFAULT_GEMINI_MODELS)
-        initModelsForProvider(PROVIDER_NVIDIA, DEFAULT_NVIDIA_MODELS)
-        initModelsForProvider(PROVIDER_GROQ, DEFAULT_GROQ_MODELS)
-        initModelsForProvider(PROVIDER_OPENROUTER, DEFAULT_OPENROUTER_MODELS)
-        initModelsForProvider(PROVIDER_NARA, DEFAULT_NARA_MODELS)
-        initModelsForProvider(PROVIDER_CLOUDFLARE, DEFAULT_CLOUDFLARE_MODELS)
-        initModelsForProvider(PROVIDER_LIQUID, DEFAULT_LIQUID_MODELS)
     }
 
     private fun initModelsForProvider(providerId: String, defaults: List<String>) {
@@ -293,14 +263,7 @@ class ProviderCircuitBreakerAndKeyManager @Inject constructor(
         val current = modelLists[providerId]
         if (!current.isNullOrEmpty()) return current.toList()
         return when (providerId) {
-            PROVIDER_QWEN -> DEFAULT_QWEN_MODELS
-            PROVIDER_GEMINI -> DEFAULT_GEMINI_MODELS
-            PROVIDER_NVIDIA -> DEFAULT_NVIDIA_MODELS
-            PROVIDER_GROQ -> DEFAULT_GROQ_MODELS
-            PROVIDER_OPENROUTER -> DEFAULT_OPENROUTER_MODELS
-            PROVIDER_NARA -> DEFAULT_NARA_MODELS
-            PROVIDER_CLOUDFLARE -> DEFAULT_CLOUDFLARE_MODELS
-            PROVIDER_LIQUID -> DEFAULT_LIQUID_MODELS
+            PROVIDER_META -> DEFAULT_META_MODELS
             else -> emptyList()
         }
     }

@@ -39,8 +39,8 @@ class SemanticRetrievalRepository @Inject constructor(
      */
     suspend fun retrieveCandidates(
         queryEmbedding: FloatArray,
-        limit: Int = 5,
-        minimumSimilarityThreshold: Float = 0.38f,
+        limit: Int = 8,
+        minimumSimilarityThreshold: Float = 0.25f,
         queryText: String = "",
         recentReplyHashes: List<Int> = emptyList()
     ): Pair<List<RetrievalCandidate>, Float> {

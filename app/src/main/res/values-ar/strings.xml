@@ -356,6 +356,7 @@
     <string name="daily_metrics_title">مؤشرات التشغيل اليومية</string>
     <string name="quick_actions_title">الإجراءات السريعة</string>
     <string name="bot_simulator_title">محاكي ردود البوت</string>
+    <string name="bot_simulator_subtitle">اختبر وعاين ردود الذكاء الاصطناعي مباشرة</string>
 
     <!-- ── Settings Screen & Tabs ──────────────────────────────────────────────── -->
     <string name="settings_title">إعدادات المتجر والمساعد</string>
@@ -381,8 +382,6 @@
     <string name="settings_ai_keys_for_provider">مفاتيح الـ API لمزود %s</string>
     <string name="settings_ai_keys_subtitle">يمكنك إضافة مفاتيح متعددة مع فحص اتصال كل مفتاح بشكل مباشر.</string>
     <string name="settings_ai_guide_title">دليل الحصول على المفتاح لمزود %s</string>
-    <string name="settings_ai_cloudflare_account_id_title">معرّف حساب كلاودفلير</string>
-    <string name="settings_ai_cloudflare_account_id_subtitle">مطلوب لتشغيل نماذج Workers AI بجانب رمز الـ API</string>
     <string name="settings_ai_no_keys">لا توجد مفاتيح مسجلة لهذا المزود حتى الآن. سيتم استخدام المفاتيح الافتراضية إذا توفرت.</string>
     <string name="settings_ai_key_label">مفتاح #%d</string>
     <string name="settings_ai_status_untested">لم يتم الفحص بعد</string>
@@ -743,7 +742,7 @@
     <string name="chat_import_error_indexing_failed">حدث خطأ أثناء حفظ وفهرسة المعرفة. يرجى التحقق من النص والمحاولة مرة أخرى.</string>
     <string name="chat_import_error_unsupported_file">نوع الملف غير مدعوم. اختر ملف بنسق .txt أو .md</string>
     <string name="guide_dialog_title">دليل استخراج المفتاح</string>
-    <string name="guide_notification_copy_text">انسخ هذا النص وأرسله لأي نموذج ذكاء اصطناعي (مثل ChatGPT أو Gemini) ليرشدك لإنشاء الحساب خطوة بخطوة بالروابط.</string>
+    <string name="guide_notification_copy_text">انسخ هذا النص وأرسله لأي مساعد ذكاء اصطناعي ليرشدك لإنشاء الحساب خطوة بخطوة بالروابط.</string>
 
     <string name="orders_dashboard_title">إدارة وتجهيز الطلبات</string>
     <string name="orders_selected_count">تم تحديد %d طلبات</string>
@@ -910,53 +909,13 @@
     <!-- Sprint 1: Provider Guide Details -->
     <string name="guide_close_desc">إغلاق</string>
     <string name="guide_open_portal_desc">فتح المنصة</string>
-    <string name="guide_qwen_step_1">ادخل إلى منصة Qwen Cloud عبر الرابط الرسمي وسجل الدخول باستخدام حسابك.</string>
-    <string name="guide_qwen_step_2">من القائمة الجانبية في Model Studio، توجه إلى قسم مفاتيح الواجهة (API-KEY).</string>
-    <string name="guide_qwen_step_3">اضغط على Create API-KEY وانسخ الرمز السري المتولد فوراً (يبدأ بـ sk-...).</string>
-    <string name="guide_qwen_step_4">يدعم جميع نماذج Qwen 3.8 Max و Qwen 3.8 Flash و DeepSeek v4.1 السريعة.</string>
-    <string name="guide_qwen_tips">تأكد من حفظ المفتاح؛ يتيح لك التطبيق تدوير عدة مفاتيح مجانية لضمان استمرار الخدمة دون انقطاع.</string>
 
-    <string name="guide_gemini_step_1">افتح رابط منصة Google AI Studio وسجل الدخول باستخدام حساب Google الخاص بك.</string>
-    <string name="guide_gemini_step_2">اضغط على زر (Get API key) في الزاوية العلوية ثم اختر (Create API key).</string>
-    <string name="guide_gemini_step_3">اختر مشروع Google Cloud جديد أو قائم، ثم انسخ المفتاح الذي يبدأ بـ AIzaSy...</string>
-    <string name="guide_gemini_step_4">يمنحك وصولاً مجانياً سخياً لنماذج Gemini 3.1 Flash-Lite و 3.5 Flash-Lite و 3.8 Flash.</string>
-    <string name="guide_gemini_tips">مفاتيح Gemini مجانية وسريعة جداً وتدعم معالجة الصور والنصوص بجودة فائقة.</string>
 
-    <string name="guide_groq_step_1">سجل الدخول إلى GroqCloud Console عبر حساب Google أو GitHub مجاناً.</string>
-    <string name="guide_groq_step_2">من القائمة الجانبية اضغط على تبويب (API Keys) ثم زر (Create API Key).</string>
-    <string name="guide_groq_step_3">اكتب اسماً للمفتاح ثم انسخ الرمز المولد (يبدأ بـ gsk_...).</string>
-    <string name="guide_groq_step_4">يوفر سرعة استجابة فائقة البرق مع معالجات LPU لنماذج GPT-OSS و Qwen 3.8.</string>
-    <string name="guide_groq_tips">أسرع استجابة زمنية (TTFT) على الإطلاق، مثالية للرد الفوري على رسائل العملاء.</string>
 
-    <string name="guide_nvidia_step_1">ادخل إلى NVIDIA Build وسجل الدخول بحساب مطور NVIDIA Developer مجاناً.</string>
-    <string name="guide_nvidia_step_2">اختر نموذج Nemotron (مثل Nemotron 3 Ultra 550B أو Lightning).</string>
-    <string name="guide_nvidia_step_3">اضغط على زر (Get API Key) وأنشئ مفتاحاً سرياً جديداً (يبدأ بـ nvapi-...).</string>
-    <string name="guide_nvidia_step_4">تحصل على رصيد ترحيبي قدره 1000 نقطة لتشغيل أضخم النماذج المعرفية المؤسسية.</string>
-    <string name="guide_nvidia_tips">نماذج Nemotron فائقة الذكاء وممتازة للتفاوض المعقد واستخراج الطلبات.</string>
 
-    <string name="guide_openrouter_step_1">سجل الدخول إلى بوابة OpenRouter عبر حساب Google أو GitHub.</string>
-    <string name="guide_openrouter_step_2">انتقل إلى صفحة المفاتيح (Keys) ثم اضغط على (Create Key).</string>
-    <string name="guide_openrouter_step_3">انسخ المفتاح السري الذي يبدأ بـ (sk-or-v1-...).</string>
-    <string name="guide_openrouter_step_4">يدعم تلقائياً مئات النماذج المجانية والمدفوعة الدائمة مثل Nemotron Free و Liquid Free.</string>
-    <string name="guide_openrouter_tips">البديل الاحتياطي الأمثل (Failover Gateway) الذي يضمن عدم توقف الردود أبداً.</string>
 
-    <string name="guide_cloudflare_step_1">ادخل إلى لوحة تحكم Cloudflare وتوجه إلى قسم (Workers &amp; Pages) ثم (AI).</string>
-    <string name="guide_cloudflare_step_2">انسخ معرّف الحساب (Account ID) الظاهر في الشريط الجانبي الأيمن وألصقه في حقل Account ID.</string>
-    <string name="guide_cloudflare_step_3">اضغط على (Manage API Tokens) وأنشئ توكن جديد بصلاحية (Workers AI Read).</string>
-    <string name="guide_cloudflare_step_4">انسخ التوكن السري (يبدأ بـ cfut_...) وأضفه في قائمة مفاتيح الـ API.</string>
-    <string name="guide_cloudflare_tips">يتطلب Cloudflare Workers AI كلاً من Account ID و API Token للعمل مع نماذج Clef Flash و Clef Omni.</string>
 
-    <string name="guide_liquid_step_1">ادخل إلى بوابة مطوري Liquid AI وسجل الدخول بحسابك.</string>
-    <string name="guide_liquid_step_2">انتقل إلى قسم API Credentials وأنشئ مفتاحاً جديداً (يبدأ بـ liquid_...).</string>
-    <string name="guide_liquid_step_3">انسخ المفتاح السري وألصقه في التطبيق.</string>
-    <string name="guide_liquid_step_4">يدعم محرك اتخاذ القرار الفوري ونماذج d1 و d1:latest ذات زمن الاستجابة فائق الصغر.</string>
-    <string name="guide_liquid_tips">يعمل كحارس بوابات (Gatekeeper) لتصنيف نية العميل وكشف الشكاوى العاجلة خلال أقل من 800ms.</string>
 
-    <string name="guide_nara_step_1">ادخل إلى بوابة Nara Router وأنشئ حساب مستخدم جديد.</string>
-    <string name="guide_nara_step_2">توجه إلى إدارة مفاتيح API واستخرج مفتاحاً جديداً (يبدأ بـ sk-nry-...).</string>
-    <string name="guide_nara_step_3">انسخ المفتاح وضعه في قائمة مفاتيح التطبيق.</string>
-    <string name="guide_nara_step_4">يدعم نموذج laguna-s-2.1 المخصص للغة العربية والمعاملات.</string>
-    <string name="guide_nara_tips">نموذج عربي مخصص ومدرب بكفاءة عالية على اللهجات العربية وتجربة التجارة الإلكترونية.</string>
 
     <string name="guide_default_step_1">سجل الدخول إلى المنصة الرسمية للمزود.</string>
     <string name="guide_default_step_2">انتقل إلى إعدادات API وأنشئ مفتاحاً جديداً.</string>
@@ -1199,8 +1158,7 @@
     <string name="settings_ai_no_models_for_capability">لا توجد نماذج مخصصة لهذا التصنيف حالياً</string>
     <string name="settings_ai_no_primary_key_banner">لم يتم ضبط مفاتيح API بعد. يرجى إضافة مفتاح لمزود واحد على الأقل لتفعيل الرد التلقائي.</string>
     <string name="settings_ai_key_required_badge">يمكنك إضافة مفتاح</string>
-    <string name="settings_ai_openrouter_dependency_banner">إذا لم تكن تستخدم OpenRouter كبوابة شاملة، يرجى التأكد من إضافة مفتاح لمزود يدعم الصوت (مثل Qwen أو Groq) ومزود يدعم اتخاذ القرار (مثل Cloudflare أو Liquid) بجانب مزود النصوص.</string>
-    <string name="settings_ai_meta_active_banner">تم تفعيل Meta AI للردود والرؤية والتفريغ الصوتي. في حال عدم إضافة مفتاح لمزود اتخاذ القرار (مثل Cloudflare أو Liquid)، سيعتمد التطبيق تلقائياً على التصنيف المحلي على الجهاز مع التوجيه المباشر للنموذج الذكي.</string>
+    <string name="settings_ai_meta_active_banner">تم تفعيل Meta AI (Muse Spark 1.3) للنصوص والصور والصوت واتخاذ القرار. تعمل جميع الطلبات عبر نماذج Meta دون الحاجة إلى أي مزود ذكاء اصطناعي خارجي.</string>
     <string name="settings_ai_meta_card_title">Meta AI (المزود الأساسي #1)</string>
     <string name="settings_ai_meta_card_subtitle">الواجهة الرسمية Meta Model API للنصوص والرؤية والتفريغ الصوتي</string>
     <string name="settings_ai_meta_active_badge">نشط (#1)</string>
@@ -1220,7 +1178,6 @@
     <string name="settings_ai_models_summary_sheet">النماذج المضبوطة بالترتيب الاحتياطي</string>
     <string name="settings_ai_provider_cascade_title">سلسلة التراجع النشطة</string>
     <string name="settings_ai_provider_cascade_subtitle">اضغط لترتيب أولوية المحركات</string>
-    <string name="settings_ai_cloudflare_hint">معرّف حساب كلاودفلير يتكون عادة من 32 حرفاً سداسي عشري</string>
 
     <string name="msg_when_greeting">يُرسل عند بدء محادثة جديدة مع العميل</string>
     <string name="msg_when_farewell">يُرسل عند ختام المحادثة</string>
@@ -1260,8 +1217,7 @@
     <string name="confirm_restore_backup_confirm_btn">استعادة واستبدال</string>
 
     <!-- Search Keywords (Bilingual Search Index) -->
-    <string name="kw_api_keys">api keys tokens credentials secret openrouter groq gemini nvidia qwen cloudflare nara liquid مفاتيح توكن سر ربط ذكاء اصطناعي</string>
-    <string name="kw_cloudflare">cloudflare account id workers ai حساب كلاودفلير معرّف</string>
+    <string name="kw_api_keys">api keys tokens credentials secret meta muse spark مفاتيح توكن سر ربط ذكاء اصطناعي</string>
     <string name="kw_tone">tone persona personality voice witty formal friendly concise نبرة شخصية أسلوب مرح رسمي ودود مقتضب</string>
     <string name="kw_days">working days schedule official hours أيام العمل الجدول مواعيد رسمي</string>
     <string name="kw_bot_name">bot name assistant persona اسم البوت المساعد الممثل</string>
@@ -1285,7 +1241,7 @@
     <string name="kw_storage_access">storage media files all files access permission إذن تخزين وسائط وصول ملفات</string>
     <string name="kw_human_takeover">human takeover pause safety safety toggle إيقاف أمان تدخل بشري</string>
     <string name="kw_provider_chain">provider chain fallback cascade order priority أولوية ترتيب محركات الذكاء بديل</string>
-    <string name="kw_models">models llm inference custom model deepseek qwen نماذج ذكاء اصطناعي تخصيص</string>
+    <string name="kw_models">models llm inference custom model muse spark نماذج ذكاء اصطناعي تخصيص</string>
     <string name="kw_permissions">permissions health checks diagnostics recheck أذونات صحة فحص تشخيص إعادة فحص</string>
     <string name="kw_backup">backup export restore encrypted local data نسخة احتياطية تصدير استيراد تشفير</string>
     <string name="kw_cache">cache clean storage clear temporary cleaner ذاكرة مؤقتة تنظيف مسح مساحة</string>

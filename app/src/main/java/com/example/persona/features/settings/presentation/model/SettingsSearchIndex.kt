@@ -44,7 +44,6 @@ val SettingsSearchIndex: List<SettingEntry> = listOf(
     SettingEntry(SettingKey.ProviderChain, R.string.settings_ai_priority_title, R.string.kw_provider_chain, SettingsSpoke.AiEngine),
     SettingEntry(SettingKey.ApiKeys, R.string.settings_ai_keys_title, R.string.kw_api_keys, SettingsSpoke.AiEngine),
     SettingEntry(SettingKey.Models, R.string.settings_ai_models_summary_sheet, R.string.kw_models, SettingsSpoke.AiEngine),
-    SettingEntry(SettingKey.CloudflareId, R.string.settings_ai_cloudflare_account_id_title, R.string.kw_cloudflare, SettingsSpoke.AiEngine, provider = "cloudflare"),
 
     SettingEntry(SettingKey.Permissions, R.string.settings_perm_check_title, R.string.kw_permissions, SettingsSpoke.Health),
     SettingEntry(SettingKey.Backup, R.string.settings_backup_title, R.string.kw_backup, SettingsSpoke.Health),

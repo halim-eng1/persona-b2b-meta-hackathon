@@ -16,7 +16,7 @@ data class AuditLogItem(
     val timestamp: Instant,
     val sourceClass: String = "BUSINESS",
     val gatekeeperTier: String = "MODEL", // RULE, HEURISTIC, MODEL, FALLBACK
-    val providerModel: String = "Gemini 1.5 Flash",
+    val providerModel: String = "Meta / muse-spark-1.3",
     val latencyMs: Long = 650L,
     val promptTokens: Int = 120,
     val completionTokens: Int = 45,

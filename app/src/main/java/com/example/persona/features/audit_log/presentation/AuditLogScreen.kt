@@ -202,7 +202,7 @@ fun AuditLogScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     val allLabel = stringResource(R.string.audit_log_filter_all)
-                    listOf("ALL" to allLabel, "Gemini" to "Gemini", "Qwen" to "Qwen", "Nvidia" to "NVIDIA", "Groq" to "Groq").forEach { (providerKey, label) ->
+                    listOf("ALL" to allLabel, "Meta" to "Meta").forEach { (providerKey, label) ->
                         FilterChip(
                             selected = state.selectedProvider == providerKey,
                             onClick = { viewModel.onProviderSelected(providerKey) },

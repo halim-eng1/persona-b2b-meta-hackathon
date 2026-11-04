@@ -82,7 +82,6 @@ class AiActions(private val vm: SettingsViewModel) {
     fun moveApiKey(provider: String, from: Int, to: Int) = vm.moveApiKey(provider, from, to)
     fun testConnection(provider: String, key: String) = vm.testConnection(provider, key)
     fun testAll(provider: String) = vm.testAllConnections(provider)
-    fun setCloudflareAccountId(id: String) = vm.setCloudflareAccountId(id)
     fun addProviderModel(provider: String, model: String) = vm.addProviderModel(provider, model)
     fun addProviderModelWithCapabilities(provider: String, model: String, capabilities: Set<ModelCapability>) =
         vm.addProviderModelWithCapabilities(provider, model, capabilities)

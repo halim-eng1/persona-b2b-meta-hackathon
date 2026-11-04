@@ -88,7 +88,7 @@ class AuditLogRepositoryImpl @Inject constructor(
                 val finalModel = if (p.providerModel.isNotBlank() && p.providerModel != "Unknown") {
                     p.providerModel
                 } else {
-                    "Gemini 1.5 Flash"
+                    "Meta / muse-spark-1.3"
                 }
 
                 val finalLatency = if (p.latencyMs > 0L) {

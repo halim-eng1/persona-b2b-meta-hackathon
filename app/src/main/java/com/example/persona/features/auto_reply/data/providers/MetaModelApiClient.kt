@@ -74,6 +74,16 @@ class MetaModelApiClient @Inject constructor(
             MODEL_MUSE_SPARK_1_2
         )
 
+        /** Resolves the transparent fallback counterpart model between standard and contributor variants. */
+        fun getCounterpartModel(model: String): String? {
+            val trimmed = model.trim()
+            return when {
+                trimmed.endsWith("-contributor") -> trimmed.removeSuffix("-contributor")
+                trimmed.startsWith("muse-spark") -> "$trimmed-contributor"
+                else -> null
+            }
+        }
+
         private val jsonParser = Json {
             ignoreUnknownKeys = true
             isLenient = true
@@ -260,6 +270,7 @@ class MetaModelApiClient @Inject constructor(
     /**
      * Executes single chat completion matching [ReplyGenerationRepositoryImpl]'s cascade interface.
      * Maps HTTP status codes to [CallResult] variants to trigger circuit breaker logic.
+     * Includes transparent HTTP 404 fallback between contributor and standard model variants.
      */
     suspend fun executeSingleCall(
         model: String,
@@ -268,6 +279,24 @@ class MetaModelApiClient @Inject constructor(
         apiKey: String,
         reasoningEffort: String? = "low",
         temperature: Double = 0.7
+    ): CallResult = executeSingleCallInternal(
+        model = model,
+        messages = messages,
+        maxTokens = maxTokens,
+        apiKey = apiKey,
+        reasoningEffort = reasoningEffort,
+        temperature = temperature,
+        attemptedModels = emptySet()
+    )
+
+    private suspend fun executeSingleCallInternal(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int,
+        apiKey: String,
+        reasoningEffort: String?,
+        temperature: Double,
+        attemptedModels: Set<String>
     ): CallResult = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
             Log.w(TAG, "Meta API key is blank; skipping request for model $model")
@@ -331,6 +360,25 @@ class MetaModelApiClient @Inject constructor(
                 val responseBody = response.body?.string().orEmpty()
 
                 when {
+                    code == 404 -> {
+                        PersonaLogger.w(TAG, "HTTP 404 on [Meta] model $targetModel (key $keyMasked): $responseBody")
+                        val counterpart = getCounterpartModel(targetModel)
+                        if (counterpart != null && !attemptedModels.contains(counterpart)) {
+                            val logMsg = "🔄 Transparent fallback triggered: '$targetModel' returned 404, retrying immediately with '$counterpart'"
+                            Log.i(TAG, logMsg)
+                            PersonaLogger.i(TAG, logMsg)
+                            return@withContext executeSingleCallInternal(
+                                model = counterpart,
+                                messages = messages,
+                                maxTokens = maxTokens,
+                                apiKey = apiKey,
+                                reasoningEffort = reasoningEffort,
+                                temperature = temperature,
+                                attemptedModels = attemptedModels + targetModel
+                            )
+                        }
+                        CallResult.Failed
+                    }
                     code == 429 -> {
                         PersonaLogger.w(TAG, "Rate limited (429) on [Meta] model $targetModel (key $keyMasked)")
                         CallResult.RateLimited

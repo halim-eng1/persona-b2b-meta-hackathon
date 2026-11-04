@@ -63,19 +63,19 @@ object LenientKeywordSerializer : KSerializer<String?> {
 // ── Request DTOs ──────────────────────────────────────────────────────────────
 
 /**
- * Custom serializer for [OpenRouterChatMessage] that supports both standard
- * string content and OpenAI/Groq/OpenRouter multimodal array content (text + image_url).
+ * Custom serializer for [ChatMessage] that supports both standard
+ * string content and multimodal array content (text + image_url).
  */
-object OpenRouterChatMessageSerializer : KSerializer<OpenRouterChatMessage> {
+object ChatMessageSerializer : KSerializer<ChatMessage> {
     override val descriptor: SerialDescriptor =
-        buildClassSerialDescriptor("OpenRouterChatMessage") {
+        buildClassSerialDescriptor("ChatMessage") {
             element<String>("role")
             element<JsonElement>("content")
         }
 
-    override fun serialize(encoder: Encoder, value: OpenRouterChatMessage) {
+    override fun serialize(encoder: Encoder, value: ChatMessage) {
         val jsonEncoder = encoder as? JsonEncoder
-            ?: throw SerializationException("OpenRouterChatMessageSerializer only supports Json")
+            ?: throw SerializationException("ChatMessageSerializer only supports Json")
 
         val contentElement: JsonElement = if (value.imageUrl.isNullOrBlank()) {
             JsonPrimitive(value.content)
@@ -102,9 +102,9 @@ object OpenRouterChatMessageSerializer : KSerializer<OpenRouterChatMessage> {
         jsonEncoder.encodeJsonElement(jsonObject)
     }
 
-    override fun deserialize(decoder: Decoder): OpenRouterChatMessage {
+    override fun deserialize(decoder: Decoder): ChatMessage {
         val jsonDecoder = decoder as? JsonDecoder
-            ?: return OpenRouterChatMessage(role = "user", content = decoder.decodeString())
+            ?: return ChatMessage(role = "user", content = decoder.decodeString())
         val jsonObject = jsonDecoder.decodeJsonElement().jsonObject
 
         val role = jsonObject["role"]?.jsonPrimitive?.content ?: "user"
@@ -135,7 +135,7 @@ object OpenRouterChatMessageSerializer : KSerializer<OpenRouterChatMessage> {
             }
         }
 
-        return OpenRouterChatMessage(
+        return ChatMessage(
             role = role,
             content = textContent,
             imageUrl = extractedImageUrl
@@ -148,71 +148,11 @@ object OpenRouterChatMessageSerializer : KSerializer<OpenRouterChatMessage> {
  * (and optional [imageUrl] for multimodal vision payloads).
  * Prevents any accidental serialization of `reasoning_content` on outgoing HTTP requests.
  */
-@Serializable(with = OpenRouterChatMessageSerializer::class)
-data class OpenRouterChatMessage(
+@Serializable(with = ChatMessageSerializer::class)
+data class ChatMessage(
     val role: String,   // "system" | "user" | "assistant"
     val content: String,
     val imageUrl: String? = null
-)
-
-typealias ChatMessage = OpenRouterChatMessage
-
-@Serializable
-data class OpenRouterRequest(
-    val model: String,
-    val messages: List<OpenRouterChatMessage>,
-    val temperature: Float = 0.45f,
-    @SerialName("max_tokens")
-    val maxTokens: Int = 512,
-    /** Suppresses chain-of-thought / reasoning token leakage on supporting models. */
-    @SerialName("include_reasoning")
-    val includeReasoning: Boolean = false,
-    /**
-     * Optional reasoning configuration. Only attached for benchmark-proven models.
-     */
-    val reasoning: ReasoningConfig? = null,
-    val stream: Boolean = false
-)
-
-/**
- * OpenRouter reasoning configuration for selective reasoning support.
- */
-@Serializable
-data class ReasoningConfig(
-    val effort: String = "low"
-)
-
-// ── Response DTOs ─────────────────────────────────────────────────────────────
-
-@Serializable
-data class OpenRouterMessageDto(
-    val role: String? = null,
-    val content: String? = null,
-    @SerialName("reasoning_content")
-    val reasoningContent: String? = null
-)
-
-typealias ChoiceMessage = OpenRouterMessageDto
-
-@Serializable
-data class OpenRouterResponse(
-    val id: String? = null,
-    val model: String? = null,
-    val choices: List<Choice>? = null,
-    val usage: CommonUsageDto? = null,
-    val error: OpenRouterError? = null
-)
-
-@Serializable
-data class Choice(
-    val message: OpenRouterMessageDto? = null,
-    val delta: OpenRouterMessageDto? = null
-)
-
-@Serializable
-data class OpenRouterError(
-    val message: String? = null,
-    val code: Int? = null
 )
 
 // ── Agentic Response Schema ──────────────────────────────────────────────────

@@ -841,7 +841,7 @@ RULES:
             }
         }
 
-        fun buildOpenRouterMessages(
+        fun buildChatMessages(
             systemPrompt: String,
             chatHistory: List<ChatHistoryEntity>,
             currentInboundText: String,

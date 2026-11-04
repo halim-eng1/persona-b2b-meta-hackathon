@@ -32,7 +32,6 @@ enum class SettingKey {
     ProviderChain,
     ApiKeys,
     Models,
-    CloudflareId,
     Permissions,
     Backup,
     Cache,

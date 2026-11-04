@@ -231,7 +231,7 @@ class KnowledgeManagementViewModelTest {
         coEvery {
             semanticRetrievalRepository.retrieveCandidates(
                 queryEmbedding = mockVector,
-                limit = 5,
+                limit = 8,
                 minimumSimilarityThreshold = any(),
                 queryText = "بكام السويت شيرت؟"
             )
@@ -269,7 +269,7 @@ class KnowledgeManagementViewModelTest {
         coEvery {
             semanticRetrievalRepository.retrieveCandidates(
                 queryEmbedding = mockVector,
-                limit = 5,
+                limit = 8,
                 minimumSimilarityThreshold = any(),
                 queryText = "بكام السويت شيرت؟"
             )
@@ -277,7 +277,7 @@ class KnowledgeManagementViewModelTest {
         coEvery {
             semanticRetrievalRepository.retrieveCandidates(
                 queryEmbedding = mockVector,
-                limit = 5,
+                limit = 8,
                 minimumSimilarityThreshold = any(),
                 queryText = "ومصاريف الشحن كام؟"
             )
@@ -356,7 +356,7 @@ class KnowledgeManagementViewModelTest {
         val botMsg = state.simulatorMessages[1]
         assertNotNull(botMsg.trace)
         assertEquals(InboundIntent.CATALOG_INQUIRY, botMsg.trace?.intent)
-        assertEquals("FastPath: Image Present", botMsg.trace?.intentSourceTier)
+        assertEquals("Unified Meta Muse Spark 1.3", botMsg.trace?.intentSourceTier)
     }
 
     @Test
@@ -458,7 +458,7 @@ class KnowledgeManagementViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isSimulating)
         assertEquals(2, state.simulatorMessages.size)
-        assertEquals("لم يتم العثور على رد مطابق في كتالوج المتجر.", state.simulatedResponse)
+        assertEquals("لم يتم العثور على رد مطابق في كتالوج المعرفة.", state.simulatedResponse)
         assertTrue(state.simulationResults.isEmpty())
         assertEquals(0f, state.simulationBestScore, 0.001f)
     }

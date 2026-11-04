@@ -73,8 +73,6 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var permissionChecker: PermissionChecker
     @Inject lateinit var userPreferencesRepository: UserPreferencesRepository
-    @Inject lateinit var onnxModelManager: com.example.persona.features.chat_import.data.embedding.OnnxModelManager
-    @Inject lateinit var huggingFaceTokenizer: com.example.persona.features.chat_import.data.embedding.HuggingFaceTokenizer
 
     private var pendingDeepLinkContact by mutableStateOf<Pair<String, String>?>(null)
 
@@ -178,21 +176,8 @@ class MainActivity : ComponentActivity() {
                     val hasSeenOnboardingPref by userPreferencesRepository.hasSeenOnboardingFlow.collectAsStateWithLifecycle(
                         initialValue = userPreferencesRepository.hasSeenOnboardingSync()
                     )
-                    val isModelPreparedPref by userPreferencesRepository.isModelPreparedFlow.collectAsStateWithLifecycle(
-                        initialValue = userPreferencesRepository.isModelPreparedSync()
-                    )
-
-                    val isModelReady = remember(isModelPreparedPref) {
-                        isModelPreparedPref && onnxModelManager.isModelReady() && huggingFaceTokenizer.isTokenizerReady()
-                    }
-                    val startDestination = remember(hasSeenOnboardingPref, isModelReady) {
-                        if (!hasSeenOnboardingPref) {
-                            Screen.FeatureOnboarding
-                        } else if (isModelReady) {
-                            Screen.Home
-                        } else {
-                            Screen.ModelPreparation
-                        }
+                    val startDestination = remember(hasSeenOnboardingPref) {
+                        if (!hasSeenOnboardingPref) Screen.FeatureOnboarding else Screen.Home
                     }
 
                     val navController = rememberNavController()
@@ -233,7 +218,6 @@ class MainActivity : ComponentActivity() {
                             navController = navController,
                             modifier = Modifier.padding(innerPadding),
                             startDestination = startDestination,
-                            isModelReady = isModelReady,
                             currentLanguage = appLanguage,
                             onLanguageChange = { newLang ->
                                 coroutineScope.launch {

@@ -246,13 +246,6 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update { it.copy(themeMode = mode) }
             }
         }
-
-        // Group 6: Cloudflare Account ID
-        viewModelScope.launch {
-            userPreferencesRepository.cloudflareAccountIdFlow.collect { cfAccountId ->
-                _uiState.update { it.copy(cloudflareAccountId = cfAccountId) }
-            }
-        }
     }
 
     fun selectTab(tabIndex: Int) {
@@ -274,10 +267,6 @@ class SettingsViewModel @Inject constructor(
     fun refreshProviderConfig(provider: String) {
         val norm = ModelProviders.normalize(provider)
         val keys = secureCredentialsRepository.getApiKeys(norm)
-        if (norm == ModelProviders.CLOUDFLARE) {
-            val cfId = secureCredentialsRepository.getCloudflareAccountId()
-            _uiState.update { it.copy(cloudflareAccountId = cfId) }
-        }
         viewModelScope.launch {
             val modelConfigs = userPreferencesRepository.getProviderModelConfigsSync(norm)
             val capabilityModelConfigs = ModelCapability.entries.associateWith { cap ->
@@ -420,15 +409,6 @@ class SettingsViewModel @Inject constructor(
         refreshProviderConfig(norm)
     }
 
-    fun setCloudflareAccountId(id: String) {
-        val trimmed = id.trim()
-        secureCredentialsRepository.setCloudflareAccountId(trimmed)
-        _uiState.update { it.copy(cloudflareAccountId = trimmed) }
-        viewModelScope.launch {
-            userPreferencesRepository.setCloudflareAccountId(trimmed)
-        }
-    }
-
     fun testConnection(provider: String, key: String) {
         val norm = ModelProviders.normalize(provider)
         val trimmed = key.trim()
@@ -457,14 +437,7 @@ class SettingsViewModel @Inject constructor(
         var connection: HttpURLConnection? = null
         return try {
             val urlString = when (provider) {
-                ModelProviders.GEMINI -> "https://generativelanguage.googleapis.com/v1beta/models?key=$key"
-                ModelProviders.GROQ -> "https://api.groq.com/openai/v1/models"
-                ModelProviders.OPENROUTER -> "https://openrouter.ai/api/v1/auth/key"
-                ModelProviders.NVIDIA -> "https://integrate.api.nvidia.com/v1/models"
-                ModelProviders.CLOUDFLARE -> {
-                    val accId = _uiState.value.cloudflareAccountId.ifBlank { secureCredentialsRepository.getCloudflareAccountId() }
-                    if (accId.isNotBlank()) "https://api.cloudflare.com/client/v4/accounts/$accId/ai/models/search" else null
-                }
+                ModelProviders.META -> "https://api.meta.ai/v1/models"
                 else -> null
             }
 
@@ -476,9 +449,7 @@ class SettingsViewModel @Inject constructor(
                 connectTimeout = 4000
                 readTimeout = 4000
                 requestMethod = "GET"
-                if (provider != ModelProviders.GEMINI) {
-                    setRequestProperty("Authorization", "Bearer $key")
-                }
+                setRequestProperty("Authorization", "Bearer $key")
             }
             connection = conn
 

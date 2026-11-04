@@ -149,7 +149,10 @@ fun KnowledgeManagementScreen(
         simulatedResponse = state.simulatedResponse,
         simulationResults = state.simulationResults,
         simulationBestScore = state.simulationBestScore,
-        simulationError = state.simulationError
+        simulationError = state.simulationError,
+        suggestedFaqChips = state.suggestedFaqChips,
+        onLoadBusinessSample = { viewModel.loadBusinessSampleKnowledge() },
+        onLoadPersonalSample = { viewModel.loadPersonalSampleKnowledge() }
     )
 
     // Keyboard-aware, vertically scrollable dialog to add product or free text knowledge
@@ -292,6 +295,31 @@ fun KnowledgeManagementScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp
                         )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.loadBusinessSampleKnowledge() },
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 44.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("تحميل كتالوج متجر", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+
+                        OutlinedButton(
+                            onClick = { viewModel.loadPersonalSampleKnowledge() },
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 44.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("تحميل مساعد تنفيذي", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
 
                     // Search & Category Filter Bar

@@ -11,14 +11,10 @@ import com.example.persona.core.database.entity.FailedQueryEntity
 import com.example.persona.core.network.dto.AgenticLlmResponse
 import com.example.persona.core.network.dto.ExtractedOrder
 import com.example.persona.features.auto_reply.data.diagnostics.NotificationSourceClass
-import com.example.persona.features.auto_reply.data.gatekeeper.CloudflareClefClient
-import com.example.persona.features.auto_reply.data.gatekeeper.LiquidDecisionClient
 import com.example.persona.features.auto_reply.data.repository.PromptContextBuilder
 import com.example.persona.features.auto_reply.data.repository.SemanticRetrievalRepository
 import com.example.persona.features.auto_reply.data.service.WhatsAppMediaExtractor
-import com.example.persona.features.auto_reply.domain.gatekeeper.DecisionResult
 import com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent
-import com.example.persona.features.auto_reply.domain.gatekeeper.LocalDecisionClassifier
 import com.example.persona.features.auto_reply.domain.model.PersonaTone
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
@@ -78,7 +74,11 @@ data class KnowledgeManagementUiState(
     val simulationError: String? = null,
     val simulatorMessages: List<SimulatorMessage> = emptyList(),
     val selectedMediaUri: String? = null,
-    val selectedMediaType: SimulatorMediaType? = null
+    val selectedMediaType: SimulatorMediaType? = null,
+    val suggestedFaqChips: List<String> = emptyList(),
+    val isRecordingAudio: Boolean = false,
+    val recordingDurationSeconds: Int = 0,
+    val recordingAmplitude: Float = 0f
 )
 
 @HiltViewModel
@@ -94,16 +94,12 @@ class KnowledgeManagementViewModel @Inject constructor(
     private val replyGenerationRepository: ReplyGenerationRepository? = null,
     private val promptContextBuilder: PromptContextBuilder? = null,
     private val reasoningLeakSanitizer: ReasoningLeakSanitizer? = null,
-    private val cloudflareClefClient: CloudflareClefClient? = null,
-    private val liquidDecisionClient: LiquidDecisionClient? = null,
-    private val localDecisionClassifier: LocalDecisionClassifier? = null,
     private val mediaExtractor: WhatsAppMediaExtractor? = null,
     @ApplicationContext private val context: Context? = null,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     private val replyRepo = replyGenerationRepository
-    private val localClassifier = localDecisionClassifier ?: LocalDecisionClassifier()
     private val extractor = mediaExtractor
 
     private val _uiState = MutableStateFlow(KnowledgeManagementUiState())
@@ -125,9 +121,14 @@ class KnowledgeManagementViewModel @Inject constructor(
                         }
                     }
                     .collect { knowledgeEntries ->
+                        val faqs = extractDynamicFaqChips(knowledgeEntries)
                         _uiState.update { current ->
                             val filtered = computeFilteredEntries(knowledgeEntries, current.searchQuery, current.selectedFilter)
-                            current.copy(entries = knowledgeEntries, filteredEntries = filtered)
+                            current.copy(
+                                entries = knowledgeEntries,
+                                filteredEntries = filtered,
+                                suggestedFaqChips = faqs
+                            )
                         }
                     }
             }
@@ -186,6 +187,86 @@ class KnowledgeManagementViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    fun loadBusinessSampleKnowledge() {
+        val ctx = context ?: return
+        viewModelScope.launch(ioDispatcher) {
+            _uiState.update { it.copy(isProcessing = true, errorMessage = null) }
+            try {
+                val markdown = ctx.assets.open("knowledge_business_sample.md").bufferedReader().use { it.readText() }
+                repository.ingestMarkdownDocument(
+                    text = markdown,
+                    sourceFileName = "knowledge_business_sample.md",
+                    sourceType = "SAMPLE_BUSINESS"
+                )
+                _uiState.update { it.copy(isProcessing = false) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isProcessing = false, errorMessage = "فشل تحميل نموذج بيانات المتجر: ${e.message}") }
+            }
+        }
+    }
+
+    fun loadPersonalSampleKnowledge() {
+        val ctx = context ?: return
+        viewModelScope.launch(ioDispatcher) {
+            _uiState.update { it.copy(isProcessing = true, errorMessage = null) }
+            try {
+                val markdown = ctx.assets.open("knowledge_personal_sample.md").bufferedReader().use { it.readText() }
+                repository.ingestMarkdownDocument(
+                    text = markdown,
+                    sourceFileName = "knowledge_personal_sample.md",
+                    sourceType = "SAMPLE_PERSONAL"
+                )
+                _uiState.update { it.copy(isProcessing = false) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isProcessing = false, errorMessage = "فشل تحميل نموذج البيانات الشخصية: ${e.message}") }
+            }
+        }
+    }
+
+    private fun extractDynamicFaqChips(entries: List<KnowledgeEntry>): List<String> {
+        if (entries.isEmpty()) {
+            return listOf(
+                "ما هي المنتجات والأسعار المتاحة؟",
+                "ما هي مصاريف ومواعيد الشحن؟",
+                "كيف يمكنني استبدال أو استرجاع المنتج؟",
+                "ما هو رقم خدمة العملاء وموقع الفرع؟"
+            )
+        }
+
+        val chips = mutableListOf<String>()
+        val combinedText = entries.joinToString(" ") { "${it.headerContext.orEmpty()} ${it.chunkText}" }
+
+        if (combinedText.contains("هودي") || combinedText.contains("hoodie", ignoreCase = true)) {
+            chips.add("بكام الهودي الأوفرسايز وخاماته وألوانه؟")
+        }
+        if (combinedText.contains("تيشيرت") || combinedText.contains("t-shirt", ignoreCase = true)) {
+            chips.add("ما هي أسعار ومقاسات التيشيرتات؟")
+        }
+        if (combinedText.contains("شحن") || combinedText.contains("توصيل") || combinedText.contains("shipping", ignoreCase = true)) {
+            chips.add("ما هي مصاريف ومدة الشحن للقاهرة والمحافظات؟")
+        }
+        if (combinedText.contains("استبدال") || combinedText.contains("استرجاع") || combinedText.contains("refund", ignoreCase = true)) {
+            chips.add("ما هي شروط وسياسة الاستبدال والاسترجاع؟")
+        }
+        if (combinedText.contains("اجتماع") || combinedText.contains("مواعيد") || combinedText.contains("meeting", ignoreCase = true)) {
+            chips.add("كيف يمكنني حجز موعد اجتماع رسمي؟")
+        }
+        if (combinedText.contains("عنوان") || combinedText.contains("فرع") || combinedText.contains("مقر") || combinedText.contains("location", ignoreCase = true)) {
+            chips.add("أين يقع فرع أو مقر العمل الرئيسي؟")
+        }
+        if (chips.size < 4 && (combinedText.contains("رقم") || combinedText.contains("هاتف") || combinedText.contains("phone", ignoreCase = true))) {
+            chips.add("ما هو رقم خدمة العملاء والتواصل المباشر؟")
+        }
+
+        return chips.take(6).ifEmpty {
+            listOf(
+                "ما هي المنتجات والأسعار المتاحة؟",
+                "ما هي مصاريف ومواعيد الشحن؟",
+                "ما هي سياسة الاسترجاع والاستبدال؟"
+            )
         }
     }
 
@@ -298,24 +379,20 @@ class KnowledgeManagementViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isProcessing = false,
-                        errorMessage = "تعذر توليد التضمين الذكي أو حفظ إجابة الاستفسار."
+                        errorMessage = "فشل في حفظ إجابة السؤال في قاعدة المعرفة."
                     )
                 }
             }
         }
     }
 
-    fun deleteQuery(id: Long) {
-        viewModelScope.launch {
-            failedQueryDao.deleteById(id)
-        }
-    }
-
-    // ── Bot Simulator / Sandbox ──────────────────────────────────────────────
     fun onOpenSimulator() {
         _uiState.update {
             it.copy(
                 isSimulatorOpen = true,
+                simulatedResponse = null,
+                simulationResults = emptyList(),
+                simulationBestScore = 0f,
                 simulationError = null
             )
         }
@@ -339,7 +416,7 @@ class KnowledgeManagementViewModel @Inject constructor(
         }
     }
 
-    fun onSimulatorMediaSelected(uri: String?, type: SimulatorMediaType?) {
+    fun onSelectMedia(uri: String?, type: SimulatorMediaType?) {
         _uiState.update {
             it.copy(
                 selectedMediaUri = uri,
@@ -354,6 +431,31 @@ class KnowledgeManagementViewModel @Inject constructor(
                 selectedMediaUri = null,
                 selectedMediaType = null
             )
+        }
+    }
+
+    fun onSimulatorMediaSelected(uri: String?, type: SimulatorMediaType?) {
+        onSelectMedia(uri, type)
+    }
+
+    fun clearAllKnowledge() {
+        viewModelScope.launch(ioDispatcher) {
+            repository.clearAllKnowledge()
+            runCatching { userPreferencesRepository.clearStoreKnowledgeTopics() }
+            runCatching { userPreferencesRepository.clearStoreWebsite() }
+            _uiState.update {
+                it.copy(
+                    entries = emptyList(),
+                    filteredEntries = emptyList(),
+                    suggestedFaqChips = emptyList()
+                )
+            }
+        }
+    }
+
+    fun deleteQuery(id: Long) {
+        viewModelScope.launch(ioDispatcher) {
+            failedQueryDao.deleteById(id)
         }
     }
 
@@ -417,10 +519,13 @@ class KnowledgeManagementViewModel @Inject constructor(
         var asrTranscription: String? = null
         var visionDescription: String? = null
 
-        // 1. Audio ASR transcription step
+        // 1. Audio ASR transcription via Meta Voice Transcribe
         val ext = extractor
+        var audioTempFile: File? = null
+        var imageTempFile: File? = null
         if (mediaType == SimulatorMediaType.AUDIO && !mediaUri.isNullOrBlank()) {
             val audioFile = resolveFileFromUri(mediaUri, SimulatorMediaType.AUDIO)
+            audioTempFile = audioFile
             if (audioFile != null && ext != null) {
                 val transcribed = runCatching { ext.transcribeVoiceNote(audioFile) }.getOrNull()
                 if (!transcribed.isNullOrBlank()) {
@@ -443,110 +548,52 @@ class KnowledgeManagementViewModel @Inject constructor(
         var imageFilePath: String? = null
         if (isImagePresent) {
             val imgFile = resolveFileFromUri(mediaUri!!, SimulatorMediaType.IMAGE)
+            imageTempFile = imgFile
             imageFilePath = imgFile?.absolutePath ?: mediaUri
         }
 
         // =========================================================================
-        // EXPERIMENTAL TEST SETUP: Evaluating On-Device Multilingual Classifier as Tier 1
-        // Goal: Leverage ~1ms edge inference for instant intent triage before cloud calls.
-        // Fallback: Cloudflare Clef (Tier 2) -> Liquid AI (Tier 3).
+        // UNIFIED SINGLE-STAGE REASONING (Meta Mandate)
+        // Retrieve top 8 context chunks directly and pass to Muse Spark 1.3
         // =========================================================================
-        val tGatekeeper = System.currentTimeMillis()
-        val (decision, resolvedTier) = if (isImagePresent) {
-            DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 1.0f, latencyMs = 0L) to "FastPath: Image Present"
-        } else {
-            val queryEmbedding = embeddingEngine?.embed(effectiveText)
-            val localDecision = runCatching {
-                localClassifier.classify(effectiveText, queryEmbedding)
-            }.getOrElse {
-                DecisionResult(intent = InboundIntent.CATALOG_INQUIRY, confidence = 0.5f, latencyMs = 0L)
-            }
-
-            val isOnDeviceAccepted = localDecision.confidence >= 0.70f ||
-                localDecision.intent == InboundIntent.GREETING ||
-                localDecision.intent == InboundIntent.BANTER
-
-            if (isOnDeviceAccepted) {
-                val latency = System.currentTimeMillis() - tGatekeeper
-                localDecision.copy(latencyMs = latency) to "On-Device"
-            } else {
-                val lastAssistantText = _uiState.value.simulatorMessages.lastOrNull { it.sender == SimulatorSender.BOT }?.text?.trim().orEmpty()
-                val gatekeeperInput = if (lastAssistantText.isNotBlank()) {
-                    "[الرد السابق]: $lastAssistantText\n[رسالة العميل]: $effectiveText"
-                } else {
-                    effectiveText
-                }
-
-                val cfIntent = cloudflareClefClient?.let { client ->
-                    runCatching {
-                        client.decide(gatekeeperInput, timeoutMs = 1150L)
-                    }.getOrNull()
-                }
-
-                if (cfIntent != null) {
-                    val latency = System.currentTimeMillis() - tGatekeeper
-                    DecisionResult(intent = cfIntent, confidence = 0.95f, latencyMs = latency) to "Cloudflare Clef"
-                } else {
-                    val liquidIntent = liquidDecisionClient?.let { client ->
-                        runCatching {
-                            client.decide(gatekeeperInput, timeoutMs = 800L)
-                        }.getOrNull()
-                    }
-
-                    if (liquidIntent != null) {
-                        val latency = System.currentTimeMillis() - tGatekeeper
-                        DecisionResult(intent = liquidIntent, confidence = 0.95f, latencyMs = latency) to "Liquid AI"
-                    } else {
-                        val latency = System.currentTimeMillis() - tGatekeeper
-                        localDecision.copy(latencyMs = latency) to "On-Device Fallback"
-                    }
-                }
-            }
-        }
-
-        // 4. RAG Retrieval if intent is CATALOG_INQUIRY or forced via entity/URL keywords
-        val containsEntityOrUrl = hasExplicitEntityOrUrl(effectiveText)
-        val effectiveIntent = if (isImagePresent || containsEntityOrUrl) InboundIntent.CATALOG_INQUIRY else decision.intent
+        val resolvedTier = "Unified Meta Muse Spark 1.3"
 
         var candidates: List<RetrievalCandidate> = emptyList()
         var bestScore = 0f
-        val needsRag = effectiveIntent == InboundIntent.CATALOG_INQUIRY || isImagePresent || containsEntityOrUrl
-        if (needsRag) {
-            val engine = embeddingEngine
-            val repo = semanticRetrievalRepository
-            if (engine != null && repo != null) {
-                val queryEmbedding = engine.embed(effectiveText)
-                if (queryEmbedding != null) {
-                    val (retrieved, score) = repo.retrieveCandidates(
-                        queryEmbedding = queryEmbedding,
-                        limit = 5,
-                        minimumSimilarityThreshold = 0.25f,
-                        queryText = effectiveText
+
+        val engine = embeddingEngine
+        val repo = semanticRetrievalRepository
+        if (engine != null && repo != null) {
+            val queryEmbedding = engine.embed(effectiveText)
+            if (queryEmbedding != null) {
+                val (retrieved, score) = repo.retrieveCandidates(
+                    queryEmbedding = queryEmbedding,
+                    limit = 8,
+                    minimumSimilarityThreshold = 0.25f,
+                    queryText = effectiveText
+                )
+                candidates = retrieved
+                bestScore = score
+            }
+        } else {
+            // In-memory matching against knowledge entries
+            val matches = _uiState.value.entries.filter {
+                it.chunkText.contains(effectiveText, ignoreCase = true)
+            }
+            if (matches.isNotEmpty()) {
+                candidates = matches.take(8).map {
+                    RetrievalCandidate(
+                        chunkId = it.chunkId,
+                        chunkText = it.chunkText,
+                        headerContext = it.headerContext,
+                        similarityScore = 0.85f
                     )
-                    candidates = retrieved
-                    bestScore = score
                 }
-            } else {
-                // In-memory matching against knowledge entries
-                val matches = _uiState.value.entries.filter {
-                    it.chunkText.contains(effectiveText, ignoreCase = true) ||
-                    (containsEntityOrUrl && (it.chunkText.contains("http") || it.chunkText.contains("tiktok") || it.chunkText.contains("تيك توك") || it.chunkText.contains("@")))
-                }
-                if (matches.isNotEmpty()) {
-                    candidates = matches.take(5).map {
-                        RetrievalCandidate(
-                            chunkId = it.chunkId,
-                            chunkText = it.chunkText,
-                            headerContext = it.headerContext,
-                            similarityScore = 0.85f
-                        )
-                    }
-                    bestScore = 0.85f
-                }
+                bestScore = 0.85f
             }
         }
 
-        // 5. Assemble System Prompt with PromptContextBuilder
+        // Assemble System Prompt with PromptContextBuilder
         val botName = runCatching { userPreferencesRepository.getBotNameSync() }.getOrDefault(UserPreferencesRepository.DEFAULT_BOT_NAME)
         val storeName = runCatching { userPreferencesRepository.getStoreNameSync() }.getOrDefault(UserPreferencesRepository.DEFAULT_STORE_NAME)
         val tone = runCatching { userPreferencesRepository.getPersonaToneSync() }.getOrDefault(PersonaTone.STANDARD_POLITE)
@@ -577,7 +624,7 @@ class KnowledgeManagementViewModel @Inject constructor(
             statusCounts = emptyList()
         )
 
-        // 6. Call ReplyGenerationRepository.generateReply
+        // Call ReplyGenerationRepository.generateReply
         val priorMessages = _uiState.value.simulatorMessages.dropLast(1)
         val rawChatHistory = priorMessages.reversed().mapIndexed { index, msg ->
             val text = when {
@@ -634,7 +681,7 @@ class KnowledgeManagementViewModel @Inject constructor(
         var refinedKeyword: String? = null
         var pass2Candidates: List<RetrievalCandidate> = emptyList()
         var finalParsedResponse: AgenticLlmResponse
-        var llmProviderName = "OpenRouter / Gemini / Qwen"
+        var llmProviderName = "Meta Muse Spark 1.3"
 
         val rawOutput = runCatching {
             replyRepo?.generateReply(
@@ -647,7 +694,7 @@ class KnowledgeManagementViewModel @Inject constructor(
                 maxTokens = if (isImagePresent) 500 else 600,
                 lastOrder = null,
                 orderStatusCounts = emptyList(),
-                inboundIntent = if (candidates.isNotEmpty() || containsEntityOrUrl) InboundIntent.CATALOG_INQUIRY else decision.intent
+                inboundIntent = InboundIntent.CATALOG_INQUIRY
             )
         }.getOrNull()
         llmLatencyMs = System.currentTimeMillis() - llmStartTime
@@ -689,7 +736,7 @@ class KnowledgeManagementViewModel @Inject constructor(
                     if (p2Embedding != null) {
                         val (p2Retrieved, _) = semanticRetrievalRepository.retrieveCandidates(
                             queryEmbedding = p2Embedding,
-                            limit = 5,
+                            limit = 8,
                             minimumSimilarityThreshold = 0.25f,
                             queryText = combinedQuery
                         )
@@ -739,12 +786,12 @@ class KnowledgeManagementViewModel @Inject constructor(
                 finalParsedResponse = firstPassParsed
             }
         } else {
-            // Local sandbox fallback response when cloud keys are unavailable
+            // Local fallback response when cloud keys are unavailable
             llmProviderName = "محاكي الاسترجاع المحلي (بدون اتصال)"
             val fallbackText = if (candidates.isNotEmpty()) {
                 candidates.first().chunkText
             } else {
-                "لم يتم العثور على رد مطابق في كتالوج المتجر."
+                "لم يتم العثور على رد مطابق في كتالوج المعرفة."
             }
             finalParsedResponse = AgenticLlmResponse(
                 action = "REPLY",
@@ -761,7 +808,7 @@ class KnowledgeManagementViewModel @Inject constructor(
             ?: when {
                 isHitl -> "⚠️ تم توجيه الاستفسار للمراجعة البشرية لعدم توفر رد مؤكد أو لحاجة الإجراء لتدخل يدوي."
                 candidates.isNotEmpty() -> candidates.first().chunkText
-                else -> "لم يتم العثور على معلومات كافية للإجابة في كتالوج المتجر."
+                else -> "لم يتم العثور على معلومات كافية للإجابة في كتالوج المعرفة."
             }
 
         val totalDurationMs = System.currentTimeMillis() - startTime
@@ -783,10 +830,10 @@ class KnowledgeManagementViewModel @Inject constructor(
 
         val trace = ExecutionTrace(
             totalDurationMs = totalDurationMs,
-            intent = decision.intent,
+            intent = InboundIntent.CATALOG_INQUIRY,
             intentSourceTier = resolvedTier,
-            intentConfidence = decision.confidence,
-            intentLatencyMs = decision.latencyMs,
+            intentConfidence = 1.0f,
+            intentLatencyMs = 0L,
             ragCandidates = candidates,
             ragBestScore = bestScore,
             reQueryTriggered = reQueryTriggered,
@@ -799,11 +846,11 @@ class KnowledgeManagementViewModel @Inject constructor(
             promptTokens = promptTokens,
             completionTokens = completionTokens,
             totalTokens = totalTokens,
-            orderAction = finalParsedResponse.orderAction?.uppercase() ?: "NONE",
+            systemPrompt = fullSystemPrompt,
             extractedOrder = finalParsedResponse.extractedOrder,
-            systemPrompt = "", // Removed from UI as requested
-            asrTranscription = asrTranscription,
-            visionDescription = visionDescription
+            orderAction = finalParsedResponse.orderAction ?: "NONE",
+            visionDescription = visionDescription,
+            asrTranscription = asrTranscription
         )
 
         val botMessage = SimulatorMessage(
@@ -822,119 +869,75 @@ class KnowledgeManagementViewModel @Inject constructor(
                 simulatorMessages = it.simulatorMessages + botMessage
             )
         }
+
+        // Release transient media copies created for this turn. Only files this ViewModel
+        // materialised into the cache directory are removed; user-owned originals are untouched.
+        cleanupTempMedia(audioTempFile)
+        cleanupTempMedia(imageTempFile)
     }
 
-    private suspend fun resolveFileFromUri(uriString: String, mediaType: SimulatorMediaType? = null): File? = withContext(ioDispatcher) {
-        if (uriString.isBlank()) return@withContext null
-        val ctx = context ?: return@withContext null
-        runCatching {
-            val uri = Uri.parse(uriString)
-            if (uri.scheme == "file") {
-                val path = uri.path ?: return@withContext null
-                val file = File(path)
-                if (file.exists()) return@withContext file
+    /**
+     * Deletes a simulator cache copy (`sim_input_*`) once the turn that needed it is finished.
+     * Files supplied by the user are never touched.
+     */
+    private fun cleanupTempMedia(file: File?) {
+        if (file == null) return
+        if (!file.name.startsWith("sim_input_")) return
+        runCatching { if (file.exists()) file.delete() }
+    }
+
+    private fun resolveFileFromUri(uriString: String, type: SimulatorMediaType): File? {
+        val trimmed = uriString.trim()
+        // Bare absolute paths (e.g. from the live recorder) have no URI scheme.
+        if (trimmed.startsWith("/")) {
+            val direct = File(trimmed)
+            if (direct.exists()) return direct
+        }
+        val uri = runCatching { Uri.parse(trimmed) }.getOrNull()
+        if (uri?.scheme == "file") {
+            val f = File(uri.path ?: "")
+            if (f.exists()) return f
+        }
+        val ctx = context ?: return null
+        val parsedUri = uri ?: return null
+        return try {
+            val extension = if (type == SimulatorMediaType.IMAGE) ".jpg" else ".wav"
+            val tempFile = File.createTempFile("sim_input_", extension, ctx.cacheDir)
+            val stream = ctx.contentResolver.openInputStream(parsedUri) ?: run {
+                tempFile.delete()
+                return null
             }
-            val mimeType = ctx.contentResolver.getType(uri)
-            val extension = when {
-                mimeType != null && mimeType.contains("jpeg", ignoreCase = true) -> ".jpg"
-                mimeType != null && mimeType.contains("png", ignoreCase = true) -> ".png"
-                mimeType != null && mimeType.contains("webp", ignoreCase = true) -> ".webp"
-                mimeType != null && mimeType.contains("ogg", ignoreCase = true) -> ".ogg"
-                mimeType != null && mimeType.contains("opus", ignoreCase = true) -> ".opus"
-                mimeType != null && mimeType.contains("audio", ignoreCase = true) -> ".m4a"
-                uriString.contains(".jpg", true) || uriString.contains("jpeg", true) -> ".jpg"
-                uriString.contains(".png", true) -> ".png"
-                uriString.contains(".webp", true) -> ".webp"
-                uriString.contains(".ogg", true) -> ".ogg"
-                uriString.contains(".opus", true) -> ".opus"
-                uriString.contains(".mp3", true) -> ".mp3"
-                uriString.contains(".m4a", true) -> ".m4a"
-                uriString.contains(".wav", true) -> ".wav"
-                mediaType == SimulatorMediaType.IMAGE -> ".jpg"
-                mediaType == SimulatorMediaType.AUDIO -> ".ogg"
-                else -> ".tmp"
-            }
-            val stream = ctx.contentResolver.openInputStream(uri) ?: return@withContext null
-            val tempFile = File(ctx.cacheDir, "sim_upload_${System.currentTimeMillis()}$extension")
             stream.use { input ->
                 tempFile.outputStream().use { output ->
                     input.copyTo(output)
                 }
             }
             tempFile
-        }.getOrNull()
-    }
-
-    /**
-     * Wipes the entire knowledge base:
-     * 1. Deletes all chunks and embeddings from Room tables via repository.
-     * 2. Clears store knowledge topics from DataStore preferences.
-     * 3. Clears active UI state list.
-     */
-    fun clearAllKnowledge() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isProcessing = true, errorMessage = null) }
-            repository.clearAllKnowledge()
-            userPreferencesRepository.clearStoreKnowledgeTopics()
-            userPreferencesRepository.clearStoreWebsite()
-            _uiState.update {
-                it.copy(
-                    entries = emptyList(),
-                    filteredEntries = emptyList(),
-                    isProcessing = false
-                )
-            }
+        } catch (e: Exception) {
+            null
         }
     }
 
-    companion object {
-        fun computeFilteredEntries(
-            entries: List<KnowledgeEntry>,
-            searchQuery: String,
-            selectedFilter: String
-        ): List<KnowledgeEntry> {
-            var list = entries
-            if (searchQuery.isNotBlank()) {
-                val q = searchQuery.trim().lowercase()
-                list = list.filter {
-                    it.chunkText.lowercase().contains(q) ||
-                        (it.headerContext?.lowercase()?.contains(q) == true)
-                }
-            }
-            return when (selectedFilter) {
-                "PRODUCT" -> list.filter {
-                    it.chunkText.contains("[منتج]") ||
-                        it.headerContext?.contains("منتج") == true ||
-                        it.chunkText.contains("ج.م") ||
-                        it.chunkText.contains("جنيه")
-                }
-                "POLICY" -> list.filter {
-                    it.headerContext?.contains("شحن") == true ||
-                        it.headerContext?.contains("سياس") == true ||
-                        it.headerContext?.contains("استرجاع") == true ||
-                        it.sourceType == "CORE_DOCUMENT"
-                }
-                "OFFER" -> list.filter { it.sourceType == "TEMPORARY_OFFER" }
-                else -> list
+    private fun computeFilteredEntries(
+        entries: List<KnowledgeEntry>,
+        query: String,
+        filter: String
+    ): List<KnowledgeEntry> {
+        val queryFiltered = if (query.isBlank()) {
+            entries
+        } else {
+            entries.filter { entry ->
+                entry.chunkText.contains(query, ignoreCase = true) ||
+                (entry.headerContext?.contains(query, ignoreCase = true) == true)
             }
         }
-        fun hasExplicitEntityOrUrl(text: String): Boolean {
-            if (text.isBlank()) return false
-            val lower = text.lowercase()
-            if (lower.contains("http://") || lower.contains("https://") || lower.contains("www.") ||
-                lower.contains(".com") || lower.contains(".net") || lower.contains(".org") ||
-                lower.contains(".eg") || lower.contains(".shop") || lower.contains("@")
-            ) {
-                return true
-            }
-            val entityKeywords = listOf(
-                "tiktok", "tik tok", "facebook", "fb", "instagram", "insta", "whatsapp",
-                "تيك توك", "تيكتوك", "فيسبوك", "فيس بوك", "انستجرام", "انستقرام", "انستا", "واتساب",
-                "موقع", "الموقع", "موقعكم", "ويب سايت", "ويبسايت", "لينك", "اللينك", "رابط", "الرابط",
-                "صفحة", "صفحتكم", "حساب", "حسابكم", "أكونت", "اكونت", "رقم", "رقمكم", "ارقام", "أرقام",
-                "خدمة العملاء", "خدمه العملاء"
-            )
-            return entityKeywords.any { lower.contains(it) }
+
+        return when (filter.uppercase()) {
+            "ALL" -> queryFiltered
+            "PRODUCT" -> queryFiltered.filter { it.sourceType.contains("PRODUCT", ignoreCase = true) || it.chunkText.contains("سعر") || it.chunkText.contains("جنيه") }
+            "POLICY" -> queryFiltered.filter { it.sourceType.contains("POLICY", ignoreCase = true) || it.chunkText.contains("شحن") || it.chunkText.contains("استرجاع") }
+            "OFFER" -> queryFiltered.filter { it.sourceType.contains("OFFER", ignoreCase = true) || it.sourceType.contains("TEMP", ignoreCase = true) }
+            else -> queryFiltered
         }
     }
 }

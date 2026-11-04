@@ -1,6 +1,6 @@
 package com.example.persona.features.knowledge.di
 
-import com.example.persona.features.knowledge.data.indexer.OnnxKnowledgeVectorIndexer
+import com.example.persona.features.knowledge.data.indexer.KnowledgeVectorIndexerImpl
 import com.example.persona.features.knowledge.domain.indexer.KnowledgeVectorIndexer
 import dagger.Binds
 import dagger.Module
@@ -15,6 +15,6 @@ abstract class KnowledgeModule {
     @Binds
     @Singleton
     abstract fun bindKnowledgeVectorIndexer(
-        impl: OnnxKnowledgeVectorIndexer
+        impl: KnowledgeVectorIndexerImpl
     ): KnowledgeVectorIndexer
 }

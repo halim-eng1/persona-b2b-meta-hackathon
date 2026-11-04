@@ -86,107 +86,8 @@ android {
             useSupportLibrary = true
         }
 
-        ndk {
-            stl = "c++_shared"
-            abiFilters.clear()
-            abiFilters.add("arm64-v8a")
-        }
-
-        // OpenRouter credentials — resolved from environment or secrets properties
-        buildConfigField(
-            "String",
-            "OPENROUTER_API_KEY",
-            "\"${resolveSecret("OPENROUTER_API_KEY") ?: ""}\""
-        )
-        buildConfigField(
-            "String",
-            "OPENROUTER_API_KEY_V2",
-            "\"${resolveSecret("OPENROUTER_API_KEY_V2") ?: ""}\""
-        )
-        buildConfigField(
-            "String",
-            "OPENROUTER_BASE_URL",
-            "\"${resolveSecret("OPENROUTER_BASE_URL") ?: "https://openrouter.ai/api/v1/chat/completions"}\""
-        )
-
-        // Groq Cloud credentials — resolved from environment or secrets properties
-        buildConfigField(
-            "String",
-            "GROQ_API_KEY",
-            "\"${resolveSecret("GROQ_API_KEY") ?: ""}\""
-        )
-        buildConfigField(
-            "String",
-            "GROQ_API_KEY_V2",
-            "\"${resolveSecret("GROQ_API_KEY_V2") ?: ""}\""
-        )
-        buildConfigField(
-            "String",
-            "GROQ_BASE_URL",
-            "\"${resolveSecret("GROQ_BASE_URL") ?: "https://api.groq.com/openai/v1/chat/completions"}\""
-        )
-
-        // NVIDIA NIM credentials — resolved from environment or secrets properties
-        val resolvedNvidiaKey = resolveSecret("NVIDIA_API_KEY") ?: resolveSecret("NIVIDIA_API_KEY") ?: ""
-        buildConfigField(
-            "String",
-            "NVIDIA_API_KEY",
-            "\"$resolvedNvidiaKey\""
-        )
-        buildConfigField(
-            "String",
-            "NVIDIA_BASE_URL",
-            "\"${resolveSecret("NVIDIA_BASE_URL") ?: "https://integrate.api.nvidia.com/v1/chat/completions"}\""
-        )
-
-        // QwenCloud / DashScope credentials — resolved from environment or secrets properties
-        val resolvedQwenKey = resolveSecret("QWEN_API_KEY") ?: resolveSecret("DASHSCOPE_API_KEY") ?: ""
-        buildConfigField(
-            "String",
-            "QWEN_API_KEY",
-            "\"$resolvedQwenKey\""
-        )
-        buildConfigField(
-            "String",
-            "QWEN_BASE_URL",
-            "\"${resolveSecret("QWEN_BASE_URL") ?: "https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1/chat/completions"}\""
-        )
-        buildConfigField(
-            "String",
-            "QWEN_ASR_BASE_URL",
-            "\"${resolveSecret("QWEN_ASR_BASE_URL") ?: "https://ap-southeast-1.maas.qwencloudapi.com/api/v1/services/aigc/multimodal-generation/generation"}\""
-        )
-
-        // Google Gemini credentials — resolved from environment or secrets properties
-        val resolvedGeminiKey = resolveSecret("GEMINI_API_KEY") ?: resolveSecret("GOOGLE_API_KEY") ?: ""
-        val resolvedGeminiKey2 = resolveSecret("GEMINI_API_KEY_2") ?: resolveSecret("GEMINI_API_KEY_V2") ?: ""
-        buildConfigField("String", "GEMINI_API_KEY", "\"$resolvedGeminiKey\"")
-        buildConfigField("String", "GEMINI_API_KEY_2", "\"$resolvedGeminiKey2\"")
-        buildConfigField("String", "GEMINI_BASE_URL", "\"${resolveSecret("GEMINI_BASE_URL") ?: "https://generativelanguage.googleapis.com/v1beta"}\"")
-
-        // Liquid API credentials — resolved from environment or secrets properties
-        val resolvedLiquidKey = resolveSecret("LIQUID_API_KEY") ?: resolveSecret("LIQUD_API_KEY") ?: ""
-        val resolvedLiquidKey2 = resolveSecret("LIQUID_API_KEY_2") ?: resolveSecret("LIQUD_API_KEY_V2") ?: ""
-        buildConfigField("String", "LIQUID_API_KEY", "\"$resolvedLiquidKey\"")
-        buildConfigField("String", "LIQUID_API_KEY_2", "\"$resolvedLiquidKey2\"")
-        buildConfigField("String", "LIQUID_BASE_URL", "\"${resolveSecret("LIQUID_BASE_URL") ?: "https://api.liquid.ai/decisions/v1/systemone"}\"")
-
-        // Cloudflare Clef credentials — resolved from environment or secrets properties
-        val resolvedCfAccountId = resolveSecret("CLOUDFLARE_ACCOUNT_ID") ?: resolveSecret("CloudFlare_ACCOUNT_ID") ?: ""
-        val resolvedCfApiToken = resolveSecret("CLOUDFLARE_API_TOKEN") ?: resolveSecret("CloudFlare_API_TOKEN") ?: ""
-        buildConfigField("String", "CLOUDFLARE_ACCOUNT_ID", "\"$resolvedCfAccountId\"")
-        buildConfigField("String", "CLOUDFLARE_API_TOKEN", "\"$resolvedCfApiToken\"")
-
-        val resolvedNaraKey = resolveSecret("NARA_ROUTER_API_KEY") ?: resolveSecret("NARA_API_KEY") ?: ""
-        buildConfigField("String", "NARA_ROUTER_API_KEY", "\"$resolvedNaraKey\"")
-
-        val resolvedDashScopeKey = resolveSecret("DASHSCOPE_API_KEY") ?: resolvedQwenKey
-        buildConfigField("String", "DASHSCOPE_API_KEY", "\"$resolvedDashScopeKey\"")
-
-        val resolvedGroqKey2 = resolveSecret("GROQ_API_KEY_2") ?: resolveSecret("GROQ_API_KEY_V2") ?: ""
-        buildConfigField("String", "GROQ_API_KEY_2", "\"$resolvedGroqKey2\"")
-
-        // Meta Model API credentials — resolved from environment or secrets properties
+        // Meta Model API credentials — resolved from environment or secrets properties.
+        // Runtime mandate: Meta models only. No third-party provider credentials are compiled in.
         val resolvedMetaKey = resolveSecret("META_API_KEY") ?: ""
         buildConfigField("String", "META_API_KEY", "\"$resolvedMetaKey\"")
         buildConfigField("String", "META_BASE_URL", "\"${resolveSecret("META_BASE_URL") ?: "https://api.meta.ai/v1"}\"")
@@ -299,12 +200,8 @@ dependencies {
     implementation(libs.ktor.client.auth)
     implementation(libs.ktor.client.logging)
 
-    // ONNX Runtime
-    implementation(libs.onnxruntime.android)
-
-    // DJL Tokenizer
-    implementation(libs.djl.tokenizers)
-    implementation(libs.djl.android.tokenizer.native)
+    // ONNX Runtime and DJL tokenizer dependencies were removed: embeddings are now produced
+    // on-device by the deterministic FeatureHashingVectorizer (no model download, no native runtime).
 
 
     // WorkManager

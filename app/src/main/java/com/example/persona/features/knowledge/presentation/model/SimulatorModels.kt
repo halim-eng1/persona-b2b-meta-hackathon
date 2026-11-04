@@ -37,7 +37,7 @@ data class ExecutionTrace(
     val reQueryKeyword: String? = null,
     val reQueryVisualDescription: String? = null,
     val reQueryCandidates: List<RetrievalCandidate> = emptyList(),
-    val llmProvider: String = "OpenRouter / Gemini / Qwen",
+    val llmProvider: String = "Meta Muse Spark 1.3",
     val llmLatencyMs: Long = 0L,
     val llmAction: String = "REPLY",
     val promptTokens: Int = 0,

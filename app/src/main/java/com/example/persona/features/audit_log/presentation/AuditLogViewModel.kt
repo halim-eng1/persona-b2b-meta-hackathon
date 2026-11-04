@@ -19,7 +19,7 @@ data class AuditLogUiState(
     val filteredItems: List<AuditLogItem> = emptyList(),
     val searchQuery: String = "",
     val selectedTier: String = "ALL", // ALL, RULE, HEURISTIC, MODEL, FALLBACK
-    val selectedProvider: String = "ALL", // ALL, Gemini, Qwen, Nvidia, Groq
+    val selectedProvider: String = "ALL", // ALL, Meta
     val selectedStatus: String = "ALL", // ALL, SUCCESS, ESCALATED_HITL, ERROR
     val expandedItemIds: Set<Long> = emptySet(),
     val isLoading: Boolean = true,

@@ -38,7 +38,7 @@ class AuditLogViewModelTest {
         wasAutoSent = true,
         timestamp = Instant.fromEpochMilliseconds(1730000000000L),
         gatekeeperTier = "RULE",
-        providerModel = "Gemini 1.5 Flash",
+        providerModel = "Meta / muse-spark-1.3",
         latencyMs = 350L,
         status = "SUCCESS"
     )
@@ -52,7 +52,7 @@ class AuditLogViewModelTest {
         wasAutoSent = false,
         timestamp = Instant.fromEpochMilliseconds(1730001000000L),
         gatekeeperTier = "HEURISTIC",
-        providerModel = "Qwen 2.5",
+        providerModel = "Meta / muse-spark-1.2",
         latencyMs = 700L,
         status = "ESCALATED_HITL"
     )
@@ -66,7 +66,7 @@ class AuditLogViewModelTest {
         wasAutoSent = true,
         timestamp = Instant.fromEpochMilliseconds(1730002000000L),
         gatekeeperTier = "MODEL",
-        providerModel = "Nvidia Nemotron",
+        providerModel = "Meta / muse-spark-1.3-contributor",
         latencyMs = 950L,
         status = "SUCCESS"
     )
@@ -180,21 +180,21 @@ class AuditLogViewModelTest {
     }
 
     @Test
-    fun `provider filter filters items by providerModel`() = runTest(testDispatcher) {
+    fun `provider filter filters items by providerModel substring`() = runTest(testDispatcher) {
         logsFlow.value = listOf(sampleItem1, sampleItem2, sampleItem3)
         val viewModel = AuditLogViewModel(auditLogRepository)
         val collectJob = launch { viewModel.uiState.collect() }
         advanceUntilIdle()
 
-        viewModel.onProviderSelected("Gemini")
+        viewModel.onProviderSelected("muse-spark-1.3")
         advanceUntilIdle()
-        assertEquals(1, viewModel.uiState.value.filteredItems.size)
-        assertEquals("Gemini 1.5 Flash", viewModel.uiState.value.filteredItems.first().providerModel)
+        assertEquals(2, viewModel.uiState.value.filteredItems.size)
+        assertTrue(viewModel.uiState.value.filteredItems.all { it.providerModel.contains("muse-spark-1.3") })
 
-        viewModel.onProviderSelected("Nvidia")
+        viewModel.onProviderSelected("muse-spark-1.2")
         advanceUntilIdle()
         assertEquals(1, viewModel.uiState.value.filteredItems.size)
-        assertEquals("Nvidia Nemotron", viewModel.uiState.value.filteredItems.first().providerModel)
+        assertEquals("Meta / muse-spark-1.2", viewModel.uiState.value.filteredItems.first().providerModel)
 
         collectJob.cancel()
     }

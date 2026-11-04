@@ -11,14 +11,8 @@ import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.network.dto.ChatMessage
 import com.example.persona.features.auto_reply.data.media.ImagePayloadPreprocessor
-import com.example.persona.features.auto_reply.data.providers.GeminiClient
-import com.example.persona.features.auto_reply.data.providers.GroqClient
 import com.example.persona.features.auto_reply.data.providers.MetaModelApiClient
-import com.example.persona.features.auto_reply.data.providers.NaraRouterClient
-import com.example.persona.features.auto_reply.data.providers.NvidiaNimClient
-import com.example.persona.features.auto_reply.data.providers.OpenRouterClient
 import com.example.persona.features.auto_reply.data.providers.ProviderCircuitBreakerAndKeyManager
-import com.example.persona.features.auto_reply.data.providers.QwenCloudClient
 import com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent
 import com.example.persona.features.auto_reply.domain.model.ProcessedNotification
 import com.example.persona.features.auto_reply.domain.model.RetrievalCandidate
@@ -34,8 +28,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Lean coordinator for cloud LLM response generation with active circuit breaker,
- * unlimited keys pool, dynamic model management, and dynamic provider priority reordering.
+ * 100% Meta Model API runtime coordinator for conversational and multimodal response generation.
+ * Exclusively dispatches to Meta's Muse Spark 1.3 / 1.2 models with transparent contributor failover.
  */
 @Singleton
 class ReplyGenerationRepositoryImpl @Inject constructor(
@@ -43,14 +37,8 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
     private val promptContextBuilder: PromptContextBuilder,
     @ApplicationContext private val context: Context,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val qwenClient: QwenCloudClient,
-    private val nvidiaClient: NvidiaNimClient,
-    private val groqClient: GroqClient,
-    private val geminiClient: GeminiClient,
-    private val openRouterClient: OpenRouterClient,
-    private val naraRouterClient: NaraRouterClient,
-    private val metaModelApiClient: MetaModelApiClient? = null,
-    private val imagePreprocessor: ImagePayloadPreprocessor,
+    private val metaModelApiClient: MetaModelApiClient,
+    private val imagePreprocessor: ImagePayloadPreprocessor = ImagePayloadPreprocessor(),
     circuitBreaker: ProviderCircuitBreakerAndKeyManager? = null
 ) : ReplyGenerationRepository {
 
@@ -62,156 +50,16 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
 
     override fun getLastExecutionTelemetry(): com.example.persona.features.auto_reply.domain.model.ExecutionTelemetry? = lastTelemetry
 
-    /** Test seam: overrides API keys and supplies dependencies explicitly. */
-    internal constructor(
-        httpClient: HttpClient,
-        context: Context,
-        primaryApiKey: String,
-        fallbackApiKey: String,
-        promptContextBuilder: PromptContextBuilder = PromptContextBuilder(),
-        userPreferencesRepository: UserPreferencesRepository,
-        groqPrimaryApiKey: String? = "",
-        groqFallbackApiKey: String? = "",
-        nvidiaApiKey: String? = "",
-        qwenApiKey: String? = "",
-        geminiApiKey: String? = "",
-        geminiApiKey2: String? = "",
-        naraApiKey: String? = "",
-        metaApiKey: String? = "",
-        metaModelApiClient: MetaModelApiClient? = null
-    ) : this(
-        httpClient = httpClient,
-        promptContextBuilder = promptContextBuilder,
-        context = context,
-        userPreferencesRepository = userPreferencesRepository,
-        qwenClient = QwenCloudClient(httpClient),
-        nvidiaClient = NvidiaNimClient(httpClient),
-        groqClient = GroqClient(httpClient),
-        geminiClient = GeminiClient(httpClient),
-        openRouterClient = OpenRouterClient(httpClient),
-        naraRouterClient = NaraRouterClient(httpClient),
-        metaModelApiClient = metaModelApiClient,
-        imagePreprocessor = ImagePayloadPreprocessor(),
-        circuitBreaker = ProviderCircuitBreakerAndKeyManager(context, SystemAlertNotificationHandler(context))
-    ) {
-        this.primaryApiKeyOverride = primaryApiKey
-        this.fallbackApiKeyOverride = fallbackApiKey
-        this.groqPrimaryApiKeyOverride = groqPrimaryApiKey
-        this.groqFallbackApiKeyOverride = groqFallbackApiKey
-        this.nvidiaApiKeyOverride = nvidiaApiKey
-        this.qwenApiKeyOverride = qwenApiKey
-        this.geminiApiKeyOverride = geminiApiKey
-        this.geminiApiKey2Override = geminiApiKey2
-        this.naraApiKeyOverride = naraApiKey
-        this.metaApiKeyOverride = metaApiKey
-    }
-
-    /** Secondary convenience constructor preserving standard 4-arg instantiations. */
-    constructor(
-        httpClient: HttpClient,
-        promptContextBuilder: PromptContextBuilder,
-        context: Context,
-        userPreferencesRepository: UserPreferencesRepository
-    ) : this(
-        httpClient = httpClient,
-        promptContextBuilder = promptContextBuilder,
-        context = context,
-        userPreferencesRepository = userPreferencesRepository,
-        qwenClient = QwenCloudClient(httpClient),
-        nvidiaClient = NvidiaNimClient(httpClient),
-        groqClient = GroqClient(httpClient),
-        geminiClient = GeminiClient(httpClient),
-        openRouterClient = OpenRouterClient(httpClient),
-        naraRouterClient = NaraRouterClient(httpClient),
-        metaModelApiClient = null,
-        imagePreprocessor = ImagePayloadPreprocessor(),
-        circuitBreaker = ProviderCircuitBreakerAndKeyManager(context, SystemAlertNotificationHandler(context))
-    )
-
-    private var primaryApiKeyOverride: String? = null
-    private var fallbackApiKeyOverride: String? = null
-    private var groqPrimaryApiKeyOverride: String? = null
-    private var groqFallbackApiKeyOverride: String? = null
-    private var nvidiaApiKeyOverride: String? = null
-    private var qwenApiKeyOverride: String? = null
-    private var geminiApiKeyOverride: String? = null
-    private var geminiApiKey2Override: String? = null
-    private var naraApiKeyOverride: String? = null
-    private var metaApiKeyOverride: String? = null
-
-    internal val metaApiKey: String
-        get() = metaApiKeyOverride?.trim()
-            ?: userPreferencesRepository.getApiKeys(ModelProviders.META).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+    /** Primary Meta key resolved from secure storage, falling back to BuildConfig. */
+    private val metaApiKey: String
+        get() = userPreferencesRepository.getApiKeys(ModelProviders.META).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
             ?: runCatching { BuildConfig.META_API_KEY }.getOrNull()?.trim() ?: ""
-
-    internal val primaryApiKey: String
-        get() = primaryApiKeyOverride?.trim()
-            ?: userPreferencesRepository.getApiKeys(ModelProviders.OPENROUTER).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
-            ?: BuildConfig.OPENROUTER_API_KEY.trim()
-
-    internal val fallbackApiKey: String
-        get() = fallbackApiKeyOverride?.trim()
-            ?: userPreferencesRepository.getApiKeys(ModelProviders.OPENROUTER).drop(1).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
-            ?: BuildConfig.OPENROUTER_API_KEY_V2.trim()
-
-    internal val groqPrimaryApiKey: String
-        get() = groqPrimaryApiKeyOverride?.trim()
-            ?: userPreferencesRepository.getApiKeys(ModelProviders.GROQ).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
-            ?: BuildConfig.GROQ_API_KEY.trim()
-
-    internal val groqFallbackApiKey: String
-        get() = groqFallbackApiKeyOverride?.trim()
-            ?: userPreferencesRepository.getApiKeys(ModelProviders.GROQ).drop(1).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
-            ?: BuildConfig.GROQ_API_KEY_V2.trim()
-
-    internal val nvidiaApiKey: String
-        get() = nvidiaApiKeyOverride?.trim()
-            ?: userPreferencesRepository.getApiKeys(ModelProviders.NVIDIA).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
-            ?: BuildConfig.NVIDIA_API_KEY.trim()
-
-    internal val qwenApiKey: String
-        get() = qwenApiKeyOverride?.trim()
-            ?: userPreferencesRepository.getApiKeys(ModelProviders.QWEN).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
-            ?: BuildConfig.QWEN_API_KEY.trim()
-
-    internal val geminiApiKey: String
-        get() = geminiApiKeyOverride?.trim()
-            ?: userPreferencesRepository.getApiKeys(ModelProviders.GEMINI).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
-            ?: BuildConfig.GEMINI_API_KEY.trim()
-
-    internal val geminiApiKey2: String
-        get() = geminiApiKey2Override?.trim()
-            ?: userPreferencesRepository.getApiKeys(ModelProviders.GEMINI).drop(1).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
-            ?: BuildConfig.GEMINI_API_KEY_2.trim()
-
-    internal val naraApiKey: String
-        get() = naraApiKeyOverride?.trim()
-            ?: userPreferencesRepository.getApiKeys(ModelProviders.NARA).firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
-            ?: (runCatching {
-                BuildConfig::class.java.getField("NARA_API_KEY").get(null) as? String
-            }.getOrNull()?.trim() ?: "")
-
-    override fun hasConfiguredKeys(provider: String): Boolean {
-        val norm = ModelProviders.normalize(provider)
-        if (userPreferencesRepository.hasConfiguredKeys(norm)) return true
-        return when (norm) {
-            ModelProviders.QWEN -> qwenApiKey.isNotBlank()
-            ModelProviders.NVIDIA -> nvidiaApiKey.isNotBlank()
-            ModelProviders.GROQ -> groqPrimaryApiKey.isNotBlank() || groqFallbackApiKey.isNotBlank()
-            ModelProviders.GEMINI -> geminiApiKey.isNotBlank() || geminiApiKey2.isNotBlank()
-            ModelProviders.OPENROUTER -> primaryApiKey.isNotBlank() || fallbackApiKey.isNotBlank()
-            ModelProviders.NARA -> naraApiKey.isNotBlank()
-            else -> false
-        }
-    }
 
     companion object {
         private const val TAG = PersonaLogTags.LLM
 
         const val MODEL_TIMEOUT_MS = 10_000L
         const val VISION_MODEL_TIMEOUT_MS = 25_000L
-        const val QWEN_TTFT_TIMEOUT_MS = 5_000L
-        const val QWEN_STREAM_TIMEOUT_MS = 25_000L
         private const val ABSOLUTE_FAILOVER_CEILING = 8000
 
         const val HITL_FALLBACK_JSON =
@@ -220,26 +68,6 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val CANONICAL_HITL_MESSAGE = PromptContextBuilder.CANONICAL_HITL_MESSAGE
 
         val VISION_META_MODELS = MetaModelApiClient.META_VISION_MODELS
-        val VISION_QWEN_MODELS = QwenCloudClient.VISION_QWEN_MODELS
-        val VISION_GROQ_MODELS = GroqClient.VISION_GROQ_MODELS
-        val VISION_GEMINI_MODELS = GeminiClient.VISION_GEMINI_MODELS
-        val VISION_NVIDIA_MODELS = NvidiaNimClient.VISION_NVIDIA_MODELS
-        val VISION_OPENROUTER_MODELS = OpenRouterClient.VISION_OPENROUTER_MODELS
-
-        /**
-         * MANDATORY ARCHITECTURAL OVERRIDE:
-         * Strictly FORBIDDEN to reduce experimental Qwen models!
-         * All 10 default Qwen models MUST remain.
-         */
-        val QWEN_TEXT_MODELS = QwenCloudClient.QWEN_TEXT_MODELS
-        val GEMINI_TEXT_MODELS = GeminiClient.GEMINI_TEXT_MODELS
-        val NVIDIA_TEXT_MODELS = NvidiaNimClient.NVIDIA_TEXT_MODELS
-        val GROQ_MODELS = GroqClient.GROQ_MODELS
-        val NARA_TEXT_MODELS = NaraRouterClient.NARA_TEXT_MODELS
-        val OPENROUTER_FAILOVER_MODELS = OpenRouterClient.OPENROUTER_FAILOVER_MODELS
-        val FAILOVER_MODELS = OPENROUTER_FAILOVER_MODELS
-        val REASONING_MODELS = OpenRouterClient.REASONING_MODELS
-
         val SYSTEM_PROMPT_FIRST_PASS = PromptContextBuilder.SYSTEM_PROMPT_FIRST_PASS
         val SYSTEM_PROMPT_FINAL_PASS = PromptContextBuilder.SYSTEM_PROMPT_FINAL_PASS
 
@@ -305,14 +133,14 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             customMediaFallbackMessage: String? = null
         ): List<ChatHistoryEntity> = PromptContextBuilder.filterAndPairChatHistory(chatHistory, nowMs, customMediaFallbackMessage)
 
-        internal fun buildOpenRouterMessages(
+        internal fun buildChatMessages(
             systemPrompt: String,
             chatHistory: List<ChatHistoryEntity>,
             currentInboundText: String,
             nowMs: Long = System.currentTimeMillis(),
             imageUrl: String? = null,
             customMediaFallbackMessage: String? = null
-        ): List<ChatMessage> = PromptContextBuilder.buildOpenRouterMessages(systemPrompt, chatHistory, currentInboundText, nowMs, imageUrl, customMediaFallbackMessage)
+        ): List<ChatMessage> = PromptContextBuilder.buildChatMessages(systemPrompt, chatHistory, currentInboundText, nowMs, imageUrl, customMediaFallbackMessage)
 
         internal fun formatRelativeTime(
             timestampMs: Long,
@@ -351,122 +179,6 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val activeFromManager = circuitBreaker.getActiveKeys(providerId)
         val combined = (explicitOverrides + activeFromManager).map { it.trim() }.filter { it.isNotBlank() }.distinct()
         return combined
-    }
-
-    /**
-     * Returns the user-configured models for [provider] that have [capability] set.
-     * Falls back to the hardcoded constant list if the user hasn't stored any configs yet,
-     * or if no user-configured models carry the requested capability.
-     */
-    private suspend fun getDynamicModels(
-        provider: String,
-        capability: ModelCapability,
-        hardcodedFallback: List<String>
-    ): List<String> {
-        val norm = ModelProviders.normalize(provider)
-        val configs = runCatching {
-            userPreferencesRepository.getProviderModelConfigsSync(norm)
-        }.getOrElse { emptyList() }
-        val userDefined = configs.filter { capability in it.capabilities }.map { it.modelId }
-        return userDefined.ifEmpty { hardcodedFallback }
-    }
-
-    internal suspend fun callQwenCloud(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int,
-        apiKey: String? = null
-    ): CallResult {
-        val key = apiKey?.trim()?.takeIf { it.isNotBlank() }
-            ?: qwenApiKey.ifBlank { userPreferencesRepository.getQwenApiKeySync() }.trim()
-        if (key.isBlank()) {
-            PersonaLogger.w(TAG, "callQwenCloud aborted: No API key configured")
-            return CallResult.AuthOrQuotaError(401)
-        }
-        return qwenClient.call(model, messages, maxTokens, key)
-    }
-
-    internal suspend fun callNvidiaNim(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int,
-        apiKey: String? = null
-    ): CallResult {
-        val key = apiKey?.trim()?.takeIf { it.isNotBlank() }
-            ?: nvidiaApiKey.ifBlank { userPreferencesRepository.getNvidiaApiKeySync() }.trim()
-        if (key.isBlank()) {
-            PersonaLogger.w(TAG, "callNvidiaNim aborted: No API key configured")
-            return CallResult.AuthOrQuotaError(401)
-        }
-        return nvidiaClient.call(model, messages, maxTokens, key)
-    }
-
-    internal suspend fun callGroq(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int,
-        apiKey: String? = null
-    ): CallResult {
-        if (apiKey != null && apiKey.isNotBlank()) {
-            return groqClient.executeSingleCall(model, messages, maxTokens, apiKey.trim())
-        }
-        val primary = groqPrimaryApiKey.trim()
-        val fallback = groqFallbackApiKey.trim()
-        if (primary.isBlank() && fallback.isBlank()) {
-            PersonaLogger.w(TAG, "callGroq aborted: No API key configured")
-            return CallResult.AuthOrQuotaError(401)
-        }
-        return groqClient.call(model, messages, maxTokens, primary, fallback)
-    }
-
-    internal suspend fun callGemini(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int,
-        apiKey: String? = null
-    ): CallResult {
-        if (apiKey != null && apiKey.isNotBlank()) {
-            return geminiClient.executeSingleCall(model, messages, maxTokens, apiKey.trim())
-        }
-        val primary = geminiApiKey.trim()
-        val secondary = geminiApiKey2.trim()
-        if (primary.isBlank() && secondary.isBlank()) {
-            PersonaLogger.w(TAG, "callGemini aborted: No API key configured")
-            return CallResult.AuthOrQuotaError(401)
-        }
-        return geminiClient.call(model, messages, maxTokens, primary, secondary)
-    }
-
-    internal suspend fun callOpenRouter(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int,
-        apiKey: String? = null
-    ): CallResult {
-        if (apiKey != null && apiKey.isNotBlank()) {
-            return openRouterClient.executeSingleCall(model, messages, maxTokens, apiKey.trim())
-        }
-        val primary = primaryApiKey.trim()
-        val fallback = fallbackApiKey.trim()
-        if (primary.isBlank() && fallback.isBlank()) {
-            PersonaLogger.w(TAG, "callOpenRouter aborted: No API key configured")
-            return CallResult.AuthOrQuotaError(401)
-        }
-        return openRouterClient.call(model, messages, maxTokens, primary, fallback)
-    }
-
-    internal suspend fun callNaraRouter(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int,
-        apiKey: String? = null
-    ): CallResult {
-        val key = apiKey?.trim()?.takeIf { it.isNotBlank() } ?: naraApiKey.trim()
-        if (key.isBlank()) {
-            PersonaLogger.w(TAG, "callNaraRouter aborted: No API key configured")
-            return CallResult.AuthOrQuotaError(401)
-        }
-        return naraRouterClient.call(model, messages, maxTokens, key)
     }
 
     override suspend fun generateReply(
@@ -523,75 +235,38 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             userPreferencesRepository.getStoreNameSync()
         }
 
+        // Unified Single-Stage Reasoning: Directly provide retrieved knowledge chunks and context to Muse Spark 1.3
         val systemPromptWithContext = if (accountMode == AccountMode.PERSONAL) {
-            when (inboundIntent) {
-                InboundIntent.GREETING, InboundIntent.BANTER -> {
-                    Log.d(TAG, "⚡ Routing to Personal small talk (intent=$inboundIntent, bypassing RAG)")
-                    PromptContextBuilder.buildPersonalFirstPassSystemPrompt(
-                        assistantName = botName,
-                        ownerName = storeName,
-                        tone = tone
-                    )
-                }
-                else -> {
-                    val baseSystemPrompt = PromptContextBuilder.buildPersonalFirstPassSystemPrompt(
-                        assistantName = botName,
-                        ownerName = storeName,
-                        tone = tone
-                    )
-                    PromptContextBuilder.buildPersonalSystemPromptWithContext(
-                        staticSystemPrompt = baseSystemPrompt,
-                        candidates = candidates
-                    )
-                }
-            }
+            val baseSystemPrompt = PromptContextBuilder.buildPersonalFirstPassSystemPrompt(
+                assistantName = botName,
+                ownerName = storeName,
+                tone = tone,
+                isMultimodal = false
+            )
+            PromptContextBuilder.buildPersonalSystemPromptWithContext(
+                staticSystemPrompt = baseSystemPrompt,
+                candidates = candidates
+            )
         } else {
-            when (inboundIntent) {
-                InboundIntent.GREETING, InboundIntent.BANTER -> {
-                    Log.d(TAG, "⚡ Routing to buildMicroBanterPrompt (intent=$inboundIntent, bypassing RAG)")
-                    PromptContextBuilder.buildMicroBanterPrompt(
-                        botName = botName,
-                        storeName = storeName,
-                        tone = tone,
-                        storeTopics = storeTopics
-                    )
-                }
-                InboundIntent.ORDER_STATUS -> {
-                    Log.d(TAG, "⚡ Routing to buildMicroOrderStatusPrompt (intent=$inboundIntent)")
-                    val orderContext = PromptContextBuilder.formatCustomerOrderState(
-                        activeOrders = activeOrders,
-                        lastOrder = lastOrder,
-                        statusCounts = orderStatusCounts
-                    )
-                    PromptContextBuilder.buildMicroOrderStatusPrompt(
-                        botName = botName,
-                        storeName = storeName,
-                        tone = tone,
-                        orderStateContext = orderContext
-                    )
-                }
-                InboundIntent.CATALOG_INQUIRY -> {
-                    val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
-                        botName = botName,
-                        storeName = storeName,
-                        tone = tone,
-                        isMultimodal = false
-                    )
-                    PromptContextBuilder.buildSystemPromptWithContext(
-                        staticSystemPrompt = baseSystemPrompt,
-                        candidates = candidates,
-                        activeOrders = activeOrders,
-                        storeTopics = storeTopics,
-                        storeWebsite = storeWebsite,
-                        lastOrder = lastOrder,
-                        statusCounts = orderStatusCounts
-                    )
-                }
-            }
+            val baseSystemPrompt = PromptContextBuilder.buildFirstPassSystemPrompt(
+                botName = botName,
+                storeName = storeName,
+                tone = tone,
+                isMultimodal = false
+            )
+            PromptContextBuilder.buildSystemPromptWithContext(
+                staticSystemPrompt = baseSystemPrompt,
+                candidates = candidates,
+                activeOrders = activeOrders,
+                storeTopics = storeTopics,
+                storeWebsite = storeWebsite,
+                lastOrder = lastOrder,
+                statusCounts = orderStatusCounts
+            )
         }
 
         val customMediaFallback = runCatching { userPreferencesRepository.getMediaFallbackMessageSync() }.getOrNull()
-        val messages = PromptContextBuilder.buildOpenRouterMessages(
+        val messages = PromptContextBuilder.buildChatMessages(
             systemPrompt = systemPromptWithContext,
             chatHistory = chatHistory,
             currentInboundText = notification.originalText,
@@ -649,7 +324,7 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
             )
         }
         val customMediaFallback = runCatching { userPreferencesRepository.getMediaFallbackMessageSync() }.getOrNull()
-        val messages = PromptContextBuilder.buildOpenRouterMessages(
+        val messages = PromptContextBuilder.buildChatMessages(
             systemPrompt = systemPromptWithContext,
             chatHistory = chatHistory,
             currentInboundText = queryText,
@@ -665,399 +340,67 @@ class ReplyGenerationRepositoryImpl @Inject constructor(
         val effectiveTokens = if (hasImage) maxTokens else maxOf(maxTokens, 1500)
         val targetMaxTokens = minOf(effectiveTokens, ABSOLUTE_FAILOVER_CEILING)
 
-        if (hasImage) {
-            PersonaLogger.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade...")
-            Log.i(TAG, "📸 Multimodal Vision request detected. Dispatching to Vision cascade...")
+        val metaKeys = getEffectiveKeys(
+            ProviderCircuitBreakerAndKeyManager.PROVIDER_META,
+            listOfNotNull(metaApiKey.takeIf { it.isNotBlank() })
+        ).ifEmpty {
+            val configKeys = userPreferencesRepository.getApiKeys(ModelProviders.META)
+                .map { it.trim() }.filter { it.isNotBlank() }
+            if (configKeys.isNotEmpty()) configKeys
+            else listOfNotNull(runCatching { BuildConfig.META_API_KEY }.getOrNull()?.trim()?.takeIf { it.isNotBlank() })
+        }
 
-            // ── Vision Tier 0: Meta Model API (muse-spark-1.3-contributor Primary) ───
-            if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)) {
-                val effectiveVisionMeta = getDynamicModels(
-                    ModelProviders.META, ModelCapability.VISION, VISION_META_MODELS
-                )
-                val metaKeys = getEffectiveKeys(
-                    ProviderCircuitBreakerAndKeyManager.PROVIDER_META,
-                    listOfNotNull(metaApiKey.takeIf { it.isNotBlank() })
-                )
-                if (metaKeys.isNotEmpty() && metaModelApiClient != null) {
-                    val metaStartTime = System.currentTimeMillis()
-                    for (key in metaKeys) {
-                        for (model in effectiveVisionMeta) {
-                            val modelMaxTokens = if (model.contains("muse-spark") || model.contains("reasoning")) maxOf(targetMaxTokens, 2000) else maxOf(targetMaxTokens, 1500)
-                            when (val result = metaModelApiClient.executeSingleCall(model, messages, modelMaxTokens, key)) {
-                                is CallResult.Success -> {
-                                    circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)
-                                    val durationMs = System.currentTimeMillis() - metaStartTime
-                                    PersonaLogger.i(TAG, "Vision Tier 0 (Meta) succeeded with $model in ${durationMs}ms!")
-                                    recordSuccessTelemetry("Meta", model, durationMs, result, messages)
-                                    return result.content
-                                }
-                                is CallResult.AuthOrQuotaError -> {
-                                    circuitBreaker.evictKey(ProviderCircuitBreakerAndKeyManager.PROVIDER_META, key, "Auth/quota error: ${result.code}")
-                                    break
-                                }
-                                is CallResult.Timeout -> {
-                                    circuitBreaker.recordTimeout(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)
-                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)) break
-                                }
-                                is CallResult.ServerError -> {
-                                    circuitBreaker.recordFailure(ProviderCircuitBreakerAndKeyManager.PROVIDER_META, isServerError = true)
-                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)) break
-                                }
-                                else -> {}
-                            }
-                        }
-                        if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)) break
-                    }
-                }
-            }
-
-            // ── Vision Tier 1: QwenCloud Multimodal Vision (Secondary) ───
-            if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN)) {
-                val effectiveVisionQwen = getDynamicModels(
-                    ModelProviders.QWEN, ModelCapability.VISION, VISION_QWEN_MODELS
-                )
-                val qwenKeys = getEffectiveKeys(
-                    ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN,
-                    listOfNotNull(qwenApiKey.ifBlank { userPreferencesRepository.getQwenApiKeySync() }.takeIf { it.isNotBlank() })
-                )
-                if (qwenKeys.isNotEmpty()) {
-                    val qwenStartTime = System.currentTimeMillis()
-                    for (key in qwenKeys) {
-                        for (model in effectiveVisionQwen) {
-                            when (val result = qwenClient.executeSingleCall(model, messages, targetMaxTokens, key)) {
-                                is CallResult.Success -> {
-                                    circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN)
-                                    val durationMs = System.currentTimeMillis() - qwenStartTime
-                                    PersonaLogger.i(TAG, "Vision Tier 1 (Qwen) succeeded with $model in ${durationMs}ms!")
-                                    recordSuccessTelemetry("Qwen", model, durationMs, result, messages)
-                                    return result.content
-                                }
-                                is CallResult.AuthOrQuotaError -> {
-                                    circuitBreaker.evictKey(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN, key, "Auth/quota error: ${result.code}")
-                                    break
-                                }
-                                is CallResult.Timeout -> {
-                                    circuitBreaker.recordTimeout(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN)
-                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN)) break
-                                }
-                                is CallResult.ServerError -> {
-                                    circuitBreaker.recordFailure(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN, isServerError = true)
-                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN)) break
-                                }
-                                else -> {}
-                            }
-                        }
-                        if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN)) break
-                    }
-                }
-            }
-
-            // ── Vision Tier 2: Groq Cloud (Secondary) ───────────────────
-            if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ)) {
-                val effectiveVisionGroq = getDynamicModels(
-                    ModelProviders.GROQ, ModelCapability.VISION, VISION_GROQ_MODELS
-                )
-                val groqKeys = getEffectiveKeys(
-                    ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ,
-                    listOfNotNull(groqPrimaryApiKey.takeIf { it.isNotBlank() }, groqFallbackApiKey.takeIf { it.isNotBlank() })
-                )
-                if (groqKeys.isNotEmpty()) {
-                    val groqStartTime = System.currentTimeMillis()
-                    for (key in groqKeys) {
-                        for (model in effectiveVisionGroq) {
-                            when (val result = groqClient.executeSingleCall(model, messages, targetMaxTokens, key)) {
-                                is CallResult.Success -> {
-                                    circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ)
-                                    val durationMs = System.currentTimeMillis() - groqStartTime
-                                    PersonaLogger.i(TAG, "Vision Tier 2 (Groq) succeeded with $model in ${durationMs}ms!")
-                                    recordSuccessTelemetry("Groq", model, durationMs, result, messages)
-                                    return result.content
-                                }
-                                is CallResult.AuthOrQuotaError -> {
-                                    circuitBreaker.evictKey(ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ, key, "Auth/quota error: ${result.code}")
-                                    break
-                                }
-                                is CallResult.Timeout -> {
-                                    circuitBreaker.recordTimeout(ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ)
-                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ)) break
-                                }
-                                is CallResult.ServerError -> {
-                                    circuitBreaker.recordFailure(ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ, isServerError = true)
-                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ)) break
-                                }
-                                else -> {}
-                            }
-                        }
-                        if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ)) break
-                    }
-                }
-            }
-
-            // ── Vision Tier 2.5: Gemini ──────────────────────────────────
-            if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI)) {
-                val effectiveVisionGemini = getDynamicModels(
-                    ModelProviders.GEMINI, ModelCapability.VISION, VISION_GEMINI_MODELS
-                )
-                val geminiKeys = getEffectiveKeys(
-                    ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI,
-                    listOfNotNull(geminiApiKey.takeIf { it.isNotBlank() }, geminiApiKey2.takeIf { it.isNotBlank() && it != "gemini_placeholder_key_2" })
-                )
-                if (geminiKeys.isNotEmpty()) {
-                    val geminiStartTime = System.currentTimeMillis()
-                    for (key in geminiKeys) {
-                        for (model in effectiveVisionGemini) {
-                            when (val result = geminiClient.executeSingleCall(model, messages, targetMaxTokens, key)) {
-                                is CallResult.Success -> {
-                                    circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI)
-                                    val durationMs = System.currentTimeMillis() - geminiStartTime
-                                    PersonaLogger.i(TAG, "Vision Tier 2.5 (Gemini) succeeded with $model in ${durationMs}ms!")
-                                    recordSuccessTelemetry("Gemini", model, durationMs, result, messages)
-                                    return result.content
-                                }
-                                is CallResult.AuthOrQuotaError -> {
-                                    circuitBreaker.evictKey(ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI, key, "Auth/quota error: ${result.code}")
-                                    break
-                                }
-                                is CallResult.Timeout -> {
-                                    circuitBreaker.recordTimeout(ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI)
-                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI)) break
-                                }
-                                is CallResult.ServerError -> {
-                                    circuitBreaker.recordFailure(ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI, isServerError = true)
-                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI)) break
-                                }
-                                else -> {}
-                            }
-                        }
-                        if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI)) break
-                    }
-                }
-            }
-
-            // ── Vision Tier 3: NVIDIA NIM ──────────────────────────
-            if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA)) {
-                val effectiveVisionNvidia = getDynamicModels(
-                    ModelProviders.NVIDIA, ModelCapability.VISION, VISION_NVIDIA_MODELS
-                )
-                val nvidiaKeys = getEffectiveKeys(
-                    ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA,
-                    listOfNotNull(nvidiaApiKey.ifBlank { userPreferencesRepository.getNvidiaApiKeySync() }.takeIf { it.isNotBlank() })
-                )
-                if (nvidiaKeys.isNotEmpty()) {
-                    val nvidiaStartTime = System.currentTimeMillis()
-                    for (key in nvidiaKeys) {
-                        for (model in effectiveVisionNvidia) {
-                            when (val result = nvidiaClient.executeSingleCall(model, messages, targetMaxTokens, key)) {
-                                is CallResult.Success -> {
-                                    circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA)
-                                    val durationMs = System.currentTimeMillis() - nvidiaStartTime
-                                    PersonaLogger.i(TAG, "Vision Tier 3 (NVIDIA NIM) succeeded with $model in ${durationMs}ms!")
-                                    recordSuccessTelemetry("NVIDIA", model, durationMs, result, messages)
-                                    return result.content
-                                }
-                                is CallResult.AuthOrQuotaError -> {
-                                    circuitBreaker.evictKey(ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA, key, "Auth/quota error: ${result.code}")
-                                    break
-                                }
-                                is CallResult.Timeout -> {
-                                    circuitBreaker.recordTimeout(ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA)
-                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA)) break
-                                }
-                                is CallResult.ServerError -> {
-                                    circuitBreaker.recordFailure(ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA, isServerError = true)
-                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA)) break
-                                }
-                                else -> {}
-                            }
-                        }
-                        if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA)) break
-                    }
-                }
-            }
-
-            // ── Vision Tier 4: OpenRouter Fallback ──────────────────
-            if (circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER)) {
-                val effectiveVisionOpenRouter = getDynamicModels(
-                    ModelProviders.OPENROUTER, ModelCapability.VISION, VISION_OPENROUTER_MODELS
-                )
-                val openRouterKeys = getEffectiveKeys(
-                    ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER,
-                    listOfNotNull(primaryApiKey.takeIf { it.isNotBlank() }, fallbackApiKey.takeIf { it.isNotBlank() })
-                )
-                if (openRouterKeys.isNotEmpty()) {
-                    for (key in openRouterKeys) {
-                        for (model in effectiveVisionOpenRouter) {
-                            when (val result = openRouterClient.executeSingleCall(model, messages, targetMaxTokens, key)) {
-                                is CallResult.Success -> {
-                                    circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER)
-                                    PersonaLogger.i(TAG, "Vision Tier 4 (OpenRouter) succeeded with $model")
-                                    recordSuccessTelemetry("OpenRouter", model, 0L, result, messages)
-                                    return result.content
-                                }
-                                is CallResult.AuthOrQuotaError -> {
-                                    circuitBreaker.evictKey(ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER, key, "Auth/quota error: ${result.code}")
-                                    break
-                                }
-                                is CallResult.Timeout -> {
-                                    circuitBreaker.recordTimeout(ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER)
-                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER)) break
-                                }
-                                is CallResult.ServerError -> {
-                                    circuitBreaker.recordFailure(ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER, isServerError = true)
-                                    if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER)) break
-                                }
-                                else -> {}
-                            }
-                        }
-                        if (!circuitBreaker.isProviderHealthy(ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER)) break
-                    }
-                }
-            }
-
-            // Fallback to text chain if visual description is available
-            val hasVisualDescription = messages.any { it.content.contains("[وصف الصورة المرفقة من العميل]:") }
-            if (hasVisualDescription) {
-                PersonaLogger.w(TAG, "Dedicated Vision models exhausted. Falling back to text model chain using visual_product_description...")
-                Log.w(TAG, "Dedicated Vision models exhausted. Falling back to text model chain using visual_product_description...")
-                val strippedMessages = messages.map { it.copy(imageUrl = null) }
-                return executeFailoverChain(strippedMessages, maxTokens)
-            }
-
-            Log.w(TAG, "All Vision models failed across tiers. Returning HITL fallback JSON.")
-            PersonaLogger.d(TAG, "All Vision models failed — HITL fallback")
+        if (metaKeys.isEmpty()) {
+            PersonaLogger.w(TAG, "No Meta API key configured across secure storage and BuildConfig")
             return HITL_FALLBACK_JSON
         }
 
-        // ── Pure Text / Transcribed Voice Request (Dynamic Cascade with Circuit Breaker) ──
-        val cascadeOrder = circuitBreaker.getProviderCascadeOrder()
+        val modelsToTry = listOf(
+            MetaModelApiClient.MODEL_MUSE_SPARK_1_3_CONTRIBUTOR,
+            MetaModelApiClient.MODEL_MUSE_SPARK_1_3,
+            MetaModelApiClient.MODEL_MUSE_SPARK_1_2_CONTRIBUTOR,
+            MetaModelApiClient.MODEL_MUSE_SPARK_1_2
+        )
 
-                for (providerId in cascadeOrder) {
-                        if (!circuitBreaker.isProviderHealthy(providerId)) {
-                PersonaLogger.i(TAG, "⚡ [$providerId] circuit breaker is OPEN (cooldown 5m). Bypassing in 0ms.")
-                Log.i(TAG, "⚡ [$providerId] circuit breaker is OPEN (cooldown 5m). Bypassing in 0ms.")
-                continue
-            }
-
-            val keys = when (providerId) {
-                ProviderCircuitBreakerAndKeyManager.PROVIDER_META -> getEffectiveKeys(
-                    providerId,
-                    metaApiKeyOverride?.takeIf { it.isNotBlank() }?.let { listOf(it) }
-                        ?: userPreferencesRepository.getApiKeys(ModelProviders.META)
-                            .map { it.trim() }
-                            .filter { it.isNotBlank() }
-                            .ifEmpty {
-                                listOfNotNull(runCatching { BuildConfig.META_API_KEY }.getOrNull()?.trim()?.takeIf { it.isNotBlank() })
-                            }
-                )
-                ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN -> getEffectiveKeys(
-                    providerId,
-                    listOfNotNull(qwenApiKey.ifBlank { userPreferencesRepository.getQwenApiKeySync() }.takeIf { it.isNotBlank() })
-                )
-                ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI -> getEffectiveKeys(
-                    providerId,
-                    listOfNotNull(geminiApiKey.takeIf { it.isNotBlank() }, geminiApiKey2.takeIf { it.isNotBlank() && it != "gemini_placeholder_key_2" })
-                )
-                ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA -> getEffectiveKeys(
-                    providerId,
-                    listOfNotNull(nvidiaApiKey.ifBlank { userPreferencesRepository.getNvidiaApiKeySync() }.takeIf { it.isNotBlank() })
-                )
-                ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ -> getEffectiveKeys(
-                    providerId,
-                    listOfNotNull(groqPrimaryApiKey.takeIf { it.isNotBlank() }, groqFallbackApiKey.takeIf { it.isNotBlank() })
-                )
-                ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER -> getEffectiveKeys(
-                    providerId,
-                    listOfNotNull(primaryApiKey.takeIf { it.isNotBlank() }, fallbackApiKey.takeIf { it.isNotBlank() })
-                )
-                ProviderCircuitBreakerAndKeyManager.PROVIDER_NARA -> getEffectiveKeys(
-                    providerId,
-                    listOfNotNull(naraApiKey.takeIf { it.isNotBlank() })
-                )
-                else -> circuitBreaker.getActiveKeys(providerId)
-            }
-
-            if (keys.isEmpty()) {
-                continue
-            }
-
-            val models = circuitBreaker.getModelList(providerId)
-            val startTime = System.currentTimeMillis()
-
-            for (key in keys) {
-                for (model in models) {
-                    val result = when (providerId) {
-                        ProviderCircuitBreakerAndKeyManager.PROVIDER_META -> {
-                            val modelMaxTokens = if (model.contains("muse-spark") || model.contains("reasoning")) maxOf(targetMaxTokens, 2000) else maxOf(targetMaxTokens, 1500)
-                            metaModelApiClient?.executeSingleCall(model, messages, modelMaxTokens, key) ?: CallResult.Failed
-                        }
-                        ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN -> qwenClient.executeSingleCall(model, messages, targetMaxTokens, key)
-                        ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI -> geminiClient.executeSingleCall(model, messages, targetMaxTokens, key)
-                        ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA -> nvidiaClient.executeSingleCall(model, messages, targetMaxTokens, key)
-                        ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ -> groqClient.executeSingleCall(model, messages, targetMaxTokens, key)
-                        ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER -> openRouterClient.executeSingleCall(model, messages, targetMaxTokens, key)
-                        ProviderCircuitBreakerAndKeyManager.PROVIDER_NARA -> naraRouterClient.call(model, messages, targetMaxTokens, key)
-                        else -> CallResult.Failed
+        val startTime = System.currentTimeMillis()
+        for (key in metaKeys) {
+            for (model in modelsToTry) {
+                val modelMaxTokens = if (model.contains("muse-spark") || model.contains("reasoning")) maxOf(targetMaxTokens, 2000) else maxOf(targetMaxTokens, 1500)
+                PersonaLogger.i(TAG, "Attempting Meta inference with model $model")
+                when (val result = metaModelApiClient.executeSingleCall(model, messages, modelMaxTokens, key)) {
+                    is CallResult.Success -> {
+                        circuitBreaker.recordSuccess(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)
+                        val durationMs = System.currentTimeMillis() - startTime
+                        val logMsg = "✨ Meta model $model succeeded in ${durationMs}ms (actual=${result.actualModel})"
+                        PersonaLogger.i(TAG, logMsg)
+                        Log.i(TAG, logMsg)
+                        recordSuccessTelemetry("Meta", model, durationMs, result, messages)
+                        return result.content
                     }
-                    
-
-                    when (result) {
-                        is CallResult.Success -> {
-                            circuitBreaker.recordSuccess(providerId)
-                            val durationMs = System.currentTimeMillis() - startTime
-                            PersonaLogger.i(TAG, "Tier [$providerId] succeeded with model $model in ${durationMs}ms!")
-                            Log.i(TAG, "Tier [$providerId] succeeded with model $model in ${durationMs}ms")
-                            val providerLabel = when (providerId) {
-                                ProviderCircuitBreakerAndKeyManager.PROVIDER_META -> "Meta"
-                                ProviderCircuitBreakerAndKeyManager.PROVIDER_QWEN -> "Qwen"
-                                ProviderCircuitBreakerAndKeyManager.PROVIDER_GEMINI -> "Gemini"
-                                ProviderCircuitBreakerAndKeyManager.PROVIDER_NVIDIA -> "NVIDIA"
-                                ProviderCircuitBreakerAndKeyManager.PROVIDER_GROQ -> "Groq"
-                                ProviderCircuitBreakerAndKeyManager.PROVIDER_OPENROUTER -> "OpenRouter"
-                                ProviderCircuitBreakerAndKeyManager.PROVIDER_NARA -> "Nara"
-                                else -> providerId.replaceFirstChar { it.uppercase() }
-                            }
-                            recordSuccessTelemetry(providerLabel, model, durationMs, result, messages)
-                            return result.content
-                        }
-                        is CallResult.AuthOrQuotaError -> {
-                            if (result.code == 401 || result.code == 402) {
-                                PersonaLogger.w(TAG, "Key auth error (${result.code}) on [$providerId]. Evicting key.")
-                                circuitBreaker.evictKey(providerId, key, "Auth error: ${result.code}")
-                                break // rotate to next key
-                            } else {
-                                PersonaLogger.w(TAG, "Model $model quota error (${result.code}) on [$providerId]. Cascading to next model.")
-                            }
-                        }
-                        is CallResult.Timeout -> {
-                            PersonaLogger.w(TAG, "Timeout on [$providerId] model $model.")
-                            circuitBreaker.recordTimeout(providerId)
-                            if (!circuitBreaker.isProviderHealthy(providerId)) {
-                                break // 2 timeouts tripped breaker -> 0ms cascade to next provider
-                            }
-                        }
-                        is CallResult.ServerError -> {
-                            PersonaLogger.w(TAG, "Server error (${result.code}) on [$providerId] model $model.")
-                            circuitBreaker.recordFailure(providerId, isServerError = true)
-                            if (!circuitBreaker.isProviderHealthy(providerId)) {
-                                break
-                            }
-                        }
-                        is CallResult.RateLimited -> {
-                            PersonaLogger.w(TAG, "Rate limited (429) on [$providerId] model $model. Trying next model.")
-                        }
-                        else -> {
-                            Log.w(TAG, "Model $model call failed ($result) on [$providerId].")
-                        }
+                    is CallResult.AuthOrQuotaError -> {
+                        PersonaLogger.w(TAG, "Meta auth/quota error ${result.code} for key ${maskKey(key)}")
+                        circuitBreaker.evictKey(ProviderCircuitBreakerAndKeyManager.PROVIDER_META, key, "Auth error: ${result.code}")
+                        break
                     }
-                }
-                if (!circuitBreaker.isProviderHealthy(providerId)) {
-                    break // failover immediately to next provider
+                    is CallResult.Timeout -> {
+                        PersonaLogger.w(TAG, "Timeout on Meta model $model. Cascading...")
+                        circuitBreaker.recordTimeout(ProviderCircuitBreakerAndKeyManager.PROVIDER_META)
+                    }
+                    is CallResult.ServerError -> {
+                        PersonaLogger.w(TAG, "Server error (${result.code}) on Meta model $model. Cascading...")
+                        circuitBreaker.recordFailure(ProviderCircuitBreakerAndKeyManager.PROVIDER_META, isServerError = true)
+                    }
+                    is CallResult.RateLimited -> {
+                        PersonaLogger.w(TAG, "Rate limited (429) on Meta model $model. Cascading...")
+                    }
+                    else -> {
+                        PersonaLogger.w(TAG, "Meta model $model call failed ($result). Cascading...")
+                    }
                 }
             }
         }
 
-        Log.w(TAG, "All models failed across configured cascade tiers. Returning HITL fallback JSON.")
-        PersonaLogger.d(TAG, "All models failed — HITL fallback")
+        PersonaLogger.d(TAG, "All Meta model cascades exhausted — degrading to HITL fallback")
         return HITL_FALLBACK_JSON
     }
 

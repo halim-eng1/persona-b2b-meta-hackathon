@@ -44,7 +44,7 @@ data class BusinessHoursSchedule(
 @Singleton
 class UserPreferencesRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>,
-    private val secureCredentialsRepository: SecureCredentialsRepository
+    val secureCredentialsRepository: SecureCredentialsRepository
 ) {
     /**
      * Backward-compatible constructor for unit tests or legacy callers
@@ -92,10 +92,6 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_HITL_HOLDING_MESSAGE = stringPreferencesKey("hitl_holding_message")
         val KEY_MEDIA_FALLBACK_MESSAGE = stringPreferencesKey("media_fallback_message")
         val KEY_BLANK_REPLY_FALLBACK_TEMPLATE = stringPreferencesKey("blank_reply_fallback_template")
-
-        // ── LLM Credentials Overrides (Legacy keys migrated to SecureCredentialsRepository) ─
-        val KEY_NVIDIA_API_KEY = stringPreferencesKey("nvidia_api_key")
-        val KEY_QWEN_API_KEY = stringPreferencesKey("qwen_api_key")
 
         // ── Provider Ordering & Model Management ──────────────────────────────
         val KEY_PROVIDER_ORDER = stringPreferencesKey("provider_order")
@@ -173,15 +169,7 @@ class UserPreferencesRepository @Inject constructor(
         const val DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE = DEFAULT_BLANK_REPLY_FALLBACK_TEMPLATE_EN
 
         val DEFAULT_PROVIDER_ORDER = listOf(
-            ModelProviders.META,
-            ModelProviders.OPENROUTER,
-            ModelProviders.QWEN,
-            ModelProviders.GEMINI,
-            ModelProviders.GROQ,
-            ModelProviders.NVIDIA,
-            ModelProviders.CLOUDFLARE,
-            ModelProviders.LIQUID,
-            ModelProviders.NARA
+            ModelProviders.META
         )
 
         val DEFAULT_PROVIDER_MODELS = ModelProviders.DEFAULT_MODELS
@@ -191,46 +179,11 @@ class UserPreferencesRepository @Inject constructor(
          * during legacy migration or fresh installations.
          */
         val PRESEEDED_CAPABILITIES: Map<String, Set<ModelCapability>> = mapOf(
-            "muse-spark-1.3-contributor" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
-            "muse-spark-1.3" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
-            "muse-spark-1.2-contributor" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
-            "muse-spark-1.2" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
-            "muse-voice-transcribe-1.0" to setOf(ModelCapability.AUDIO),
-
-            "deepseek-v4.1-flash" to setOf(ModelCapability.TEXT),
-            "qwen3.8-omni-flash" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
-            "qwen-vl-max" to setOf(ModelCapability.VISION),
-            "fun-asr-flash-2026-06-15" to setOf(ModelCapability.AUDIO),
-            "qwen3.8-max" to setOf(ModelCapability.TEXT),
-            "qwen3.8-flash" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
-            "deepseek-v4-pro-0813" to setOf(ModelCapability.TEXT),
-            "qwen3.7-plus" to setOf(ModelCapability.TEXT),
-            "qwen3.7-flash" to setOf(ModelCapability.TEXT),
-            "qwen3.6-flash" to setOf(ModelCapability.TEXT),
-            "qwen3.5-flash" to setOf(ModelCapability.TEXT),
-            "qwen3-coder-flash" to setOf(ModelCapability.TEXT),
-            "qwen3.6-27b" to setOf(ModelCapability.TEXT),
-
-            "gemini-3.8-flash" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
-            "gemini-3.5-flash-lite" to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.AUDIO),
-            "gemini-3.1-flash-lite" to setOf(ModelCapability.TEXT),
-
-            "llama-3.3-70b-versatile" to setOf(ModelCapability.TEXT),
-            "whisper-large-v3" to setOf(ModelCapability.AUDIO),
-            "llama-3.2-11b-vision-preview" to setOf(ModelCapability.VISION),
-
-            "@cf/cloudflare/clef-flash" to setOf(ModelCapability.DECISION),
-            "@cf/cloudflare/clef-omni" to setOf(ModelCapability.DECISION),
-            "cloudflare/clef-flash" to setOf(ModelCapability.DECISION),
-            "d1:latest" to setOf(ModelCapability.DECISION),
-            "d1" to setOf(ModelCapability.DECISION),
-            "liquid/d1.1" to setOf(ModelCapability.DECISION),
-            "nvidia/nemotron-3.5-super-vl:free" to setOf(ModelCapability.TEXT, ModelCapability.VISION),
-            "nvidia/nemotron-3-ultra-550b-a55b:free" to setOf(ModelCapability.TEXT),
-            "liquid/lfm-2.5-2.6b:free" to setOf(ModelCapability.TEXT),
-            "openrouter/free" to setOf(ModelCapability.TEXT),
-            "z-ai/glm-5.3-flash" to setOf(ModelCapability.TEXT),
-            "openai/whisper-large-v3" to setOf(ModelCapability.AUDIO)
+            "muse-spark-1.3-contributor" to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.DECISION),
+            "muse-spark-1.3" to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.DECISION),
+            "muse-spark-1.2-contributor" to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.DECISION),
+            "muse-spark-1.2" to setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.DECISION),
+            "muse-voice-transcribe-1.0" to setOf(ModelCapability.AUDIO)
         )
 
         /**
@@ -239,23 +192,11 @@ class UserPreferencesRepository @Inject constructor(
          */
         val REQUIRED_MODELS_BACKFILL: Map<String, List<ModelConfig>> = mapOf(
             ModelProviders.META to listOf(
-                ModelConfig("muse-spark-1.3-contributor", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
-                ModelConfig("muse-spark-1.3", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
-                ModelConfig("muse-spark-1.2-contributor", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
-                ModelConfig("muse-spark-1.2", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
+                ModelConfig("muse-spark-1.3-contributor", setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.DECISION)),
+                ModelConfig("muse-spark-1.3", setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.DECISION)),
+                ModelConfig("muse-spark-1.2-contributor", setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.DECISION)),
+                ModelConfig("muse-spark-1.2", setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.DECISION)),
                 ModelConfig("muse-voice-transcribe-1.0", setOf(ModelCapability.AUDIO))
-            ),
-            ModelProviders.QWEN to listOf(
-                ModelConfig("qwen3.8-omni-flash", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
-                ModelConfig("qwen-vl-max", setOf(ModelCapability.VISION)),
-                ModelConfig("fun-asr-flash-2026-06-15", setOf(ModelCapability.AUDIO))
-            ),
-            ModelProviders.OPENROUTER to listOf(
-                ModelConfig("nvidia/nemotron-3.5-super-vl:free", setOf(ModelCapability.TEXT, ModelCapability.VISION)),
-                ModelConfig("liquid/d1.1", setOf(ModelCapability.DECISION)),
-                ModelConfig("cloudflare/clef-flash", setOf(ModelCapability.DECISION)),
-                ModelConfig("openai/whisper-large-v3", setOf(ModelCapability.AUDIO)),
-                ModelConfig("z-ai/glm-5.3-flash", setOf(ModelCapability.TEXT))
             )
         )
     }
@@ -270,7 +211,7 @@ class UserPreferencesRepository @Inject constructor(
     private var cachedModelPrepared: Boolean? = null
 
     val isModelPreparedFlow: Flow<Boolean> = dataStore.data.map { prefs ->
-        val prepared = prefs[KEY_MODEL_PREPARED] ?: false
+        val prepared = prefs[KEY_MODEL_PREPARED] ?: true
         cachedModelPrepared = prepared
         prepared
     }
@@ -405,20 +346,7 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
-    val nvidiaApiKeyFlow: Flow<String?> = secureCredentialsRepository.nvidiaApiKeyFlow
-    val qwenApiKeyFlow: Flow<String?> = secureCredentialsRepository.qwenApiKeyFlow
 
-    val cloudflareAccountIdFlow: Flow<String> = secureCredentialsRepository.cloudflareAccountIdFlow.map {
-        it?.takeIf { id -> id.isNotBlank() } ?: secureCredentialsRepository.getCloudflareAccountId()
-    }
-
-    fun getCloudflareAccountId(): String = secureCredentialsRepository.getCloudflareAccountId()
-
-    suspend fun getCloudflareAccountIdSync(): String = secureCredentialsRepository.getCloudflareAccountId()
-
-    suspend fun setCloudflareAccountId(accountId: String?) {
-        secureCredentialsRepository.setCloudflareAccountId(accountId)
-    }
 
     // ── AutoStart Confirmation Persistence ─────────────────────────────────────
 
@@ -507,7 +435,7 @@ class UserPreferencesRepository @Inject constructor(
         val stored = if (raw.isNullOrBlank()) {
             DEFAULT_PROVIDER_ORDER
         } else {
-            val parsed = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+            val parsed = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() && it in ModelProviders.ALL }.distinct()
             if (!parsed.contains(ModelProviders.META)) {
                 listOf(ModelProviders.META) + parsed
             } else {
@@ -515,13 +443,13 @@ class UserPreferencesRepository @Inject constructor(
             }
         }
         val missing = DEFAULT_PROVIDER_ORDER.filterNot { stored.contains(it) }
-        stored + missing
+        (stored + missing).distinct().filter { it in ModelProviders.ALL }
     }
 
     fun getProviderOrder(): Flow<List<String>> = providerOrderFlow
 
     suspend fun setProviderOrder(order: List<String>) {
-        val sanitized = order.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+        val sanitized = order.map { it.trim().lowercase() }.filter { it.isNotEmpty() && it in ModelProviders.ALL }.distinct()
         dataStore.edit { prefs ->
             prefs[KEY_PROVIDER_ORDER] = sanitized.joinToString(",")
         }
@@ -532,7 +460,7 @@ class UserPreferencesRepository @Inject constructor(
         val stored = if (raw.isNullOrBlank()) {
             DEFAULT_PROVIDER_ORDER
         } else {
-            val parsed = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+            val parsed = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() && it in ModelProviders.ALL }.distinct()
             if (!parsed.contains(ModelProviders.META)) {
                 listOf(ModelProviders.META) + parsed
             } else {
@@ -540,7 +468,7 @@ class UserPreferencesRepository @Inject constructor(
             }
         }
         val missing = DEFAULT_PROVIDER_ORDER.filterNot { stored.contains(it) }
-        return stored + missing
+        return (stored + missing).distinct().filter { it in ModelProviders.ALL }
     }
 
     // ── Per-Capability Provider Priority Ordering ─────────────────────────────
@@ -549,10 +477,10 @@ class UserPreferencesRepository @Inject constructor(
         dataStore.data.map { prefs ->
             val raw = prefs[providerPriorityKey(capability)]
             if (raw.isNullOrBlank()) {
-                ModelProviders.DEFAULT_CAPABILITY_PROVIDERS[capability] ?: emptyList()
+                ModelProviders.DEFAULT_CAPABILITY_PROVIDERS[capability] ?: listOf(ModelProviders.META)
             } else {
-                val parsed = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
-                if (capability != ModelCapability.DECISION && !parsed.contains(ModelProviders.META)) {
+                val parsed = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() && it in ModelProviders.ALL }.distinct()
+                if (!parsed.contains(ModelProviders.META)) {
                     listOf(ModelProviders.META) + parsed
                 } else {
                     parsed
@@ -563,10 +491,10 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun getProviderPrioritySync(capability: ModelCapability): List<String> {
         val raw = dataStore.data.first()[providerPriorityKey(capability)]
         return if (raw.isNullOrBlank()) {
-            ModelProviders.DEFAULT_CAPABILITY_PROVIDERS[capability] ?: emptyList()
+            ModelProviders.DEFAULT_CAPABILITY_PROVIDERS[capability] ?: listOf(ModelProviders.META)
         } else {
-            val parsed = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
-            if (capability != ModelCapability.DECISION && !parsed.contains(ModelProviders.META)) {
+            val parsed = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() && it in ModelProviders.ALL }.distinct()
+            if (!parsed.contains(ModelProviders.META)) {
                 listOf(ModelProviders.META) + parsed
             } else {
                 parsed
@@ -614,7 +542,7 @@ class UserPreferencesRepository @Inject constructor(
 
         val baseConfigs: List<ModelConfig> = if (!newRaw.isNullOrBlank()) {
             // User has explicitly customized/saved capability-annotated models:
-            // Parse configs AS-IS, preserving custom capabilities (including any custom tags for Cloudflare/Liquid)
+            // Parse configs AS-IS, preserving custom capabilities (including any custom tags).
             newRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
                 .map { ModelConfig.parse(it) }
         } else {
@@ -626,11 +554,7 @@ class UserPreferencesRepository @Inject constructor(
                 DEFAULT_PROVIDER_MODELS[norm] ?: emptyList()
             }
             ids.map { id ->
-                val caps = if (norm == ModelProviders.CLOUDFLARE || norm == ModelProviders.LIQUID) {
-                    setOf(ModelCapability.DECISION)
-                } else {
-                    PRESEEDED_CAPABILITIES[id] ?: ModelConfig.inferCapabilities(id)
-                }
+                val caps = PRESEEDED_CAPABILITIES[id] ?: ModelConfig.inferCapabilities(id)
                 ModelConfig(modelId = id, capabilities = caps)
             }
         }
@@ -1107,39 +1031,7 @@ class UserPreferencesRepository @Inject constructor(
         }
     }
 
-    suspend fun setNvidiaApiKey(key: String?) {
-        secureCredentialsRepository.setNvidiaApiKey(key)
-        dataStore.edit { prefs ->
-            prefs.remove(KEY_NVIDIA_API_KEY)
-        }
-    }
 
-    suspend fun getNvidiaApiKeySync(): String {
-        val secureKey = secureCredentialsRepository.getNvidiaApiKey()
-        if (secureKey.isNotBlank()) return secureKey
-        val legacy = dataStore.data.first()[KEY_NVIDIA_API_KEY]?.takeIf { it.isNotBlank() } ?: ""
-        if (legacy.isNotBlank()) {
-            secureCredentialsRepository.setNvidiaApiKey(legacy)
-        }
-        return legacy
-    }
-
-    suspend fun setQwenApiKey(key: String?) {
-        secureCredentialsRepository.setQwenApiKey(key)
-        dataStore.edit { prefs ->
-            prefs.remove(KEY_QWEN_API_KEY)
-        }
-    }
-
-    suspend fun getQwenApiKeySync(): String {
-        val secureKey = secureCredentialsRepository.getQwenApiKey()
-        if (secureKey.isNotBlank()) return secureKey
-        val legacy = dataStore.data.first()[KEY_QWEN_API_KEY]?.takeIf { it.isNotBlank() } ?: ""
-        if (legacy.isNotBlank()) {
-            secureCredentialsRepository.setQwenApiKey(legacy)
-        }
-        return legacy
-    }
 
     suspend fun getBlankReplyFallbackTemplateSync(): String {
         val prefs = dataStore.data.first()
@@ -1164,13 +1056,13 @@ class UserPreferencesRepository @Inject constructor(
     }
 
     suspend fun isModelPrepared(): Boolean =
-        dataStore.data.first()[KEY_MODEL_PREPARED] ?: false
+        dataStore.data.first()[KEY_MODEL_PREPARED] ?: true
 
     fun isModelPreparedSync(): Boolean {
         cachedModelPrepared?.let { return it }
         return runCatching {
             kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                val value = dataStore.data.first()[KEY_MODEL_PREPARED] ?: false
+                val value = dataStore.data.first()[KEY_MODEL_PREPARED] ?: true
                 cachedModelPrepared = value
                 value
             }

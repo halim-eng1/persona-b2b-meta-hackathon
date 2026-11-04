@@ -5,7 +5,7 @@ package com.example.persona.features.settings.domain.repository
  * A single model may carry multiple capabilities (e.g. TEXT + VISION).
  *
  * Stored as a comma-separated set alongside the model ID in DataStore:
- *   "qwen3.8-omni-flash|TEXT,VISION"
+ *   "muse-spark-1.3|TEXT,VISION"
  * Legacy entries that have no pipe separator are treated as TEXT-only.
  */
 enum class ModelCapability(val key: String, val label: String) {
@@ -67,39 +67,32 @@ data class ModelConfig(
             val id = modelId.lowercase()
             val caps = mutableSetOf<ModelCapability>()
 
-            // Decision / Gatekeeper models (Cloudflare Clef, Liquid D1, Decision/Router classifiers)
-            if (id.contains("clef") || id == "d1" || id.startsWith("d1:") || id.contains("/d1") || id.contains("decision") || id.contains("gatekeeper")) {
+            // Meta Muse Spark models: Text, Vision, Decision
+            if (id.contains("muse-spark")) {
+                caps += ModelCapability.TEXT
+                caps += ModelCapability.VISION
                 caps += ModelCapability.DECISION
                 return caps
             }
 
-            // Audio / ASR models
-            if (id.contains("asr") || id.contains("whisper") || id.contains("funasr") ||
-                id.contains("speech") || id.contains("stt")
-            ) {
+            // Meta Muse Voice models: Audio
+            if (id.contains("voice") || id.contains("transcribe") || id.contains("asr") || id.contains("speech") || id.contains("stt")) {
                 caps += ModelCapability.AUDIO
+                return caps
             }
+
+            // Decision / Gatekeeper models
+            if (id.contains("decision") || id.contains("gatekeeper")) {
+                caps += ModelCapability.DECISION
+                return caps
+            }
+
             // Vision / multimodal models
-            if (id.contains("vision") || id.contains("vl") || id.contains("omni") ||
-                id.contains("visual") || id.contains("image")
-            ) {
+            if (id.contains("vision") || id.contains("vl") || id.contains("omni") || id.contains("visual") || id.contains("image")) {
                 caps += ModelCapability.VISION
-                if (!id.contains("vl-max")) {
-                    // VL-max is primarily vision-focused unless specified, but omni/flash models do text too
-                    caps += ModelCapability.TEXT
-                }
-            }
-            // Gemini 3.5 flash lite is multimodal across text, vision, and audio
-            if (id.contains("gemini-3.5-flash-lite")) {
                 caps += ModelCapability.TEXT
-                caps += ModelCapability.VISION
-                caps += ModelCapability.AUDIO
             }
-            // Gemini 3.8 flash is text + vision
-            if (id.contains("gemini-3.8-flash")) {
-                caps += ModelCapability.TEXT
-                caps += ModelCapability.VISION
-            }
+
             // Default fallback: TEXT
             if (caps.isEmpty()) caps += ModelCapability.TEXT
             return caps

@@ -17,6 +17,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -240,6 +241,98 @@ class MetaModelApiClientTest {
             apiKey = "key"
         )
         assertEquals(1500, capturedMaxTokens)
+    }
+
+    @Test
+    fun `getCounterpartModel maps between standard and contributor variants`() {
+        assertEquals(
+            "muse-spark-1.3-contributor",
+            MetaModelApiClient.getCounterpartModel("muse-spark-1.3")
+        )
+        assertEquals(
+            "muse-spark-1.3",
+            MetaModelApiClient.getCounterpartModel("muse-spark-1.3-contributor")
+        )
+        assertEquals(
+            "muse-spark-1.2-contributor",
+            MetaModelApiClient.getCounterpartModel("muse-spark-1.2")
+        )
+        assertEquals(
+            "muse-spark-1.2",
+            MetaModelApiClient.getCounterpartModel("muse-spark-1.2-contributor")
+        )
+        assertNull(MetaModelApiClient.getCounterpartModel("muse-voice-transcribe-1.0"))
+    }
+
+    @Test
+    fun `executeSingleCall transparently falls back to the counterpart model on HTTP 404`() = runTest {
+        val requestedModels = mutableListOf<String>()
+        val (client, _) = createClient { chain ->
+            val req = chain.request()
+            val buffer = Buffer()
+            req.body?.writeTo(buffer)
+            val model = Json.parseToJsonElement(buffer.readUtf8())
+                .jsonObject["model"]?.jsonPrimitive?.content
+            requestedModels += model!!
+            val code = if (model == "muse-spark-1.3") 404 else 200
+            Response.Builder()
+                .request(req)
+                .protocol(Protocol.HTTP_1_1)
+                .code(code)
+                .message(if (code == 404) "Not Found" else "OK")
+                .body(
+                    (
+                        if (code == 404) """{"error":"model not found"}"""
+                        else """{"choices":[{"message":{"content":"{\"action\":\"REPLY\"}"}}]}"""
+                        ).toResponseBody(jsonMediaType)
+                )
+                .build()
+        }
+
+        val result = client.executeSingleCall(
+            model = "muse-spark-1.3",
+            messages = listOf(ChatMessage(role = "user", content = "Hi")),
+            maxTokens = 100,
+            apiKey = "key"
+        )
+
+        assertEquals(
+            listOf("muse-spark-1.3", "muse-spark-1.3-contributor"),
+            requestedModels
+        )
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Success)
+    }
+
+    @Test
+    fun `executeSingleCall does not retry endlessly when both variants return 404`() = runTest {
+        val requestedModels = mutableListOf<String>()
+        val (client, _) = createClient { chain ->
+            val req = chain.request()
+            val buffer = Buffer()
+            req.body?.writeTo(buffer)
+            requestedModels += Json.parseToJsonElement(buffer.readUtf8())
+                .jsonObject["model"]!!.jsonPrimitive.content
+            Response.Builder()
+                .request(req)
+                .protocol(Protocol.HTTP_1_1)
+                .code(404)
+                .message("Not Found")
+                .body("""{"error":"model not found"}""".toResponseBody(jsonMediaType))
+                .build()
+        }
+
+        val result = client.executeSingleCall(
+            model = "muse-spark-1.3",
+            messages = listOf(ChatMessage(role = "user", content = "Hi")),
+            maxTokens = 100,
+            apiKey = "key"
+        )
+
+        assertEquals(
+            listOf("muse-spark-1.3", "muse-spark-1.3-contributor"),
+            requestedModels
+        )
+        assertTrue(result is ReplyGenerationRepositoryImpl.CallResult.Failed)
     }
 }
 

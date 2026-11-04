@@ -21,7 +21,6 @@ sealed class Screen {
     @Serializable data object Settings : Screen()
     @Serializable data object Onboarding : Screen()
     @Serializable data object FeatureOnboarding : Screen()
-    @Serializable data object ModelPreparation : Screen()
     @Serializable data object ChatImport : Screen()
     @Serializable data class ChatImportProgress(val contactName: String = "") : Screen()
     @Serializable data object PermissionSetup : Screen()

@@ -58,30 +58,16 @@
 -dontwarn io.ktor.**
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ONNX Runtime JNI Keep Rules
+# JNI / Native Method Keep Rules
 # ─────────────────────────────────────────────────────────────────────────────
--keep class ai.onnxruntime.** { *; }
--keepclassmembers class ai.onnxruntime.** { *; }
--keep class com.microsoft.onnxruntime.** { *; }
--keepclassmembers class com.microsoft.onnxruntime.** { *; }
--dontwarn ai.onnxruntime.**
--dontwarn com.microsoft.onnxruntime.**
-
-# ─────────────────────────────────────────────────────────────────────────────
-# DJL / HuggingFace Tokenizers Keep Rules (Native JNI bindings)
-# ─────────────────────────────────────────────────────────────────────────────
--keep class ai.djl.** { *; }
--keepclassmembers class ai.djl.** { *; }
--keep class ai.djl.huggingface.** { *; }
--keepclassmembers class ai.djl.huggingface.** { *; }
--keep class ai.djl.huggingface.tokenizers.** { *; }
--keepclassmembers class ai.djl.huggingface.tokenizers.** { *; }
--keep class ai.djl.huggingface.tokenizers.jni.** { *; }
--keepclassmembers class ai.djl.huggingface.tokenizers.jni.** { *; }
 -keepclasseswithmembernames class * {
     native <methods>;
 }
--dontwarn ai.djl.**
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SLF4J (transitive via Ktor / kotlinx-coroutines) — no binding is bundled
+# ─────────────────────────────────────────────────────────────────────────────
+-dontwarn org.slf4j.impl.StaticLoggerBinder
 -dontwarn org.apache.commons.compress.**
 -dontwarn org.apache.commons.lang3.**
 

@@ -66,7 +66,6 @@ fun AiEngineScreen(
     }
 
     val hasAnyKeyConfigured = keyCounts.values.any { it > 0 }
-    val openRouterKeyCount = keyCounts[ModelProviders.OPENROUTER] ?: 0
     val metaKeyCount = keyCounts[ModelProviders.META] ?: 0
 
     SpokeScaffold(
@@ -128,33 +127,6 @@ fun AiEngineScreen(
                         text = stringResource(R.string.settings_ai_meta_active_banner),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-        } else if (openRouterKeyCount == 0) {
-            // Smart Dependency Banner: If OpenRouter has no key configured, guide user on dependencies
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-                tonalElevation = 1.dp
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = stringResource(R.string.settings_ai_openrouter_dependency_banner),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
             }

@@ -150,7 +150,7 @@ private fun AddProviderModelDialog(
                     value = modelInput,
                     onValueChange = { modelInput = it.replace("|", "") },
                     label = { Text(stringResource(R.string.settings_ai_add_model_label)) },
-                    placeholder = { Text("e.g. qwen3.8-omni-flash") },
+                    placeholder = { Text("e.g. muse-spark-1.3") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)

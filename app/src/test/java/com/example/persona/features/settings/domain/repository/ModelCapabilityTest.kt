@@ -53,22 +53,22 @@ class ModelCapabilityTest {
 
     @Test
     fun `parse legacy format with no pipe defaults to TEXT`() {
-        val config = ModelConfig.parse("qwen3.8-max")
-        assertEquals("qwen3.8-max", config.modelId)
+        val config = ModelConfig.parse("muse-spark-1.3")
+        assertEquals("muse-spark-1.3", config.modelId)
         assertEquals(setOf(ModelCapability.TEXT), config.capabilities)
     }
 
     @Test
     fun `parse new format with pipe separator`() {
-        val config = ModelConfig.parse("qwen3-vl|TEXT,VISION")
-        assertEquals("qwen3-vl", config.modelId)
+        val config = ModelConfig.parse("muse-spark-1.3|TEXT,VISION")
+        assertEquals("muse-spark-1.3", config.modelId)
         assertEquals(setOf(ModelCapability.TEXT, ModelCapability.VISION), config.capabilities)
     }
 
     @Test
     fun `parse AUDIO only model`() {
-        val config = ModelConfig.parse("fun-asr-flash-2026-06-15|AUDIO")
-        assertEquals("fun-asr-flash-2026-06-15", config.modelId)
+        val config = ModelConfig.parse("muse-voice-transcribe-1.0|AUDIO")
+        assertEquals("muse-voice-transcribe-1.0", config.modelId)
         assertEquals(setOf(ModelCapability.AUDIO), config.capabilities)
     }
 
@@ -83,7 +83,7 @@ class ModelCapabilityTest {
 
     @Test
     fun `serialize and parse roundtrip preserves modelId and capabilities`() {
-        val original = ModelConfig("whisper-large-v3", setOf(ModelCapability.AUDIO))
+        val original = ModelConfig("muse-voice-transcribe-1.0", setOf(ModelCapability.AUDIO))
         val parsed = ModelConfig.parse(original.serialize())
         assertEquals(original.modelId, parsed.modelId)
         assertEquals(original.capabilities, parsed.capabilities)
@@ -92,60 +92,55 @@ class ModelCapabilityTest {
     // ── ModelConfig.inferCapabilities ─────────────────────────────────────────
 
     @Test
-    fun `inferCapabilities detects audio from whisper`() {
-        val caps = ModelConfig.inferCapabilities("whisper-large-v3")
-        assertTrue(ModelCapability.AUDIO in caps)
+    fun `inferCapabilities detects text vision and decision for muse spark`() {
+        val caps = ModelConfig.inferCapabilities("muse-spark-1.3")
+        assertEquals(
+            setOf(ModelCapability.TEXT, ModelCapability.VISION, ModelCapability.DECISION),
+            caps
+        )
     }
 
     @Test
-    fun `inferCapabilities detects audio from asr keyword`() {
-        val caps = ModelConfig.inferCapabilities("fun-asr-flash-2026-06-15")
-        assertTrue(ModelCapability.AUDIO in caps)
+    fun `inferCapabilities detects audio from voice and transcribe keywords`() {
+        assertTrue(ModelCapability.AUDIO in ModelConfig.inferCapabilities("muse-voice-transcribe-1.0"))
+        assertTrue(ModelCapability.AUDIO in ModelConfig.inferCapabilities("custom-asr-model"))
     }
 
     @Test
     fun `inferCapabilities detects vision from vl suffix`() {
-        val caps = ModelConfig.inferCapabilities("qwen3-vl-72b")
+        val caps = ModelConfig.inferCapabilities("custom-vl-72b")
         assertTrue(ModelCapability.VISION in caps)
         assertTrue(ModelCapability.TEXT in caps)
     }
 
     @Test
     fun `inferCapabilities detects vision from omni keyword`() {
-        val caps = ModelConfig.inferCapabilities("qwen3.8-omni-flash")
+        val caps = ModelConfig.inferCapabilities("omni-flash")
         assertTrue(ModelCapability.VISION in caps)
         assertTrue(ModelCapability.TEXT in caps)
     }
 
     @Test
     fun `inferCapabilities defaults to TEXT for plain text model`() {
-        val caps = ModelConfig.inferCapabilities("qwen3.8-max")
+        val caps = ModelConfig.inferCapabilities("plain-text-model")
         assertEquals(setOf(ModelCapability.TEXT), caps)
     }
 
     @Test
     fun `inferCapabilities is case insensitive`() {
-        val caps = ModelConfig.inferCapabilities("WHISPER-LARGE")
+        val caps = ModelConfig.inferCapabilities("MUSE-VOICE-TRANSCRIBE-1.0")
         assertTrue(ModelCapability.AUDIO in caps)
     }
 
     @Test
-    fun `inferCapabilities detects DECISION for clef models`() {
-        val caps = ModelConfig.inferCapabilities("@cf/cloudflare/clef-flash")
-        assertEquals(setOf(ModelCapability.DECISION), caps)
-    }
-
-    @Test
-    fun `inferCapabilities detects DECISION for d1 models`() {
-        assertEquals(setOf(ModelCapability.DECISION), ModelConfig.inferCapabilities("d1:latest"))
-        assertEquals(setOf(ModelCapability.DECISION), ModelConfig.inferCapabilities("d1"))
-        assertEquals(setOf(ModelCapability.DECISION), ModelConfig.inferCapabilities("liquid/d1"))
+    fun `inferCapabilities detects DECISION for decision and gatekeeper models`() {
+        assertEquals(setOf(ModelCapability.DECISION), ModelConfig.inferCapabilities("decision-router"))
         assertEquals(setOf(ModelCapability.DECISION), ModelConfig.inferCapabilities("custom-gatekeeper-v1"))
         assertEquals(setOf(ModelCapability.DECISION), ModelConfig.inferCapabilities("intent-decision-router"))
     }
 
     @Test
-    fun `inferCapabilities does not falsely match d1 substring in sd1, feed1, or model-prod1`() {
+    fun `inferCapabilities does not falsely match unrelated numeric suffixes`() {
         assertEquals(setOf(ModelCapability.TEXT), ModelConfig.inferCapabilities("stabilityai/sd1.5"))
         assertEquals(setOf(ModelCapability.TEXT), ModelConfig.inferCapabilities("feed1"))
         assertEquals(setOf(ModelCapability.TEXT), ModelConfig.inferCapabilities("model-prod1"))
@@ -160,4 +155,3 @@ class ModelCapabilityTest {
         )
     }
 }
-

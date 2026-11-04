@@ -145,28 +145,15 @@ class WhatsAppMediaExtractorTest {
     }
 
     @Test
-    fun `transcribeVoiceNote calls Groq Whisper Audio API and returns transcribed text`() = runBlocking {
-        val mockEngine = MockEngine { request ->
-            assertEquals("https://api.groq.com/openai/v1/audio/transcriptions", request.url.toString())
-            assertTrue(request.headers.contains(HttpHeaders.Authorization, "Bearer test_groq_key"))
-            respond(
-                content = """{"text": "عايز أعرف سعر التيشيرت الأسود مقاس لارج لو سمحت"}""",
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, "application/json")
-            )
-        }
-
-        val client = HttpClient(mockEngine) {
-            install(ContentNegotiation) {
-                json(Json { ignoreUnknownKeys = true })
-            }
-        }
+    fun `transcribeVoiceNote returns Meta Muse Voice transcription`() = runBlocking {
+        val mockMetaClient = io.mockk.mockk<com.example.persona.features.auto_reply.data.providers.MetaModelApiClient>()
+        io.mockk.coEvery { mockMetaClient.transcribeAudio(any(), any()) } returns
+            Result.success("عايز أعرف سعر التيشيرت الأسود مقاس لارج لو سمحت")
 
         val extractor = WhatsAppMediaExtractor(
             context = mockContext,
-            httpClient = client,
-            groqPrimaryApiKey = "test_groq_key",
-            groqFallbackApiKey = "test_fallback_key"
+            httpClient = HttpClient(MockEngine { respond("") }),
+            metaModelApiClient = mockMetaClient
         )
 
         val tempAudio = tempFolder.newFile("sample.opus").apply {
@@ -176,51 +163,26 @@ class WhatsAppMediaExtractorTest {
         val result = extractor.transcribeVoiceNote(tempAudio)
         assertNotNull(result)
         assertEquals("عايز أعرف سعر التيشيرت الأسود مقاس لارج لو سمحت", result)
+        io.mockk.coVerify(exactly = 1) { mockMetaClient.transcribeAudio(tempAudio, "ar") }
     }
 
     @Test
-    fun `transcribeVoiceNote falls back to secondary Groq key on 429 rate limit`() = runBlocking {
-        var callCount = 0
-        val mockEngine = MockEngine { request ->
-            callCount++
-            if (callCount == 1) {
-                assertEquals("Bearer primary_key", request.headers[HttpHeaders.Authorization])
-                respond(
-                    content = """{"error":{"message":"Rate limit reached"}}""",
-                    status = HttpStatusCode.TooManyRequests,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
-            } else {
-                assertEquals("Bearer secondary_key", request.headers[HttpHeaders.Authorization])
-                respond(
-                    content = """{"text": "السلام عليكم، هل متاح مقاس ميديوم؟"}""",
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
-            }
-        }
-
-        val client = HttpClient(mockEngine) {
-            install(ContentNegotiation) {
-                json(Json { ignoreUnknownKeys = true })
-            }
-        }
+    fun `transcribeVoiceNote returns null when Meta transcription fails`() = runBlocking {
+        val mockMetaClient = io.mockk.mockk<com.example.persona.features.auto_reply.data.providers.MetaModelApiClient>()
+        io.mockk.coEvery { mockMetaClient.transcribeAudio(any(), any()) } returns
+            Result.failure(IllegalStateException("rate limited"))
 
         val extractor = WhatsAppMediaExtractor(
             context = mockContext,
-            httpClient = client,
-            groqPrimaryApiKey = "primary_key",
-            groqFallbackApiKey = "secondary_key"
+            httpClient = HttpClient(MockEngine { respond("") }),
+            metaModelApiClient = mockMetaClient
         )
 
         val tempAudio = tempFolder.newFile("voice.opus").apply {
             writeBytes(ByteArray(1024) { 2 })
         }
 
-        val result = extractor.transcribeVoiceNote(tempAudio)
-        assertNotNull(result)
-        assertEquals("السلام عليكم، هل متاح مقاس ميديوم؟", result)
-        assertEquals(2, callCount)
+        assertNull(extractor.transcribeVoiceNote(tempAudio))
     }
 
     @Test
@@ -679,46 +641,15 @@ class WhatsAppMediaExtractorTest {
     }
 
     @Test
-    fun `transcribeVoiceNote sends ogg filename extension and valid multipart payload without duplicate form-data headers`() = runBlocking {
-        var wireBodyText = ""
-        val mockEngine = MockEngine { request ->
-            assertEquals("https://api.groq.com/openai/v1/audio/transcriptions", request.url.toString())
-            assertEquals("Bearer test_groq_key", request.headers[HttpHeaders.Authorization])
-
-            val body = request.body
-            assertTrue(body is MultiPartFormDataContent)
-            val channel = io.ktor.utils.io.ByteChannel(autoFlush = true)
-            runBlocking {
-                (body as io.ktor.http.content.OutgoingContent.WriteChannelContent).writeTo(channel)
-                channel.close(null)
-                val readBytes = java.io.ByteArrayOutputStream()
-                val buffer = java.nio.ByteBuffer.allocate(1024)
-                while (!channel.isClosedForRead) {
-                    buffer.clear()
-                    val count = channel.readAvailable(buffer)
-                    if (count > 0) {
-                        readBytes.write(buffer.array(), 0, count)
-                    } else if (count == -1) {
-                        break
-                    }
-                }
-                wireBodyText = readBytes.toString("UTF-8")
-            }
-
-            respond(
-                content = """{"text": "عايز اعرف اسعار الهوديز"}""",
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, "application/json")
-            )
-        }
-
-        val client = HttpClient(mockEngine)
+    fun `transcribeVoiceNote forwards the original opus file to MetaModelApiClient`() = runBlocking {
+        val mockMetaClient = io.mockk.mockk<com.example.persona.features.auto_reply.data.providers.MetaModelApiClient>()
+        io.mockk.coEvery { mockMetaClient.transcribeAudio(any(), any()) } returns
+            Result.success("عايز اعرف اسعار الهوديز")
 
         val extractor = WhatsAppMediaExtractor(
             context = mockContext,
-            httpClient = client,
-            groqPrimaryApiKey = "test_groq_key",
-            groqFallbackApiKey = "fallback_key"
+            httpClient = HttpClient(MockEngine { respond("") }),
+            metaModelApiClient = mockMetaClient
         )
 
         // WhatsApp file named with .opus extension
@@ -729,19 +660,7 @@ class WhatsAppMediaExtractorTest {
         val result = extractor.transcribeVoiceNote(tempAudio)
         assertNotNull(result)
         assertEquals("عايز اعرف اسعار الهوديز", result)
-
-        // Verify wire format invariants:
-        assertTrue(wireBodyText.contains("filename=\"PTT-20261028-WA0009.ogg\""))
-        assertFalse(wireBodyText.contains("PTT-20261028-WA0009.opus"))
-        assertTrue(wireBodyText.contains("Content-Type: audio/ogg"))
-        assertTrue(wireBodyText.contains("name=model") || wireBodyText.contains("name=\"model\""))
-        assertTrue(wireBodyText.contains("whisper-large-v3-turbo"))
-        assertTrue(wireBodyText.contains("name=response_format") || wireBodyText.contains("name=\"response_format\""))
-        assertTrue(wireBodyText.contains("json"))
-        assertTrue(wireBodyText.contains("name=language") || wireBodyText.contains("name=\"language\""))
-        assertTrue(wireBodyText.contains("ar"))
-        assertFalse(wireBodyText.contains("form-data; name=\"file\"; form-data; name=\"file\""))
-        assertFalse(wireBodyText.contains("form-data; name=file; form-data; name=file"))
+        io.mockk.coVerify(exactly = 1) { mockMetaClient.transcribeAudio(tempAudio, "ar") }
     }
 
     @Test
@@ -821,19 +740,13 @@ class WhatsAppMediaExtractorTest {
 
     @Test
     fun `transcribeVoiceNote deletes temporary incoming_voice ogg cache file in finally`() = runBlocking {
-        val mockEngine = MockEngine { request ->
-            respond(
-                content = """{"text": "مرحباً"}""",
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, "application/json")
-            )
-        }
-        val client = HttpClient(mockEngine)
+        val mockMetaClient = io.mockk.mockk<com.example.persona.features.auto_reply.data.providers.MetaModelApiClient>()
+        io.mockk.coEvery { mockMetaClient.transcribeAudio(any(), any()) } returns Result.success("مرحباً")
+
         val extractor = WhatsAppMediaExtractor(
             context = mockContext,
-            httpClient = client,
-            groqPrimaryApiKey = "test_groq_key",
-            groqFallbackApiKey = "fallback_key"
+            httpClient = HttpClient(MockEngine { respond("") }),
+            metaModelApiClient = mockMetaClient
         )
 
         val tempVoiceCacheFile = File(cacheDir, "incoming_voice_12345.ogg").apply {
@@ -882,533 +795,6 @@ class WhatsAppMediaExtractorTest {
     }
 
     @Test
-    fun `parseQwenAsrResponse correctly parses SSE stream frames from Qwen FunASR`() {
-        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
-        val sseStream = """
-            id:1
-            event:result
-            data:{"sentence":{"sentence_id":1,"begin_time":280,"end_time":3393,"text":"هو المفروض في حد موجود هنا دلوقتي ولا إيه؟","sentence_end":true},"text":"هو المفروض في حد موجود هنا دلوقتي ولا إيه؟"}
-        """.trimIndent()
-
-        val parsed = extractor.parseQwenAsrResponse(sseStream)
-        assertEquals("هو المفروض في حد موجود هنا دلوقتي ولا إيه؟", parsed)
-    }
-
-    @Test
-    fun `parseQwenAsrResponse handles empty or malformed SSE stream gracefully`() {
-        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
-        val emptySse = ""
-        val malformedSse = """
-            id:1
-            event:result
-            data:not-valid-json
-        """.trimIndent()
-
-        assertNull(extractor.parseQwenAsrResponse(emptySse))
-        assertNull(extractor.parseQwenAsrResponse(malformedSse))
-    }
-
-    @Test
-    fun `callGeminiAudioTranscription sends valid inlineData payload and extracts transcribed text`() = runBlocking {
-        var interceptedUrl = ""
-        var interceptedContentType = ""
-        var interceptedBody = ""
-
-        val mockEngine = MockEngine { request ->
-            interceptedUrl = request.url.toString()
-            interceptedContentType = request.body.contentType?.toString()
-                ?: request.headers[HttpHeaders.ContentType]
-                ?: ""
-            interceptedBody = (request.body as? io.ktor.http.content.TextContent)?.text
-                ?: (request.body as? io.ktor.http.content.ByteArrayContent)?.let { String(it.bytes(), Charsets.UTF_8) }
-                ?: ""
-
-            respond(
-                content = """
-                    {
-                      "candidates": [
-                        {
-                          "content": {
-                            "parts": [
-                              {
-                                "text": "عايز اعرف اسعار التيشيرتات"
-                              }
-                            ],
-                            "role": "model"
-                          },
-                          "finishReason": "STOP"
-                        }
-                      ]
-                    }
-                """.trimIndent(),
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, "application/json")
-            )
-        }
-
-        val client = HttpClient(mockEngine)
-        val extractor = WhatsAppMediaExtractor(
-            context = mockContext,
-            httpClient = client
-        )
-
-        val sampleAudioBytes = byteArrayOf(10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
-        val tempAudio = tempFolder.newFile("sample_voice.ogg").apply {
-            writeBytes(sampleAudioBytes + ByteArray(500) { 1 })
-        }
-
-        val result = extractor.callGeminiAudioTranscription(tempAudio, "test_gemini_key_123")
-        assertNotNull(result)
-        assertEquals("عايز اعرف اسعار التيشيرتات", result)
-
-        // Verify URL & Query param
-        assertTrue(interceptedUrl.startsWith("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent"))
-        assertTrue(interceptedUrl.contains("key=test_gemini_key_123"))
-        assertTrue(interceptedContentType.contains("application/json"))
-
-        // Verify payload JSON structure
-        val root = Json.parseToJsonElement(interceptedBody).jsonObject
-        val contents = root["contents"] as JsonArray
-        assertEquals(1, contents.size)
-        val parts = contents[0].jsonObject["parts"] as JsonArray
-        assertEquals(2, parts.size)
-
-        // Part 0: inlineData
-        val inlineData = parts[0].jsonObject["inlineData"]!!.jsonObject
-        assertEquals("audio/ogg", inlineData["mimeType"]!!.jsonPrimitive.content)
-        assertTrue(inlineData["data"]!!.jsonPrimitive.content.isNotBlank())
-
-        // Part 1: text prompt
-        val promptText = parts[1].jsonObject["text"]!!.jsonPrimitive.content
-        assertEquals(
-            "Transcribe this colloquial Egyptian Arabic voice note verbatim into plain text. Output ONLY the plain transcription without any commentary, markdown, or formatting.",
-            promptText
-        )
-    }
-
-    @Test
-    fun `transcribeVoiceNote falls back to Gemini Audio when Qwen FunASR fails`() = runBlocking {
-        var qwenCalled = false
-        var geminiCalled = false
-        var groqCalled = false
-
-        val mockEngine = MockEngine { request ->
-            val url = request.url.toString()
-            when {
-                url.contains("qwencloudapi") -> {
-                    qwenCalled = true
-                    respond(
-                        content = """{"error": "Internal server error"}""",
-                        status = HttpStatusCode.InternalServerError,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                url.contains("generativelanguage.googleapis.com") -> {
-                    geminiCalled = true
-                    respond(
-                        content = """
-                            {
-                              "candidates": [
-                                {
-                                  "content": {
-                                    "parts": [
-                                      {
-                                        "text": "هو الاوردر هيوصل امتى لو سمحت؟"
-                                      }
-                                    ]
-                                  }
-                                }
-                              ]
-                            }
-                        """.trimIndent(),
-                        status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                url.contains("groq.com") -> {
-                    groqCalled = true
-                    respond(
-                        content = """{"text": "groq fallback"}""",
-                        status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                else -> respond("", HttpStatusCode.NotFound)
-            }
-        }
-
-        val client = HttpClient(mockEngine)
-        val extractor = WhatsAppMediaExtractor(
-            context = mockContext,
-            httpClient = client,
-            groqPrimaryApiKey = "groq_key",
-            groqFallbackApiKey = "groq_fallback",
-            qwenApiKey = "qwen_key",
-            geminiApiKey = "gemini_key"
-        )
-
-        val tempAudio = tempFolder.newFile("test_voice_cascade.opus").apply {
-            writeBytes(ByteArray(1024) { 5 })
-        }
-
-        val result = extractor.transcribeVoiceNote(tempAudio)
-        assertNotNull(result)
-        assertEquals("هو الاوردر هيوصل امتى لو سمحت؟", result)
-        assertTrue("Qwen should have been called first", qwenCalled)
-        assertTrue("Gemini should have been called after Qwen failed", geminiCalled)
-        assertFalse("Groq should NOT have been called since Gemini succeeded", groqCalled)
-    }
-
-    @Test
-    fun `transcribeVoiceNote falls back to Gemini Audio when Qwen FunASR is absent`() = runBlocking {
-        var geminiCalled = false
-        var groqCalled = false
-
-        val mockEngine = MockEngine { request ->
-            val url = request.url.toString()
-            when {
-                url.contains("generativelanguage.googleapis.com") -> {
-                    geminiCalled = true
-                    respond(
-                        content = """
-                            {
-                              "candidates": [
-                                {
-                                  "content": {
-                                    "parts": [
-                                      {
-                                        "text": "بكام الشحن لإسكندرية؟"
-                                      }
-                                    ]
-                                  }
-                                }
-                              ]
-                            }
-                        """.trimIndent(),
-                        status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                url.contains("groq.com") -> {
-                    groqCalled = true
-                    respond(
-                        content = """{"text": "groq"}""",
-                        status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                else -> respond("", HttpStatusCode.NotFound)
-            }
-        }
-
-        val client = HttpClient(mockEngine)
-        val extractor = WhatsAppMediaExtractor(
-            context = mockContext,
-            httpClient = client,
-            groqPrimaryApiKey = "groq_key",
-            groqFallbackApiKey = "groq_fallback",
-            qwenApiKey = "",
-            geminiApiKey = "gemini_key"
-        )
-
-        val tempAudio = tempFolder.newFile("test_voice_no_qwen.opus").apply {
-            writeBytes(ByteArray(1024) { 6 })
-        }
-
-        val result = extractor.transcribeVoiceNote(tempAudio)
-        assertNotNull(result)
-        assertEquals("بكام الشحن لإسكندرية؟", result)
-        assertTrue("Gemini should have been called", geminiCalled)
-        assertFalse("Groq should NOT have been called", groqCalled)
-    }
-
-    @Test
-    fun `callGeminiAudioTranscription falls back to secondary model on 404 or error`() = runBlocking {
-        val invokedModels = mutableListOf<String>()
-
-        val mockEngine = MockEngine { request ->
-            val url = request.url.toString()
-            when {
-                url.contains("models/gemini-3.5-flash-lite:generateContent") -> {
-                    invokedModels.add("gemini-3.5-flash-lite")
-                    respond(
-                        content = """{"error": {"code": 404, "message": "Model not found"}}""",
-                        status = HttpStatusCode.NotFound,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                url.contains("models/gemini-2.5-flash-lite:generateContent") -> {
-                    invokedModels.add("gemini-2.5-flash-lite")
-                    respond(
-                        content = """
-                            {
-                              "candidates": [
-                                {
-                                  "content": {
-                                    "parts": [
-                                      {
-                                        "text": "مقاس 2XL متاح؟"
-                                      }
-                                    ]
-                                  }
-                                }
-                              ]
-                            }
-                        """.trimIndent(),
-                        status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                else -> respond("", HttpStatusCode.NotFound)
-            }
-        }
-
-        val client = HttpClient(mockEngine)
-        val extractor = WhatsAppMediaExtractor(
-            context = mockContext,
-            httpClient = client
-        )
-
-        val tempAudio = tempFolder.newFile("test_gemini_fallback.opus").apply {
-            writeBytes(ByteArray(1024) { 7 })
-        }
-
-        val result = extractor.callGeminiAudioTranscription(tempAudio, "test_api_key")
-        assertNotNull(result)
-        assertEquals("مقاس 2XL متاح؟", result)
-        assertEquals(listOf("gemini-3.5-flash-lite", "gemini-2.5-flash-lite"), invokedModels)
-    }
-
-    @Test
-    fun `parseGeminiAudioResponse strips quotes and preambles cleanly`() {
-        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(MockEngine { respond("") }))
-
-        val responseWithPreamble = """
-            {
-              "candidates": [
-                {
-                  "content": {
-                    "parts": [
-                      {
-                        "text": "Transcription: \"عايز هودي مقاس لارج لو سمحت\""
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-        """.trimIndent()
-
-        val parsed = extractor.parseGeminiAudioResponse(responseWithPreamble)
-        assertEquals("عايز هودي مقاس لارج لو سمحت", parsed)
-    }
-
-    @Test
-    fun `transcribeVoiceNote routes through OpenRouter when OpenRouter model is tagged with AUDIO`() = runBlocking {
-        var openRouterCalled = false
-        var capturedModel: String? = null
-
-        val mockEngine = MockEngine { request ->
-            val url = request.url.toString()
-            if (url.contains("openrouter.ai/api/v1/audio/transcriptions")) {
-                openRouterCalled = true
-                val bodyStr = (request.body as? io.ktor.http.content.TextContent)?.text
-                    ?: (request.body as? io.ktor.http.content.ByteArrayContent)?.let { String(it.bytes(), Charsets.UTF_8) }
-                    ?: ""
-                val json = Json.parseToJsonElement(bodyStr).jsonObject
-                capturedModel = json["model"]?.jsonPrimitive?.content
-                respond(
-                    content = """{"text": "عايز اطلب هودي اسود مقاس XL"}""",
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
-            } else {
-                respond(
-                    content = "error",
-                    status = HttpStatusCode.InternalServerError,
-                    headers = headersOf(HttpHeaders.ContentType, "text/plain")
-                )
-            }
-        }
-
-        val extractor = WhatsAppMediaExtractor(
-            mockContext,
-            HttpClient(mockEngine),
-            groqPrimaryApiKey = "",
-            groqFallbackApiKey = "",
-            qwenApiKey = "",
-            geminiApiKey = "",
-            openRouterPrimaryApiKey = "sk-or-test-key",
-            openRouterFallbackApiKey = ""
-        )
-
-        val tempAudio = tempFolder.newFile("test_openrouter_voice.ogg").apply {
-            writeBytes(ByteArray(1024) { 8 })
-        }
-
-        val result = extractor.transcribeVoiceNote(
-            audioFile = tempAudio,
-            audioModelsOverride = null,
-            openRouterAudioModels = listOf("openai/whisper-large-v3")
-        )
-
-        assertNotNull(result)
-        assertEquals("عايز اطلب هودي اسود مقاس XL", result)
-        assertTrue("OpenRouter audio endpoint should be called", openRouterCalled)
-        assertEquals("openai/whisper-large-v3", capturedModel)
-    }
-
-    @Test
-    fun `callOpenRouterAudioTranscription falls back to chat completions when STT endpoint fails`() = runBlocking {
-        var transcriptionsCalled = false
-        var chatCompletionsCalled = false
-
-        val mockEngine = MockEngine { request ->
-            val url = request.url.toString()
-            when {
-                url.contains("/api/v1/audio/transcriptions") -> {
-                    transcriptionsCalled = true
-                    respond(
-                        content = """{"error": {"code": 404, "message": "Endpoint not supported for this model"}}""",
-                        status = HttpStatusCode.NotFound,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                url.contains("/api/v1/chat/completions") -> {
-                    chatCompletionsCalled = true
-                    respond(
-                        content = """
-                            {
-                              "choices": [
-                                {
-                                  "message": {
-                                    "role": "assistant",
-                                    "content": "مساء الخير، لو سمحت السعر كام؟"
-                                  }
-                                }
-                              ]
-                            }
-                        """.trimIndent(),
-                        status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                else -> respond(
-                    content = "not found",
-                    status = HttpStatusCode.NotFound,
-                    headers = headersOf(HttpHeaders.ContentType, "text/plain")
-                )
-            }
-        }
-
-        val extractor = WhatsAppMediaExtractor(mockContext, HttpClient(mockEngine))
-        val tempAudio = tempFolder.newFile("multimodal_voice.ogg").apply {
-            writeBytes(ByteArray(1024) { 9 })
-        }
-
-        val result = extractor.callOpenRouterAudioTranscription(tempAudio, "test_key", "google/gemini-2.5-flash")
-        assertNotNull(result)
-        assertEquals("مساء الخير، لو سمحت السعر كام؟", result)
-        assertTrue("Transcriptions endpoint should be tried first", transcriptionsCalled)
-        assertTrue("Chat completions endpoint should be called as fallback", chatCompletionsCalled)
-    }
-
-    @Test
-    fun `transcribeVoiceNote uses custom OpenRouter API key from secure credentials`() = runBlocking {
-        var authHeaderReceived: String? = null
-        val mockEngine = MockEngine { request ->
-            authHeaderReceived = request.headers[HttpHeaders.Authorization]
-            respond(
-                content = """{"text": "مرحبا بك"}""",
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, "application/json")
-            )
-        }
-
-        val mockCreds = mockk<com.example.persona.features.settings.domain.repository.SecureCredentialsRepository>(relaxed = true)
-        every { mockCreds.getApiKeys(com.example.persona.features.settings.domain.repository.ModelProviders.OPENROUTER) } returns listOf("sk-or-custom-vault-key")
-
-        val extractor = WhatsAppMediaExtractor(
-            mockContext,
-            HttpClient(mockEngine),
-            groqPrimaryApiKey = "",
-            groqFallbackApiKey = "",
-            qwenApiKey = "",
-            geminiApiKey = "",
-            openRouterPrimaryApiKey = "",
-            openRouterFallbackApiKey = "",
-            secureCredentialsRepository = mockCreds
-        )
-
-        val tempAudio = tempFolder.newFile("test_custom_or_voice.ogg").apply {
-            writeBytes(ByteArray(1024) { 5 })
-        }
-
-        val result = extractor.transcribeVoiceNote(
-            audioFile = tempAudio,
-            audioModelsOverride = null,
-            openRouterAudioModels = listOf("openai/whisper-large-v3"),
-            audioProviderPriority = listOf("openrouter")
-        )
-
-        assertNotNull(result)
-        assertEquals("Bearer sk-or-custom-vault-key", authHeaderReceived)
-    }
-
-    @Test
-    fun `transcribeVoiceNote respects audioProviderPriority order`() = runBlocking {
-        val providersAttempted = mutableListOf<String>()
-        val mockEngine = MockEngine { request ->
-            val url = request.url.toString()
-            when {
-                url.contains("groq.com") -> {
-                    providersAttempted.add("groq")
-                    respond(
-                        content = """{"text": "رد من جروك"}""",
-                        status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                url.contains("openrouter.ai") -> {
-                    providersAttempted.add("openrouter")
-                    respond(
-                        content = """{"text": "رد من اوبن راوتر"}""",
-                        status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                else -> respond("error", HttpStatusCode.InternalServerError)
-            }
-        }
-
-        val extractor = WhatsAppMediaExtractor(
-            mockContext,
-            HttpClient(mockEngine),
-            groqPrimaryApiKey = "gsk-test-key",
-            groqFallbackApiKey = "",
-            qwenApiKey = "",
-            geminiApiKey = "",
-            openRouterPrimaryApiKey = "sk-or-test-key",
-            openRouterFallbackApiKey = ""
-        )
-
-        val tempAudio = tempFolder.newFile("test_priority_voice.ogg").apply {
-            writeBytes(ByteArray(1024) { 7 })
-        }
-
-        // Groq prioritized first
-        val result = extractor.transcribeVoiceNote(
-            audioFile = tempAudio,
-            audioModelsOverride = null,
-            openRouterAudioModels = listOf("openai/whisper-large-v3"),
-            audioProviderPriority = listOf("groq", "openrouter")
-        )
-
-        assertNotNull(result)
-        assertEquals(listOf("groq"), providersAttempted)
-    }
-
-    @Test
     fun `transcribeVoiceNote invokes MetaModelApiClient when meta is prioritized`() = runBlocking {
         val mockMetaClient = io.mockk.mockk<com.example.persona.features.auto_reply.data.providers.MetaModelApiClient>()
         io.mockk.coEvery { mockMetaClient.transcribeAudio(any(), any()) } returns Result.success("تفريغ صوتي من ميتا")
@@ -1416,12 +802,6 @@ class WhatsAppMediaExtractorTest {
         val extractor = WhatsAppMediaExtractor(
             context = mockContext,
             httpClient = io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { respond("") }),
-            groqPrimaryApiKey = "",
-            groqFallbackApiKey = "",
-            qwenApiKey = "",
-            geminiApiKey = "",
-            openRouterPrimaryApiKey = "",
-            openRouterFallbackApiKey = "",
             metaModelApiClient = mockMetaClient
         )
 
@@ -1429,10 +809,7 @@ class WhatsAppMediaExtractorTest {
             writeBytes(ByteArray(512) { 1 })
         }
 
-        val result = extractor.transcribeVoiceNote(
-            audioFile = tempAudio,
-            audioProviderPriority = listOf("meta", "groq")
-        )
+        val result = extractor.transcribeVoiceNote(tempAudio)
 
         assertEquals("تفريغ صوتي من ميتا", result)
         io.mockk.coVerify(exactly = 1) { mockMetaClient.transcribeAudio(tempAudio, "ar") }

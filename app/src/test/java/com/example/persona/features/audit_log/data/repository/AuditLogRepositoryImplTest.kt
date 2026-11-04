@@ -98,8 +98,8 @@ class AuditLogRepositoryImplTest {
             similarityScore = 0.92f,
             wasAutoSent = true,
             timestamp = Clock.System.now(),
-            gatekeeperTier = "Tier 1: Cloudflare Clef",
-            providerModel = "Qwen / deepseek-v4.1-flash",
+            gatekeeperTier = "Tier 1: Muse Spark 1.3",
+            providerModel = "Meta / muse-spark-1.3",
             latencyMs = 1120L,
             promptTokens = 905,
             completionTokens = 71,
@@ -112,9 +112,9 @@ class AuditLogRepositoryImplTest {
         assertEquals(42L, result[0].id)
         assertEquals("علي", result[0].contactName)
         assertEquals("شارع التحرير الدقي", result[0].generatedReply)
-        assertEquals("Tier 1: Cloudflare Clef", result[0].gatekeeperTier)
+        assertEquals("Tier 1: Muse Spark 1.3", result[0].gatekeeperTier)
         assertEquals("SUCCESS", result[0].status)
-        assertEquals("Qwen / deepseek-v4.1-flash", result[0].providerModel)
+        assertEquals("Meta / muse-spark-1.3", result[0].providerModel)
         assertEquals(1120L, result[0].latencyMs)
         assertEquals(905, result[0].promptTokens)
         assertEquals(71, result[0].completionTokens)

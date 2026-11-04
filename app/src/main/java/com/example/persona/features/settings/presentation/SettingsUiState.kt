@@ -92,8 +92,7 @@ data class SettingsUiState(
     val selectedCapabilityFilter: ModelCapability = ModelCapability.TEXT,
     val capabilityProviderPriorities: Map<ModelCapability, List<String>> = emptyMap(),
     val providerConfigs: Map<String, ProviderConfigState> = emptyMap(),
-    val selectedProviderForEdit: String = ModelProviders.OPENROUTER,
-    val cloudflareAccountId: String = "",
+    val selectedProviderForEdit: String = ModelProviders.META,
 
     // ── 2. Store Identity & Bot Persona
     val accountMode: AccountMode = AccountMode.BUSINESS,

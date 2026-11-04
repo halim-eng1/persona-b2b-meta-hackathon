@@ -28,8 +28,7 @@ import com.example.persona.features.auto_reply.domain.model.ExtraMessage
 import com.example.persona.features.auto_reply.domain.model.WhatsAppNotification
 import com.example.persona.features.auto_reply.domain.orchestrator.AutoReplyOrchestrator
 import com.example.persona.features.auto_reply.service.NotificationParser
-import com.example.persona.features.chat_import.data.embedding.HuggingFaceTokenizer
-import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
+
 import dagger.hilt.android.AndroidEntryPoint
 import android.content.res.Configuration
 import java.util.Locale
@@ -45,8 +44,6 @@ import javax.inject.Inject
 class WhatsAppNotificationListener : NotificationListenerService() {
 
     @Inject lateinit var messageDispatcher: IncomingMessageDispatcher
-    @Inject lateinit var modelManager: OnnxModelManager
-    @Inject lateinit var tokenizer: HuggingFaceTokenizer
     @Inject lateinit var orchestrator: AutoReplyOrchestrator
     @Inject lateinit var sourceDiagnostics: NotificationSourceDiagnostics
     @Inject lateinit var prefsRepository: UserPreferencesRepository
@@ -313,20 +310,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                     val isTempCache = audioFile != null && audioFile.name.startsWith("incoming_voice_")
                     try {
                         if (audioFile != null) {
-                            val audioModels = runCatching {
-                                prefsRepository.getProviderModelConfigsSync(ModelProviders.QWEN, ModelCapability.AUDIO)
-                                    .filter { ModelCapability.AUDIO in it.capabilities }
-                                    .map { it.modelId }
-                            }.getOrNull()
-                            val openRouterAudioModels = runCatching {
-                                prefsRepository.getProviderModelConfigsSync(ModelProviders.OPENROUTER, ModelCapability.AUDIO)
-                                    .filter { ModelCapability.AUDIO in it.capabilities }
-                                    .map { it.modelId }
-                            }.getOrNull()
-                            val audioPriority = runCatching {
-                                prefsRepository.getProviderPrioritySync(ModelCapability.AUDIO)
-                            }.getOrNull()
-                            val transcribed = mediaExtractor.transcribeVoiceNote(audioFile, audioModels, openRouterAudioModels, audioPriority)
+                            val transcribed = mediaExtractor.transcribeVoiceNote(audioFile)
                             if (!transcribed.isNullOrBlank()) {
                                 effectiveText = "[رسالة صوتية من العميل]: $transcribed"
                                 mediaFilePath = null // CRITICAL: Transcribed voice is a pure text turn; never an image attachment!
@@ -386,16 +370,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        // Pre-warm ONNX model + tokenizer in background
-        serviceScope.launch(Dispatchers.IO) {
-            try {
-                tokenizer.initialize()
-                modelManager.loadModel()
-                Log.i("NLS", "ONNX model and tokenizer pre-warmed successfully")
-            } catch (e: Exception) {
-                Log.e("NLS", "Failed to pre-warm ONNX model/tokenizer", e)
-            }
-        }
+        // No model warm-up needed: the deterministic embedding engine is ready at process start.
 
         // Continuously refresh routing prefs in the background
         serviceScope.launch(Dispatchers.IO) {

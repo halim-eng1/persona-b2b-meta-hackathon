@@ -2,7 +2,6 @@ package com.example.persona.features.settings.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.example.persona.BuildConfig
 import com.example.persona.core.data.repository.UserPreferencesRepository
 import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.domain.repository.SecureCredentialsRepository
@@ -26,12 +25,7 @@ class SecureCredentialsRepositoryTest {
     }
 
     @Test
-    fun `initial API keys are blank and flows emit null`() = runTest {
-        assertEquals("", secureCredentialsRepository.getNvidiaApiKey())
-        assertEquals("", secureCredentialsRepository.getQwenApiKey())
-        assertNull(secureCredentialsRepository.nvidiaApiKeyFlow.first())
-        assertNull(secureCredentialsRepository.qwenApiKeyFlow.first())
-
+    fun `initial API keys are blank`() = runTest {
         ModelProviders.ALL.forEach { provider ->
             assertTrue(secureCredentialsRepository.getApiKeys(provider).isEmpty())
             assertTrue(secureCredentialsRepository.getApiKeysFlow(provider).first().isEmpty())
@@ -39,110 +33,60 @@ class SecureCredentialsRepositoryTest {
     }
 
     @Test
-    fun `setting Nvidia API key updates getter and flow`() = runTest {
-        secureCredentialsRepository.setNvidiaApiKey("nvapi-test-secret-123")
-
-        assertEquals("nvapi-test-secret-123", secureCredentialsRepository.getNvidiaApiKey())
-        assertEquals("nvapi-test-secret-123", secureCredentialsRepository.nvidiaApiKeyFlow.first())
-
-        // Clearing key
-        secureCredentialsRepository.setNvidiaApiKey("")
-        assertEquals("", secureCredentialsRepository.getNvidiaApiKey())
-        assertNull(secureCredentialsRepository.nvidiaApiKeyFlow.first())
-    }
-
-    @Test
-    fun `setting Qwen API key updates getter and flow`() = runTest {
-        secureCredentialsRepository.setQwenApiKey("sk-qwen-secret-456")
-
-        assertEquals("sk-qwen-secret-456", secureCredentialsRepository.getQwenApiKey())
-        assertEquals("sk-qwen-secret-456", secureCredentialsRepository.qwenApiKeyFlow.first())
-
-        // Setting blank/null
-        secureCredentialsRepository.setQwenApiKey(null)
-        assertEquals("", secureCredentialsRepository.getQwenApiKey())
-        assertNull(secureCredentialsRepository.qwenApiKeyFlow.first())
-    }
-
-    @Test
     fun `unlimited API keys per provider can be added, retrieved, and removed`() = runTest {
-        val providers = listOf(
-            ModelProviders.META,
-            ModelProviders.QWEN,
-            ModelProviders.GEMINI,
-            ModelProviders.GROQ,
-            ModelProviders.NVIDIA,
-            ModelProviders.OPENROUTER,
-            ModelProviders.CLOUDFLARE,
-            ModelProviders.LIQUID,
-            ModelProviders.NARA
-        )
+        val provider = ModelProviders.META
 
-        providers.forEach { provider ->
-            // Add keys
-            secureCredentialsRepository.addApiKey(provider, "key-1-$provider")
-            secureCredentialsRepository.addApiKey(provider, "key-2-$provider")
-            secureCredentialsRepository.addApiKey(provider, "key-3-$provider")
+        // Add keys
+        secureCredentialsRepository.addApiKey(provider, "meta-key-1")
+        secureCredentialsRepository.addApiKey(provider, "meta-key-2")
+        secureCredentialsRepository.addApiKey(provider, "meta-key-3")
 
-            val keys = secureCredentialsRepository.getApiKeys(provider)
-            assertEquals(3, keys.size)
-            assertEquals(listOf("key-1-$provider", "key-2-$provider", "key-3-$provider"), keys)
-            assertEquals(keys, secureCredentialsRepository.getApiKeysFlow(provider).first())
+        val keys = secureCredentialsRepository.getApiKeys(provider)
+        assertEquals(3, keys.size)
+        assertEquals(listOf("meta-key-1", "meta-key-2", "meta-key-3"), keys)
+        assertEquals(keys, secureCredentialsRepository.getApiKeysFlow(provider).first())
 
-            // Duplicate key should not be re-added
-            secureCredentialsRepository.addApiKey(provider, "key-2-$provider")
-            assertEquals(3, secureCredentialsRepository.getApiKeys(provider).size)
+        // Duplicate key should not be re-added
+        secureCredentialsRepository.addApiKey(provider, "meta-key-2")
+        assertEquals(3, secureCredentialsRepository.getApiKeys(provider).size)
 
-            // Remove a key
-            secureCredentialsRepository.removeApiKey(provider, "key-2-$provider")
-            val afterRemoval = secureCredentialsRepository.getApiKeys(provider)
-            assertEquals(2, afterRemoval.size)
-            assertEquals(listOf("key-1-$provider", "key-3-$provider"), afterRemoval)
+        // Remove a key
+        secureCredentialsRepository.removeApiKey(provider, "meta-key-2")
+        val afterRemoval = secureCredentialsRepository.getApiKeys(provider)
+        assertEquals(2, afterRemoval.size)
+        assertEquals(listOf("meta-key-1", "meta-key-3"), afterRemoval)
 
-            // Overwrite with setApiKeys
-            secureCredentialsRepository.setApiKeys(provider, listOf("new-key-a", "new-key-b"))
-            assertEquals(listOf("new-key-a", "new-key-b"), secureCredentialsRepository.getApiKeys(provider))
-        }
+        // Overwrite with setApiKeys
+        secureCredentialsRepository.setApiKeys(provider, listOf("new-key-a", "new-key-b"))
+        assertEquals(listOf("new-key-a", "new-key-b"), secureCredentialsRepository.getApiKeys(provider))
     }
 
     @Test
-    fun `Cloudflare Account ID can be updated and falls back to BuildConfig`() = runTest {
-        val defaultFallback = BuildConfig.CLOUDFLARE_ACCOUNT_ID
-        assertEquals(defaultFallback, secureCredentialsRepository.getCloudflareAccountId())
+    fun `hasConfiguredKeys returns false when empty and true when keys added`() = runTest {
+        val provider = ModelProviders.META
+        assertEquals(false, secureCredentialsRepository.hasConfiguredKeys(provider))
 
-        secureCredentialsRepository.setCloudflareAccountId("custom-cf-account-987")
-        assertEquals("custom-cf-account-987", secureCredentialsRepository.getCloudflareAccountId())
-        assertEquals("custom-cf-account-987", secureCredentialsRepository.cloudflareAccountIdFlow.first())
+        secureCredentialsRepository.addApiKey(provider, "meta-test-key")
+        assertEquals(true, secureCredentialsRepository.hasConfiguredKeys(provider))
 
-        // Reset/blank falls back to BuildConfig
-        secureCredentialsRepository.setCloudflareAccountId(null)
-        assertEquals(defaultFallback, secureCredentialsRepository.getCloudflareAccountId())
+        secureCredentialsRepository.removeApiKey(provider, "meta-test-key")
+        assertEquals(false, secureCredentialsRepository.hasConfiguredKeys(provider))
     }
 
     @Test
-    fun `UserPreferencesRepository delegates API keys and Cloudflare Account ID to secure repository`() = runTest {
-        val mockDataStore = mockk<androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>>(relaxed = true)
-        val userPrefs = UserPreferencesRepository(
-            dataStore = mockDataStore,
-            secureCredentialsRepository = secureCredentialsRepository
-        )
+    fun `blank strings are rejected and not counted in hasConfiguredKeys`() = runTest {
+        val provider = ModelProviders.META
+        secureCredentialsRepository.addApiKey(provider, "   ")
+        assertEquals(false, secureCredentialsRepository.hasConfiguredKeys(provider))
+        assertTrue(secureCredentialsRepository.getApiKeys(provider).isEmpty())
 
-        userPrefs.setNvidiaApiKey("nv-secured-token")
-        assertEquals("nv-secured-token", userPrefs.getNvidiaApiKeySync())
-        assertEquals("nv-secured-token", userPrefs.nvidiaApiKeyFlow.first())
-
-        userPrefs.setQwenApiKey("qwen-secured-token")
-        assertEquals("qwen-secured-token", userPrefs.getQwenApiKeySync())
-        assertEquals("qwen-secured-token", userPrefs.qwenApiKeyFlow.first())
-
-        userPrefs.setCloudflareAccountId("cf-account-id-12345")
-        assertEquals("cf-account-id-12345", userPrefs.getCloudflareAccountId())
-        assertEquals("cf-account-id-12345", userPrefs.getCloudflareAccountIdSync())
-        assertEquals("cf-account-id-12345", userPrefs.cloudflareAccountIdFlow.first())
+        secureCredentialsRepository.setApiKeys(provider, listOf("", "  ", "\t"))
+        assertEquals(false, secureCredentialsRepository.hasConfiguredKeys(provider))
+        assertTrue(secureCredentialsRepository.getApiKeys(provider).isEmpty())
     }
 
     @Test
-    fun `SecureCredentialsRepositoryImpl seeds from BuildConfig without overwriting existing merchant keys`() = runTest {
+    fun `SecureCredentialsRepositoryImpl stores and retrieves Meta keys`() = runTest {
         val mockPrefs = mockk<SharedPreferences>(relaxed = true)
         val mockEditor = mockk<SharedPreferences.Editor>(relaxed = true)
         every { mockPrefs.edit() } returns mockEditor
@@ -154,41 +98,8 @@ class SecureCredentialsRepositoryTest {
 
         val repo = SecureCredentialsRepositoryImpl(mockContext)
 
-        // Verifying Cloudflare Account ID reads fallback when not set
-        val defaultCf = BuildConfig.CLOUDFLARE_ACCOUNT_ID
-        assertEquals(defaultCf, repo.getCloudflareAccountId())
-
-        // Custom merchant keys are preserved and not overwritten
-        repo.setApiKeys(ModelProviders.QWEN, listOf("custom-merchant-qwen-key"))
-        assertEquals(listOf("custom-merchant-qwen-key"), repo.getApiKeys(ModelProviders.QWEN))
-
-        // Updating merchant Cloudflare Account ID works and does not revert to fallback
-        repo.setCloudflareAccountId("merchant-custom-cf-account-id")
-        assertEquals("merchant-custom-cf-account-id", repo.getCloudflareAccountId())
-        assertEquals("merchant-custom-cf-account-id", repo.cloudflareAccountIdFlow.first())
-    }
-
-    @Test
-    fun `hasConfiguredKeys returns false when empty and true when keys added`() = runTest {
-        val provider = ModelProviders.OPENROUTER
-        assertEquals(false, secureCredentialsRepository.hasConfiguredKeys(provider))
-
-        secureCredentialsRepository.addApiKey(provider, "sk-test-openrouter-key")
-        assertEquals(true, secureCredentialsRepository.hasConfiguredKeys(provider))
-
-        secureCredentialsRepository.removeApiKey(provider, "sk-test-openrouter-key")
-        assertEquals(false, secureCredentialsRepository.hasConfiguredKeys(provider))
-    }
-
-    @Test
-    fun `blank strings are rejected and not counted in hasConfiguredKeys`() = runTest {
-        val provider = ModelProviders.GROQ
-        secureCredentialsRepository.addApiKey(provider, "   ")
-        assertEquals(false, secureCredentialsRepository.hasConfiguredKeys(provider))
-        assertTrue(secureCredentialsRepository.getApiKeys(provider).isEmpty())
-
-        secureCredentialsRepository.setApiKeys(provider, listOf("", "  ", "\t"))
-        assertEquals(false, secureCredentialsRepository.hasConfiguredKeys(provider))
-        assertTrue(secureCredentialsRepository.getApiKeys(provider).isEmpty())
+        // Custom merchant keys are preserved
+        repo.setApiKeys(ModelProviders.META, listOf("custom-merchant-meta-key"))
+        assertEquals(listOf("custom-merchant-meta-key"), repo.getApiKeys(ModelProviders.META))
     }
 }

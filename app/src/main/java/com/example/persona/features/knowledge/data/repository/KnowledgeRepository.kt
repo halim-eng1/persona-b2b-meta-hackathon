@@ -5,7 +5,7 @@ import com.example.persona.core.database.dao.BusinessKnowledgeDao
 import com.example.persona.core.database.dao.EmbeddingIndexDao
 import com.example.persona.core.database.entity.BusinessKnowledgeEntity
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
-import com.example.persona.features.knowledge.data.indexer.OnnxKnowledgeVectorIndexer
+import com.example.persona.features.knowledge.data.indexer.KnowledgeVectorIndexerImpl
 import com.example.persona.features.knowledge.domain.indexer.KnowledgeVectorIndexer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -31,7 +31,7 @@ class KnowledgeRepository @Inject constructor(
         embeddingEngine: EmbeddingEngine
     ) : this(
         businessKnowledgeDao = businessKnowledgeDao,
-        vectorIndexer = OnnxKnowledgeVectorIndexer(embeddingEngine, embeddingIndexDao),
+        vectorIndexer = KnowledgeVectorIndexerImpl(embeddingEngine, embeddingIndexDao),
         embeddingIndexDao = embeddingIndexDao
     )
 

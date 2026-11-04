@@ -24,8 +24,6 @@ import com.example.persona.features.auto_reply.domain.modifier.StylePostProcesso
 import com.example.persona.features.auto_reply.domain.repository.AuditLogRepository
 import com.example.persona.features.auto_reply.domain.repository.ReplyGenerationRepository
 import com.example.persona.features.auto_reply.domain.usecase.DirectReplyExecutionUseCase
-import com.example.persona.features.auto_reply.data.gatekeeper.CloudflareClefClient
-import com.example.persona.features.auto_reply.data.gatekeeper.LiquidDecisionClient
 import com.example.persona.features.auto_reply.domain.gatekeeper.InboundIntent
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
 import com.example.persona.features.chat_import.data.normalizer.ArabicTextNormalizer
@@ -60,9 +58,7 @@ class AutoReplyOrchestratorRagTest {
         processor: NotificationProcessorImpl = mockk(relaxed = true),
         embeddingEngine: EmbeddingEngine = mockk(relaxed = true),
         stylePostProcessor: StylePostProcessor = StylePostProcessor(),
-        auditLogRepository: AuditLogRepository = mockk(relaxed = true),
-        cloudflareClefClient: CloudflareClefClient = mockk(relaxed = true),
-        liquidDecisionClient: LiquidDecisionClient = mockk(relaxed = true)
+        auditLogRepository: AuditLogRepository = mockk(relaxed = true)
     ): AutoReplyOrchestrator {
         every { prefsRepository.hasConfiguredKeys(any()) } returns true
         every { replyGenerationRepository.hasConfiguredKeys(any()) } returns true
@@ -84,9 +80,7 @@ class AutoReplyOrchestratorRagTest {
             businessKnowledgeDao = businessKnowledgeDao,
             conversationMetadataDao = conversationMetadataDao,
             context = mockk(relaxed = true),
-            scope = CoroutineScope(Dispatchers.Unconfined),
-            cloudflareClefClient = cloudflareClefClient,
-            liquidDecisionClient = liquidDecisionClient
+            scope = CoroutineScope(Dispatchers.Unconfined)
         )
     }
 
@@ -895,122 +889,6 @@ class AutoReplyOrchestratorRagTest {
     }
 
     @Test
-    fun `gatekeeper receives formatted context prefix when previous assistant turn exists in chat history`() = runBlocking {
-        val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
-        val cfClient = mockk<CloudflareClefClient>(relaxed = true)
-        val processor = mockk<NotificationProcessorImpl>()
-        val prefsRepo = mockk<UserPreferencesRepository>(relaxed = true)
-        coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
-        coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0)
-
-        val previousTurn = ChatHistoryEntity(
-            id = 1L,
-            contactName = "عميل سياقي",
-            messageText = "تمام، تحب تشوف المقاسات ولا الألوان الأول؟",
-            timestamp = System.currentTimeMillis() - 10_000L,
-            isFromUser = false,
-            sourceClass = NotificationSourceClass.BUSINESS.name
-        )
-        coEvery {
-            chatHistoryDao.getRecentMessagesExceptForSource(
-                contactName = "عميل سياقي",
-                sourceClass = any(),
-                excludeId = any(),
-                limit = any()
-            )
-        } returns listOf(previousTurn)
-
-        val inboundQuery = "وريني المقاسات المتاحة"
-        val processed = ProcessedNotification(
-            contactName = "عميل سياقي",
-            originalText = inboundQuery,
-            normalizedText = inboundQuery,
-            notificationKey = "key_ctx_1",
-            postTime = System.currentTimeMillis(),
-            context = mockk(relaxed = true),
-            sourceClass = NotificationSourceClass.BUSINESS
-        )
-        coEvery { processor.process(any()) } returns processed
-        coEvery { cfClient.decide(any(), any()) } returns InboundIntent.CATALOG_INQUIRY
-
-        val orchestrator = createTestOrchestrator(
-            chatHistoryDao = chatHistoryDao,
-            prefsRepository = prefsRepo,
-            processor = processor,
-            cloudflareClefClient = cfClient
-        )
-
-        orchestrator.processNotificationSequentially(
-            WhatsAppNotification(
-                title = "عميل سياقي",
-                text = inboundQuery,
-                postTime = System.currentTimeMillis(),
-                notificationKey = "key_ctx_1"
-            )
-        )
-
-        val expectedContextPrefix = "[الرد السابق]: تمام، تحب تشوف المقاسات ولا الألوان الأول؟\n[رسالة العميل]: $inboundQuery"
-        coVerify(atLeast = 1) {
-            cfClient.decide(expectedContextPrefix, timeoutMs = 1150L)
-        }
-    }
-
-    @Test
-    fun `gatekeeper receives raw query text without context prefix when no previous assistant turn exists`() = runBlocking {
-        val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
-        val cfClient = mockk<CloudflareClefClient>(relaxed = true)
-        val processor = mockk<NotificationProcessorImpl>()
-        val prefsRepo = mockk<UserPreferencesRepository>(relaxed = true)
-        coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
-        coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0)
-
-        coEvery {
-            chatHistoryDao.getRecentMessagesExceptForSource(
-                contactName = "عميل جديد",
-                sourceClass = any(),
-                excludeId = any(),
-                limit = any()
-            )
-        } returns emptyList()
-
-        val inboundQuery = "عندكم هوديز؟"
-        val processed = ProcessedNotification(
-            contactName = "عميل جديد",
-            originalText = inboundQuery,
-            normalizedText = inboundQuery,
-            notificationKey = "key_new_1",
-            postTime = System.currentTimeMillis(),
-            context = mockk(relaxed = true),
-            sourceClass = NotificationSourceClass.BUSINESS
-        )
-        coEvery { processor.process(any()) } returns processed
-        coEvery { cfClient.decide(any(), any()) } returns InboundIntent.CATALOG_INQUIRY
-
-        val orchestrator = createTestOrchestrator(
-            chatHistoryDao = chatHistoryDao,
-            prefsRepository = prefsRepo,
-            processor = processor,
-            cloudflareClefClient = cfClient
-        )
-
-        orchestrator.processNotificationSequentially(
-            WhatsAppNotification(
-                title = "عميل جديد",
-                text = inboundQuery,
-                postTime = System.currentTimeMillis(),
-                notificationKey = "key_new_1"
-            )
-        )
-
-        coVerify(atLeast = 1) {
-            cfClient.decide(inboundQuery, timeoutMs = 1150L)
-        }
-        coVerify(exactly = 0) {
-            cfClient.decide(match { it.contains("[الرد السابق]:") }, any())
-        }
-    }
-
-    @Test
     fun `Pass 1 response with action REPLY and non-blank refinedSearchKeyword is auto-promoted to RE_QUERY and triggers Pass 2`() = runBlocking {
         val replyRepo = mockk<ReplyGenerationRepository>(relaxed = true)
         val semanticRepo = mockk<SemanticRetrievalRepository>(relaxed = true)
@@ -1317,8 +1195,6 @@ class AutoReplyOrchestratorRagTest {
         val chatHistoryDao = mockk<ChatHistoryDao>(relaxed = true)
         val replyRepo = mockk<ReplyGenerationRepository>(relaxed = true)
         val prefsRepo = mockk<UserPreferencesRepository>(relaxed = true)
-        val cloudflareClient = mockk<CloudflareClefClient>(relaxed = true)
-        val liquidClient = mockk<LiquidDecisionClient>(relaxed = true)
         val processor = mockk<NotificationProcessorImpl>()
 
         coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
@@ -1345,9 +1221,7 @@ class AutoReplyOrchestratorRagTest {
             processor = processor,
             chatHistoryDao = chatHistoryDao,
             replyGenerationRepository = replyRepo,
-            prefsRepository = prefsRepo,
-            cloudflareClefClient = cloudflareClient,
-            liquidDecisionClient = liquidClient
+            prefsRepository = prefsRepo
         )
 
         val coalescedNotification = WhatsAppNotification(
@@ -1363,9 +1237,6 @@ class AutoReplyOrchestratorRagTest {
 
         orchestrator.processNotificationSequentially(coalescedNotification)
 
-        // Verify gatekeepers were NOT called because isImagePresent triggered fast-path
-        coVerify(exactly = 0) { cloudflareClient.decide(any(), any()) }
-        coVerify(exactly = 0) { liquidClient.decide(any(), any()) }
 
         // Verify reply generation received the image media path and CATALOG_INQUIRY intent
         coVerify(exactly = 1) {
@@ -1391,10 +1262,14 @@ class AutoReplyOrchestratorRagTest {
         val prefsRepo = mockk<UserPreferencesRepository>(relaxed = true)
         val embeddingEngine = mockk<EmbeddingEngine>(relaxed = true)
         val processor = mockk<NotificationProcessorImpl>()
+        val semanticRetrieval = mockk<SemanticRetrievalRepository>(relaxed = true)
 
         coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
         coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0, replyDelaySeconds = 0)
         coEvery { embeddingEngine.embedForAutoReply(any()) } returns FloatArray(384) { 0.1f }
+        coEvery {
+            semanticRetrieval.retrieveCandidates(any(), any(), any(), any(), any())
+        } returns Pair(emptyList(), 0f)
 
         val processed = ProcessedNotification(
             contactName = "عميل الدفعة",
@@ -1414,7 +1289,8 @@ class AutoReplyOrchestratorRagTest {
             chatHistoryDao = chatHistoryDao,
             replyGenerationRepository = replyRepo,
             prefsRepository = prefsRepo,
-            embeddingEngine = embeddingEngine
+            embeddingEngine = embeddingEngine,
+            semanticRetrievalRepository = semanticRetrieval
         )
 
         val coalescedNotification = WhatsAppNotification(
@@ -1590,14 +1466,11 @@ class AutoReplyOrchestratorRagTest {
         val embeddingEngine = mockk<EmbeddingEngine>(relaxed = true)
         val prefsRepo = mockk<UserPreferencesRepository>(relaxed = true)
         val processor = mockk<NotificationProcessorImpl>()
-        val cfClient = mockk<CloudflareClefClient>()
 
         coEvery { prefsRepo.isAutoReplyEnabledSync() } returns true
         coEvery { prefsRepo.getStylePreferencesSync() } returns StylePreferences(cooldownMins = 0)
         coEvery { directReplyUseCase.execute(any(), any(), any(), any()) } returns com.example.persona.features.auto_reply.domain.usecase.ReplyExecutionResult.Success
 
-        // Gatekeeper returns BANTER for the URL turn
-        coEvery { cfClient.decide(any(), any()) } returns InboundIntent.BANTER
 
         val inboundQuery = "tiktok.com/@velo.egypt"
         val processed = ProcessedNotification(
@@ -1630,8 +1503,7 @@ class AutoReplyOrchestratorRagTest {
             directReplyExecutionUseCase = directReplyUseCase,
             embeddingEngine = embeddingEngine,
             prefsRepository = prefsRepo,
-            processor = processor,
-            cloudflareClefClient = cfClient
+            processor = processor
         )
 
         val notification = WhatsAppNotification(

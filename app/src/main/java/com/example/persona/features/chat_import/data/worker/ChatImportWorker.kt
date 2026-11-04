@@ -25,7 +25,6 @@ import com.example.persona.core.di.IoDispatcher
 import com.example.persona.core.logging.PersonaLogger
 import com.example.persona.core.logging.PersonaLogTags
 import com.example.persona.features.chat_import.data.embedding.EmbeddingEngine
-import com.example.persona.features.chat_import.data.embedding.OnnxModelManager
 import com.example.persona.features.chat_import.data.parser.KnowledgeChunk
 import com.example.persona.features.chat_import.data.parser.MarkdownChunker
 import com.example.persona.features.chat_import.data.parser.StoreTopicsExtractor
@@ -58,7 +57,6 @@ class ChatImportWorker @AssistedInject constructor(
     private val markdownChunker: MarkdownChunker,
     private val whatsAppTxtExportParser: WhatsAppTxtExportParser,
     private val embeddingEngine: EmbeddingEngine,
-    private val modelManager: OnnxModelManager,
     private val businessKnowledgeDao: BusinessKnowledgeDao,
     private val embeddingIndexDao: EmbeddingIndexDao,
     private val database: PersonaDatabase,
@@ -170,13 +168,10 @@ class ChatImportWorker @AssistedInject constructor(
                 PersonaLogger.w(PersonaLogTags.IMPORT, "Failed to persist store website: ${e.message}")
             }
 
-            // ── Phase 3: Load model & Generate Embeddings in Memory ─────────────
+            // ── Phase 3: Generate Embeddings in Memory ──────────────────────────
             // We generate embeddings BEFORE mutating the database. This guarantees atomic resilience:
             // if cancelled or stopped midway, the database remains in its previous valid state.
-            if (!modelManager.isLoaded()) {
-                val loaded = modelManager.loadModel()
-                if (!loaded) return@withContext failWithError("Failed to load AI embedding model")
-            }
+            // The deterministic feature-hashing engine needs no model load.
 
             val totalChunks = chunks.size
             val totalBatches = (totalChunks + Constants.EMBEDDING_BATCH_SIZE - 1) / Constants.EMBEDDING_BATCH_SIZE

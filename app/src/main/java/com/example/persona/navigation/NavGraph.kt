@@ -23,7 +23,7 @@ import com.example.persona.features.home.presentation.HomeScreen
 import com.example.persona.features.knowledge.presentation.KnowledgeManagementScreen
 import com.example.persona.features.onboarding.presentation.FeatureOnboardingScreen
 import com.example.persona.features.onboarding.presentation.PermissionOnboardingScreen
-import com.example.persona.features.onboarding.presentation.model_download.ModelPreparationScreen
+
 import com.example.persona.features.orders.presentation.OrdersDashboardScreen
 import com.example.persona.features.settings.presentation.SettingsScreen
 
@@ -32,7 +32,6 @@ fun PersonaNavGraph(
     navController: NavHostController,
     modifier: Modifier = Modifier,
     startDestination: Screen = Screen.Home,
-    isModelReady: Boolean = true,
     currentLanguage: String = UserPreferencesRepository.DEFAULT_APP_LANGUAGE,
     onLanguageChange: (String) -> Unit = {},
     onCompleteOnboarding: () -> Unit = {}
@@ -140,22 +139,8 @@ fun PersonaNavGraph(
                 onLanguageChange = onLanguageChange,
                 onComplete = {
                     onCompleteOnboarding()
-                    val next = if (isModelReady) Screen.Home else Screen.ModelPreparation
-                    navController.navigate(next) {
-                        popUpTo(Screen.FeatureOnboarding) { inclusive = true }
-                    }
-                }
-            )
-        }
-
-        // ── Mandatory Permission / Onboarding Flow ───────────────────────────
-        composable<Screen.ModelPreparation> {
-            ModelPreparationScreen(
-                currentLanguage = currentLanguage,
-                onLanguageChange = onLanguageChange,
-                onComplete = {
                     navController.navigate(Screen.Home) {
-                        popUpTo(Screen.ModelPreparation) { inclusive = true }
+                        popUpTo(Screen.FeatureOnboarding) { inclusive = true }
                     }
                 }
             )

@@ -356,6 +356,7 @@
     <string name="daily_metrics_title">Daily Operating Metrics</string>
     <string name="quick_actions_title">Quick Actions</string>
     <string name="bot_simulator_title">Bot Simulator</string>
+    <string name="bot_simulator_subtitle">Test and preview real-time AI responses</string>
 
     <!-- ── Settings Screen & Tabs ──────────────────────────────────────────────── -->
     <string name="settings_title">Store &amp; Assistant Settings</string>
@@ -381,8 +382,6 @@
     <string name="settings_ai_keys_for_provider">API Keys for %s</string>
     <string name="settings_ai_keys_subtitle">Add multiple API keys with live connection test for each key.</string>
     <string name="settings_ai_guide_title">How to get API Key for %s</string>
-    <string name="settings_ai_cloudflare_account_id_title">Cloudflare Account ID</string>
-    <string name="settings_ai_cloudflare_account_id_subtitle">Required for Workers AI models in addition to API token</string>
     <string name="settings_ai_no_keys">No API keys registered for this provider yet. Default keys will be used if configured.</string>
     <string name="settings_ai_key_label">Key #%d</string>
     <string name="settings_ai_status_untested">Not tested yet</string>
@@ -743,7 +742,7 @@
     <string name="chat_import_error_indexing_failed">An error occurred while saving and indexing knowledge. Please check the text and try again.</string>
     <string name="chat_import_error_unsupported_file">Unsupported file type. Please pick a .txt or .md file.</string>
     <string name="guide_dialog_title">API Key Extraction Guide</string>
-    <string name="guide_notification_copy_text">Copy this text and send it to any AI model (like ChatGPT or Gemini) to guide you through creating an account step by step with links.</string>
+    <string name="guide_notification_copy_text">Copy this text and send it to any AI assistant to guide you through creating an account step by step with links.</string>
 
     <string name="orders_dashboard_title">Orders Fulfillment</string>
     <string name="orders_selected_count">%d orders selected</string>
@@ -910,53 +909,13 @@
     <!-- Sprint 1: Provider Guide Details -->
     <string name="guide_close_desc">Close</string>
     <string name="guide_open_portal_desc">Open Portal</string>
-    <string name="guide_qwen_step_1">Log in to the official Qwen Cloud platform with your account.</string>
-    <string name="guide_qwen_step_2">From the side menu in Model Studio, navigate to API-KEY.</string>
-    <string name="guide_qwen_step_3">Click Create API-KEY and copy your generated secret key (starts with sk-...).</string>
-    <string name="guide_qwen_step_4">Supports all fast models: Qwen 3.8 Max, Qwen 3.8 Flash, and DeepSeek v4.1.</string>
-    <string name="guide_qwen_tips">Be sure to save the key; Persona supports rotating multiple free keys for zero downtime.</string>
 
-    <string name="guide_gemini_step_1">Open Google AI Studio and sign in with your Google account.</string>
-    <string name="guide_gemini_step_2">Click (Get API key) in the top corner and choose (Create API key).</string>
-    <string name="guide_gemini_step_3">Select a new or existing Google Cloud project, then copy the key starting with AIzaSy...</string>
-    <string name="guide_gemini_step_4">Grants generous free tier access to Gemini 3.1 Flash-Lite, 3.5 Flash-Lite, and 3.8 Flash.</string>
-    <string name="guide_gemini_tips">Gemini keys are fast, free, and support multimodal images and text with high quality.</string>
 
-    <string name="guide_groq_step_1">Sign in to GroqCloud Console using Google or GitHub for free.</string>
-    <string name="guide_groq_step_2">From the side menu, click (API Keys) tab then (Create API Key).</string>
-    <string name="guide_groq_step_3">Enter a name for the key and copy the token (starts with gsk_...).</string>
-    <string name="guide_groq_step_4">Provides ultra-fast LPU inference speeds for GPT-OSS and Qwen 3.8 models.</string>
-    <string name="guide_groq_tips">Fastest Time-to-First-Token (TTFT), ideal for real-time customer auto-replies.</string>
 
-    <string name="guide_nvidia_step_1">Go to NVIDIA Build and sign in with a free NVIDIA Developer account.</string>
-    <string name="guide_nvidia_step_2">Select a Nemotron model (e.g. Nemotron 3 Ultra 550B or Lightning).</string>
-    <string name="guide_nvidia_step_3">Click (Get API Key) and generate a new key (starts with nvapi-...).</string>
-    <string name="guide_nvidia_step_4">Receive 1,000 welcome points to run enterprise foundation models.</string>
-    <string name="guide_nvidia_tips">Nemotron models excel at complex multi-turn negotiation and order extraction.</string>
 
-    <string name="guide_openrouter_step_1">Sign in to OpenRouter via Google or GitHub.</string>
-    <string name="guide_openrouter_step_2">Go to Keys page and click (Create Key).</string>
-    <string name="guide_openrouter_step_3">Copy the secret key that starts with (sk-or-v1-...).</string>
-    <string name="guide_openrouter_step_4">Automatically supports hundreds of permanent free and paid models like Nemotron Free and Liquid Free.</string>
-    <string name="guide_openrouter_tips">The ultimate failover gateway ensuring your automated replies never stop.</string>
 
-    <string name="guide_cloudflare_step_1">Log into Cloudflare dashboard and go to (Workers &amp; Pages) then (AI).</string>
-    <string name="guide_cloudflare_step_2">Copy the Account ID shown on the right sidebar and paste into the Account ID field.</string>
-    <string name="guide_cloudflare_step_3">Click (Manage API Tokens) and create a new token with Workers AI Read permissions.</string>
-    <string name="guide_cloudflare_step_4">Copy the secret token (starts with cfut_...) and add it to your API keys.</string>
-    <string name="guide_cloudflare_tips">Cloudflare Workers AI requires both Account ID and API Token for Clef Flash and Clef Omni models.</string>
 
-    <string name="guide_liquid_step_1">Log in to the Liquid AI Developer Portal with your account.</string>
-    <string name="guide_liquid_step_2">Go to API Credentials and create a new key (starts with liquid_...).</string>
-    <string name="guide_liquid_step_3">Copy the key and paste it into the application.</string>
-    <string name="guide_liquid_step_4">Supports instant decision engine and d1 / d1:latest models with ultra-low latency.</string>
-    <string name="guide_liquid_tips">Functions as a Gatekeeper classifying customer intent and detecting urgent issues under 800ms.</string>
 
-    <string name="guide_nara_step_1">Open the Nara Router portal and create a new account.</string>
-    <string name="guide_nara_step_2">Go to API Keys management and generate a new key (starts with sk-nry-...).</string>
-    <string name="guide_nara_step_3">Copy the key and add it to the app\'s key manager.</string>
-    <string name="guide_nara_step_4">Supports the specialized Arabic commerce transaction model laguna-s-2.1.</string>
-    <string name="guide_nara_tips">A dedicated Arabic model fine-tuned for regional dialects and e-commerce transactions.</string>
 
     <string name="guide_default_step_1">Sign in to the provider\'s official developer platform.</string>
     <string name="guide_default_step_2">Navigate to API settings and create a new key.</string>
@@ -1199,8 +1158,7 @@
     <string name="settings_ai_no_models_for_capability">No models configured for this capability</string>
     <string name="settings_ai_no_primary_key_banner">No API keys configured yet. Please add a key for at least one provider to activate auto-reply.</string>
     <string name="settings_ai_key_required_badge">Optional (Add Key)</string>
-    <string name="settings_ai_openrouter_dependency_banner">If not using OpenRouter as an all-in-one gateway, make sure to configure a provider for Audio (e.g. Qwen/Groq) and Decision (e.g. Cloudflare/Liquid) alongside Text.</string>
-    <string name="settings_ai_meta_active_banner">Meta AI is active for Text, Vision, and Audio. If no Decision key (Cloudflare, Liquid, or OpenRouter) is provided, the system will autonomously rely on on-device intent classification and direct model reasoning.</string>
+    <string name="settings_ai_meta_active_banner">Meta AI (Muse Spark 1.3) is active for Text, Vision, Audio, and Decision. All requests run through Meta models with no third-party AI provider required.</string>
     <string name="settings_ai_meta_card_title">Meta AI (Primary Provider #1)</string>
     <string name="settings_ai_meta_card_subtitle">Official Meta Model API covering Text, Vision &amp; Audio</string>
     <string name="settings_ai_meta_active_badge">Active (#1)</string>
@@ -1220,7 +1178,6 @@
     <string name="settings_ai_models_summary_sheet">Configured inference models in fallback order</string>
     <string name="settings_ai_provider_cascade_title">Active Fallback Chain</string>
     <string name="settings_ai_provider_cascade_subtitle">Tap to adjust engine priority</string>
-    <string name="settings_ai_cloudflare_hint">Cloudflare Account ID is typically a 32-character hex string</string>
 
     <string name="msg_when_greeting">Sent when customer starts a new conversation</string>
     <string name="msg_when_farewell">Sent when concluding the conversation</string>
@@ -1260,8 +1217,7 @@
     <string name="confirm_restore_backup_confirm_btn">Restore &amp; Overwrite</string>
 
     <!-- Search Keywords (Bilingual Search Index) -->
-    <string name="kw_api_keys">api keys tokens credentials secret openrouter groq gemini nvidia qwen cloudflare nara liquid مفاتيح توكن سر ربط ذكاء اصطناعي</string>
-    <string name="kw_cloudflare">cloudflare account id workers ai حساب كلاودفلير معرّف</string>
+    <string name="kw_api_keys">api keys tokens credentials secret meta muse spark مفاتيح توكن سر ربط ذكاء اصطناعي</string>
     <string name="kw_tone">tone persona personality voice witty formal friendly concise نبرة شخصية أسلوب مرح رسمي ودود مقتضب</string>
     <string name="kw_days">working days schedule official hours أيام العمل الجدول مواعيد رسمي</string>
     <string name="kw_bot_name">bot name assistant persona اسم البوت المساعد الممثل</string>
@@ -1285,7 +1241,7 @@
     <string name="kw_storage_access">storage media files all files access permission إذن تخزين وسائط وصول ملفات</string>
     <string name="kw_human_takeover">human takeover pause safety safety toggle إيقاف أمان تدخل بشري</string>
     <string name="kw_provider_chain">provider chain fallback cascade order priority أولوية ترتيب محركات الذكاء بديل</string>
-    <string name="kw_models">models llm inference custom model deepseek qwen نماذج ذكاء اصطناعي تخصيص</string>
+    <string name="kw_models">models llm inference custom model muse spark نماذج ذكاء اصطناعي تخصيص</string>
     <string name="kw_permissions">permissions health checks diagnostics recheck أذونات صحة فحص تشخيص إعادة فحص</string>
     <string name="kw_backup">backup export restore encrypted local data نسخة احتياطية تصدير استيراد تشفير</string>
     <string name="kw_cache">cache clean storage clear temporary cleaner ذاكرة مؤقتة تنظيف مسح مساحة</string>
