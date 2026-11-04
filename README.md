@@ -2,7 +2,7 @@
 
 <img src="docs/persona_neural_icon.svg" alt="Persona B2B Logo" width="120" height="120" />
 
-# Persona B2B — Meta Model API Edition
+# Persona B2B: Smart Auto Reply
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-blue.svg?logo=kotlin)](https://kotlinlang.org)
 [![Android](https://img.shields.io/badge/Platform-Android_14_%28API_34%2B%29-green.svg?logo=android)](https://developer.android.com)
@@ -13,55 +13,76 @@
 
 </div>
 
-> **Persona B2B** is an autonomous, bilingual (Arabic/English) AI communication and stateful commerce engine for Android. Engineered exclusively on the official **Meta Model API** (`Muse Spark 1.3`, `Muse Spark 1.2`, and `Muse Voice Transcribe 1.0`), it empowers small and medium businesses (SMBs) as a full-cycle sales & order agent—or operates as an isolated **Personal Executive Assistant**—with zero third-party AI model dependencies at runtime.
+> **Persona B2B** is an autonomous, multimodal (Text, Voice Notes, & Images), bilingual (Arabic/English) AI communication and stateful commerce engine for Android. Engineered exclusively on the official **Meta Model API** (`Muse Spark 1.3`, `Muse Spark 1.2`, and `Muse Voice Transcribe 1.0`), it empowers small and medium businesses (SMBs) as a full-cycle sales & order agent—or operates as an isolated **Personal Executive Assistant**—with zero third-party AI model dependencies at runtime.
 
 ---
 
-## 🏗️ System Architecture & End-to-End Execution Flow
+## 🏗️ Production System Architecture (Autonomous Background Engine)
 
-```text
-+-----------------------------------------------------------------------------------+
-|                        1. INBOUND CHANNELS & LIVE SIMULATOR                       |
-|  • Live WhatsApp Notification Listener  OR  • Interactive In-App Bot Simulator    |
-|  • Text Queries / Dynamic FAQ Chips     OR  • Live 16kHz Mic Voice Recording      |
-+-----------------------------------------+-----------------------------------------+
-                                          |
-                                          v
-+-----------------------------------------------------------------------------------+
-|                     2. HARDWARE MEDIA & META VOICE PIPELINE                       |
-|  • On-Device AudioWavConverter (Android MediaCodec -> 16kHz Mono PCM WAV)         |
-|  • Meta Model API ASR: `muse-voice-transcribe-1.0` (Speech-to-Text Transcription) |
-+-----------------------------------------+-----------------------------------------+
-                                          |
-                                          v
-+-----------------------------------------------------------------------------------+
-|            3. ZERO-COLD-START DETERMINISTIC RAG ENGINE (0ms Overhead)             |
-|  • Bilingual Normalization (Arabic/English) + Colloquial Synonym Expansion Layer  |
-|  • Deterministic 384-Dim Signed Feature Hashing + BM25 Lexical Scoring            |
-|  • Room SQLite Vector Index (`FloatArray(384)`) -> Top-8 Context Chunks (topK=8)  |
-+-----------------------------------------+-----------------------------------------+
-                                          |
-                                          v
-+-----------------------------------------------------------------------------------+
-|               4. UNIFIED SINGLE-STAGE META AI REASONING ENGINE                    |
-|  • Single-Pass Prompt: Chat History + Top-8 Knowledge Chunks + Active Orders      |
-|  • Primary Engine: `muse-spark-1.3` <--> `muse-spark-1.3-contributor`             |
-|    (Automatic HTTP 404 Transparent Entitlement Failover)                          |
-|  • Secondary Meta Fallback: `muse-spark-1.2` <--> `muse-spark-1.2-contributor`    |
-|  • Multi-Key Pool Rotation, Circuit Breakers & `<think>` Trace Sanitization       |
-+-----------------------------------------+-----------------------------------------+
-                                          |
-                    +---------------------+---------------------+
-                    |                                           |
-                    v (B2B Merchant Mode)                       v (Personal Assistant Mode)
-+---------------------------------------+   +---------------------------------------+
-|   5A. STATEFUL COMMERCE & ORDERS      |   |   5B. EXECUTIVE AUTO-PILOT            |
-|  • Autonomous JSON Order Extraction   |   |  • Context-Aware Personal Replies     |
-|  • Room DB Order Lifecycle Tracking   |   |  • Meeting & Schedule Coordination    |
-|  • Direct Reply & HITL Escalation     |   |  • Isolated from Commercial Tools     |
-+---------------------------------------+   +---------------------------------------+
-```
+The core strength of **Persona B2B** lies in its autonomous background execution on Android. It operates as an unattended, privacy-first daemon that listens to real customer chats, extracts multimodal context, executes deterministic RAG retrieval, reasons with Meta's official LLMs, and updates stateful order databases—all without needing user supervision.
 
+`	ext
++--------------------------------------------------------------------------------------------------+
+|                          1. INBOUND REAL-WORLD PRODUCTION CHANNELS                               |
+|   • Android NotificationListenerService intercepts real incoming WhatsApp / WhatsApp Business    |
+|   • Direct WakeLock & Coroutine Background Worker (Operates even when screen is locked/off)      |
++------------------------------------------------+-------------------------------------------------+
+                                                 |
+         +---------------------------------------+---------------------------------------+
+         | (Customer Text Query)                 | (Customer Voice Note)                 | (Customer Product Photo)
+         v                                       v                                       v
++------------------------+      +--------------------------------+      +--------------------------------+
+| Text Normalizer        |      | Hardware AudioWavConverter     |      | ImagePayloadPreprocessor       |
+| • Arabic diacritic fix |      | • MediaCodec -> 16kHz PCM WAV  |      | • Downscale & JPEG compression |
+| • Punctuation cleanup  |      | • Meta muse-voice-transcribe   |      | • Base64 payload packaging     |
++-----------+------------+      +---------------+----------------+      +---------------+----------------+
+            |                                   |                                       |
+            +-----------------------------------+---------------------------------------+
+                                                |
+                                                v
++--------------------------------------------------------------------------------------------------+
+|                            2. ZERO-STARTUP DETERMINISTIC RAG ENGINE                              |
+|   • Dialectal & Commerce Synonym Expansion (هاتف <-> جوال/موبايل, سعر <-> كام/تكلفة)             |
+|   • 384-Dimensional Mathematical Feature Hashing + BM25 Lexical Ranking (0ms model download)     |
+|   • Room SQLite Vector Table Query -> Retrieves Top-8 Most Relevant Context Chunks (topK = 8)    |
++-----------------------------------------------+--------------------------------------------------+
+                                                |
+                                                v
++--------------------------------------------------------------------------------------------------+
+|                            3. UNIFIED META MODEL REASONING ENGINE                                |
+|   • Single-Pass Reasoning: Muse Spark 1.3 (RAG Synthesis + Autonomous JSON Order Extraction)     |
+|   • Multimodal Visual Reasoning: Muse Spark 1.3 Vision (Processes image specs and product matches)|
+|   • Transparent Entitlement Failover: Auto-detects 404 and flips standard <-> contributor tags   |
+|   • Meta Key Rotation & Circuit Breaker: Zero downtime under rate limits or network issues       |
++-----------------------------------------------+--------------------------------------------------+
+                                                |
+                        +-----------------------+-----------------------+
+                        |                                               |
+                        v (B2B Merchant Mode)                           v (Executive Assistant Mode)
++-----------------------------------------------+   +-----------------------------------------------+
+|     4A. STATEFUL COMMERCE & ORDERS DB         |   |         4B. EXECUTIVE AUTO-PILOT              |
+|   • Autonomous JSON Order Entity Parsing      |   |   • Context-Aware Professional Replies        |
+|   • Room SQLite Database Order Insertion      |   |   • Availability & Scheduling Coordination    |
+|   • Stock & Shipping Validation Rules         |   |   • Autonomous Personal Inquiry Triage        |
+|   • Direct WhatsApp Quick-Reply Notification  |   |   • Safe Guardrails (No Commercial Actions)   |
++-----------------------------------------------+   +-----------------------------------------------+
+`
+
+---
+
+## ⚡ Live WhatsApp Production vs. Interactive Bot Simulator
+
+To provide the evaluation committee with the most flexible testing experience, **Persona B2B** provides two interchangeable entry points to the exact same Meta AI pipeline:
+
+| Dimension | 📱 Live WhatsApp Background Engine | 🧪 Interactive Bot Simulator (In-App) |
+| :--- | :--- | :--- |
+| **Target Audience** | Real customers on WhatsApp & WhatsApp Business | Hackathon Judges & Fast Evaluation |
+| **Prerequisites** | Android Notification Access permission | **Zero Permissions Required** (Runs standalone) |
+| **Input Modalities** | Inbound WhatsApp texts, voice notes, photos | Typed queries, dynamic FAQ chips, live mic audio |
+| **Audio Processing** | WhatsApp audio notes $\rightarrow$ MediaCodec $\rightarrow$ Meta ASR | Live microphone $\rightarrow$ 16kHz PCM WAV $\rightarrow$ Meta ASR |
+| **RAG & Reasoning** | Deterministic 384-Dim RAG + Meta Muse Spark 1.3 | Identical Deterministic RAG + Meta Muse Spark 1.3 |
+| **Order Extraction** | Automatic JSON extraction into Room DB | Live interactive order preview + Room DB update |
+| **Reply Dispatch** | Automated OS Notification Action Quick-Reply | Real-time chat bubbles in UI with timing metrics |
 ---
 
 ## 🌟 Core Pillars & Hackathon Innovations
@@ -74,13 +95,19 @@ Every AI model invoked at runtime is an official Meta model via `MetaModelApiCli
 - **Transparent Entitlement Failover**: Automatically detects HTTP `404 model_not_found` responses and transparently switches between standard model IDs (`muse-spark-1.3`) and hackathon contributor variants (`muse-spark-1.3-contributor`) on the fly, ensuring 100% compatibility with any judge's API key.
 - **Dynamic Key Pool & Circuit Breakers**: Supports rotating across multiple Meta API keys with exponential backoff and human-in-the-loop (HITL) escalation if rate limits are exhausted.
 
-### 2. Zero-Startup Deterministic 384-Dim RAG with Synonym Expansion
-- **Zero External AI Models**: Replaces heavy third-party embedding downloads with a pure mathematical **Multilingual Feature Hashing & BM25 Vector Engine** (`EmbeddingEngine.kt`).
+### 2. True Multimodal Ingestion (Text, Voice Notes & Product Photos)
+Persona B2B processes every customer interaction modality natively:
+- **Product Photos & Image Recognition**: When customers send a photo of an item or inquiry (ImagePayloadPreprocessor.kt), the engine decodes, optimizes, and forwards the base64 visual payload to Meta's multimodal vision pipeline (Muse Spark 1.3 Vision). It extracts exact product specs, colors, and models to ground RAG retrieval and confirm orders.
+- **Voice Notes & Audio Transcription**: Incoming customer voice messages and in-app microphone recordings are automatically converted to 16kHz mono PCM WAV on-device and transcribed in real-time via **Meta muse-voice-transcribe-1.0** with robust understanding of colloquial Arabic dialects and English.
+- **Natural Conversational Text**: Fluent, dialect-aware chat replies powered by single-pass Meta reasoning.
+
+### 3. Zero-Startup Deterministic 384-Dim RAG with Synonym Expansion
+- **Zero External AI Models**: Built with a pure mathematical **Multilingual Feature Hashing & BM25 Vector Engine** (`EmbeddingEngine.kt`).
 - **0-Second Cold Start**: Launches instantly with zero model download wait times while preserving a native `FloatArray(384)` vector layout in Room SQLite.
 - **Colloquial & Commerce Synonym Expansion**: Pre-expands regional and commercial terms prior to hashing (e.g., mapping `هاتف` $\leftrightarrow$ `موبايل/جوال/فون`, `سعر` $\leftrightarrow$ `بكام/تكلفة`, `شحن` $\leftrightarrow$ `توصيل/دليفري`, `order` $\leftrightarrow$ `طلب/اوردر`).
 - **Deep Context Window (`topK = 8`)**: Supplies the top 8 most relevant knowledge chunks directly to `Muse Spark 1.3` for comprehensive domain grounding.
 
-### 3. Interactive Bot Simulator with Live Voice Recording & Dynamic FAQs
+### 4. Interactive Bot Simulator with Live Voice Recording & Dynamic FAQs
 - **No WhatsApp Setup Needed for Judges**: Test the entire end-to-end Meta AI pipeline inside the built-in **Bot Simulator** bottom sheet.
 - **Live Microphone Recording**: Record real-time 16kHz mono PCM WAV voice notes directly inside the simulator (`LiveAudioRecorder.kt`), complete with runtime permission handling, pulse/timer animations, hardware WAV conversion, and live transcription via `muse-voice-transcribe-1.0`.
 - **Dynamic Suggested FAQ Chips**: Automatically parses indexed knowledge headings and product entities to generate 4–6 clickable suggested question chips tailored to the currently active knowledge base.
@@ -150,7 +177,6 @@ In `app/build.gradle.kts`, the build system automatically checks for `META_API_K
   Create `secrets.local.properties` in the root directory of the project and add your key so the compiled app works out-of-the-box:
   ```properties
   META_API_KEY=your_meta_model_api_key_here
-  META_BASE_URL=[https://api.meta.ai/v1](https://api.meta.ai/v1)
   ```
 - **Option 2 (Configure anytime via In-App UI)**:
   If you build without `secrets.local.properties` (or install the pre-built APK), simply open the app and enter your key directly in **Settings $\rightarrow$ AI Engine $\rightarrow$ Meta Model API Key**. Keys are encrypted on-device via `EncryptedSharedPreferences`.
