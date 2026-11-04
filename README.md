@@ -22,54 +22,64 @@
 The core strength of **Persona B2B** lies in its autonomous background execution on Android. It operates as an unattended, privacy-first daemon that listens to real customer chats, extracts multimodal context, executes deterministic RAG retrieval, reasons with Meta's official LLMs, and updates stateful order databases—all without needing user supervision.
 
 ```mermaid
-flowchart TD
-    subgraph Inbound["1. Inbound Production Channels"]
-        A["Android NotificationListenerService<br/>(WhatsApp & WhatsApp Business)"]
-        WL["Background WakeLock & Coroutine Worker"]
-        A --> WL
-    end
+flowchart TB
+    %% 1. Top Pipeline: Ingestion & Retrieval
+    subgraph TopPipeline ["1, 2 & 3. Inbound Ingestion & Deterministic RAG Pipeline"]
+        direction LR
+        
+        subgraph S1 ["1. Inbound Channels"]
+            direction TB
+            A["WhatsApp Listener<br/>(Standard & Business)"] --> WL["Background Daemon<br/>(WakeLock & Coroutine)"]
+        end
 
-    subgraph Preprocessing["Multimodal Ingestion Pipeline"]
-        T["Text Normalizer<br/>(Arabic Diacritics & Punctuation)"]
-        V["AudioWavConverter<br/>(MediaCodec -> 16kHz PCM WAV)"]
-        I["ImagePayloadPreprocessor<br/>(Downscale & Base64 Packaging)"]
+        subgraph S2 ["2. Multimodal Ingestion"]
+            direction TB
+            T["Text Normalizer<br/>(Diacritics & Punctuation)"]
+            V["AudioWavConverter<br/>(MediaCodec -> 16kHz WAV)"] --> ASR["Meta muse-voice-transcribe-1.0<br/>(Arabic & English ASR)"]
+            I["ImagePayloadPreprocessor<br/>(Downscale & Base64)"]
+        end
+
+        subgraph S3 ["3. Deterministic RAG (0ms Startup)"]
+            direction TB
+            SYN["Synonym Expansion<br/>(Dialectal & Commerce Aliases)"] --> HASH["384-Dim Feature Hashing<br/>+ BM25 Ranking"]
+            HASH --> ROOM[("Room SQLite Vector DB")]
+            ROOM --> TOP8["Top-8 Context Chunks<br/>(topK = 8)"]
+        end
+
         WL -->|Text| T
         WL -->|Voice Note| V
         WL -->|Photo| I
-    end
-
-    subgraph RAG["2. Zero-Startup Deterministic RAG"]
-        ASR["Meta muse-voice-transcribe-1.0"]
-        V --> ASR
-        SYN["Synonym Expansion Layer<br/>(Dialectal & Commerce Aliases)"]
-        HASH["384-Dim Feature Hashing + BM25"]
-        ROOM[("Room SQLite Vector Store")]
-        TOP8["Top-8 Knowledge Chunks (topK = 8)"]
-
         T --> SYN
         ASR --> SYN
-        SYN --> HASH --> ROOM --> TOP8
     end
 
-    subgraph Reasoning["3. Unified Meta Model Reasoning Engine"]
-        SPARK["Muse Spark 1.3 (Unified Single-Pass Reasoning)"]
-        VISION["Muse Spark 1.3 Vision (Product Matching)"]
-        FAILOVER["Transparent 404 Entitlement Failover<br/>(standard &lt;--&gt; contributor)"]
-        KEYS["Meta Key Rotation & Circuit Breaker"]
+    %% 2. Central Hub: Meta Model Reasoning Engine
+    subgraph S4 ["4. Unified Meta Model Reasoning Engine (Central Hub)"]
+        direction TB
+        SPARK["Muse Spark 1.3<br/>(Single-Pass Unified Reasoning & JSON Extraction)"]
+        VISION["Muse Spark 1.3 Vision<br/>(Product Specs & Visual Grounding)"]
+        FAIL["Transparent 404 Failover<br/>(standard &lt;--&gt; contributor)"]
+        KEYS["Key Pool Rotation & Circuit Breaker"]
         
-        TOP8 --> SPARK
-        I --> VISION --> SPARK
-        SPARK --- FAILOVER
+        VISION --> SPARK
+        SPARK --- FAIL
         SPARK --- KEYS
     end
 
-    subgraph Execution["4. Dual Autonomous Modes"]
+    %% 3. Bottom Execution: Dual Modes
+    subgraph BottomPipeline ["5. Autonomous Output Modes"]
+        direction LR
         B2B["4A. B2B Merchant Mode<br/>• Autonomous JSON Order Extraction<br/>• Room DB Order State Tracking<br/>• Direct WhatsApp Quick-Reply"]
-        EXEC["4B. Executive Assistant Mode<br/>• Context-Aware Personal Replies<br/>• Schedule & Meeting Coordination<br/>• Commercial Action Guardrails"]
-        
-        SPARK -->|B2B Mode| B2B
-        SPARK -->|Personal Mode| EXEC
+        EXEC["4B. Executive Assistant Mode<br/>• Context-Aware Personal Replies<br/>• Schedule & Meeting Coordination<br/>• Commercial Guardrails (No Orders)"]
     end
+
+    %% Connecting Top to Center
+    TOP8 ==>|Top-8 Grounded Context| SPARK
+    I ==>|Visual Payload| VISION
+
+    %% Connecting Center to Bottom
+    SPARK ==>|B2B Order Flow| B2B
+    SPARK ==>|Personal Flow| EXEC
 ```
 
 ---
@@ -129,7 +139,7 @@ Persona B2B processes every customer interaction modality natively:
 When you launch **Persona B2B**, the app guides you through a seamless setup flow:
 
 1. **Guided Onboarding & Permissions**:
-   - Follow the interactive onboarding cards to grant notification and microphone permissions (see the [Android 13/14+ Sideloading Note](#-important-notes-for-judges-apk-sideloading--android-1314-permissions) below if testing live OS notifications).
+   - Follow the interactive onboarding cards to grant notification and microphone permissions (see the [Android 13/14+ Sideloading Note](#judges-notes) below if testing live OS notifications).
 2. **Enter Your Meta Model API Key**:
    - Navigate to **Settings $\rightarrow$ AI Engine** (or the Onboarding API step) and paste your **Meta Model API Key** from `dev.meta.ai` (if not already pre-configured via `secrets.local.properties` at build time).
 3. **Select Persona Mode & Customize Identity**:
@@ -147,6 +157,7 @@ When you launch **Persona B2B**, the app guides you through a seamless setup flo
 
 ---
 
+<a id="judges-notes"></a>
 ## ⚠️ Important Notes for Judges (APK Sideloading & Android 13/14+ Permissions)
 
 Because this application is distributed directly as a standalone APK outside the Google Play Store for hackathon evaluation, Android's built-in OS security applies two standard restrictions to sideloaded apps:
