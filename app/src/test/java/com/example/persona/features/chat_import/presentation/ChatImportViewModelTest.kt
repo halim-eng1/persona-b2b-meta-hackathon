@@ -157,6 +157,7 @@ class ChatImportViewModelTest {
     @Test
     fun ingestDirectText_whenSuccessful_updatesSuccessMessageAndClearsInput() = runTest {
         val mockKnowledgeRepo = mockk<com.example.persona.features.knowledge.data.repository.KnowledgeRepository>()
+        every { mockKnowledgeRepo.observeAllChunks() } returns flowOf(emptyList())
         coEvery { mockKnowledgeRepo.ingestMarkdownDocument(any(), any(), any(), any()) } returns Result.success(5)
 
         val vm = ChatImportViewModel(
@@ -178,6 +179,7 @@ class ChatImportViewModelTest {
     @Test
     fun ingestDirectText_whenAlreadyIndexing_doesNotLaunchSecondJob() = runTest {
         val mockKnowledgeRepo = mockk<com.example.persona.features.knowledge.data.repository.KnowledgeRepository>()
+        every { mockKnowledgeRepo.observeAllChunks() } returns flowOf(emptyList())
         coEvery { mockKnowledgeRepo.ingestMarkdownDocument(any(), any(), any(), any()) } returns Result.success(1)
 
         val vm = ChatImportViewModel(
@@ -195,6 +197,7 @@ class ChatImportViewModelTest {
     @Test
     fun ingestDirectText_whenTechnicalDbErrorOccurs_sanitizesErrorForUi() = runTest {
         val mockKnowledgeRepo = mockk<com.example.persona.features.knowledge.data.repository.KnowledgeRepository>()
+        every { mockKnowledgeRepo.observeAllChunks() } returns flowOf(emptyList())
         coEvery { mockKnowledgeRepo.ingestMarkdownDocument(any(), any(), any(), any()) } returns
             Result.failure(android.database.sqlite.SQLiteConstraintException("FOREIGN KEY constraint failed (code 787 SQLITE_CONSTRAINT_FOREIGNKEY)"))
 

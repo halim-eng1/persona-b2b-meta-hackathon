@@ -5,8 +5,12 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -50,6 +54,7 @@ import com.example.persona.R
 import com.example.persona.ui.theme.PersonaTheme
 import com.example.persona.ui.theme.spacing
 import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.sp
 
 /**
  * Stateful entry point for the Knowledge Base creation screen.
@@ -119,6 +124,9 @@ fun ChatImportScreen(
         onPickFile = { fileLauncher.launch(acceptedMimeTypes) },
         onClearSelectedFile = viewModel::clearSelectedFile,
         onStartImport = viewModel::startImport,
+        onLoadBusinessSample = viewModel::loadBusinessSampleKnowledge,
+        onLoadPersonalSample = viewModel::loadPersonalSampleKnowledge,
+        onDismissAlreadyPopulated = viewModel::dismissAlreadyPopulatedDialog,
         modifier = modifier
     )
 }
@@ -141,6 +149,9 @@ fun ChatImportContent(
     onPickFile: () -> Unit,
     onClearSelectedFile: () -> Unit,
     onStartImport: () -> Unit,
+    onLoadBusinessSample: () -> Unit = {},
+    onLoadPersonalSample: () -> Unit = {},
+    onDismissAlreadyPopulated: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isDark = isSystemInDarkTheme()
@@ -154,6 +165,8 @@ fun ChatImportContent(
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     var showAiPromptSheet by rememberSaveable { mutableStateOf(false) }
 
+    // Root Box lets the non-dismissible overlay cover the entire screen (top bar included)
+    Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -181,7 +194,7 @@ fun ChatImportContent(
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        modifier = modifier
+        modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -429,6 +442,42 @@ fun ChatImportContent(
                                     text = stringResource(R.string.import_screen_save_index_btn),
                                     fontWeight = FontWeight.Bold
                                 )
+                            }
+                        }
+
+                        // Sample knowledge quick-start — only offered while the base is empty
+                        if (!uiState.hasKnowledge) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.s)
+                            ) {
+                                OutlinedButton(
+                                    onClick = onLoadBusinessSample,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .defaultMinSize(minHeight = MaterialTheme.spacing.touchTargetMin),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text(
+                                        stringResource(R.string.knowledge_sample_store),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+
+                                OutlinedButton(
+                                    onClick = onLoadPersonalSample,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .defaultMinSize(minHeight = MaterialTheme.spacing.touchTargetMin),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text(
+                                        stringResource(R.string.knowledge_sample_personal),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                             }
                         }
                     }
@@ -759,6 +808,76 @@ fun ChatImportContent(
                                 )
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+        // Already-populated informational dialog (sample import while knowledge exists) —
+        // mirrors KnowledgeManagementScreen behavior
+        if (uiState.showAlreadyPopulatedDialog) {
+            AlertDialog(
+                onDismissRequest = onDismissAlreadyPopulated,
+                title = {
+                    Text(
+                        text = stringResource(R.string.knowledge_already_populated_title),
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = { Text(stringResource(R.string.knowledge_already_populated)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = onDismissAlreadyPopulated,
+                        modifier = Modifier.defaultMinSize(minHeight = MaterialTheme.spacing.touchTargetMin)
+                    ) {
+                        Text(stringResource(R.string.common_done))
+                    }
+                }
+            )
+        }
+
+        // ── Non-dismissible blocking overlay while indexing ─────────────
+        // The user cannot leave the screen, tap anywhere, or edit text until
+        // the knowledge add succeeds or fails (isDirectIndexing flips false).
+        if (uiState.isDirectIndexing) {
+            BackHandler(enabled = true) { /* consume back while indexing */ }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { /* consume taps */ }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 8.dp,
+                    modifier = Modifier
+                        .widthIn(max = 320.dp)
+                        .padding(horizontal = 24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(18.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(44.dp),
+                            strokeWidth = 3.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = stringResource(R.string.knowledge_indexing_progress),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }

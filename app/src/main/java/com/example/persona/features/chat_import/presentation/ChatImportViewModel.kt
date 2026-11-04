@@ -1,5 +1,6 @@
 package com.example.persona.features.chat_import.presentation
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,9 +11,11 @@ import com.example.persona.features.chat_import.data.repository.ChatImportReposi
 import com.example.persona.features.chat_import.data.worker.ChatImportWorker
 import com.example.persona.features.chat_import.domain.usecase.StartChatImportUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -23,22 +26,107 @@ class ChatImportViewModel @Inject constructor(
     private val repository: ChatImportRepository,
     private val knowledgeRepository: com.example.persona.features.knowledge.data.repository.KnowledgeRepository? = null,
     private val markdownChunker: com.example.persona.features.chat_import.data.parser.MarkdownChunker = com.example.persona.features.chat_import.data.parser.MarkdownChunker(),
-    private val userPreferencesRepository: com.example.persona.core.data.repository.UserPreferencesRepository? = null
+    private val userPreferencesRepository: com.example.persona.core.data.repository.UserPreferencesRepository? = null,
+    @ApplicationContext private val appContext: Context? = null
 ) : ViewModel() {
-
-    constructor(
-        startImportUseCase: StartChatImportUseCase,
-        repository: ChatImportRepository
-    ) : this(
-        startImportUseCase = startImportUseCase,
-        repository = repository,
-        knowledgeRepository = null,
-        markdownChunker = com.example.persona.features.chat_import.data.parser.MarkdownChunker(),
-        userPreferencesRepository = null
-    )
 
     private val _uiState = MutableStateFlow(ChatImportUiState())
     val uiState: StateFlow<ChatImportUiState> = _uiState.asStateFlow()
+
+    init {
+        // Observe live chunk count so the sample-load buttons hide once knowledge is present
+        val kRepo = knowledgeRepository
+        if (kRepo != null) {
+            viewModelScope.launch {
+                kRepo.observeAllChunks().collect { chunks ->
+                    _uiState.update { it.copy(hasKnowledge = chunks.isNotEmpty()) }
+                }
+            }
+        }
+    }
+
+    // ── Sample knowledge loaders ──────────────────────────────────────────────
+
+    fun loadBusinessSampleKnowledge() {
+        loadSampleKnowledge(
+            mode = com.example.persona.features.settings.domain.model.AccountMode.BUSINESS,
+            englishAsset = "knowledge_store_en.md",
+            arabicAsset = "knowledge_store_ar.md",
+            sourceType = "SAMPLE_BUSINESS",
+            errorPrefix = "فشل تحميل نموذج بيانات المتجر"
+        )
+    }
+
+    fun loadPersonalSampleKnowledge() {
+        loadSampleKnowledge(
+            mode = com.example.persona.features.settings.domain.model.AccountMode.PERSONAL,
+            englishAsset = "knowledge_personal_en.md",
+            arabicAsset = "knowledge_personal_ar.md",
+            sourceType = "SAMPLE_PERSONAL",
+            errorPrefix = "فشل تحميل نموذج البيانات الشخصية"
+        )
+    }
+
+    private fun loadSampleKnowledge(
+        mode: com.example.persona.features.settings.domain.model.AccountMode,
+        englishAsset: String,
+        arabicAsset: String,
+        sourceType: String,
+        errorPrefix: String
+    ) {
+        if (_uiState.value.hasKnowledge) {
+            // Already populated — surface the info dialog
+            _uiState.update { it.copy(showAlreadyPopulatedDialog = true) }
+            return
+        }
+        val kRepo = knowledgeRepository ?: return
+        val ctx = appContext ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isDirectIndexing = true, directIndexError = null) }
+            try {
+                val isArabic = userPreferencesRepository?.let { prefs ->
+                    runCatching {
+                        prefs.appLanguageFlow.first()
+                    }.getOrDefault("").startsWith("ar", ignoreCase = true)
+                } ?: false
+                val assetName = if (isArabic) arabicAsset else englishAsset
+                val markdown = ctx.assets.open(assetName).bufferedReader().use { it.readText() }
+                val result = kRepo.ingestMarkdownDocument(
+                    text = markdown,
+                    sourceFileName = assetName,
+                    sourceType = sourceType
+                )
+                result.onSuccess {
+                    runCatching { userPreferencesRepository?.setAccountMode(mode) }
+                    _uiState.update {
+                        it.copy(
+                            isDirectIndexing = false,
+                            directIndexSuccessChunks = result.getOrDefault(0)
+                        )
+                    }
+                }.onFailure { err ->
+                    _uiState.update {
+                        it.copy(
+                            isDirectIndexing = false,
+                            directIndexError = "$errorPrefix: ${err.message}"
+                        )
+                    }
+                }
+            } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isDirectIndexing = false, directIndexError = "$errorPrefix: ${e.message}")
+                }
+            }
+        }
+    }
+
+    // ── Dismiss already-populated dialog ─────────────────────────────────────
+
+    fun dismissAlreadyPopulatedDialog() {
+        _uiState.update { it.copy(showAlreadyPopulatedDialog = false) }
+    }
 
     fun onDirectInputTextChanged(text: String) {
         _uiState.update { it.copy(directInputText = text, directIndexError = null, directIndexSuccessMessage = null, directIndexSuccessChunks = null) }
@@ -281,7 +369,10 @@ data class ChatImportUiState(
     val resultContact: String? = null,
     val resultTotal: Int = 0,
     val resultUserMsgs: Int = 0,
-    val resultFormat: String? = null
+    val resultFormat: String? = null,
+    // Sample knowledge loaders
+    val hasKnowledge: Boolean = false,
+    val showAlreadyPopulatedDialog: Boolean = false
 ) {
     val progressFraction: Float
         get() = if (totalMessages > 0) messagesProcessed.toFloat() / totalMessages else 0f
