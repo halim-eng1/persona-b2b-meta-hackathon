@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- خلفية داكنة فاخرة -->
+    <linearGradient id="bgModern" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#072721" />
+      <stop offset="100%" stop-color="#03110E" />
+    </linearGradient>
+
+    <!-- تدرج فقاعة المحادثة الخلفية -->
+    <linearGradient id="chatBubbleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0D9488" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#065F46" stop-opacity="0.15" />
+    </linearGradient>
+
+    <!-- تدرج الشريط المتصل لحرف P -->
+    <linearGradient id="ribbonP" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6EE7B7" />
+      <stop offset="45%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+
+    <!-- تدرج الذكاء الاصطناعي الذهبي -->
+    <linearGradient id="aiGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE047" />
+      <stop offset="50%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#B45309" />
+    </linearGradient>
+  </defs>
+
+  <!-- 1. الخلفية -->
+  <rect width="512" height="512" rx="116" fill="url(#bgModern)" />
+
+  <!-- 2. إطار فقاعة محادثة خلفية بلمسة زجاجية -->
+  <rect x="88" y="88" width="336" height="336" rx="96" fill="url(#chatBubbleGrad)" stroke="#14B8A6" stroke-width="3" stroke-opacity="0.25" />
+
+  <!-- 3. المسار الهندسي الموحد لحرف P مع ذيل المحادثة -->
+  <path d="M 164 384 
+           V 156 
+           C 164 142 175 132 188 132 
+           H 284 
+           C 338 132 378 168 378 218 
+           C 378 268 338 304 284 304 
+           H 224 
+           L 164 384 Z" fill="none" stroke="url(#ribbonP)" stroke-width="46" stroke-linejoin="round" stroke-linecap="round" />
+
+  <!-- 4. النواة العصبية الذكية (On-Device RAG & Persona Core) داخل تجويف الـ P -->
+  <circle cx="274" cy="218" r="24" fill="#ECFDF5" />
+  <circle cx="274" cy="218" r="10" fill="#059669" />
+
+  <!-- 5. نجمة الذكاء الاصطناعي (Gatekeeper & Multi-LLM Spark) -->
+  <path d="M 378 100 
+           Q 378 132 410 132 
+           Q 378 132 378 164 
+           Q 378 132 346 132 
+           Q 378 132 378 100 Z" fill="url(#aiGold)" />
+  <circle cx="332" cy="348" r="10" fill="#34D399" opacity="0.8" />
+  <circle cx="288" cy="368" r="6" fill="#5EEAD4" opacity="0.5" />
+</svg>

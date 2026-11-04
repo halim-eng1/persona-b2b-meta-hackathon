@@ -233,8 +233,8 @@ class UserPreferencesRepository @Inject constructor(
         StylePreferences(
             personaTone = PersonaTone.fromString(rawTone),
             styleProfile = StyleProfile.fromString(prefs[KEY_STYLE_PROFILE] ?: StyleProfile.CASUAL.name),
-            similarityThreshold = prefs[KEY_SIMILARITY_THRESHOLD] ?: 0.75f,
-            cooldownMins = prefs[KEY_COOLDOWN_MINS] ?: 5,
+            similarityThreshold = prefs[KEY_SIMILARITY_THRESHOLD] ?: 0.65f,
+            cooldownMins = prefs[KEY_COOLDOWN_MINS] ?: 0,
             replyDelaySeconds = prefs[KEY_REPLY_DELAY_SECONDS] ?: 2
         )
     }
@@ -904,8 +904,8 @@ class UserPreferencesRepository @Inject constructor(
         return StylePreferences(
             personaTone = PersonaTone.fromString(rawTone),
             styleProfile = StyleProfile.fromString(prefs[KEY_STYLE_PROFILE] ?: StyleProfile.CASUAL.name),
-            similarityThreshold = prefs[KEY_SIMILARITY_THRESHOLD] ?: 0.75f,
-            cooldownMins = prefs[KEY_COOLDOWN_MINS] ?: 5,
+            similarityThreshold = prefs[KEY_SIMILARITY_THRESHOLD] ?: 0.65f,
+            cooldownMins = prefs[KEY_COOLDOWN_MINS] ?: 0,
             replyDelaySeconds = prefs[KEY_REPLY_DELAY_SECONDS] ?: 2
         )
     }
