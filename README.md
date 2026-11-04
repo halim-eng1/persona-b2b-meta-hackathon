@@ -21,52 +21,56 @@
 
 The core strength of **Persona B2B** lies in its autonomous background execution on Android. It operates as an unattended, privacy-first daemon that listens to real customer chats, extracts multimodal context, executes deterministic RAG retrieval, reasons with Meta's official LLMs, and updates stateful order databases—all without needing user supervision.
 
-`	ext
-+--------------------------------------------------------------------------------------------------+
-|                          1. INBOUND REAL-WORLD PRODUCTION CHANNELS                               |
-|   • Android NotificationListenerService intercepts real incoming WhatsApp / WhatsApp Business    |
-|   • Direct WakeLock & Coroutine Background Worker (Operates even when screen is locked/off)      |
-+------------------------------------------------+-------------------------------------------------+
-                                                 |
-         +---------------------------------------+---------------------------------------+
-         | (Customer Text Query)                 | (Customer Voice Note)                 | (Customer Product Photo)
-         v                                       v                                       v
-+------------------------+      +--------------------------------+      +--------------------------------+
-| Text Normalizer        |      | Hardware AudioWavConverter     |      | ImagePayloadPreprocessor       |
-| • Arabic diacritic fix |      | • MediaCodec -> 16kHz PCM WAV  |      | • Downscale & JPEG compression |
-| • Punctuation cleanup  |      | • Meta muse-voice-transcribe   |      | • Base64 payload packaging     |
-+-----------+------------+      +---------------+----------------+      +---------------+----------------+
-            |                                   |                                       |
-            +-----------------------------------+---------------------------------------+
-                                                |
-                                                v
-+--------------------------------------------------------------------------------------------------+
-|                            2. ZERO-STARTUP DETERMINISTIC RAG ENGINE                              |
-|   • Dialectal & Commerce Synonym Expansion (هاتف <-> جوال/موبايل, سعر <-> كام/تكلفة)             |
-|   • 384-Dimensional Mathematical Feature Hashing + BM25 Lexical Ranking (0ms model download)     |
-|   • Room SQLite Vector Table Query -> Retrieves Top-8 Most Relevant Context Chunks (topK = 8)    |
-+-----------------------------------------------+--------------------------------------------------+
-                                                |
-                                                v
-+--------------------------------------------------------------------------------------------------+
-|                            3. UNIFIED META MODEL REASONING ENGINE                                |
-|   • Single-Pass Reasoning: Muse Spark 1.3 (RAG Synthesis + Autonomous JSON Order Extraction)     |
-|   • Multimodal Visual Reasoning: Muse Spark 1.3 Vision (Processes image specs and product matches)|
-|   • Transparent Entitlement Failover: Auto-detects 404 and flips standard <-> contributor tags   |
-|   • Meta Key Rotation & Circuit Breaker: Zero downtime under rate limits or network issues       |
-+-----------------------------------------------+--------------------------------------------------+
-                                                |
-                        +-----------------------+-----------------------+
-                        |                                               |
-                        v (B2B Merchant Mode)                           v (Executive Assistant Mode)
-+-----------------------------------------------+   +-----------------------------------------------+
-|     4A. STATEFUL COMMERCE & ORDERS DB         |   |         4B. EXECUTIVE AUTO-PILOT              |
-|   • Autonomous JSON Order Entity Parsing      |   |   • Context-Aware Professional Replies        |
-|   • Room SQLite Database Order Insertion      |   |   • Availability & Scheduling Coordination    |
-|   • Stock & Shipping Validation Rules         |   |   • Autonomous Personal Inquiry Triage        |
-|   • Direct WhatsApp Quick-Reply Notification  |   |   • Safe Guardrails (No Commercial Actions)   |
-+-----------------------------------------------+   +-----------------------------------------------+
-`
+```mermaid
+flowchart TD
+    subgraph Inbound["1. Inbound Production Channels"]
+        A["Android NotificationListenerService<br/>(WhatsApp & WhatsApp Business)"]
+        WL["Background WakeLock & Coroutine Worker"]
+        A --> WL
+    end
+
+    subgraph Preprocessing["Multimodal Ingestion Pipeline"]
+        T["Text Normalizer<br/>(Arabic Diacritics & Punctuation)"]
+        V["AudioWavConverter<br/>(MediaCodec -> 16kHz PCM WAV)"]
+        I["ImagePayloadPreprocessor<br/>(Downscale & Base64 Packaging)"]
+        WL -->|Text| T
+        WL -->|Voice Note| V
+        WL -->|Photo| I
+    end
+
+    subgraph RAG["2. Zero-Startup Deterministic RAG"]
+        ASR["Meta muse-voice-transcribe-1.0"]
+        V --> ASR
+        SYN["Synonym Expansion Layer<br/>(Dialectal & Commerce Aliases)"]
+        HASH["384-Dim Feature Hashing + BM25"]
+        ROOM[("Room SQLite Vector Store")]
+        TOP8["Top-8 Knowledge Chunks (topK = 8)"]
+
+        T --> SYN
+        ASR --> SYN
+        SYN --> HASH --> ROOM --> TOP8
+    end
+
+    subgraph Reasoning["3. Unified Meta Model Reasoning Engine"]
+        SPARK["Muse Spark 1.3 (Unified Single-Pass Reasoning)"]
+        VISION["Muse Spark 1.3 Vision (Product Matching)"]
+        FAILOVER["Transparent 404 Entitlement Failover<br/>(standard &lt;--&gt; contributor)"]
+        KEYS["Meta Key Rotation & Circuit Breaker"]
+        
+        TOP8 --> SPARK
+        I --> VISION --> SPARK
+        SPARK --- FAILOVER
+        SPARK --- KEYS
+    end
+
+    subgraph Execution["4. Dual Autonomous Modes"]
+        B2B["4A. B2B Merchant Mode<br/>• Autonomous JSON Order Extraction<br/>• Room DB Order State Tracking<br/>• Direct WhatsApp Quick-Reply"]
+        EXEC["4B. Executive Assistant Mode<br/>• Context-Aware Personal Replies<br/>• Schedule & Meeting Coordination<br/>• Commercial Action Guardrails"]
+        
+        SPARK -->|B2B Mode| B2B
+        SPARK -->|Personal Mode| EXEC
+    end
+```
 
 ---
 
