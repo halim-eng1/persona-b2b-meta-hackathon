@@ -149,7 +149,7 @@ class ChatImportViewModelTest {
         viewModel.onDirectInputTextChanged("   ")
         viewModel.ingestDirectText()
 
-        assertTrue(viewModel.uiState.value.directIndexError?.contains("blank", ignoreCase = true) == true ||
+        assertTrue(viewModel.uiState.value.directIndexError?.contains("paste", ignoreCase = true) == true ||
             viewModel.uiState.value.directIndexError?.contains("أولاً") == true)
         assertFalse(viewModel.uiState.value.isDirectIndexing)
     }

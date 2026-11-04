@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import com.example.persona.core.common.AppException
 import com.example.persona.core.common.Resource
+import com.example.persona.R
 import com.example.persona.features.chat_import.data.repository.ChatImportRepository
 import com.example.persona.features.chat_import.data.worker.ChatImportWorker
 import com.example.persona.features.chat_import.domain.usecase.StartChatImportUseCase
@@ -140,7 +141,8 @@ class ChatImportViewModel @Inject constructor(
         val text = _uiState.value.directInputText.trim()
         if (text.isBlank()) {
             _uiState.update {
-                it.copy(directIndexError = "يرجى لصق نص المعرفة أولاً")
+                it.copy(directIndexError = appContext?.getString(R.string.chat_import_error_empty_text)
+                    ?: "Please paste knowledge text first")
             }
             return
         }
@@ -148,7 +150,8 @@ class ChatImportViewModel @Inject constructor(
         val kRepo = knowledgeRepository
         if (kRepo == null) {
             _uiState.update {
-                it.copy(directIndexError = "محرك المعرفة غير مهيأ")
+                it.copy(directIndexError = appContext?.getString(R.string.chat_import_error_engine_not_ready)
+                    ?: "Knowledge engine is not initialized")
             }
             return
         }
