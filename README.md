@@ -17,6 +17,9 @@
 
 ---
 
+### 🎥 Watch 3-Min Hackathon Demo
+[![Watch Demo Video](https://img.shields.io/badge/YouTube_Demo-3_Min_Walkthrough-FF0000?style=for-the-badge&logo=youtube)](https://www.youtube.com/watch?v=vMrbJKpD2VI)
+
 ### 📥 Download Production Release APK
 [![Download APK](https://img.shields.io/badge/Download_APK-GitHub_Release-0668E1?style=for-the-badge&logo=github)](https://github.com/halim-eng1/persona-b2b-meta-hackathon/releases/download/v1.0.0/persona-b2b-v1.0-release.apk)
 [![Mirror Drive](https://img.shields.io/badge/Download_Mirror-Google_Drive-34A853?style=for-the-badge&logo=googledrive)](https://drive.google.com/file/d/1lYpd1PvyWl7KDwG2iOQbW1N0us39X5eo/view?usp=drive_link)
