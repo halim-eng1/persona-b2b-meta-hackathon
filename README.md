@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 <img src="docs/persona_neural_icon.svg" alt="Persona B2B Logo" width="120" height="120" />
 
@@ -14,6 +14,12 @@
 </div>
 
 > **Persona B2B** is an autonomous, multimodal (Text, Voice Notes, & Images), bilingual (Arabic/English) AI communication and stateful commerce engine for Android. Engineered exclusively on the official **Meta Model API** (`Muse Spark 1.3`, `Muse Spark 1.2`, and `Muse Voice Transcribe 1.0`), it empowers small and medium businesses (SMBs) as a full-cycle sales & order agent—or operates as an isolated **Personal Executive Assistant**—with zero third-party AI model dependencies at runtime.
+
+---
+
+### 📥 Download Production Release APK
+[![Download APK](https://img.shields.io/badge/Download_APK-GitHub_Release-0668E1?style=for-the-badge&logo=github)](https://github.com/halim-eng1/persona-b2b-meta-hackathon/releases/download/v1.0.0/persona-b2b-v1.0-release.apk)
+[![Mirror Drive](https://img.shields.io/badge/Download_Mirror-Google_Drive-34A853?style=for-the-badge&logo=googledrive)](https://drive.google.com/file/d/1lYpd1PvyWl7KDwG2iOQbW1N0us39X5eo/view?usp=drive_link)
 
 ---
 
