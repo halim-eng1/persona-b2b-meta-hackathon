@@ -26,6 +26,7 @@ import com.example.persona.features.onboarding.presentation.PermissionOnboarding
 
 import com.example.persona.features.orders.presentation.OrdersDashboardScreen
 import com.example.persona.features.settings.presentation.SettingsScreen
+import com.example.persona.features.settings.presentation.SettingsSpoke
 
 @Composable
 fun PersonaNavGraph(
@@ -60,20 +61,18 @@ fun PersonaNavGraph(
                 onNavigateToChat = { contactName, sourceClass ->
                     navController.navigate(Screen.ChatDetail(contactName, sourceClass))
                 },
-                onNavigateToOrders = {
-                    navController.navigate(Screen.Orders) {
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
-                onNavigateToKnowledge = {
-                    navController.navigate(Screen.KnowledgeManagement) {
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
                 onNavigateToContacts = {
                     navController.navigate(Screen.Contacts)
+                },
+                onNavigateToPersona = {
+                    navController.navigate(Screen.VoiceBehavior) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToChannels = {
+                    navController.navigate(Screen.WhatsAppRouting) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -112,6 +111,35 @@ fun PersonaNavGraph(
                         }
                     }
                 }
+            )
+        }
+
+        // ── Direct deep links into Settings spokes ────────────────────────────
+        composable<Screen.VoiceBehavior> {
+            SettingsScreen(
+                onExit = {
+                    if (!navController.popBackStack()) {
+                        navController.navigate(Screen.Home) {
+                            popUpTo(Screen.Home) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                startSpoke = SettingsSpoke.Voice
+            )
+        }
+
+        composable<Screen.WhatsAppRouting> {
+            SettingsScreen(
+                onExit = {
+                    if (!navController.popBackStack()) {
+                        navController.navigate(Screen.Home) {
+                            popUpTo(Screen.Home) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                startSpoke = SettingsSpoke.WhatsApp
             )
         }
 

@@ -1,6 +1,9 @@
 package com.example.persona.features.knowledge.presentation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -105,6 +108,28 @@ fun KnowledgeManagementScreen(
         )
     }
 
+    // Already-populated informational dialog (sample import while chunks exist)
+    if (state.showAlreadyPopulatedDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissAlreadyPopulatedDialog() },
+            title = {
+                Text(
+                    text = stringResource(R.string.knowledge_already_populated_title),
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = { Text(stringResource(R.string.knowledge_already_populated)) },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.dismissAlreadyPopulatedDialog() },
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                ) {
+                    Text(stringResource(R.string.common_done))
+                }
+            }
+        )
+    }
+
     // Edit Entry Dialog
     state.editingEntry?.let { entryToEdit ->
         EditKnowledgeDialog(
@@ -151,6 +176,7 @@ fun KnowledgeManagementScreen(
         simulationBestScore = state.simulationBestScore,
         simulationError = state.simulationError,
         suggestedFaqChips = state.suggestedFaqChips,
+        hasKnowledge = state.entries.isNotEmpty(),
         onLoadBusinessSample = { viewModel.loadBusinessSampleKnowledge() },
         onLoadPersonalSample = { viewModel.loadPersonalSampleKnowledge() }
     )
@@ -297,28 +323,38 @@ fun KnowledgeManagementScreen(
                         )
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { viewModel.loadBusinessSampleKnowledge() },
-                            modifier = Modifier
-                                .weight(1f)
-                                .defaultMinSize(minHeight = 44.dp),
-                            shape = RoundedCornerShape(10.dp)
+                    if (state.entries.isEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("تحميل كتالوج متجر", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        }
+                            OutlinedButton(
+                                onClick = { viewModel.loadBusinessSampleKnowledge() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .defaultMinSize(minHeight = 44.dp),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    stringResource(R.string.knowledge_sample_store),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
 
-                        OutlinedButton(
-                            onClick = { viewModel.loadPersonalSampleKnowledge() },
-                            modifier = Modifier
-                                .weight(1f)
-                                .defaultMinSize(minHeight = 44.dp),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("تحميل مساعد تنفيذي", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            OutlinedButton(
+                                onClick = { viewModel.loadPersonalSampleKnowledge() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .defaultMinSize(minHeight = 44.dp),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    stringResource(R.string.knowledge_sample_personal),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
 
@@ -554,5 +590,49 @@ fun KnowledgeManagementScreen(
             contentColor = MaterialTheme.colorScheme.onPrimary,
             elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
         )
+
+        // ── Blocking vectorisation overlay (non-dismissible) ─────────────
+        if (state.isProcessing) {
+            BackHandler(enabled = true) { /* consume back while indexing */ }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { /* consume taps */ }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 8.dp,
+                    modifier = Modifier
+                        .widthIn(max = 320.dp)
+                        .padding(horizontal = 24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(18.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(44.dp),
+                            strokeWidth = 3.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = stringResource(R.string.knowledge_indexing_progress),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
     }
 }

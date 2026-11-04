@@ -1,6 +1,7 @@
 package com.example.persona.features.settings.presentation.screens.hub
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -11,7 +12,9 @@ import androidx.compose.material.icons.filled.GroupOff
 import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -53,6 +56,11 @@ fun QuickSwitchesRow(
     }
 }
 
+/**
+ * A filter chip whose selected state mirrors the feature's enabled state.
+ * Unselected chips stay neutral (muted border and icon); selected chips use the
+ * primary teal container so the active switches read as a single accent group.
+ */
 @Composable
 private fun QuickChip(
     @StringRes label: Int,
@@ -70,6 +78,22 @@ private fun QuickChip(
                 contentDescription = null,
                 modifier = Modifier.size(18.dp)
             )
-        }
+        },
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            selectedLeadingIconColor = MaterialTheme.colorScheme.primary
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (checked) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            }
+        )
     )
 }

@@ -25,12 +25,13 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okio.BufferedSink
 import java.io.File
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -41,6 +42,72 @@ class AuthOrQuotaException(val code: Int, message: String) : IOException(message
 class RateLimitException(message: String) : IOException(message)
 class ServerException(val code: Int, message: String) : IOException(message)
 class ApiTimeoutException(message: String) : IOException(message)
+
+/**
+ * Streaming multipart body for Meta's ASR endpoint.
+ *
+ * OkHttp's [okhttp3.MultipartBody] adds a per-part `Content-Length` header to every
+ * part whose body has a known length. Meta's `voyager/transcribe` gateway cannot parse
+ * such bodies and answers with HTTP 400 `Malformed multipart body` (verified live:
+ * identical requests without per-part Content-Length return 200, any part carrying it
+ * returns 400 — auth-blind, before key validation). This body emits the exact
+ * gateway-friendly wire format instead:
+ *
+ * ```
+ * --<boundary>                                            (unquoted boundary in Content-Type)
+ * Content-Disposition: form-data; name="request"          (no filename, no Content-Length)
+ * Content-Type: application/json; charset=utf-8
+ * <requestJson>
+ * --<boundary>
+ * Content-Disposition: form-data; name="audio"; filename="<wav>"
+ * Content-Type: audio/wav
+ * <raw wav bytes>
+ * --<boundary>--
+ * ```
+ */
+private class AsrMultipartRequestBody(
+    requestJson: String,
+    private val audioFile: File
+) : RequestBody() {
+
+    private val boundary: String =
+        "persona-asr-" + java.util.UUID.randomUUID().toString().replace("-", "")
+
+    private val preamble: ByteArray = (
+        "--$boundary\r\n" +
+            "Content-Disposition: form-data; name=\"request\"\r\n" +
+            "Content-Type: application/json; charset=utf-8\r\n" +
+            "\r\n" +
+            requestJson + "\r\n" +
+            "--$boundary\r\n" +
+            "Content-Disposition: form-data; name=\"audio\"; filename=\"${audioFile.name}\"\r\n" +
+            "Content-Type: audio/wav\r\n" +
+            "\r\n"
+        ).toByteArray(Charsets.UTF_8)
+
+    private val epilogue: ByteArray =
+        "\r\n--$boundary--\r\n".toByteArray(Charsets.UTF_8)
+
+    override fun contentType(): MediaType? =
+        "multipart/form-data; boundary=$boundary".toMediaType()
+
+    override fun contentLength(): Long =
+        preamble.size.toLong() + audioFile.length() + epilogue.size.toLong()
+
+    override fun writeTo(sink: BufferedSink) {
+        sink.write(preamble)
+        audioFile.inputStream().use { input ->
+            sink.outputStream().use { output ->
+                input.copyTo(output, DEFAULT_STREAM_BUFFER_SIZE)
+            }
+        }
+        sink.write(epilogue)
+    }
+
+    private companion object {
+        const val DEFAULT_STREAM_BUFFER_SIZE = 32 * 1024
+    }
+}
 
 @Singleton
 class MetaModelApiClient @Inject constructor(
@@ -90,7 +157,6 @@ class MetaModelApiClient @Inject constructor(
         }
 
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-        private val WAV_MEDIA_TYPE = "audio/wav".toMediaType()
     }
 
     private val baseUrl: String
@@ -199,11 +265,15 @@ class MetaModelApiClient @Inject constructor(
                 }
             }.toString()
 
-            val requestBody = MultipartBody.Builder()
-                .setType(MultipartBody.FORM)
-                .addFormDataPart("request", null, requestJson.toRequestBody(JSON_MEDIA_TYPE))
-                .addFormDataPart("audio", "recording.wav", wavFile.asRequestBody(WAV_MEDIA_TYPE))
-                .build()
+            // Meta ASR expects two distinct multipart parts:
+            //  - `request`: JSON config sent as a plain form field (no filename)
+            //  - `audio`:   raw 16kHz mono WAV bytes with a real filename
+            // IMPORTANT: Meta's gateway rejects the well-formed OkHttp multipart with
+            // "Malformed multipart body" because OkHttp adds a per-part `Content-Length`
+            // header to each part. Verified against the live endpoint: identical requests
+            // without per-part Content-Length return 200, any part carrying it returns 400.
+            // Therefore the multipart bytes are assembled manually here (no MultipartBody).
+            val requestBody = AsrMultipartRequestBody(requestJson, wavFile)
 
             val request = Request.Builder()
                 .url(url)

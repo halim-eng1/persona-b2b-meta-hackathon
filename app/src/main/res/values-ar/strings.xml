@@ -68,9 +68,9 @@
     <string name="home_stat_waiting_customers">عملاء في الانتظار</string>
     <string name="home_stat_bot_replies">ردود البوت اليوم</string>
     <string name="home_stat_total_prefix">إجمالي: %d</string>
-    <string name="home_action_catalog">كتالوج المنتجات</string>
+    <string name="home_action_persona">أسلوب وشخصية البوت</string>
     <string name="home_action_import">استيراد المعرفة</string>
-    <string name="home_action_orders">تجهيز الطلبات</string>
+    <string name="home_action_channels">قنوات المراسلة</string>
     <string name="home_action_contacts">دليل العملاء CRM</string>
 
     <!-- ── Home Guided Permission Setup & Banner ──────────────────────────────── -->
@@ -222,6 +222,11 @@
     <string name="knowledge_input_card_collapse">طي نموذج الإضافة</string>
     <string name="knowledge_empty_state_cta">إضافة أول منتج للكتالوج</string>
     <string name="knowledge_btn_add_entry_full">+ إضافة معرفة أو منتج</string>
+    <string name="knowledge_sample_store">تحميل نموذج متجر</string>
+    <string name="knowledge_sample_personal">تحميل مساعد تنفيذي</string>
+    <string name="knowledge_already_populated_title">قاعدة المعرفة</string>
+    <string name="knowledge_already_populated">تم تزويد المساعد بالمعرفة مسبقاً</string>
+    <string name="knowledge_indexing_progress">جاري تقطيع وفهرسة البيانات دلالياً... يرجى الانتظار</string>
     <string name="knowledge_dialog_free_title">عنوان المعلومة أو السياسة</string>
     <string name="knowledge_dialog_free_title_hint">مثال: سياسة الاسترجاع، الشحن، مواعيد العمل</string>
     <string name="knowledge_dialog_free_content">التفاصيل والمحتوى</string>
@@ -261,6 +266,9 @@
     <string name="sim_btn_close">إغلاق</string>
     <string name="sim_welcome_title">مرحباً بك في محاكي المساعد الآلي!</string>
     <string name="sim_welcome_desc">ابدأ بكتابة رسالة عميل افتراضية، أو اختر أحد الأسئلة السريعة أعلاه، أو أرفق صورة منتج / رسالة صوتية لاختبار مسار التفكير والاسترجاع كاملاً.</string>
+    <string name="sim_sample_hint">أو اختر بيانات تجريبية جاهزة للاختبار:</string>
+    <string name="sim_sample_store">كتالوج متجر</string>
+    <string name="sim_sample_personal">مساعد تنفيذي</string>
     <string name="sim_media_image_title">صورة مرفقة للتحليل البصري</string>
     <string name="sim_media_image_subtitle">سيتم تفعيل مسار الرؤية البصرية</string>
     <string name="sim_media_audio_title">تسجيل صوتي مرفق</string>
@@ -273,12 +281,12 @@
     <string name="sim_voice_note_label">تسجيل صوتي</string>
     <string name="sim_typing_indicator">المساعد يحلل الرسالة ويسترجع البيانات...</string>
     <string name="sim_media_preview_desc">معاينة المرفق</string>
-    <string name="sim_sample_query_1">بكام التيشيرت الأوفر سايز؟</string>
-    <string name="sim_sample_query_2">مصاريف الشحن للقاهرة والجيزة كام؟</string>
-    <string name="sim_sample_query_3">عايز أطلب 2 تيشيرت أسود لمدينة نصر 01012345678</string>
-    <string name="sim_sample_query_4">هل متاح استبدال أو استرجاع؟</string>
-    <string name="sim_sample_query_5">عايز ألغي الأوردر</string>
-    <string name="sim_sample_query_6">طرق الدفع المتاحة إيه؟</string>
+    <string name="sim_sample_query_1">ما هي المنتجات والأسعار المتاحة؟</string>
+    <string name="sim_sample_query_2">ما هي مصاريف ومدة الشحن؟</string>
+    <string name="sim_sample_query_3">ما هي سياسة الاستبدال والاسترجاع؟</string>
+    <string name="sim_sample_query_4">كيف يمكنني حجز موعد اجتماع؟</string>
+    <string name="sim_sample_query_5">ما هي ساعات العمل؟</string>
+    <string name="sim_sample_query_6">ما هي طرق الدفع المتاحة؟</string>
 
     <string name="trace_thinking_steps">⚡ خطوات التفكير والقرار (استغرق %s ثانية)</string>
     <string name="trace_intent_title">النية المكتشفة</string>

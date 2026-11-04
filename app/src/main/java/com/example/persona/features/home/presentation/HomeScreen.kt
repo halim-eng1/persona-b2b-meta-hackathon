@@ -57,9 +57,9 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToAuditLog: () -> Unit,
     onNavigateToChat: (contactName: String, sourceClass: String) -> Unit,
-    onNavigateToOrders: () -> Unit = {},
-    onNavigateToKnowledge: () -> Unit = onNavigateToImport,
     onNavigateToContacts: () -> Unit = {},
+    onNavigateToPersona: () -> Unit = onNavigateToSettings,
+    onNavigateToChannels: () -> Unit = onNavigateToSettings,
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
@@ -209,7 +209,7 @@ fun HomeScreen(
                         SetupCopilotCard(
                             step = copilotStep,
                             onConfigureApiKey = onNavigateToSettings,
-                            onCustomizePersona = onNavigateToSettings
+                            onCustomizePersona = onNavigateToPersona
                         )
                     }
                 }
@@ -246,9 +246,9 @@ fun HomeScreen(
                 // ── Section 4: Quick Action Deck ──────────────────────────────────
                 item(key = "quick_actions") {
                     QuickActionsSection(
-                        onNavigateToKnowledge = onNavigateToKnowledge,
+                        onNavigateToPersona = onNavigateToPersona,
                         onNavigateToImport = onNavigateToImport,
-                        onNavigateToOrders = onNavigateToOrders,
+                        onNavigateToChannels = onNavigateToChannels,
                         onNavigateToContacts = onNavigateToContacts
                     )
                 }

@@ -73,6 +73,7 @@ private inline fun <reified T : Any> NavGraphBuilder.settingsDestination(
 @Composable
 fun SettingsHost(
     onExit: () -> Unit = {},
+    startSpoke: SettingsSpoke? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
@@ -119,7 +120,8 @@ fun SettingsHost(
                 ) {
                     NavHost(
                         navController = nav,
-                        startDestination = SettingsRoute.Hub,
+                        startDestination = startSpoke?.let { SettingsRoute.Spoke(it) }
+                            ?: SettingsRoute.Hub,
                         enterTransition = {
                             slideIntoContainer(Slide.Start, tween(340, easing = EmphasizedDecelerate), initialOffset = { it / 6 }) +
                                 fadeIn(tween(220, delayMillis = 60))
@@ -149,7 +151,9 @@ fun SettingsHost(
 
                         settingsDestination<SettingsRoute.Spoke> { entry ->
                             val route = entry.toRoute<SettingsRoute.Spoke>()
-                            val back: () -> Unit = { nav.navigateUp() }
+                            val back: () -> Unit = {
+                                if (!nav.navigateUp()) onExit()
+                            }
                             when (route.spoke) {
                                 SettingsSpoke.Voice -> VoiceBehaviorScreen(
                                     state = state,

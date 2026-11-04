@@ -19,6 +19,8 @@ sealed class Screen {
     @Serializable data object Contacts : Screen()
     @Serializable data object AuditLog : Screen()
     @Serializable data object Settings : Screen()
+    @Serializable data object VoiceBehavior : Screen()
+    @Serializable data object WhatsAppRouting : Screen()
     @Serializable data object Onboarding : Screen()
     @Serializable data object FeatureOnboarding : Screen()
     @Serializable data object ChatImport : Screen()

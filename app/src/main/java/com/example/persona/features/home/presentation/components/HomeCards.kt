@@ -457,9 +457,9 @@ fun B2BOperationalMetricsHub(
 
 @Composable
 fun QuickActionsSection(
-    onNavigateToKnowledge: () -> Unit,
+    onNavigateToPersona: () -> Unit,
     onNavigateToImport: () -> Unit,
-    onNavigateToOrders: () -> Unit,
+    onNavigateToChannels: () -> Unit,
     onNavigateToContacts: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -488,9 +488,9 @@ fun QuickActionsSection(
             ) {
                 QuickActionButton(
                     modifier = Modifier.weight(1f),
-                    icon = Icons.Default.AddShoppingCart,
-                    label = stringResource(R.string.home_action_catalog),
-                    onClick = onNavigateToKnowledge
+                    icon = Icons.Default.RecordVoiceOver,
+                    label = stringResource(R.string.home_action_persona),
+                    onClick = onNavigateToPersona
                 )
                 QuickActionButton(
                     modifier = Modifier.weight(1f),
@@ -506,9 +506,9 @@ fun QuickActionsSection(
             ) {
                 QuickActionButton(
                     modifier = Modifier.weight(1f),
-                    icon = Icons.AutoMirrored.Filled.ReceiptLong,
-                    label = stringResource(R.string.home_action_orders),
-                    onClick = onNavigateToOrders
+                    icon = Icons.AutoMirrored.Filled.Chat,
+                    label = stringResource(R.string.home_action_channels),
+                    onClick = onNavigateToChannels
                 )
                 QuickActionButton(
                     modifier = Modifier.weight(1f),

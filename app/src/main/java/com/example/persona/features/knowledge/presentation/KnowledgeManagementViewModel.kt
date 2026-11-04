@@ -31,6 +31,7 @@ import com.example.persona.features.knowledge.domain.model.KnowledgeEntry
 import com.example.persona.features.knowledge.domain.usecase.AddManualKnowledgeUseCase
 import com.example.persona.features.knowledge.domain.usecase.DeleteKnowledgeEntryUseCase
 import com.example.persona.features.knowledge.domain.usecase.UpdateKnowledgeEntryUseCase
+import com.example.persona.features.settings.domain.model.AccountMode
 import com.example.persona.features.knowledge.presentation.model.ExecutionTrace
 import com.example.persona.features.knowledge.presentation.model.SimulatorMediaType
 import com.example.persona.features.knowledge.presentation.model.SimulatorMessage
@@ -40,6 +41,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,7 +80,8 @@ data class KnowledgeManagementUiState(
     val suggestedFaqChips: List<String> = emptyList(),
     val isRecordingAudio: Boolean = false,
     val recordingDurationSeconds: Int = 0,
-    val recordingAmplitude: Float = 0f
+    val recordingAmplitude: Float = 0f,
+    val showAlreadyPopulatedDialog: Boolean = false
 )
 
 @HiltViewModel
@@ -104,6 +107,11 @@ class KnowledgeManagementViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(KnowledgeManagementUiState())
     val uiState: StateFlow<KnowledgeManagementUiState> = _uiState.asStateFlow()
+
+    companion object {
+        /** Minimum time the blocking vectorisation overlay stays visible. */
+        private const val MIN_INDEXING_OVERLAY_MS = 2_000L
+    }
 
     init {
         viewModelScope.launch {
@@ -170,7 +178,7 @@ class KnowledgeManagementViewModel @Inject constructor(
         _uiState.update { it.copy(isProcessing = true, errorMessage = null) }
 
         viewModelScope.launch {
-            val success = addManualKnowledgeUseCase(query, isTemp)
+            val success = withMinimumIndexingDuration { addManualKnowledgeUseCase(query, isTemp) }
             if (success) {
                 _uiState.update {
                     it.copy(
@@ -191,83 +199,142 @@ class KnowledgeManagementViewModel @Inject constructor(
     }
 
     fun loadBusinessSampleKnowledge() {
-        val ctx = context ?: return
-        viewModelScope.launch(ioDispatcher) {
-            _uiState.update { it.copy(isProcessing = true, errorMessage = null) }
-            try {
-                val markdown = ctx.assets.open("knowledge_business_sample.md").bufferedReader().use { it.readText() }
-                repository.ingestMarkdownDocument(
-                    text = markdown,
-                    sourceFileName = "knowledge_business_sample.md",
-                    sourceType = "SAMPLE_BUSINESS"
-                )
-                _uiState.update { it.copy(isProcessing = false) }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isProcessing = false, errorMessage = "فشل تحميل نموذج بيانات المتجر: ${e.message}") }
-            }
-        }
+        loadSampleKnowledge(
+            mode = AccountMode.BUSINESS,
+            englishAsset = "knowledge_store_en.md",
+            arabicAsset = "knowledge_store_ar.md",
+            sourceType = "SAMPLE_BUSINESS",
+            errorPrefix = "فشل تحميل نموذج بيانات المتجر"
+        )
     }
 
     fun loadPersonalSampleKnowledge() {
+        loadSampleKnowledge(
+            mode = AccountMode.PERSONAL,
+            englishAsset = "knowledge_personal_en.md",
+            arabicAsset = "knowledge_personal_ar.md",
+            sourceType = "SAMPLE_PERSONAL",
+            errorPrefix = "فشل تحميل نموذج البيانات الشخصية"
+        )
+    }
+
+    fun dismissAlreadyPopulatedDialog() {
+        _uiState.update { it.copy(showAlreadyPopulatedDialog = false) }
+    }
+
+    /**
+     * Loads a bundled knowledge sample matching the current app language and switches the
+     * account mode so the assistant adopts the right persona. The sample UI is only offered
+     * while the knowledge base is empty; if a sample import is requested after chunks exist,
+     * an informational dialog is surfaced instead of duplicating content.
+     */
+    private fun loadSampleKnowledge(
+        mode: AccountMode,
+        englishAsset: String,
+        arabicAsset: String,
+        sourceType: String,
+        errorPrefix: String
+    ) {
+        if (_uiState.value.entries.isNotEmpty()) {
+            _uiState.update { it.copy(showAlreadyPopulatedDialog = true) }
+            return
+        }
         val ctx = context ?: return
         viewModelScope.launch(ioDispatcher) {
             _uiState.update { it.copy(isProcessing = true, errorMessage = null) }
             try {
-                val markdown = ctx.assets.open("knowledge_personal_sample.md").bufferedReader().use { it.readText() }
-                repository.ingestMarkdownDocument(
-                    text = markdown,
-                    sourceFileName = "knowledge_personal_sample.md",
-                    sourceType = "SAMPLE_PERSONAL"
-                )
+                val isArabic = runCatching { userPreferencesRepository.appLanguageFlow.first() }
+                    .getOrDefault("")
+                    .startsWith("ar", ignoreCase = true)
+                val assetName = if (isArabic) arabicAsset else englishAsset
+                val markdown = ctx.assets.open(assetName).bufferedReader().use { it.readText() }
+                withMinimumIndexingDuration {
+                    repository.ingestMarkdownDocument(
+                        text = markdown,
+                        sourceFileName = assetName,
+                        sourceType = sourceType
+                    )
+                    runCatching { userPreferencesRepository.setAccountMode(mode) }
+                }
                 _uiState.update { it.copy(isProcessing = false) }
+            } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(isProcessing = false, errorMessage = "فشل تحميل نموذج البيانات الشخصية: ${e.message}") }
+                _uiState.update { it.copy(isProcessing = false, errorMessage = "$errorPrefix: ${e.message}") }
             }
         }
     }
 
+    /**
+     * Keeps the blocking vectorisation overlay visible for at least [MIN_INDEXING_OVERLAY_MS]
+     * so users perceive that chunks were chunked and embedded, even on fast devices.
+     */
+    private suspend fun <T> withMinimumIndexingDuration(block: suspend () -> T): T {
+        val start = System.currentTimeMillis()
+        val result = block()
+        val elapsed = System.currentTimeMillis() - start
+        if (elapsed < MIN_INDEXING_OVERLAY_MS) {
+            delay(MIN_INDEXING_OVERLAY_MS - elapsed)
+        }
+        return result
+    }
+
     private fun extractDynamicFaqChips(entries: List<KnowledgeEntry>): List<String> {
-        if (entries.isEmpty()) {
-            return listOf(
-                "ما هي المنتجات والأسعار المتاحة؟",
-                "ما هي مصاريف ومواعيد الشحن؟",
-                "كيف يمكنني استبدال أو استرجاع المنتج؟",
-                "ما هو رقم خدمة العملاء وموقع الفرع؟"
-            )
-        }
+        // No knowledge yet: let the simulator fall back to its localized sample queries.
+        if (entries.isEmpty()) return emptyList()
 
-        val chips = mutableListOf<String>()
         val combinedText = entries.joinToString(" ") { "${it.headerContext.orEmpty()} ${it.chunkText}" }
+        val isArabic = combinedText.any { it in '\u0600'..'\u06FF' }
 
-        if (combinedText.contains("هودي") || combinedText.contains("hoodie", ignoreCase = true)) {
-            chips.add("بكام الهودي الأوفرسايز وخاماته وألوانه؟")
-        }
-        if (combinedText.contains("تيشيرت") || combinedText.contains("t-shirt", ignoreCase = true)) {
-            chips.add("ما هي أسعار ومقاسات التيشيرتات؟")
-        }
-        if (combinedText.contains("شحن") || combinedText.contains("توصيل") || combinedText.contains("shipping", ignoreCase = true)) {
-            chips.add("ما هي مصاريف ومدة الشحن للقاهرة والمحافظات؟")
-        }
-        if (combinedText.contains("استبدال") || combinedText.contains("استرجاع") || combinedText.contains("refund", ignoreCase = true)) {
-            chips.add("ما هي شروط وسياسة الاستبدال والاسترجاع؟")
-        }
-        if (combinedText.contains("اجتماع") || combinedText.contains("مواعيد") || combinedText.contains("meeting", ignoreCase = true)) {
-            chips.add("كيف يمكنني حجز موعد اجتماع رسمي؟")
-        }
-        if (combinedText.contains("عنوان") || combinedText.contains("فرع") || combinedText.contains("مقر") || combinedText.contains("location", ignoreCase = true)) {
-            chips.add("أين يقع فرع أو مقر العمل الرئيسي؟")
-        }
-        if (chips.size < 4 && (combinedText.contains("رقم") || combinedText.contains("هاتف") || combinedText.contains("phone", ignoreCase = true))) {
-            chips.add("ما هو رقم خدمة العملاء والتواصل المباشر؟")
-        }
+        data class FaqSignal(val keywords: List<String>, val ar: String, val en: String)
 
-        return chips.take(6).ifEmpty {
-            listOf(
+        val signals = listOf(
+            FaqSignal(
+                listOf("سعر", "أسعار", "منتج", "price", "product", "cost"),
                 "ما هي المنتجات والأسعار المتاحة؟",
-                "ما هي مصاريف ومواعيد الشحن؟",
-                "ما هي سياسة الاسترجاع والاستبدال؟"
+                "What products and prices are available?"
+            ),
+            FaqSignal(
+                listOf("شحن", "توصيل", "shipping", "delivery"),
+                "ما هي مصاريف ومدة الشحن؟",
+                "What are the shipping fees and delivery times?"
+            ),
+            FaqSignal(
+                listOf("استبدال", "استرجاع", "refund", "return", "exchange"),
+                "ما هي سياسة الاستبدال والاسترجاع؟",
+                "What is the exchange and returns policy?"
+            ),
+            FaqSignal(
+                listOf("اجتماع", "موعد", "meeting", "schedule", "appointment"),
+                "كيف يمكنني حجز موعد اجتماع؟",
+                "How can I schedule a meeting?"
+            ),
+            FaqSignal(
+                listOf("عنوان", "فرع", "مقر", "location", "address", "showroom"),
+                "أين يقع الفرع أو المقر الرئيسي؟",
+                "Where is the main office or showroom located?"
+            ),
+            FaqSignal(
+                listOf("هاتف", "رقم", "phone", "contact", "whatsapp"),
+                "ما هو رقم التواصل المباشر؟",
+                "What is the direct contact number?"
+            ),
+            FaqSignal(
+                listOf("دفع", "payment", "card", "wallet"),
+                "ما هي طرق الدفع المتاحة؟",
+                "Which payment methods are accepted?"
+            ),
+            FaqSignal(
+                listOf("ساعات", "مواعيد العمل", "hours", "working hours"),
+                "ما هي ساعات العمل؟",
+                "What are the working hours?"
             )
-        }
+        )
+
+        return signals
+            .filter { signal -> signal.keywords.any { combinedText.contains(it, ignoreCase = true) } }
+            .map { if (isArabic) it.ar else it.en }
+            .take(6)
     }
 
     private var lastDeletedEntry: KnowledgeEntry? = null
@@ -371,7 +438,9 @@ class KnowledgeManagementViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isProcessing = true, errorMessage = null) }
             val formattedKnowledge = "سؤال: ${queryText.trim()}\nإجابة: ${answerText.trim()}"
-            val success = addManualKnowledgeUseCase(formattedKnowledge, isTemporaryOffer)
+            val success = withMinimumIndexingDuration {
+                addManualKnowledgeUseCase(formattedKnowledge, isTemporaryOffer)
+            }
             if (success) {
                 failedQueryDao.markReviewed(queryId)
                 _uiState.update { it.copy(isProcessing = false, answeringQuery = null) }

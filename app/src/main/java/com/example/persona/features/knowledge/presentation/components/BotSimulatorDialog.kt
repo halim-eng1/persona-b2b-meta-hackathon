@@ -73,6 +73,7 @@ fun BotSimulatorDialog(
     simulationBestScore: Float = 0f,
     simulationError: String? = null,
     suggestedFaqChips: List<String> = emptyList(),
+    hasKnowledge: Boolean = false,
     onLoadBusinessSample: () -> Unit = {},
     onLoadPersonalSample: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -109,14 +110,6 @@ fun BotSimulatorDialog(
         }
     }
 
-    val audioPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            onMediaSelected(uri.toString(), SimulatorMediaType.AUDIO)
-        }
-    }
-
     val quickSampleQueries = listOf(
         stringResource(R.string.sim_sample_query_1),
         stringResource(R.string.sim_sample_query_2),
@@ -125,7 +118,13 @@ fun BotSimulatorDialog(
         stringResource(R.string.sim_sample_query_5),
         stringResource(R.string.sim_sample_query_6)
     )
-    val displayChips = suggestedFaqChips.ifEmpty { quickSampleQueries }
+    // Once the knowledge base has chunks, only contextual chips derived from it are shown.
+    // Sample queries are strictly an empty-state affordance.
+    val displayChips = when {
+        suggestedFaqChips.isNotEmpty() -> suggestedFaqChips
+        hasKnowledge -> emptyList()
+        else -> quickSampleQueries
+    }
 
     // Scroll to bottom when message arrives
     LaunchedEffect(messages.size, isSimulating) {
@@ -251,34 +250,36 @@ fun BotSimulatorDialog(
                 }
             }
 
-            // ── Quick Test Chips Strip ───────────────────────────────────
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // ── Quick Test Chips Strip (contextual or empty-state only) ──
+            if (displayChips.isNotEmpty()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    items(displayChips) { sample ->
-                        SuggestionChip(
-                            onClick = {
-                                inputText = ""
-                                onSendTurn(sample, null, null)
-                            },
-                            label = {
-                                Text(
-                                    text = sample,
-                                    fontSize = 11.sp,
-                                    maxLines = 1
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(displayChips) { sample ->
+                            SuggestionChip(
+                                onClick = {
+                                    inputText = ""
+                                    onSendTurn(sample, null, null)
+                                },
+                                label = {
+                                    Text(
+                                        text = sample,
+                                        fontSize = 11.sp,
+                                        maxLines = 1
+                                    )
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = SuggestionChipDefaults.suggestionChipColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                                 )
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                             )
-                        )
+                        }
                     }
                 }
             }
@@ -357,44 +358,46 @@ fun BotSimulatorDialog(
                             modifier = Modifier.fillMaxWidth(0.85f)
                         )
 
-                        Spacer(modifier = Modifier.height(18.dp))
-                        Text(
-                            text = "أو اختر بيانات تجريبية جاهزة للاختبار:",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedButton(
-                                onClick = onLoadBusinessSample,
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        if (!hasKnowledge) {
+                            Spacer(modifier = Modifier.height(18.dp))
+                            Text(
+                                text = stringResource(R.string.sim_sample_hint),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Storefront,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("كتالوج متجر فيلو", fontSize = 12.sp)
-                            }
+                                OutlinedButton(
+                                    onClick = onLoadBusinessSample,
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Storefront,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(stringResource(R.string.sim_sample_store), fontSize = 12.sp)
+                                }
 
-                            OutlinedButton(
-                                onClick = onLoadPersonalSample,
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("مساعد تنفيذي للمكتب", fontSize = 12.sp)
+                                OutlinedButton(
+                                    onClick = onLoadPersonalSample,
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(stringResource(R.string.sim_sample_personal), fontSize = 12.sp)
+                                }
                             }
                         }
                     }
@@ -627,23 +630,6 @@ fun BotSimulatorDialog(
                             )
                         }
 
-                        // Attach Audio File Button
-                        IconButton(
-                            onClick = { audioPickerLauncher.launch("audio/*") },
-                            enabled = !isSimulating,
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AudioFile,
-                                contentDescription = stringResource(R.string.sim_action_pick_audio),
-                                tint = if (selectedMediaType == SimulatorMediaType.AUDIO) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        }
-
                         // Text Field
                         OutlinedTextField(
                             value = inputText,
@@ -733,6 +719,18 @@ private fun ChatMessageItem(message: SimulatorMessage) {
                 modifier = Modifier.weight(1f, fill = false),
                 horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
             ) {
+                // Execution trace is rendered above the assistant bubble so the reasoning
+                // that produced the reply appears between the simulated user turn and the answer.
+                if (!isUser && message.trace != null) {
+                    ExecutionTraceCard(
+                        trace = message.trace,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                }
+
                 Surface(
                     shape = RoundedCornerShape(
                         topStart = 16.dp,
@@ -800,14 +798,6 @@ private fun ChatMessageItem(message: SimulatorMessage) {
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
-
-                if (!isUser && message.trace != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    ExecutionTraceCard(
-                        trace = message.trace,
-                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }

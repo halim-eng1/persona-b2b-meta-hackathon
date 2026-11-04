@@ -43,11 +43,9 @@ import com.example.persona.features.settings.domain.repository.ModelProviders
 import com.example.persona.features.settings.presentation.AiActions
 import com.example.persona.features.settings.presentation.SettingsSpoke
 import com.example.persona.features.settings.presentation.SettingsUiState
-import com.example.persona.features.settings.presentation.components.ProviderChainStrip
 import com.example.persona.features.settings.presentation.components.ProviderMonogram
 import com.example.persona.features.settings.presentation.components.SettingsGroup
 import com.example.persona.features.settings.presentation.components.SpokeScaffold
-import com.example.persona.features.settings.presentation.components.settingFocus
 import com.example.persona.features.settings.presentation.model.SettingKey
 import com.example.persona.features.settings.presentation.sheets.ProviderPrioritySheet
 
@@ -236,12 +234,16 @@ fun AiEngineScreen(
         }
 
         // Fallback Chain Strip
+        // Hidden: the active provider cascade is still enforced by the runtime, but the
+        // reorder UI is intentionally kept out of the screen to reduce configuration noise.
+        /*
         ProviderChainStrip(
             providerOrder = state.providerOrder,
             keyCounts = keyCounts,
             onOpenReorder = { showFallbackSheet = true },
             modifier = Modifier.settingFocus(SettingKey.ProviderChain)
         )
+        */
 
         // Providers Section
         SettingsGroup(title = R.string.settings_ai_providers_title) {

@@ -8,10 +8,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     onExit: () -> Unit = {},
+    startSpoke: SettingsSpoke? = null,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     SettingsHost(
         onExit = onExit,
+        startSpoke = startSpoke,
         viewModel = viewModel,
         modifier = modifier
     )

@@ -68,9 +68,9 @@
     <string name="home_stat_waiting_customers">Waiting Customers</string>
     <string name="home_stat_bot_replies">Bot Replies Today</string>
     <string name="home_stat_total_prefix">Total: %d</string>
-    <string name="home_action_catalog">Product Catalog</string>
+    <string name="home_action_persona">Bot Style &amp; Persona</string>
     <string name="home_action_import">Import Knowledge</string>
-    <string name="home_action_orders">Order Fulfillment</string>
+    <string name="home_action_channels">Messaging Channels</string>
     <string name="home_action_contacts">CRM Contacts</string>
 
     <!-- ── Home Guided Permission Setup & Banner ──────────────────────────────── -->
@@ -222,6 +222,11 @@
     <string name="knowledge_input_card_collapse">Collapse creation form</string>
     <string name="knowledge_empty_state_cta">Add First Product to Catalog</string>
     <string name="knowledge_btn_add_entry_full">+ Add Knowledge or Product</string>
+    <string name="knowledge_sample_store">Load store sample</string>
+    <string name="knowledge_sample_personal">Load personal sample</string>
+    <string name="knowledge_already_populated_title">Knowledge base</string>
+    <string name="knowledge_already_populated">Knowledge base is already populated.</string>
+    <string name="knowledge_indexing_progress">Vectorizing and indexing knowledge chunks... Please wait.</string>
     <string name="knowledge_dialog_free_title">Fact or Policy Title</string>
     <string name="knowledge_dialog_free_title_hint">e.g. Return policy, shipping rates, working hours</string>
     <string name="knowledge_dialog_free_content">Details and Content</string>
@@ -261,6 +266,9 @@
     <string name="sim_btn_close">Close</string>
     <string name="sim_welcome_title">Welcome to AI Bot Simulator!</string>
     <string name="sim_welcome_desc">Start by typing a simulated customer message, choose a sample query above, or attach an image / voice note to test the full reasoning and retrieval pipeline.</string>
+    <string name="sim_sample_hint">Or load a ready-made sample dataset to test:</string>
+    <string name="sim_sample_store">Store sample</string>
+    <string name="sim_sample_personal">Personal assistant</string>
     <string name="sim_media_image_title">Image attached for vision analysis</string>
     <string name="sim_media_image_subtitle">Multimodal vision pass will be triggered</string>
     <string name="sim_media_audio_title">Voice note attached</string>
@@ -273,12 +281,12 @@
     <string name="sim_voice_note_label">Voice Note</string>
     <string name="sim_typing_indicator">Assistant is analyzing message and retrieving facts...</string>
     <string name="sim_media_preview_desc">Attachment preview</string>
-    <string name="sim_sample_query_1">How much is the oversized t-shirt?</string>
-    <string name="sim_sample_query_2">What are shipping fees to Cairo and Giza?</string>
-    <string name="sim_sample_query_3">I want to order 2 black t-shirts to Nasr City 01012345678</string>
-    <string name="sim_sample_query_4">Are exchanges or returns available?</string>
-    <string name="sim_sample_query_5">I want to cancel the order</string>
-    <string name="sim_sample_query_6">What payment methods are accepted?</string>
+    <string name="sim_sample_query_1">What products and prices do you have?</string>
+    <string name="sim_sample_query_2">What are the shipping fees and delivery times?</string>
+    <string name="sim_sample_query_3">What is the exchange and returns policy?</string>
+    <string name="sim_sample_query_4">How can I schedule a meeting?</string>
+    <string name="sim_sample_query_5">What are your working hours?</string>
+    <string name="sim_sample_query_6">Which payment methods do you accept?</string>
 
     <string name="trace_thinking_steps">⚡ Reasoning &amp; Decision Steps (took %s s)</string>
     <string name="trace_intent_title">Detected Intent</string>
