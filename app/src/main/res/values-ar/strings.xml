@@ -222,6 +222,7 @@
     <string name="knowledge_input_card_collapse">طي نموذج الإضافة</string>
     <string name="knowledge_empty_state_cta">إضافة أول منتج للكتالوج</string>
     <string name="knowledge_btn_add_entry_full">+ إضافة معرفة أو منتج</string>
+    <string name="knowledge_sample_hint">أو ابدأ فوراً بنماذج جاهزة لاختبار النظام كمساعد مبيعات لمتجرك أو كمساعد شخصي:</string>
     <string name="knowledge_sample_store">تحميل نموذج متجر</string>
     <string name="knowledge_sample_personal">تحميل مساعد تنفيذي</string>
     <string name="knowledge_already_populated_title">قاعدة المعرفة</string>

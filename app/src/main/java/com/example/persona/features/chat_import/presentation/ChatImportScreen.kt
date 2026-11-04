@@ -447,6 +447,12 @@ fun ChatImportContent(
 
                         // Sample knowledge quick-start — only offered while the base is empty
                         if (!uiState.hasKnowledge) {
+                            Text(
+                                text = stringResource(R.string.knowledge_sample_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                                modifier = Modifier.padding(top = MaterialTheme.spacing.xs, bottom = MaterialTheme.spacing.xxs)
+                            )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.s)

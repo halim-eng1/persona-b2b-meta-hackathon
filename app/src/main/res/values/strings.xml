@@ -222,6 +222,7 @@
     <string name="knowledge_input_card_collapse">Collapse creation form</string>
     <string name="knowledge_empty_state_cta">Add First Product to Catalog</string>
     <string name="knowledge_btn_add_entry_full">+ Add Knowledge or Product</string>
+    <string name="knowledge_sample_hint">Or start instantly with ready-made knowledge samples to test the AI as a store sales agent or personal assistant:</string>
     <string name="knowledge_sample_store">Load store sample</string>
     <string name="knowledge_sample_personal">Load personal sample</string>
     <string name="knowledge_already_populated_title">Knowledge base</string>
