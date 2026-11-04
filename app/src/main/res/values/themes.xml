@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Persona" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Main Application Themes -->
+    <style name="Theme.PersonaB2B" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Persona" parent="Theme.PersonaB2B" />
+
+    <!-- AndroidX Core SplashScreen Starting Theme -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#03110E</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.PersonaB2B</item>
+    </style>
 </resources>

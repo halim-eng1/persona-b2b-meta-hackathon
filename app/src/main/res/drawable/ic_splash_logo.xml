@@ -1,0 +1,102 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="160dp"
+    android:height="160dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <!-- 1. Background fills viewport for circular splash mask -->
+    <path
+        android:pathData="M 0,0 H 512 V 512 H 0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="512"
+                android:endY="512"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FF072721" />
+                <item android:offset="1.0" android:color="#FF03110E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 2. Inner emblem scaled to safe zone (0.88 scale centered at 256, 256) -->
+    <group
+        android:pivotX="256"
+        android:pivotY="256"
+        android:scaleX="0.88"
+        android:scaleY="0.88">
+
+        <!-- Chat bubble glass border -->
+        <path
+            android:pathData="M 184,88 H 328 A 96,96 0 0,1 424,184 V 328 A 96,96 0 0,1 328,424 H 184 A 96,96 0 0,1 88,328 V 184 A 96,96 0 0,1 184,88 Z"
+            android:strokeWidth="3"
+            android:strokeColor="#4014B8A6">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="88"
+                    android:startY="88"
+                    android:endX="424"
+                    android:endY="424"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#590D9488" />
+                    <item android:offset="1.0" android:color="#26065F46" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Ribbon P path with gradient stroke -->
+        <path
+            android:pathData="M 164,384 V 156 C 164,142 175,132 188,132 H 284 C 338,132 378,168 378,218 C 378,268 338,304 284,304 H 224 L 164,384 Z"
+            android:strokeWidth="46"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:startX="164"
+                    android:startY="132"
+                    android:endX="378"
+                    android:endY="384"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#FF6EE7B7" />
+                    <item android:offset="0.45" android:color="#FF10B981" />
+                    <item android:offset="1.0" android:color="#FF047857" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Neural Core (White & Green) -->
+        <path
+            android:pathData="M 274,194 a 24,24 0 1,0 0,48 a 24,24 0 1,0 0,-48 Z"
+            android:fillColor="#FFECFDF5" />
+        <path
+            android:pathData="M 274,208 a 10,10 0 1,0 0,20 a 10,10 0 1,0 0,-20 Z"
+            android:fillColor="#FF059669" />
+
+        <!-- AI Gold Sparkle -->
+        <path
+            android:pathData="M 378,100 Q 378,132 410,132 Q 378,132 378,164 Q 378,132 346,132 Q 378,132 378,100 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="346"
+                    android:startY="100"
+                    android:endX="410"
+                    android:endY="164"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#FFFDE047" />
+                    <item android:offset="0.5" android:color="#FFF59E0B" />
+                    <item android:offset="1.0" android:color="#FFB45309" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Satellite dots -->
+        <path
+            android:pathData="M 332,338 a 10,10 0 1,0 0,20 a 10,10 0 1,0 0,-20 Z"
+            android:fillColor="#CC34D399" />
+        <path
+            android:pathData="M 288,362 a 6,6 0 1,0 0,12 a 6,6 0 1,0 0,-12 Z"
+            android:fillColor="#805EEAD4" />
+    </group>
+</vector>
